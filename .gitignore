@@ -1,0 +1,19 @@
+# Distribution / packaging
+.Python
+bin/
+include/
+lib/
+
+# Pycharms
+.idea
+
+# Resources
+*.tar.gz
+pip-selfcheck.json
+
+# Compiled .py files
+*.py[cod]
+
+# Installer logs
+pip-log.txt
+pip-delete-this-directory.txt

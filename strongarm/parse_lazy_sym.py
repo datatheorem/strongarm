@@ -1,75 +1,6 @@
-import lief
 from strongarm.macho_parse import *
 from ctypes import *
 import sys
-
-class DysymtabCommand(Structure):
-    """Python representation of struct dysymtab_command
-
-    Definition found in <mach-o/loader.h>
-    """
-    _fields_ = [
-        ('cmd', c_uint32),
-        ('cmdsize', c_uint32),
-        ('ilocalsym', c_uint32),
-        ('nlocalsym', c_uint32),
-        ('iextdefsym', c_uint32),
-        ('nextdefsym', c_uint32),
-        ('iundefsym', c_uint32),
-        ('nundefsym', c_uint32),
-        ('tocoff', c_uint32),
-        ('ntoc', c_uint32),
-        ('modtaboff', c_uint32),
-        ('nmodtab', c_uint32),
-        ('extrefsymoff', c_uint32),
-        ('nextrefsyms', c_uint32),
-        ('indirectsymoff', c_uint32),
-        ('nindirectsyms', c_uint32),
-        ('extreloff', c_uint32),
-        ('nextrel', c_uint32),
-        ('locreloff', c_uint32),
-        ('nlocrel', c_uint32)
-    ]
-
-
-class SymtabCommand(Structure):
-    """Python representation of struct symtab_command
-
-    Definition found in <mach-o/loader.h>
-    """
-    _fields_ = [
-        ('cmd', c_uint32),
-        ('cmdsize', c_uint32),
-        ('symoff', c_uint32),
-        ('nsyms', c_uint32),
-        ('stroff', c_uint32),
-        ('strsize', c_uint32)
-    ]
-
-
-class NlistUn(Union):
-    """Python representation of union n_un
-
-    Definition found in <mach-o/nlist.h>
-    """
-    _fields_ = [
-        ('n_strx', c_uint32),
-    ]
-
-
-class Nlist64(Structure):
-    """Python representation of struct nlist_64
-
-    Definition found in <mach-o/nlist.h>
-    """
-    _fields_ = [
-        ('n_un', NlistUn),
-        ('n_type', c_uint8),
-        ('n_sect', c_uint8),
-        ('n_desc', c_uint16),
-        ('n_value', c_uint64),
-    ]
-
 
 def parse_strtab(macho_file, symtab_cmd):
     """
@@ -102,11 +33,11 @@ def parse_symtab(macho_file, symtab_cmd):
     symoff = symtab_cmd.symoff
     for i in xrange(symtab_cmd.nsyms):
         macho_file.seek(symoff)
-        nlist_data = bytearray(macho_file.read(sizeof(Nlist64)))
-        nlist = Nlist64.from_buffer(nlist_data)
+        nlist_data = bytearray(macho_file.read(sizeof(MachoNlist64)))
+        nlist = MachoNlist64.from_buffer(nlist_data)
         symtab.append(nlist)
         # go to next Nlist in file
-        symoff += sizeof(Nlist64)
+        symoff += sizeof(MachoNlist64)
     return symtab
 
 
@@ -189,31 +120,14 @@ def get_external_sym_map(macho_file, section, indirect_symtab, symtab, strtab):
 
 filename = '../GoodCertificateValidation'
 macho_file = open(filename, 'r')
+parser = MachoParser(filename)
 
-# helpers
-lief_macho = lief.MachO.parse(filename)[0]
+dysymtab_cmd = parser.dysymtab
+symtab_cmd = parser.symtab
 
-# TODO(pt): have MachoParser parse load commands as well to remove last dependence on LIEF
-# retrieve dysymtab command and symtab command from Macho header
-dysymtab_lief_cmd = next(cmd
-                         for cmd
-                         in lief_macho.commands
-                         if cmd.command == lief.MachO.LOAD_COMMAND_TYPES.DYSYMTAB)
-symtab_lief_cmd = next(cmd
-                       for cmd
-                       in lief_macho.commands
-                       if cmd.command == lief.MachO.LOAD_COMMAND_TYPES.SYMTAB)
-
-if not dysymtab_lief_cmd or not symtab_lief_cmd:
+if not dysymtab_cmd or not symtab_cmd:
     print('Couldn\'t retrieve MachO symbol tables from {}'.format(filename))
     sys.exit(1)
-
-# cast commands to their corresponding structs so we can access all their fields,
-# rather than just what LIEF exposes
-# TODO(pt) when we swap LIEF for MachoParser,
-# ensure MachO parser can return DysymtabCommand and SymtabCommand directly so we don't have to do this
-dysymtab_cmd = DysymtabCommand.from_buffer(bytearray(dysymtab_lief_cmd.data))
-symtab_cmd = SymtabCommand.from_buffer(bytearray(symtab_lief_cmd.data))
 
 # get tables we need to perform external symbol lookup
 # packed array of null-terminated external symbol names

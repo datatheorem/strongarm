@@ -7,6 +7,10 @@ class MachoParser(object):
     MH_MAGIC_64 = 0xfeedfacf
     MH_CIGAM_64 = 0xcffaedfe
 
+    MH_CPU_ARCH_ABI64 = 0x01000000
+    MH_CPU_TYPE_ARM = 12
+    MH_CPU_TYPE_ARM64 = MH_CPU_TYPE_ARM | MH_CPU_ARCH_ABI64
+
     def __init__(self, filename):
         self.is_64bit = False
         self.is_swapped = False
@@ -14,6 +18,9 @@ class MachoParser(object):
         self._num_commands = 0
         self.magic = 0
         self._file = None
+        self.cpu_type = CPU_TYPE.UNKNOWN
+
+        self.header = None
         self.segments = {}
         self.sections = {}
         self.dysymtab = None
@@ -61,8 +68,16 @@ class MachoParser(object):
 
     def parse_header(self):
         header_bytes = self.get_bytes(0, sizeof(MachoHeader64))
-        header = MachoHeader64.from_buffer(bytearray(header_bytes))
-        self._num_commands = header.ncmds
+        self.header = MachoHeader64.from_buffer(bytearray(header_bytes))
+
+        if self.header.cputype == self.MH_CPU_TYPE_ARM:
+            self.cpu_type = CPU_TYPE.ARMV7
+        elif self.header.cputype == self.MH_CPU_TYPE_ARM64:
+            self.cpu_type = CPU_TYPE.ARM64
+        else:
+            self.cpu_type = CPU_TYPE.UNKNOWN
+
+        self._num_commands = self.header.ncmds
         self.load_commands_offset += sizeof(MachoHeader64)
         self.parse_segment_commands(self.load_commands_offset)
 

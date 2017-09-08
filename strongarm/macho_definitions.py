@@ -3,7 +3,7 @@ from macho_load_commands import MachoLoadCommands
 from ctypes import *
 
 
-class CPU_TYPES(object):
+class CPU_TYPE(object):
     ARMV7 = 0
     ARM64 = 1
     UNKNOWN = 2

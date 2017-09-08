@@ -124,3 +124,10 @@ class MachoParser(object):
 
     def get_section_with_name(self, name):
         return self.sections[name]
+
+    def get_section_content(self, section):
+        return bytearray(self.get_bytes(section.offset, section.size))
+
+    def get_virtual_base(self):
+        text_seg = self.segments['__TEXT']
+        return text_seg.vmaddr

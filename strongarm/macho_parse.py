@@ -38,7 +38,6 @@ class MachoParser(object):
         self.is_64bit = self.magic_is_64()
         self.is_swapped = self.should_swap_bytes()
         self.parse_header()
-        self._file.close()
 
     def check_magic(self):
         self._file.seek(0)
@@ -131,3 +130,6 @@ class MachoParser(object):
     def get_virtual_base(self):
         text_seg = self.segments['__TEXT']
         return text_seg.vmaddr
+
+    def __del__(self):
+        self._file.close()

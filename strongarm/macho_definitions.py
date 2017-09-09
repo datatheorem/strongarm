@@ -1,6 +1,19 @@
 from typing import Text
 from macho_load_commands import MachoLoadCommands
 from ctypes import *
+''
+class MachArch(object):
+    MH_MAGIC = 0xfeedface
+    MH_CIGAM = 0xcefaedfe
+    MH_MAGIC_64 = 0xfeedfacf
+    MH_CIGAM_64 = 0xcffaedfe
+
+    FAT_MAGIC = 0xcafebabe
+    FAT_CIGAM = 0xbebafeca
+
+    MH_CPU_ARCH_ABI64 = 0x01000000
+    MH_CPU_TYPE_ARM = 12
+    MH_CPU_TYPE_ARM64 = MH_CPU_TYPE_ARM | MH_CPU_ARCH_ABI64
 
 
 class CPU_TYPE(object):
@@ -142,4 +155,29 @@ class MachoEncryptionInfo64Command(Structure):
         ('cryptsize', c_uint32),
         ('cryptid', c_uint32),
         ('pad', c_uint32),
+    ]
+
+
+class MachoFatHeader(Structure):
+    """Python representation of a struct fat_header
+
+    Definition found in <mach-o/fat.h>
+    """
+    _fields_ = [
+        ('magic', c_uint32),
+        ('nfat_arch', c_uint32),
+    ]
+
+
+class MachoFatArch(Structure):
+    """Python representation of a struct fat_arch
+
+    Definition found in <mach-o/fat.h>
+    """
+    _fields_ = [
+        ('cputype', c_uint32),
+        ('cpusubtype', c_uint32),
+        ('offset', c_uint32),
+        ('size', c_uint32),
+        ('align', c_uint32),
     ]

@@ -33,9 +33,6 @@ class MachoBinary(object):
         if not self.check_magic():
             return
         self.is_swap = self.should_swap_bytes()
-        print('Macho 64 bit slice ({})'.format(
-            'big endian' if self.is_swap else 'little endian'
-        ))
         self.is_64bit = self.magic_is_64()
         self.parse_header()
 
@@ -203,10 +200,16 @@ class MachoBinary(object):
         Returns:
             string containing byte content of mach-o slice at an offset from the start of the slice
         """
+        # ensure file is open
+        self._file = open(self._file.name)
         # account for the fact that this Macho slice is not necessarily the start of the file!
         # add slide to our macho slice to file seek
         self._file.seek(offset + self.offset_within_fat)
-        return self._file.read(size)
+        content = self._file.read(size)
+
+        # now that we've read our data, close file again
+        self._file.close()
+        return content
 
     def should_swap_bytes(self):
         # type: (None) -> bool

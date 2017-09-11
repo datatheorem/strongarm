@@ -96,7 +96,6 @@ class MachoParser(object):
         if self.is_swapped:
             self.header.nfat_arch = swap32(self.header.nfat_arch)
 
-        print('Parsing {} MachO slices...'.format(self.header.nfat_arch))
         for i in range(self.header.nfat_arch):
             arch_bytes = self.get_bytes(read_off, sizeof(MachoFatArch))
             fat_arch = MachoFatArch.from_buffer(bytearray(arch_bytes))
@@ -166,21 +165,8 @@ class MachoParser(object):
         magic = c_uint32.from_buffer(bytearray(self._file.read(sizeof(c_uint32)))).value
         is_fat = False
         # FAT archive?
-        if magic == MachArch.FAT_MAGIC:
-            print('FAT archive @ {} detected (FAT in little endian)'.format(hex(offset)))
+        if magic == MachArch.FAT_MAGIC or magic == MachArch.FAT_CIGAM:
             is_fat = True
-        elif magic == MachArch.FAT_CIGAM:
-            print('FAT archive @ {} detected (FAT in big endian)'.format(hex(offset)))
-            is_fat = True
-        # what kind of Mach O?
-        elif magic == MachArch.MH_MAGIC or magic == MachArch.MH_CIGAM:
-            print('32-bit Mach-O binaries not yet supported.')
-        elif magic == MachArch.MH_MAGIC_64:
-            print('64-bit Mach-O magic ok @ {}  (little endian)'.format(hex(offset)))
-        elif magic == MachArch.MH_CIGAM_64:
-            print('64-bit Mach-O magic ok @ {} (big endian)'.format(hex(offset)))
-        # unknown magic!
-        print('Unrecognized file magic {}'.format(hex(magic)))
         return magic, is_fat
 
     def should_swap_bytes(self):

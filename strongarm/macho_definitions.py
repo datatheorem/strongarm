@@ -1,7 +1,13 @@
 from typing import Text
 from macho_load_commands import MachoLoadCommands
 from ctypes import *
-''
+import struct
+
+
+def swap32(i):
+    return struct.unpack("<I", struct.pack(">I", i))[0]
+
+
 class MachArch(object):
     MH_MAGIC = 0xfeedface
     MH_CIGAM = 0xcefaedfe

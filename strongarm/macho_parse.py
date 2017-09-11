@@ -19,8 +19,10 @@ class MachoParser(object):
 
         self.magic, self.is_fat = self.check_magic()
         if not self._is_supported(self.magic):
-            print('Couldn\'t parse {}'.format(self._file.name))
-            return
+            raise RuntimeError('Unsupported Mach-O magic {}'.format(
+                hex(int(self.magic))
+            ))
+
         self.is_swapped = self.should_swap_bytes()
 
         if self.is_fat:
@@ -32,7 +34,14 @@ class MachoParser(object):
         # sanity check
         if not self._check_is_macho_header(fileoff):
             raise RuntimeError('Parsing error: MachO archive at {} was not a valid Macho archive!'.format(hex(fileoff)))
-        self.slices.append(MachoBinary(self._file, fileoff))
+
+        try:
+            attempt = MachoBinary(self._file, fileoff)
+            # if the MachoBinary does not have a header, there was a problem parsing it
+            if attempt.header:
+                self.slices.append(attempt)
+        except RuntimeError as e:
+            pass
 
     def _is_little_endian(self, magic):
         return magic in [MachArch.MH_MAGIC,

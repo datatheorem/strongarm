@@ -12,6 +12,7 @@ class MachoBinary(object):
         self._num_commands = 0
         self.cpu_type = CPU_TYPE.UNKNOWN
         self.magic = 0
+        self.is_swap = False
 
         self.header = None
         self.segments = {}
@@ -24,18 +25,33 @@ class MachoBinary(object):
 
     def parse(self):
         if not self.check_magic():
-            print('Couldn\'t parse {}'.format(self._file.name))
             return
+        self.is_swap = self.should_swap_bytes()
+        print('Macho 64 bit slice ({})'.format(
+            'big endian' if self.is_swap else 'little endian'
+        ))
         self.is_64bit = self.magic_is_64()
         self.parse_header()
 
     def check_magic(self):
         self.magic = c_uint32.from_buffer(bytearray(self.get_bytes(0, sizeof(c_uint32)))).value
-        valid_mag = [MachArch.MH_MAGIC_64,
-                     MachArch.MH_CIGAM_64,]
+        valid_mag = [
+            MachArch.MH_MAGIC_64,
+            MachArch.MH_CIGAM_64
+        ]
+        mag32 = [
+            MachArch.MH_MAGIC,
+            MachArch.MH_CIGAM,
+        ]
+        self.is_swap = self.should_swap_bytes()
+
+        if self.magic in mag32:
+            raise RuntimeError('32-bit Mach-O slices not supported')
         if self.magic not in valid_mag:
-            print('Macho slice magic invalid! {}'.format(hex(self.magic)))
-            return False
+            raise RuntimeError('Macho slice @ {} had invalid magic {}'.format(
+                hex(int(self.offset_within_fat)),
+                hex(int(self.magic))
+            ))
         return True
 
     def magic_is_64(self):
@@ -53,7 +69,7 @@ class MachoBinary(object):
             self.cpu_type = CPU_TYPE.UNKNOWN
 
         self._num_commands = self.header.ncmds
-        self.load_commands_offset += sizeof(MachoHeader64)
+        self.load_commands_offset = sizeof(MachoHeader64)
         self.parse_segment_commands(self.load_commands_offset)
 
     def parse_segment_commands(self, offset):
@@ -62,7 +78,7 @@ class MachoBinary(object):
             load_command = MachOLoadCommand.from_buffer(bytearray(load_command_bytes))
             # TODO(pt) handle byte swap of load_command
             if load_command.cmd == MachoLoadCommands.LC_SEGMENT:
-                print('32-bit segments not supported!')
+                # 32 bit segments unsupported!
                 continue
 
             if load_command.cmd == MachoLoadCommands.LC_SYMTAB:
@@ -98,7 +114,9 @@ class MachoBinary(object):
             section_offset += section_size
 
     def get_section_with_name(self, name):
-        return self.sections[name]
+        if name in self.sections:
+            return self.sections[name]
+        return None
 
     def get_section_content(self, section):
         return bytearray(self.get_bytes(section.offset, section.size))
@@ -112,3 +130,12 @@ class MachoBinary(object):
         # add slide to our macho slice to file seek
         self._file.seek(offset + self.offset_within_fat)
         return self._file.read(size)
+
+    def should_swap_bytes(self):
+        # TODO(pt): figure out whether we need to swap to little or big endian,
+        # based on system endianness and binary endianness
+        # everything we touch currently is little endian, so let's not worry about it for now
+        big_endian = [MachArch.MH_CIGAM,
+                      MachArch.MH_CIGAM_64,
+                      ]
+        return self.magic in big_endian

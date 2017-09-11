@@ -25,7 +25,8 @@ Usage
 --------------
 * Mach-O Parser
 
-```from strongarm.macho_parse import MachoParser
+```
+from strongarm.macho_parse import MachoParser
 from strongarm.macho_definitions import *
 parser = MachoParser('filename')
 for slice in parser.slices:
@@ -36,5 +37,6 @@ for slice in parser.slices:
         else 'unkwn'
     ))
     # access slice.segments, slice.sections,
-    # slice.symtab, etc ```
+    # slice.symtab, etc 
+```
     

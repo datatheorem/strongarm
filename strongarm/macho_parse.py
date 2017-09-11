@@ -161,8 +161,7 @@ class MachoParser(object):
         Returns:
             A tuple containing the magic that was read, and a bool indicating whether the header is a FAT
         """
-        self._file.seek(offset)
-        magic = c_uint32.from_buffer(bytearray(self._file.read(sizeof(c_uint32)))).value
+        magic = c_uint32.from_buffer(bytearray(self.get_bytes(offset, sizeof(c_uint32)))).value
         is_fat = False
         # FAT archive?
         if magic == MachArch.FAT_MAGIC or magic == MachArch.FAT_CIGAM:

@@ -21,6 +21,7 @@ class MachoBinary(object):
         self.dysymtab = None
         self.symtab = None
         self.encryption_info = None
+        self.imported_functions = None
 
         self.parse()
 
@@ -36,6 +37,7 @@ class MachoBinary(object):
         self.is_swap = self.should_swap_bytes()
         self.is_64bit = self.magic_is_64()
         self.parse_header()
+        self.imported_functions = self.parse_imported_symbols()
 
     def check_magic(self):
         # type: (None) -> bool
@@ -230,3 +232,60 @@ class MachoBinary(object):
                       MachArch.MH_CIGAM_64,
                       ]
         return self.magic in big_endian
+
+    def get_raw_string_table(self):
+        # type: (None) -> List[int]
+        """
+        Read string table from binary, as described by LC_SYMTAB. Each strtab entry is terminated
+        by a NULL character.
+        Returns:
+            Raw, packed array of characters containing binary's string table data
+        """
+        string_table_data = self.get_bytes(self.symtab.stroff, self.symtab.strsize)
+        # split into characters (string table is packed and each entry is terminated by a null character)
+        string_table = list(string_table_data)
+        return string_table
+
+    def get_symtab_contents(self):
+        # type: (None) -> List[MachoNlist64]
+        """
+        Parse symbol table containing list of Nlist64's
+        Returns:
+            Array of Nlist64's representing binary's symbol table
+        """
+        symtab = []
+        # start reading from symoff and increment by one Nlist64 each iteration
+        symoff = self.symtab.symoff
+        for i in range(self.symtab.nsyms):
+            nlist_data = self.get_bytes(symoff, sizeof(MachoNlist64))
+            nlist = MachoNlist64.from_buffer(bytearray(nlist_data))
+            symtab.append(nlist)
+            # go to next Nlist in file
+            symoff += sizeof(MachoNlist64)
+        return symtab
+
+    def parse_imported_symbols(self):
+        # type: (None) -> List[Text]
+        """
+        Convert packed string table into a list of NULL-terminated strings
+        Returns:
+            List of strings representing symbols in binary's string table
+        """
+        strtab = self.get_raw_string_table()
+        symtab = self.get_symtab_contents()
+        symbols = []
+        for i in range(len(symtab)):
+            strtab_idx = symtab[i].n_un.n_strx
+
+            # string table is an array of characters
+            # these characters represent symbol names,
+            # with a null character delimiting each symbol name
+            # find the length of this symbol by looking for the next null character starting from
+            # the first index of the symbol
+            symbol_string_len = strtab[strtab_idx::].index('\x00')
+            strtab_end_idx = strtab_idx + symbol_string_len
+            symbol_str_characters = strtab[strtab_idx:strtab_end_idx:]
+            symbol_str = ''.join(symbol_str_characters)
+
+            symbols.append(symbol_str)
+        return symbols

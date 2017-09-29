@@ -77,6 +77,7 @@ class MachoParser(object):
                          ]
 
     def parse_fat_header(self):
+        # type: (None) -> None
         """
         Parse the FAT header implicitly found at the start of the file
         This method will also parse all Mach-O's that the FAT describes
@@ -169,6 +170,7 @@ class MachoParser(object):
         return magic, is_fat
 
     def should_swap_bytes(self):
+        # type: (None) -> bool
         """
         Check if we need to swap due to a difference in endianness between host and binary
         Returns:

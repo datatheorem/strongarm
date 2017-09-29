@@ -25,6 +25,7 @@ class MachoBinary(object):
         self.parse()
 
     def parse(self):
+        # type: (None) -> None
         """
         Attempt to parse the provided file contents as a MachO slice
         This method may throw an exception if the provided data does not represent a valid or supported
@@ -37,6 +38,7 @@ class MachoBinary(object):
         self.parse_header()
 
     def check_magic(self):
+        # type: (None) -> bool
         """
         Ensure magic at provided offset within provided file represents a valid and supported Mach-O slice
         Sets up byte swapping if host and slice differ in endianness
@@ -65,6 +67,7 @@ class MachoBinary(object):
         return True
 
     def magic_is_64(self):
+        # type: (None) -> bool
         """
         Convenience method to check if our magic corresponds to a 64-bit slice
         Returns:
@@ -73,6 +76,7 @@ class MachoBinary(object):
         return self.magic == MachArch.MH_MAGIC_64 or self.magic == MachArch.MH_CIGAM_64
 
     def parse_header(self):
+        # type: (None) -> None
         """
         Parse all info from a Mach-O header.
         This method will also parse all segment and section commands.
@@ -93,6 +97,7 @@ class MachoBinary(object):
         self.parse_segment_commands(self.load_commands_offset)
 
     def parse_segment_commands(self, offset):
+        # type: (int) -> None
         """
         Parse Mach-O segment commands beginning at a given slice offset
         Args:
@@ -180,7 +185,7 @@ class MachoBinary(object):
         return bytearray(self.get_bytes(section.offset, section.size))
 
     def get_virtual_base(self):
-        # type: (None) -> (int)
+        # type: (None) -> int
         """
         Retrieve the first virtual address of the Mach-O slice
         Returns:

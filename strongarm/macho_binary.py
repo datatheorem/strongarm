@@ -22,6 +22,7 @@ class MachoBinary(object):
         self.symtab = None
         self.encryption_info = None
         self.imported_functions = None
+        self.header_flags = []
 
         self.parse()
 
@@ -93,10 +94,31 @@ class MachoBinary(object):
         else:
             self.cpu_type = CPU_TYPE.UNKNOWN
 
+        self.parse_header_flags()
+
         self._num_commands = self.header.ncmds
         # load commands begin directly after Mach O header
         self.load_commands_offset = sizeof(MachoHeader64)
         self.parse_segment_commands(self.load_commands_offset)
+
+    def parse_header_flags(self):
+        # type: (None) -> None
+        """
+        Interpret binary's header bitset and populate self.header_flags
+        """
+        flags_bitset = self.header.flags
+        # get all fields from HEADER_FLAGS
+        # we get class members by getting all fields of the class,
+        # and filtering out private names, and methods
+        flags_as_dict = HEADER_FLAGS.__dict__
+        possible_flags = {key:value for key, value in flags_as_dict.items() \
+                          if not key.startswith('__') and not callable(key)}
+        for name in possible_flags:
+            mask = flags_as_dict[name]
+            # is this mask set in the binary's flags?
+            if (flags_bitset & mask) == mask:
+                # mask is present in bitset
+                self.header_flags.append(mask)
 
     def parse_segment_commands(self, offset):
         # type: (int) -> None

@@ -54,3 +54,14 @@ class TestThinMachO(unittest.TestCase):
         self.assertIsNotNone(slice.get_section_with_name('__const'))
         self.assertIsNotNone(slice.get_section_with_name('__objc_classlist'))
         self.assertIsNotNone(slice.get_section_with_name('__data'))
+
+    def test_header_flags(self):
+        slice = self.parser.slices[0]
+        # this binary is known to have masks 1, 4, 128, 2097152
+        self.assertTrue(HEADER_FLAGS.NOUNDEFS in slice.header_flags)
+        self.assertTrue(HEADER_FLAGS.DYLDLINK in slice.header_flags)
+        self.assertTrue(HEADER_FLAGS.TWOLEVEL in slice.header_flags)
+        self.assertTrue(HEADER_FLAGS.PIE in slice.header_flags)
+
+        # the binary definitely shouldn't have this flag
+        self.assertFalse(HEADER_FLAGS.ROOT_SAFE in slice.header_flags)

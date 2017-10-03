@@ -81,7 +81,7 @@ It is a shared table of indexes into the larger external symbol table. `__la_sym
 store their symbol's _indexes into the larger symbol table_ in the indirect symbol table. The offset of a segment's
 data in the indirect symbol table is given by `segment.reserved1`.
 
-Thus, to get the indexes in the external symbol table of the pointers in the `__la_symbol_ptr` segment,
+Thus, to get references to symbols in the external symbol table of the pointers in the `__la_symbol_ptr` segment,
 we can use a loop like:
 ```python
         for (index, symbol_ptr) in enumerate(external_symtab):
@@ -94,14 +94,16 @@ we can use a loop like:
 ```
 
 The external symtab is a List of `Nlist64` structures. The index of the symbol name for this symbol within the 
-packed symbol table can be retrieved from the `sym.n_un.n_strx` field.
+packed string table can be retrieved from the `sym.n_un.n_strx` field.
 
-The string table is a _packed_ array of characters. Each string is delimited by NULL. Thus, to get the symbol name,
-start reading from `sym.n_un.n_strx`, and continue until you hit NULL.
+The string table is a _packed_ array of characters. It is a contiguous array of char's, and each string is delimited 
+by NULL. Thus, to get the symbol name, start reading from `sym.n_un.n_strx`, and continue until you hit NULL.
 
 So, to map `__stubs` to symbol names:
 * Record virtual addresses of pointers within `__la_symbol_ptr`
-* Find offset within indirect symbol table based on `__la_symbol_ptr` section header 
-* Find index within symbol table from data in indirect symbol table
-* Read symbol names from string table using index from symbol structure
+* Find offset for `__la_symbol_ptr` entries in the indirect symbol table,
+  using the offset defined in the `__la_symbol_ptr` section header 
+* For each index listed in the indirect symbol table, look at the corresponding symbol at that index in the larger
+  external symbol table.
+* Read symbol names from string table using string table index from symbol structure
 

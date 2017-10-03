@@ -9,11 +9,27 @@ class MachoImpStub(object):
 
 
 class MachoAnalyzer(object):
+    # keep map of active MachoAnalyzer instances
+    # each MachoAnalyzer operates on a single MachoBinary which will never change in the lifecycle of the analyzer
+    # also, some MachoAnalyzer operations are expensive, but they only have to be done once per instance
+    # so, we only keep one analyzer for each MachoBinary
+    active_analyzer_map = {}
+
     def __init__(self, bin):
         # type: (MachoBinary) -> MachoAnalyzer
         self.binary = bin
         self.cs = Cs(CS_ARCH_ARM64, CS_MODE_ARM)
         self.cs.detail = True
+
+        # store this analyzer in class cache
+        MachoAnalyzer.active_analyzer_map[bin] = self
+
+    @classmethod
+    def get_analyzer(cls, bin):
+        if bin in cls.active_analyzer_map:
+            # use cached analyzer for this binary
+            return cls.active_analyzer_map[bin]
+        return MachoAnalyzer(bin)
 
     @property
     def external_symbol_addr_map(self):
@@ -54,7 +70,6 @@ class MachoAnalyzer(object):
         # type: () -> List[MachoImpStub]
         imp_stub_map = self.external_symbol_addr_map
         stubs_section = self.binary.get_section_with_name('__stubs')
-        print('stubs section: {}'.format(stubs_section))
 
         func_str = self.binary.get_bytes(stubs_section.offset, stubs_section.size)
         instructions = [instr for instr in self.cs.disasm(func_str, self.binary.get_virtual_base() + stubs_section.offset)]
@@ -67,9 +82,6 @@ class MachoAnalyzer(object):
         # parse this known format
         irpd = iter(instructions)
         for nop_instr, load_instr, br_instr in zip(irpd, irpd, irpd):
-            print(ObjcFunctionAnalyzer.format_instruction(nop_instr))
-            print(ObjcFunctionAnalyzer.format_instruction(load_instr))
-            print(ObjcFunctionAnalyzer.format_instruction(br_instr))
             expected_ops = ['nop', 'ldr', 'br']
             for idx, op in enumerate([nop_instr, load_instr, br_instr]):
                 # sanity check

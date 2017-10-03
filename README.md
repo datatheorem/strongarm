@@ -4,7 +4,7 @@ strongarm
 strongarm is a library for parsing and analyzing Mach-O binaries.
 strongarm includes a Mach-O/FAT archive parser as well as utilities for reconstructing flow from compiled ARM64 assembly.
 
-strongarm's primary innovation is the name. ('macho', as well as 'arm').
+The name 'strongarm' refers to both 'macho' and 'arm'.
 
 Components
 ---------
@@ -13,6 +13,7 @@ Components
     - includes `MachoParser` and `MachoBinary`,
     as well as contents of `macho_definitions.py`,
     which describes Mach-O header structures.
+    - Map branch destinations to human-readable symbol names, even if the branch is to an external function
 * ARM64 analyzer
     - `strongarm` module
     - track register data flow

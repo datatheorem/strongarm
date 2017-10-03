@@ -3,6 +3,7 @@
 bin/
 include/
 lib/
+dist/
 
 # Pycharms
 .idea
@@ -17,3 +18,6 @@ pip-selfcheck.json
 # Installer logs
 pip-log.txt
 pip-delete-this-directory.txt
+
+# eggs
+strongarm.egg-info/

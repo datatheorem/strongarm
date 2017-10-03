@@ -1,2 +1,3 @@
 # Requirements for strongarm as a python module
 typing
+capstone

@@ -133,7 +133,7 @@ if insecure:
 else:
     print('App appears to handle certificate validation correctly. AuthDisposition: {} '
           'SecTrustEvaluate called? {}'.format(
-        authChallengeBehavior,
-        can_call_sec_trust_eval
+            authChallengeBehavior,
+            can_call_sec_trust_eval
     ))
 

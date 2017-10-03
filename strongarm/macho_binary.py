@@ -27,7 +27,7 @@ class MachoBinary(object):
         self.parse()
 
     def parse(self):
-        # type: (None) -> None
+        # type: () -> None
         """
         Attempt to parse the provided file contents as a MachO slice
         This method may throw an exception if the provided data does not represent a valid or supported
@@ -41,7 +41,7 @@ class MachoBinary(object):
         self.imported_functions = self.parse_imported_symbols()
 
     def check_magic(self):
-        # type: (None) -> bool
+        # type: () -> bool
         """
         Ensure magic at provided offset within provided file represents a valid and supported Mach-O slice
         Sets up byte swapping if host and slice differ in endianness
@@ -70,7 +70,7 @@ class MachoBinary(object):
         return True
 
     def magic_is_64(self):
-        # type: (None) -> bool
+        # type: () -> bool
         """
         Convenience method to check if our magic corresponds to a 64-bit slice
         Returns:
@@ -79,7 +79,7 @@ class MachoBinary(object):
         return self.magic == MachArch.MH_MAGIC_64 or self.magic == MachArch.MH_CIGAM_64
 
     def parse_header(self):
-        # type: (None) -> None
+        # type: () -> None
         """
         Parse all info from a Mach-O header.
         This method will also parse all segment and section commands.
@@ -102,7 +102,7 @@ class MachoBinary(object):
         self.parse_segment_commands(self.load_commands_offset)
 
     def parse_header_flags(self):
-        # type: (None) -> None
+        # type: () -> None
         """
         Interpret binary's header bitset and populate self.header_flags
         """
@@ -209,7 +209,7 @@ class MachoBinary(object):
         return bytearray(self.get_bytes(section.offset, section.size))
 
     def get_virtual_base(self):
-        # type: (None) -> int
+        # type: () -> int
         """
         Retrieve the first virtual address of the Mach-O slice
         Returns:
@@ -241,7 +241,7 @@ class MachoBinary(object):
         return content
 
     def should_swap_bytes(self):
-        # type: (None) -> bool
+        # type: () -> bool
         """
         Check whether self.magic refers to a big-endian Mach-O binary
         Returns:
@@ -256,7 +256,7 @@ class MachoBinary(object):
         return self.magic in big_endian
 
     def get_raw_string_table(self):
-        # type: (None) -> List[int]
+        # type: () -> List[int]
         """
         Read string table from binary, as described by LC_SYMTAB. Each strtab entry is terminated
         by a NULL character.
@@ -269,7 +269,7 @@ class MachoBinary(object):
         return string_table
 
     def get_symtab_contents(self):
-        # type: (None) -> List[MachoNlist64]
+        # type: () -> List[MachoNlist64]
         """
         Parse symbol table containing list of Nlist64's
         Returns:
@@ -287,7 +287,7 @@ class MachoBinary(object):
         return symtab
 
     def parse_imported_symbols(self):
-        # type: (None) -> List[Text]
+        # type: () -> List[Text]
         """
         Convert packed string table into a list of NULL-terminated strings
         Returns:
@@ -311,3 +311,53 @@ class MachoBinary(object):
 
             symbols.append(symbol_str)
         return symbols
+
+    def get_external_sym_pointers(self):
+        # type: () -> List[int]
+        """
+        Parse lazy symbol section into a list of pointers
+        The lazy symbol section contains dummy pointers to known locations, which dyld_stub_binder will
+        rewrite into their real runtime addresses when the dylibs are loaded.
+        * IMPORTANT *
+        This method actually records the _virtual address where the destination pointer is recorded_, not the value
+        of the garbage pointer.
+        This is because the actual content of these pointers is useless until runtime (since they point to nonexistent
+        data), but their ordering in the lazy symbol table is the same as described in other symbol tables, so
+        we need the index
+        Returns:
+            A list of pointers containing the virtual addresses of each pointer in this section
+        """
+        section = self.get_section_with_name('__la_symbol_ptr')
+        # __la_symbol_ptr is just an array of pointers
+        # the number of pointers is the size, in bytes, of the section, divided by a 64b pointer size
+        sym_ptr_count = section.size / sizeof(c_void_p)
+
+        section_pointers = []
+        # this section's data starts at the file offset field
+        section_data_ptr = section.offset
+
+        # read every pointer in the table
+        for i in range(sym_ptr_count):
+            # this addr is the address in the file of this data, plus the slide that the file has requested,
+            # to result in the final address that would be referenced elsewhere in this Mach-O
+            section_pointers.append(self.get_virtual_base() +  section_data_ptr)
+            # go to next pointer in list
+            section_data_ptr += sizeof(c_void_p)
+        return section_pointers
+
+    def get_indirect_symbol_table(self):
+        # type: () -> List[c_uint32_t]
+        indirect_symtab = []
+        # dysymtab has fields that tell us the file offset of the indirect symbol table, as well as the number
+        # of indirect symbols present in the mach-o
+        indirect_symtab_off = self.dysymtab.indirectsymoff
+
+        # indirect symtab is an array of uint32's
+        for i in range(self.dysymtab.nindirectsyms):
+            indirect_symtab_bytes = self.get_bytes(indirect_symtab_off, sizeof(c_uint32))
+            indirect_symtab_entry = c_uint32.from_buffer(bytearray(indirect_symtab_bytes))
+            indirect_symtab.append(int(indirect_symtab_entry.value))
+            # traverse to next pointer
+            indirect_symtab_off += sizeof(c_uint32)
+        return indirect_symtab
+

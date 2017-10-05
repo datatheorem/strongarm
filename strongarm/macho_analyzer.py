@@ -67,6 +67,47 @@ class MachoAnalyzer(object):
             imported_symbol_map[symbol_ptr] = symbol_str
         return imported_symbol_map
 
+    def parse_stub(self, instr1, instr2, instr3):
+        # each stub follows one of two patterns
+        # pattern 1: nop / ldr x16, <sym> / br x16
+        # pattern 2: adrp x16, <page> / ldr x16, [x16 <offset>] / br x16
+        # try parsing both of these formats
+        patterns = [
+            ['nop', 'ldr', 'br'],
+            ['adrp', 'ldr', 'br'],
+        ]
+        # differentiate between patterns by looking at the opcode of the first instruction
+        pattern_idx = 0
+        if instr1.mnemonic == patterns[0][0]:
+            pattern_idx = 0
+        elif instr1.mnemonic == patterns[1][0]:
+            pattern_idx = 1
+        else:
+            # unknown stub format
+            return None
+
+        expected_ops = patterns[pattern_idx]
+        for idx, op in enumerate([instr1, instr2, instr3]):
+            # sanity check
+            if op.mnemonic != expected_ops[idx]:
+                raise RuntimeError('Expected instruction {} to be {} while parsing stub, was instead {}'.format(
+                    idx,
+                    expected_ops[idx],
+                    op.mnemonic
+                ))
+
+        stub_addr = instr1.address
+        stub_dest = 0
+        # nop/ldr/br pattern
+        if pattern_idx == 0:
+            stub_dest = instr2.operands[1].value.imm
+        # adrp/ldr/br pattern
+        elif pattern_idx == 1:
+            stub_dest_page = instr1.operands[1].value.imm
+            stub_dest_pageoff = instr2.operands[1].mem.disp
+            stub_dest = stub_dest_page + stub_dest_pageoff
+        stub = MachoImpStub(stub_addr, stub_dest)
+        return stub
 
     @property
     @memoized
@@ -79,27 +120,16 @@ class MachoAnalyzer(object):
         instructions = [instr for instr in self.cs.disasm(func_str, self.binary.get_virtual_base() + stubs_section.offset)]
 
         stubs = []
-        # each stub follows this format:
-        # nop
-        # ldr x16, <sym>
-        # br x16
-        # parse this known format
-        irpd = iter(instructions)
-        for nop_instr, load_instr, br_instr in zip(irpd, irpd, irpd):
-            expected_ops = ['nop', 'ldr', 'br']
-            for idx, op in enumerate([nop_instr, load_instr, br_instr]):
-                # sanity check
-                if op.mnemonic != expected_ops[idx]:
-                    raise RuntimeError('Expected instruction {} to be {} while parsing stub, was instead {}'.format(
-                        idx,
-                        expected_ops[idx],
-                        op.mnemonic
-                    ))
+        # each stub follows one of two patterns
+        # pattern 1: nop / ldr x16, <sym> / br x16
+        # pattern 2: adrp x16, <page> / ldr x16, [x16 <offset>] / br x16
+        # try parsing both of these formats
 
-            stub_addr = nop_instr.address
-            # op 1, 0 is destination register
-            stub_dest = load_instr.operands[1].value.imm
-            stub = MachoImpStub(stub_addr, stub_dest)
+        irpd = iter(instructions)
+        for instr1, instr2, instr3 in zip(irpd, irpd, irpd):
+            stub = self.parse_stub(instr1, instr2, instr3)
+            if not stub:
+                raise RuntimeError('Failed to parse stub')
             stubs.append(stub)
         return stubs
 

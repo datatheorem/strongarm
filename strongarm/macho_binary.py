@@ -1,5 +1,6 @@
 from macho_definitions import *
 import macho_load_commands
+from decorators import memoized
 
 
 class MachoBinary(object):
@@ -268,6 +269,7 @@ class MachoBinary(object):
         string_table = list(string_table_data)
         return string_table
 
+    @memoized
     def get_symtab_contents(self):
         # type: () -> List[MachoNlist64]
         """

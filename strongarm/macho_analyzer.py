@@ -1,6 +1,7 @@
 from macho_binary import MachoBinary
 from capstone import *
 from typing import Text
+from decorators import memoized
 
 
 class MachoImpStub(object):
@@ -21,9 +22,6 @@ class MachoAnalyzer(object):
         self.binary = bin
         self.cs = Cs(CS_ARCH_ARM64, CS_MODE_ARM)
         self.cs.detail = True
-        self.__imp_stub_section_map = None
-        self.__external_symbol_addr_map = None
-        self.__address_to_symbol_name_map = None
 
         # store this analyzer in class cache
         MachoAnalyzer.active_analyzer_map[bin] = self
@@ -36,13 +34,9 @@ class MachoAnalyzer(object):
         return MachoAnalyzer(bin)
 
     @property
+    @memoized
     def external_symbol_addr_map(self):
         # type: () -> {int, Text}
-
-        # this method is expensive, use cached result if available
-        if self.__external_symbol_addr_map:
-            return self.__external_symbol_addr_map
-
         imported_symbol_map = {}
         lazy_sym_section = self.binary.get_section_with_name('__la_symbol_ptr')
         external_symtab = self.binary.get_external_sym_pointers()
@@ -71,19 +65,13 @@ class MachoAnalyzer(object):
 
             # record this mapping of address to symbol name
             imported_symbol_map[symbol_ptr] = symbol_str
-
-        # cache result so we don't have to do this again
-        self.__external_symbol_addr_map = imported_symbol_map
         return imported_symbol_map
 
+
     @property
+    @memoized
     def imp_stub_section_map(self):
         # type: () -> List[MachoImpStub]
-
-        # this method is expensive, use cached result if available
-        if self.__imp_stub_section_map:
-            return self.__imp_stub_section_map
-
         imp_stub_map = self.external_symbol_addr_map
         stubs_section = self.binary.get_section_with_name('__stubs')
 
@@ -113,17 +101,11 @@ class MachoAnalyzer(object):
             stub_dest = load_instr.operands[1].value.imm
             stub = MachoImpStub(stub_addr, stub_dest)
             stubs.append(stub)
-
-        # cache result so we don't have to do this again
-        self.__imp_stubs_section_map = stubs
         return stubs
 
     @property
+    @memoized
     def address_to_symbol_name_map(self):
-        # this method is expensive, use cached result if available
-        if self.__address_to_symbol_name_map:
-            return self.__address_to_symbol_name_map
-
         symbol_name_map = {}
         stubs = self.imp_stub_section_map
         imp_stub_map = self.external_symbol_addr_map
@@ -131,9 +113,6 @@ class MachoAnalyzer(object):
         for stub in stubs:
             symbol_name = imp_stub_map[stub.destination]
             symbol_name_map[stub.address] = symbol_name
-
-        # cache result so we don't have to do this again
-        self.__address_to_symbol_name_map = symbol_name_map
         return symbol_name_map
 
     def symbol_name_for_branch_destination(self, branch_address):

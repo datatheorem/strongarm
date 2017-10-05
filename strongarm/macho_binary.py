@@ -363,3 +363,7 @@ class MachoBinary(object):
             indirect_symtab_off += sizeof(c_uint32)
         return indirect_symtab
 
+    def get_content_from_virtual_address(self, virtual_address, size):
+        binary_address = virtual_address - self.get_virtual_base()
+        return self.get_bytes(binary_address, size)
+

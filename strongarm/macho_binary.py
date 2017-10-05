@@ -3,6 +3,12 @@ import macho_load_commands
 from decorators import memoized
 
 
+class MachoStringTableEntry(object):
+    def __init__(self, start_idx, length):
+        self.start_idx = start_idx
+        self.length = length
+
+
 class MachoBinary(object):
     def __init__(self, fat_file, offset_within_fat=0):
         # type: (file, int) -> MachoBinary
@@ -286,7 +292,36 @@ class MachoBinary(object):
             symtab.append(nlist)
             # go to next Nlist in file
             symoff += sizeof(MachoNlist64)
+
         return symtab
+
+    @memoized
+    def string_table_index_info_table(self):
+        # preprocess string table to ensure loops run in O(n) instead of O(n^2)
+        # maintain an array of MachoStringTableEntry's which is the same size as the string table array.
+        # so for each index in the string table's array of characters,
+        # have an entry in another table which contains a copy of a MachoStringTableEntry describing the string
+        # corresponding to that string table entry
+        # this way, we can find the symbol name for a given string table index without having to search for a null-
+        # character inside another loop.
+        string_table_index_info_table = []
+        current_str_start_idx = 0
+        strtab = self.get_raw_string_table()
+        for idx, ch in enumerate(strtab):
+            if ch == '\x00':
+                length = idx - current_str_start_idx
+
+                # record in list
+                ent = (current_str_start_idx, length)
+                # max to ensure there's at least 1 entry in list, even if this string entry is just a null char
+                # also, add 1 entry for null character
+                count_to_include = max(1, length + 1)
+                for j in range(count_to_include):
+                    string_table_index_info_table.append(ent)
+
+                # move to starting index of next string
+                current_str_start_idx = idx + 1
+        return string_table_index_info_table
 
     def parse_imported_symbols(self):
         # type: () -> List[Text]
@@ -297,18 +332,19 @@ class MachoBinary(object):
         """
         strtab = self.get_raw_string_table()
         symtab = self.get_symtab_contents()
+        string_table_indexes = self.string_table_index_info_table()
         symbols = []
-        for i in range(len(symtab)):
-            strtab_idx = symtab[i].n_un.n_strx
+        for sym in symtab:
+            strtab_idx = sym.n_un.n_strx
 
             # string table is an array of characters
             # these characters represent symbol names,
             # with a null character delimiting each symbol name
-            # find the length of this symbol by looking for the next null character starting from
-            # the first index of the symbol
-            symbol_string_len = strtab[strtab_idx::].index('\x00')
-            strtab_end_idx = strtab_idx + symbol_string_len
-            symbol_str_characters = strtab[strtab_idx:strtab_end_idx:]
+            # find the string corresponding to this index
+            # use string index table to avoid any array searching within this loop
+            start_idx, length = string_table_indexes[strtab_idx]
+            end_idx = start_idx + length
+            symbol_str_characters = strtab[start_idx:end_idx:]
             symbol_str = ''.join(symbol_str_characters)
 
             symbols.append(symbol_str)

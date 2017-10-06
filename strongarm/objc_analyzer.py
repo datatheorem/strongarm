@@ -7,9 +7,86 @@ from macho_binary import MachoBinary
 
 class ObjcFunctionAnalyzer(object):
     def __init__(self, binary, instructions):
-        # type: (MachoBinary, List[CsInsn]) -> ObjcFunctionAnalyzer
+        # type: (MachoBinary, List[CsInsn]) -> None
+        try:
+            self.start_address = instructions[0].address
+            last_idx = len(instructions) - 1
+            self.end_address = instructions[last_idx].address
+        except IndexError as e:
+            raise RuntimeError('ObjcFunctionAnalyzer was passed invalid instructions')
+
         self.binary = binary
+        self.analyzer = MachoAnalyzer.get_analyzer(binary)
         self._instructions = instructions
+        self.__call_targets = None
+
+    @classmethod
+    def get_function_analyzer(cls, binary, start_address):
+        analyzer = MachoAnalyzer.get_analyzer(binary)
+        instructions = analyzer.get_function_instructions(start_address)
+        print('get_function_analyzer({}) instructions: {}'.format(
+            hex(start_address),
+            instructions
+        ))
+        return ObjcFunctionAnalyzer(binary, instructions)
+
+    @property
+    def call_targets(self):
+        if self.__call_targets is not None:
+            return self.__call_targets
+        targets = []
+
+        last_branch_idx = 0
+        while True:
+            next_branch = self.next_branch(last_branch_idx)
+            if not next_branch:
+                # parsed every branch in this function
+                break
+            targets.append(next_branch)
+            # record that we checked this branch
+            last_branch_idx = self._instructions.index(next_branch.raw_instr)
+            # add 1 to last branch so on the next loop iteration,
+            # we start searching for branches following this instruction which is known to have a branch
+            last_branch_idx += 1
+
+        self.__call_targets = targets
+        return targets
+
+    def can_execute_call(self, call_address):
+        print('recursively searching for invocation of {}'.format(hex(int(call_address))))
+        for target in self.call_targets:
+            # is this a direct call?
+            if target.destination_address == call_address:
+                print('found call to {} at {}'.format(
+                    hex(int(call_address)),
+                    hex(int(target.address))
+                ))
+                return True
+            # don't try to follow this path if it's an external symbol
+            if target.is_external_call:
+                print('not following external symlink {} ({})'.format(
+                    hex(int(target.address)),
+                    target.symbol
+                ))
+                continue
+            # don't try to follow path if it's an internal branch (i.e. control flow within this function)
+            # any internal branching will eventually be covered by call_targets,
+            # so there's no need to follow twice
+            if self.is_local_branch(target):
+                print('skipping local branch {}'.format(hex(int(target.address))))
+                continue
+
+            # recursively check if this destination can call target address
+            child_analyzer = ObjcFunctionAnalyzer.get_function_analyzer(self.binary, target.destination_address)
+            if child_analyzer.can_execute_call(call_address):
+                print('found call in child code path')
+                return True
+        # no code paths reach desired call
+        print('no code paths reach {} from {}'.format(
+            hex(int(call_address)),
+            hex(int(self._instructions[0].address))
+        ))
+        return False
 
     @classmethod
     def format_instruction(cls, instr):
@@ -84,6 +161,9 @@ class ObjcFunctionAnalyzer(object):
                 branch_instr = ObjcBranchInstr(self.binary, instr)
                 return branch_instr
         return None
+
+    def is_local_branch(self, branch_instruction):
+        return self.start_address <= branch_instruction.address <= self.end_address
 
 
 class ObjcBlockAnalyzer(ObjcFunctionAnalyzer):

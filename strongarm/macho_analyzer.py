@@ -161,3 +161,104 @@ class MachoAnalyzer(object):
             hex(branch_address)
         ))
 
+    def _find_function_boundary(self, start_address, size):
+        # type: (int, int) -> int
+        """Helper function to search for a function boundary within a given block of executable code
+
+        This function searches from start_address up to start_address + size looking for a set of
+        instructions resembling a function boundary. If a function boundary is identified its address will be returned,
+        or else 0 will be returned if no boundary was found.
+        """
+
+        # get executable code in requested region
+        func_str = self.binary.get_content_from_virtual_address(virtual_address=start_address, size=size)
+
+        # transform func_str into list of CsInstr
+        instructions = [instr for instr in self.cs.disasm(func_str, start_address)]
+
+        # this will be set to an address if we find one,
+        # or will stay 0. If it remains 0 we know we didn't find the end of the function
+        end_address = 0
+        # flag to be used when we encounter an unconditional branch
+        # if we encounter an unconditional branch and recently loaded the link register with a stored value,
+        # it is exceedingly likely that the unconditional branch serves as the last statement in the function,
+        # as after the branch the link register will contain whatever it was after loading it from the stack here,
+        # and execution will jump back to the caller of this function
+        next_branch_is_return = False
+        # if a function makes no other calls to other subroutines
+        # (and thus never modifies the link register),
+        # then it's possible for the last instruction to be an unconditional branch,
+        # without first loading the link register from the stack
+        # this tracks whether the link register has been modified in the code block
+        # if it has, then we know we can only be at the end of function if we've seen a
+        # ldp ..., x30, ...
+        has_modified_lr = False
+
+        # traverse instructions, looking for signs of end-of-function
+        for instr in instructions:
+            # ret mnemonic is sure sign we've found end of the function!
+            if instr.mnemonic == 'ret':
+                end_address = instr.address
+                break
+
+            # slightly less strong heuristic
+            # in the uncommon case that a function ends in a branch,
+            # it *must* have moved something sane into the link register,
+            # or else the program would jump to an unreasonable place after the branch.
+            # The sole exception to this rule is if a function never modifies the link
+            # register in the first place, which is tracked by has_modified_lr.
+            # we could possibly strengthen the has_modified_lr check by also checking for this pattern:
+            # in the prologue, stp ..., x30, [sp, #0x...]
+            # then a corresponding ldp ..., x30, [sp, #0x...]
+            elif instr.mnemonic == 'ldp':
+                # are we restoring a value into link register?
+                load_dst_1 = instr.reg_name(instr.operands[0].value.reg)
+                load_dst_2 = instr.reg_name(instr.operands[1].value.reg)
+                # link register on ARM64 is x30
+                link_register = 'x30'
+                if load_dst_1 == link_register or load_dst_2 == link_register:
+                    next_branch_is_return = True
+
+            # branch with link inherently modifies the link register,
+            # which means the function *must* have stored link register at some point,
+            # which means we can later use an ldp ..., x30 as a heuristic for function epilogue
+            elif instr.mnemonic == 'bl':
+                has_modified_lr = True
+            elif instr.mnemonic == 'b':
+                if next_branch_is_return or not has_modified_lr:
+                    end_address = instr.address
+                    break
+
+        # long to int
+        end_address = int(end_address)
+        return end_address
+
+    def get_function_address_range(self, function_address):
+        """Retrieve the address range of executable function beginning at function_address
+
+        The return value will be a tuple containing the start and end addresses of executable code belonging
+        to the function starting at address function_address
+        """
+
+        # get_content_from_virtual_address wants a size for how much data to grab,
+        # but we don't actually know how big the function is!
+        # start off by grabbing 256 bytes, and keep doubling search area until we encounter the
+        # function boundary.
+        end_address = 0
+        search_size = 0x100
+        while not end_address:
+            end_address = self._find_function_boundary(function_address, search_size)
+            # double search space
+            search_size *= 2
+
+        return function_address, end_address
+
+    def get_function_instructions(self, start_address):
+        _, end_address = self.get_function_address_range(start_address)
+        if not end_address:
+            raise RuntimeError('Couldn\'t parse function @ {}'.format(start_address))
+        function_size = end_address - start_address
+
+        func_str = self.binary.get_bytes(start_address, function_size)
+        instructions = [instr for instr in self.cs.disasm(func_str, start_address)]
+        return instructions

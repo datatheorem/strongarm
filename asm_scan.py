@@ -51,46 +51,17 @@ def test_sta_142(path):
 
         # get details about completion block invocation
         block_invoke_instr = block_analyzer.invoke_instr
-        block_invoke_instr_idx = instructions.index(block_invoke_instr)
-        block_invoke_addr = block_invoke_instr.address
-
         if not block_invoke_instr:
             print('Buggy app! -[NSURLSessionDelegate URLSession:didReceiveChallenge:completionHandler:] completion '
                   'block never invoked.')
             return False
 
-        # check for any sort of control flow before block invocation
-        # look at every branch preceding block invocation
-        # if _SecTrustEvaluate is called, or a local function is called,
-        # we assume the function acts safely
-        can_call_sec_trust_eval = False
-
-        # check every branch up to block invocation
-        last_branch = 0
-        while last_branch < block_invoke_instr_idx:
-            branch_instr = block_analyzer.next_branch(last_branch)
-
-            if branch_instr.is_external_call:
-                print('Instruction @ {} calls external sym {}'.format(
-                    hex(int(branch_instr.address)),
-                    branch_instr.symbol
-                ))
-                if branch_instr.symbol == '_SecTrustEvaluate':
-                    can_call_sec_trust_eval = True
-            else:
-                print('Instruction @ {} calls local addr   {}'.format(
-                    hex(int(branch_instr.address)),
-                    hex(int(branch_instr.destination_address))
-                ))
-                # TODO(pt) follow local branches and determine if SecTrustEvaluate is
-                # really called before declaring secure
-                can_call_sec_trust_eval = True
-
-            # record that we checked this branch
-            last_branch = instructions.index(branch_instr.raw_instr)
-            # add 1 to last branch so on the next loop iteration,
-            # we start searching for branches following this instruction which is known to have a branch
-            last_branch += 1
+        secTrustEvaluate_stub_addr = analyzer.symbol_name_to_address_map['_SecTrustEvaluate']
+        secTrustEvaluate_reachable = block_analyzer.can_execute_call(secTrustEvaluate_stub_addr)
+        print('secTrustEvaluate_stub_addr {} reachable {}'.format(
+            hex(int(secTrustEvaluate_stub_addr)),
+            secTrustEvaluate_reachable
+        ))
 
         # signature for block invocation:
         # arg0: Block object (applies to all Block invocations)
@@ -111,46 +82,42 @@ def test_sta_142(path):
             # possible this wasn't the first block invocation!
             # this will crash if so, so catch
             # TODO(pt) handle more than one block
+            print('falling back on incorrect behavior because there is more than 1 block invocation')
             authChallengeBehavior = authChallengeDispositions[block_arg1]
         except TypeError as e:
             authChallengeBehavior = authChallengeDispositions[0]
 
-        print('Blck invoke @ {} completionBlock({}, ptr)'.format(
-            hex(int(block_invoke_addr)),
-            authChallengeBehavior
-        ))
-
         if authChallengeBehavior == 'NSURLSessionAuthChallengeUseCredential':
             # app is saying to accept the credentials
             # did they verify that the credentials were valid?
-            if not can_call_sec_trust_eval:
+            if not secTrustEvaluate_reachable:
                 insecure = True
         else:
             print('App either rejected or let system handle certificate validation.')
 
         if insecure:
-            print('-[NSURLSessionDelegate URLSession:didReceiveChallenge:completionHandler:] deterministically does not '
-                  'call SecTrustEvaluate. This app does not perform certificate validation.')
+            print('-[NSURLSessionDelegate URLSession:didReceiveChallenge:completionHandler:] deterministically does '
+                  'not call SecTrustEvaluate. This app does not perform certificate validation.')
         else:
             print('App appears to handle certificate validation correctly. AuthDisposition: {} '
                   'SecTrustEvaluate called? {}'.format(
                 authChallengeBehavior,
-                can_call_sec_trust_eval
+                secTrustEvaluate_reachable
             ))
     return insecure
 
-IPA_PATH_GMRY_BAD = unicode(os.path.join(os.path.dirname(__file__), 'bin', 'GammaRayTestGood.ipa'))
-IPA_PATH_GMRY_BAD = u'/Users/philliptennen/PycharmProjects/strongarm-ios/tests/bin/GammaRayTestGood.ipa'
-IPA_PATH_GMRY_BAD = u'/Users/philliptennen/PycharmProjects/strongarm-ios/tests/bin/GammaRayTestGood.ipa'
-IPA_PATH_GMRY_BAD = u'/Users/philliptennen/PycharmProjects/strongarm-ios/tests/bin/AdobeAcrobat.ipa'
-IPA_PATH_GMRY_BAD = u'/Users/philliptennen/PycharmProjects/strongarm-ios/tests/bin/Events.ipa'
-IPA_PATH_GMRY_BAD = u'/Users/philliptennen/PycharmProjects/strongarm-ios/tests/bin/Sportacular.ipa'
-vulnerable = test_sta_142(IPA_PATH_GMRY_BAD)
-print('{} vulnerable to STA-142? {}'.format(IPA_PATH_GMRY_BAD, vulnerable))
+paths = [
+#    u'./tests/bin/Sportacular.ipa',
+    u'./tests/bin/Events.ipa',
+    u'./tests/bin/AdobeAcrobat.ipa',
+    u'./tests/bin/Cricket.ipa',
+    u'./tests/bin/Airbnb.ipa',
+    u'./tests/bin/HealthHub.ipa',
+#    u'./tests/bin/GammaRayTestBad.ipa'
+]
 
-#    def test_afn_2_4_1(self):
-#        with IosAppPackage(self.IPA_PATH_AFN_2_4_1) as app:
-#            version = AFNetworkingUtils.find_afnetworking_version(app)
-#            self.assertEqual(version, AFNetworkingUtils.VERSION_2_1_0_TO_2_4_1)
-
+for app_path in paths:
+    print('STA-142 check on {}'.format(app_path))
+    vulnerable = test_sta_142(app_path)
+    print('{} vulnerable to STA-142? {}'.format(app_path, vulnerable))
 

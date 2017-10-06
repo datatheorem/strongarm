@@ -145,6 +145,14 @@ class MachoAnalyzer(object):
             symbol_name_map[stub.address] = symbol_name
         return symbol_name_map
 
+    @property
+    @memoized
+    def symbol_name_to_address_map(self):
+        call_address_map = {}
+        for key, value in self.address_to_symbol_name_map.iteritems():
+            call_address_map[value] = key
+        return call_address_map
+
     def symbol_name_for_branch_destination(self, branch_address):
         # type: (int) -> Text
         if branch_address in self.address_to_symbol_name_map:

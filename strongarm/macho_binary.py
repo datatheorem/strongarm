@@ -29,6 +29,7 @@ class MachoBinary(object):
         self.symtab = None
         self.encryption_info = None
         self.imported_functions = None
+        self.classlist = None
         self.header_flags = []
 
         self.parse()
@@ -46,6 +47,7 @@ class MachoBinary(object):
         self.is_64bit = self.magic_is_64()
         self.parse_header()
         self.imported_functions = self.parse_imported_symbols()
+        self.parse_classlist()
 
     def check_magic(self):
         # type: () -> bool
@@ -402,4 +404,111 @@ class MachoBinary(object):
     def get_content_from_virtual_address(self, virtual_address, size):
         binary_address = virtual_address - self.get_virtual_base()
         return self.get_bytes(binary_address, size)
+
+    def parse_selrefs(self):
+        methname_header = self.get_section_with_name('__objc_methname')
+        selref_header = self.get_section_with_name('__objc_selrefs')
+
+        print('methname header {}'.format(methname_header))
+        print('selref header {}'.format(selref_header))
+
+        methname = self.get_section_content(methname_header)
+        selref = self.get_section_content(selref_header)
+        print('len methname content {}'.format(hex(len(methname))))
+        print('len selref content {}'.format(hex(len(selref))))
+
+        # methname section data is essentially a packed character array of selector names
+        # the order of selector string literals within this array is the same as the order of selrefs
+        # in the __objc_selrefs section
+        # thus, we can map __objc_methname string literals directly to pointers in __objc_selrefs,
+        # because the order in each is the same
+
+        # read methname into list of full strings
+        selector_names = []
+        str_start_idx = 0
+        for idx, ch in enumerate(methname):
+            if chr(ch) == '\x00':
+                # end of this string
+                # read entire string into selector_names
+                sel_name = str(methname[str_start_idx:idx])
+                selector_names.append(sel_name)
+                # next string will start at the byte after this one
+                str_start_idx = idx + 1
+
+        # read selref into list of pointers
+        selrefs_size = selref_header.size / sizeof(c_uint64)
+        selref_ptrs = []
+        selref_off = 0
+        for i in range(selrefs_size):
+            selref_entry_end = selref_off + sizeof(c_uint64)
+            selref_entry = c_uint64.from_buffer(bytearray(selref[selref_off:selref_entry_end])).value
+            selref_ptrs.append(selref_entry)
+            selref_off += sizeof(c_uint64)
+
+        self.selref_map = {}
+        for name, ptr in zip(selector_names, selref_ptrs):
+            self.selref_map[ptr] = name
+        for k,v in self.selref_map.iteritems():
+            print('{}: {}'.format(
+                hex(int(k)),
+                v,
+            ))
+        return self.selref_map
+
+    def crossref_classlist(self):
+        classlist_entries = []
+        for idx, ent in enumerate(self.classlist):
+            file_ptr = ent - self.get_virtual_base()
+            raw_struct_data = self.get_bytes(file_ptr, sizeof(ObjcClass))
+            class_entry = ObjcClass.from_buffer(bytearray(raw_struct_data))
+            classlist_entries.append(class_entry)
+#            print('ObjcClass metaclass {} super {} cache {} vtable {} data {}'.format(
+#                hex((class_entry.metaclass)),
+#                hex((class_entry.superclass)),
+#                hex((class_entry.cache)),
+#                hex((class_entry.vtable)),
+#                hex((class_entry.data)),
+#            ))
+        self.parse_classlist_entries(classlist_entries)
+
+    def parse_classlist_entries(self, classlist_entries):
+        # type: (List[ObjcClass]) -> None
+        objc_data_entries = []
+        for i, class_ent in enumerate(classlist_entries):
+            data_file_ptr = class_ent.data - self.get_virtual_base()
+            raw_struct_data = self.get_bytes(data_file_ptr, sizeof(ObjcData))
+            data_entry = ObjcData.from_buffer(bytearray(raw_struct_data))
+            objc_data_entries.append(data_entry)
+        self.parse_objc_data_entries(objc_data_entries)
+
+    def parse_objc_data_entries(self, objc_data_entries):
+        # type: (List[ObjcData]) -> None
+        for ent in objc_data_entries:
+            methlist_file_ptr = ent.base_methods - self.get_virtual_base()
+            raw_struct_data = self.get_bytes(methlist_file_ptr, sizeof(ObjcMethodList))
+            methlist = ObjcMethodList.from_buffer(bytearray(raw_struct_data))
+
+            # parse every entry in method list
+            method_entry_off = methlist_file_ptr + sizeof(ObjcMethodList)
+            for i in range(methlist.methcount):
+                raw_struct_data = self.get_bytes(method_entry_off, sizeof(ObjcMethod))
+                method_ent = ObjcMethod.from_buffer(bytearray(raw_struct_data))
+                print('got method entry w sel {} imp {}'.format(hex(int(method_ent.name)), hex(int(method_ent.implementation))))
+                method_entry_off += sizeof(ObjcMethod)
+
+    def parse_classlist(self):
+        classlist_cmd = self.get_section_with_name('__objc_classlist')
+        classlist_data = self.get_section_content(classlist_cmd)
+        classlist_size = len(classlist_data) / sizeof(c_uint64)
+        classlist_off = 0
+        classlist = []
+        for i in range(classlist_size):
+            data_end = classlist_off + sizeof(c_uint64)
+            val = c_uint64.from_buffer(classlist_data[classlist_off:data_end]).value
+            classlist.append(val)
+            classlist_off += sizeof(c_uint64)
+
+        self.classlist = classlist
+        self.crossref_classlist()
+        return classlist
 

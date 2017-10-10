@@ -5,12 +5,13 @@ import sys
 
 from strongarm.macho_parse import MachoParser
 from strongarm.macho_analyzer import *
+from strongarm.macho_binary import MachoBinary
 from strongarm.objc_analyzer import *
 
 from gammaray import ios_app
 
 def calls_selector(app, instructions, sel):
-    # type (IosAppBinary, List[capstone.CsInsn], Text) -> bool
+    # type: (IosAppBinary, List[CsInsn], Text) -> bool
     imp_addr, _ = app.get_method_address_range(sel)
     print("sel {} implemented at {}".format(sel, imp_addr))
     for instr in instructions:

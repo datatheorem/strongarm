@@ -165,6 +165,38 @@ class ObjcFunctionAnalyzer(object):
     def is_local_branch(self, branch_instruction):
         return self.start_address <= branch_instruction.address <= self.end_address
 
+    def get_selref(self, msgsend_instr):
+        # search backwards from objc_msgSend call to SEL load
+        msgsend_index = self._instructions.index(msgsend_instr)
+        for idx, instr in enumerate(self._instructions[msgsend_index::-1]):
+            if instr.mnemonic == 'adrp':
+                # this instruction loads the virtual page which this selref is contained in
+                # addr is operand 2: adrp x8, 0xdeadbeef
+                page = instr.operands[1].value.imm
+
+                # instr after this should be ldr into x1
+                function_index = msgsend_index - idx
+                instr2 = self._instructions[function_index + 1]
+                slide_op = instr2.operands[1]
+
+                print('adrp instr: {}'.format(ObjcBlockAnalyzer.format_instruction(instr)))
+                print('slide instr: {}'.format(ObjcBlockAnalyzer.format_instruction(instr2)))
+                if instr2.mnemonic != 'ldr' or slide_op.type != ARM64_OP_MEM:
+#                        if instr.reg_name(src.mem.base) in self.registers_containing_block and src.mem.disp == 0x10:
+                    raise RuntimeError('encountered unknown pattern while looking for selref')
+                pageoff = instr2.operands[1].mem.disp
+                print('page {} off {}'.format(
+                    hex(int(page)),
+                    hex(int(pageoff))
+                ))
+                selref_ptr_addr = page + pageoff
+                fileoff = selref_ptr_addr - self.binary.get_virtual_base()
+                print('selref_ptr_addr {} fileoff {}'.format(hex(int(selref_ptr_addr)), hex(int(fileoff))))
+                from ctypes import c_uint64, sizeof
+                selref = c_uint64.from_buffer(bytearray(self.binary.get_bytes(fileoff, sizeof(c_uint64)))).value
+                print('selref {}'.format(hex(selref)))
+                return selref
+
 
 class ObjcBlockAnalyzer(ObjcFunctionAnalyzer):
     def __init__(self, binary, instructions, initial_block_reg):
@@ -223,5 +255,5 @@ class ObjcBlockAnalyzer(ObjcFunctionAnalyzer):
                     # return immediate value if source is not a register
                     if instr.mnemonic == 'movz':
                         return src.value.imm
-                    # source is a register, return reg name
+                    # source is a register, return register name
                     return instr.reg_name(src.value.reg)

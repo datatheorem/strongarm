@@ -53,14 +53,11 @@ class MachoParser(object):
 
         # MachoBinary constructor will throw an exception if the header can't be parsed
         try:
-            attempt = MachoBinary(self._file, fileoff, debug=True)
+            attempt = MachoBinary(self._file, fileoff)
             # if the MachoBinary does not have a header, there was a problem parsing it
             if attempt.header:
                 self.slices.append(attempt)
         except RuntimeError as e:
-            print('Failed to parse Mach-O slice at fileoff {}, continuing'.format(
-                hex(int(fileoff))
-            ))
             pass
 
     @staticmethod

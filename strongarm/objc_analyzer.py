@@ -3,6 +3,7 @@ from capstone.arm64 import *
 from typing import *
 from objc_instruction import *
 from macho_binary import MachoBinary
+from debug_util import DebugUtil
 
 
 class ObjcFunctionAnalyzer(object):
@@ -20,14 +21,16 @@ class ObjcFunctionAnalyzer(object):
         self._instructions = instructions
         self.__call_targets = None
 
+    def debug_print(self, output):
+        DebugUtil.log(self, 'func({}) {}'.format(
+            hex(int(self._instructions[0].address)),
+            output
+        ))
+
     @classmethod
     def get_function_analyzer(cls, binary, start_address):
         analyzer = MachoAnalyzer.get_analyzer(binary)
         instructions = analyzer.get_function_instructions(start_address)
-        print('get_function_analyzer({}) instructions: {}'.format(
-            hex(start_address),
-            instructions
-        ))
         return ObjcFunctionAnalyzer(binary, instructions)
 
     @property
@@ -53,19 +56,18 @@ class ObjcFunctionAnalyzer(object):
         return targets
 
     def can_execute_call(self, call_address):
-        print('recursively searching for invocation of {}'.format(hex(int(call_address))))
+        self.debug_print('recursively searching for invocation of {}'.format(hex(int(call_address))))
         for target in self.call_targets:
             # is this a direct call?
             if target.destination_address == call_address:
-                print('found call to {} at {}'.format(
+                self.debug_print('found call to {} at {}'.format(
                     hex(int(call_address)),
                     hex(int(target.address))
                 ))
                 return True
-            # don't try to follow this path if it's an external symbol
-            if target.is_external_call:
-                print('not following external symlink {} ({})'.format(
-                    hex(int(target.address)),
+            # don't try to follow this path if it's an external symbol and not an objc_msgSend call
+            if target.is_external_c_call and not target.is_msgSend_call:
+                self.debug_print('{}(...)'.format(
                     target.symbol
                 ))
                 continue
@@ -73,18 +75,19 @@ class ObjcFunctionAnalyzer(object):
             # any internal branching will eventually be covered by call_targets,
             # so there's no need to follow twice
             if self.is_local_branch(target):
-                print('skipping local branch {}'.format(hex(int(target.address))))
+                self.debug_print('local goto -> {}'.format(hex(int(target.destination_address))))
                 continue
 
             # recursively check if this destination can call target address
             child_analyzer = ObjcFunctionAnalyzer.get_function_analyzer(self.binary, target.destination_address)
             if child_analyzer.can_execute_call(call_address):
-                print('found call in child code path')
+                self.debug_print('found call to {} in child code path'.format(
+                    hex(int(call_address))
+                ))
                 return True
         # no code paths reach desired call
-        print('no code paths reach {} from {}'.format(
-            hex(int(call_address)),
-            hex(int(self._instructions[0].address))
+        self.debug_print('no code paths reach {}'.format(
+            hex(int(call_address))
         ))
         return False
 

@@ -1,6 +1,7 @@
 from macho_definitions import *
 import macho_load_commands
 from decorators import memoized
+from debug_util import DebugUtil
 
 
 class MachoStringTableEntry(object):
@@ -10,10 +11,9 @@ class MachoStringTableEntry(object):
 
 
 class MachoBinary(object):
-    def __init__(self, fat_file, offset_within_fat=0, debug=False):
+    def __init__(self, fat_file, offset_within_fat=0):
         # type: (file, int) -> MachoBinary
         self._file = fat_file
-        self._debug = debug
         self.offset_within_fat = offset_within_fat
 
         self.is_64bit = False
@@ -39,10 +39,6 @@ class MachoBinary(object):
         if not self.parse():
             raise RuntimeError('Failed to parse Mach-O')
 
-    def _debug_print(self, output):
-        if self._debug:
-            print('MachoBinary: {}'.format(output))
-
     def parse(self):
         # type: () -> Bool
         """
@@ -50,17 +46,17 @@ class MachoBinary(object):
         This method may throw an exception if the provided data does not represent a valid or supported
         Mach-O slice.
         """
-        self._debug_print('parsing Mach-O slice from {}'.format(self._file))
+        DebugUtil.log(self, 'parsing Mach-O slice from {}'.format(self._file))
 
         # preliminary Mach-O parsing
         if not self.check_magic():
-            self._debug_print('unsupported magic {}, stopping'.format(hex(int(self.magic))))
+            DebugUtil.log(self, 'unsupported magic {}'.format(hex(int(self.magic))))
             return False
         self.is_swap = self.should_swap_bytes()
         self.is_64bit = self.magic_is_64()
         self.parse_header()
 
-        self._debug_print('header parsed. non-native endianness? {}. 64-bit? {}'.format(self.is_swap, self.is_64bit))
+        DebugUtil.log(self, 'header parsed. non-native endianness? {}. 64-bit? {}'.format(self.is_swap, self.is_64bit))
 
         # perform analysis on binary
         self.imported_functions = self.parse_imported_symbols()
@@ -465,7 +461,7 @@ class MachoBinary(object):
             data_entry = ObjcData.from_buffer(bytearray(raw_struct_data))
             # ensure this is a valid entry
             if data_entry.name < self.get_virtual_base():
-                self._debug_print('caught ObjcData struct with invalid fields at {}'.format(
+                DebugUtil.log(self, 'caught ObjcData struct with invalid fields at {}'.format(
                     hex(int(data_file_ptr + self.get_virtual_base()))
                 ))
                 continue
@@ -516,7 +512,7 @@ class MachoBinary(object):
             try:
                 imp_ptr = self._selname_to_imp_map[string_ptr]
             except KeyError as e:
-                #self._debug_print('sel name at {} had no imp'.format(hex(int(string_ptr))))
+                # DebugUtil.log(self, 'selref at {} had no imp'.format(hex(int(selref_ptr))))
                 continue
             self._selref_ptr_to_imp_map[selref_ptr] = imp_ptr
 

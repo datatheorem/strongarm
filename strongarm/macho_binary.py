@@ -33,7 +33,9 @@ class MachoBinary(object):
         self.classlist = None
         self.header_flags = []
 
-        self.parse()
+        self._selname_to_imp_map = None
+        self._selref_ptr_to_imp_map = None
+
         if not self.parse():
             raise RuntimeError('Failed to parse Mach-O')
 
@@ -63,6 +65,7 @@ class MachoBinary(object):
         # perform analysis on binary
         self.imported_functions = self.parse_imported_symbols()
         self.parse_classlist()
+        self._create_selref_to_name_map()
 
         return True
 
@@ -419,55 +422,6 @@ class MachoBinary(object):
         binary_address = virtual_address - self.get_virtual_base()
         return self.get_bytes(binary_address, size)
 
-    def parse_selrefs(self):
-        methname_header = self.get_section_with_name('__objc_methname')
-        selref_header = self.get_section_with_name('__objc_selrefs')
-
-        print('methname header {}'.format(methname_header))
-        print('selref header {}'.format(selref_header))
-
-        methname = self.get_section_content(methname_header)
-        selref = self.get_section_content(selref_header)
-        print('len methname content {}'.format(hex(len(methname))))
-        print('len selref content {}'.format(hex(len(selref))))
-
-        # methname section data is essentially a packed character array of selector names
-        # the order of selector string literals within this array is the same as the order of selrefs
-        # in the __objc_selrefs section
-        # thus, we can map __objc_methname string literals directly to pointers in __objc_selrefs,
-        # because the order in each is the same
-
-        # read methname into list of full strings
-        selector_names = []
-        str_start_idx = 0
-        for idx, ch in enumerate(methname):
-            if chr(ch) == '\x00':
-                # end of this string
-                # read entire string into selector_names
-                sel_name = str(methname[str_start_idx:idx])
-                selector_names.append(sel_name)
-                # next string will start at the byte after this one
-                str_start_idx = idx + 1
-
-        # read selref into list of pointers
-        selrefs_size = selref_header.size / sizeof(c_uint64)
-        selref_ptrs = []
-        selref_off = 0
-        for i in range(selrefs_size):
-            selref_entry_end = selref_off + sizeof(c_uint64)
-            selref_entry = c_uint64.from_buffer(bytearray(selref[selref_off:selref_entry_end])).value
-            selref_ptrs.append(selref_entry)
-            selref_off += sizeof(c_uint64)
-
-        self.selref_map = {}
-        for name, ptr in zip(selector_names, selref_ptrs):
-            self.selref_map[ptr] = name
-        for k,v in self.selref_map.iteritems():
-            print('{}: {}'.format(
-                hex(int(k)),
-                v,
-            ))
-        return self.selref_map
 
     def crossref_classlist(self):
         classlist_entries = []

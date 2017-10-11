@@ -180,7 +180,7 @@ class ObjcFunctionAnalyzer(object):
         return None
 
     def is_local_branch(self, branch_instruction):
-        return self.start_address <= branch_instruction.address <= self.end_address
+        return self.start_address <= branch_instruction.destination_address <= self.end_address
 
     def get_selref(self, msgsend_instr):
         # search backwards from objc_msgSend call to SEL load

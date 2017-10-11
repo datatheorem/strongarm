@@ -176,6 +176,46 @@ class ObjcFunctionAnalyzer(object):
                 # found next branch!
                 # wrap in ObjcBranchInstr object
                 branch_instr = ObjcBranchInstr(self.binary, instr)
+
+                # if this is an objc_msgSend target, patch destination_address to be the address of the targeted IMP
+                # note! this means destination_address is *not* the actual destination address of the instruction
+                # the *real* destination will be a stub function corresponding to __objc_msgSend, but
+                # knowledge of this is largely useless, and the much more valuable piece of information is which function
+                # the selector passed to objc_msgSend corresponds to.
+                # therefore, replace the 'real' destination address with the requested IMP
+                if branch_instr.is_msgSend_call:
+                    selref = self.get_selref(branch_instr.raw_instr)
+                    # attempt to get an IMP for this selref
+                    try:
+                        sel_imp = self.binary.imp_for_selref(selref)
+                    except RuntimeError as e:
+                        # if imp_for_selref threw an exception,
+                        # then the only explanation is that we read the selref incorrectly
+                        # this could have been the pattern:
+                        # adrp x8, #0x1011bc000
+                        # ldr x22, [x8, #0x370] <-- this is where our selref gets loaded, into x22
+                        # ...
+                        # adrp       x8, #0x1011d2000
+                        # ldr        x24, [x8, #0xf48] <-- unrelated load we don't care about
+                        # mov x1, x22
+                        # bl <objc_msgSend>
+                        # in the above example, get_selref would have incorrectly caught the _second_ ldr, which
+                        # loads something unrelated, instead of the _first_ which contains the correct selref,
+                        # since get_selref only searches backwards from objc_msgSend to the first ldr.
+                        # TODO(PT): do more rigorous register data flow analysis to fix this bug
+                        self.debug_print('Stronger dataflow analysis required to follow objc_msgSend call at {}'.format(
+                            hex(int(branch_instr.raw_instr.address))
+                        ))
+                        sel_imp = None
+
+                    # if we couldn't find an IMP for this selref,
+                    # it is defined in a class outside this binary
+                    if not sel_imp:
+                        branch_instr.is_external_objc_call = True
+
+                    branch_instr.selref = selref
+                    branch_instr.destination_address = sel_imp
+
                 return branch_instr
         return None
 

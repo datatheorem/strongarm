@@ -448,22 +448,38 @@ class MachoBinary(object):
         self.crossref_classlist()
         return classlist
 
+    def read_classlist_entry(self, entry_location):
+        file_ptr = entry_location - self.get_virtual_base()
+        raw_struct_data = self.get_bytes(file_ptr, sizeof(ObjcClass))
+        class_entry = ObjcClass.from_buffer(bytearray(raw_struct_data))
+
+        # sanitize class_entry
+        # it seems for Swift classes,
+        # the compiler will add 1 to the data field
+        # TODO(pt) detecting this can be a heuristic for finding Swift classes!
+        # mod data field to a byte size
+        overlap = class_entry.data % 0x8
+        class_entry.data -= overlap
+        return class_entry
+
     def crossref_classlist(self):
+        objc_data_cmd = self.get_section_with_name('__objc_data')
+        objc_data_start = objc_data_cmd.addr
+        objc_data_end = objc_data_start + objc_data_cmd.size
+
         classlist_entries = []
         for idx, ent in enumerate(self.classlist):
-            file_ptr = ent - self.get_virtual_base()
-            raw_struct_data = self.get_bytes(file_ptr, sizeof(ObjcClass))
-            class_entry = ObjcClass.from_buffer(bytearray(raw_struct_data))
-
-            # sanitize class_entry
-            # it seems for Swift classes,
-            # the compiler will add 1 to the data field
-            # TODO(pt) detecting this can be a heuristic for finding Swift classes!
-            # mod data field to a byte size
-            overlap = class_entry.data % 0x8
-            class_entry.data -= overlap
-
+            class_entry = self.read_classlist_entry(ent)
             classlist_entries.append(class_entry)
+
+            # is the metaclass implemented within this binary?
+            # we know if it's implemented within the binary if the metaclass pointer is within the __objc_data
+            # section.
+            if objc_data_start <= class_entry.metaclass < objc_data_end:
+                # read metaclass as well and append to list
+                metaclass_entry = self.read_classlist_entry(class_entry.metaclass)
+                classlist_entries.append(metaclass_entry)
+
         self.parse_classlist_entries(classlist_entries)
 
     def parse_classlist_entries(self, classlist_entries):

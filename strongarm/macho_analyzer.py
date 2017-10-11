@@ -259,6 +259,6 @@ class MachoAnalyzer(object):
             raise RuntimeError('Couldn\'t parse function @ {}'.format(start_address))
         function_size = end_address - start_address
 
-        func_str = self.binary.get_bytes(start_address, function_size)
+        func_str = self.binary.get_bytes(start_address - self.binary.get_virtual_base(), function_size)
         instructions = [instr for instr in self.cs.disasm(func_str, start_address)]
         return instructions

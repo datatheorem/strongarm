@@ -10,9 +10,10 @@ class MachoStringTableEntry(object):
 
 
 class MachoBinary(object):
-    def __init__(self, fat_file, offset_within_fat=0):
+    def __init__(self, fat_file, offset_within_fat=0, debug=False):
         # type: (file, int) -> MachoBinary
         self._file = fat_file
+        self._debug = debug
         self.offset_within_fat = offset_within_fat
 
         self.is_64bit = False
@@ -33,21 +34,37 @@ class MachoBinary(object):
         self.header_flags = []
 
         self.parse()
+        if not self.parse():
+            raise RuntimeError('Failed to parse Mach-O')
+
+    def _debug_print(self, output):
+        if self._debug:
+            print('MachoBinary: {}'.format(output))
 
     def parse(self):
-        # type: () -> None
+        # type: () -> Bool
         """
         Attempt to parse the provided file contents as a MachO slice
         This method may throw an exception if the provided data does not represent a valid or supported
         Mach-O slice.
         """
+        self._debug_print('parsing Mach-O slice from {}'.format(self._file))
+
+        # preliminary Mach-O parsing
         if not self.check_magic():
-            return
+            self._debug_print('unsupported magic {}, stopping'.format(hex(int(self.magic))))
+            return False
         self.is_swap = self.should_swap_bytes()
         self.is_64bit = self.magic_is_64()
         self.parse_header()
+
+        self._debug_print('header parsed. non-native endianness? {}. 64-bit? {}'.format(self.is_swap, self.is_64bit))
+
+        # perform analysis on binary
         self.imported_functions = self.parse_imported_symbols()
         self.parse_classlist()
+
+        return True
 
     def check_magic(self):
         # type: () -> bool
@@ -70,12 +87,9 @@ class MachoBinary(object):
         self.is_swap = self.should_swap_bytes()
 
         if self.magic in mag32:
-            raise RuntimeError('32-bit Mach-O slices not supported')
+            return False
         if self.magic not in valid_mag:
-            raise RuntimeError('Macho slice @ {} had invalid magic {}'.format(
-                hex(int(self.offset_within_fat)),
-                hex(int(self.magic))
-            ))
+            return False
         return True
 
     def magic_is_64(self):
@@ -478,6 +492,12 @@ class MachoBinary(object):
             data_file_ptr = class_ent.data - self.get_virtual_base()
             raw_struct_data = self.get_bytes(data_file_ptr, sizeof(ObjcData))
             data_entry = ObjcData.from_buffer(bytearray(raw_struct_data))
+            # ensure this is a valid entry
+            if data_entry.name < self.get_virtual_base():
+                self._debug_print('caught ObjcData struct with invalid fields at {}'.format(
+                    hex(int(data_file_ptr + self.get_virtual_base()))
+                ))
+                continue
             objc_data_entries.append(data_entry)
         self.parse_objc_data_entries(objc_data_entries)
 

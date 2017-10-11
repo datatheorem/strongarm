@@ -11,6 +11,10 @@ class ObjcInstr(object):
         self.address = self.raw_instr.address
         self.analyzer = MachoAnalyzer.get_analyzer(binary)
 
+        self.is_msgSend_call = False
+        self.destination_address = None
+        self.symbol = None
+
 
 class ObjcBranchInstr(ObjcInstr):
     def __init__(self, binary, instruction):
@@ -23,5 +27,10 @@ class ObjcBranchInstr(ObjcInstr):
         self.symbol = None
         if self.destination_address in external_c_sym_map:
             self.symbol = external_c_sym_map[self.destination_address]
+            if self.symbol == '_objc_msgSend':
+                self.is_msgSend_call = True
 
-        self.is_external_call = self.symbol is not None
+        self.is_external_c_call = self.symbol is not None
+
+        self.selref = None
+        self.is_external_objc_call = False

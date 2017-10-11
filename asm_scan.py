@@ -56,6 +56,7 @@ def test_sta_142(path):
                   'block never invoked.')
             return False
 
+        # does this IMP have any branches calling out to _SecTrustEvaluate?
         secTrustEvaluate_stub_addr = analyzer.symbol_name_to_address_map['_SecTrustEvaluate']
         secTrustEvaluate_reachable = block_analyzer.can_execute_call(secTrustEvaluate_stub_addr)
         print('secTrustEvaluate_stub_addr {} reachable {}'.format(
@@ -70,6 +71,7 @@ def test_sta_142(path):
 
         # find arg1 to block call
         block_arg1 = block_analyzer.get_block_arg(1)
+        print('block_arg1 {}'.format(block_arg1))
 
         authChallengeDispositions = ['NSURLSessionAuthChallengeUseCredential',
                                      'NSURLSessionAuthChallengePerformDefaultHandling',
@@ -82,9 +84,10 @@ def test_sta_142(path):
             # possible this wasn't the first block invocation!
             # this will crash if so, so catch
             # TODO(pt) handle more than one block
-            print('falling back on incorrect behavior because there is more than 1 block invocation')
+            #print('falling back on incorrect behavior because there is more than 1 block invocation')
             authChallengeBehavior = authChallengeDispositions[block_arg1]
         except TypeError as e:
+            print('unknown block arg {}'.format(block_arg1))
             authChallengeBehavior = authChallengeDispositions[0]
 
         if authChallengeBehavior == 'NSURLSessionAuthChallengeUseCredential':
@@ -97,7 +100,8 @@ def test_sta_142(path):
 
         if insecure:
             print('-[NSURLSessionDelegate URLSession:didReceiveChallenge:completionHandler:] deterministically does '
-                  'not call SecTrustEvaluate. This app does not perform certificate validation.')
+                  'not call SecTrustEvaluate, but uses NSURLSessionAuthChallengeUseCredential. '
+                  'This app does not perform certificate validation.')
         else:
             print('App appears to handle certificate validation correctly. AuthDisposition: {} '
                   'SecTrustEvaluate called? {}'.format(
@@ -108,16 +112,17 @@ def test_sta_142(path):
 
 paths = [
 #    u'./tests/bin/Sportacular.ipa',
-    u'./tests/bin/Events.ipa',
+#    u'./tests/bin/Events.ipa',
     u'./tests/bin/AdobeAcrobat.ipa',
-    u'./tests/bin/Cricket.ipa',
-    u'./tests/bin/Airbnb.ipa',
-    u'./tests/bin/HealthHub.ipa',
+#    u'./tests/bin/Cricket.ipa',
+#    u'./tests/bin/Airbnb.ipa',
+#    u'./tests/bin/HealthHub.ipa',
 #    u'./tests/bin/GammaRayTestBad.ipa'
 ]
 
+DebugUtil.debug = True
 for app_path in paths:
     print('STA-142 check on {}'.format(app_path))
     vulnerable = test_sta_142(app_path)
-    print('{} vulnerable to STA-142? {}'.format(app_path, vulnerable))
-
+    print('{} passed? {}'.format(app_path, not vulnerable))
+    #print('{} vulnerable to STA-142? {}'.format(app_path, vulnerable))

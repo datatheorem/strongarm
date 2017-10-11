@@ -179,23 +179,12 @@ class ObjcFunctionAnalyzer(object):
                 instr2 = self._instructions[function_index + 1]
                 slide_op = instr2.operands[1]
 
-                print('adrp instr: {}'.format(ObjcBlockAnalyzer.format_instruction(instr)))
-                print('slide instr: {}'.format(ObjcBlockAnalyzer.format_instruction(instr2)))
                 if instr2.mnemonic != 'ldr' or slide_op.type != ARM64_OP_MEM:
-#                        if instr.reg_name(src.mem.base) in self.registers_containing_block and src.mem.disp == 0x10:
                     raise RuntimeError('encountered unknown pattern while looking for selref')
+
                 pageoff = instr2.operands[1].mem.disp
-                print('page {} off {}'.format(
-                    hex(int(page)),
-                    hex(int(pageoff))
-                ))
                 selref_ptr_addr = page + pageoff
-                fileoff = selref_ptr_addr - self.binary.get_virtual_base()
-                print('selref_ptr_addr {} fileoff {}'.format(hex(int(selref_ptr_addr)), hex(int(fileoff))))
-                from ctypes import c_uint64, sizeof
-                selref = c_uint64.from_buffer(bytearray(self.binary.get_bytes(fileoff, sizeof(c_uint64)))).value
-                print('selref {}'.format(hex(selref)))
-                return selref
+                return selref_ptr_addr
 
 
 class ObjcBlockAnalyzer(ObjcFunctionAnalyzer):

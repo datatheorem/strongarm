@@ -216,3 +216,44 @@ class HEADER_FLAGS(object):
     HAS_TLV_DESCRIPTORS = 0x800000
     NO_HEAP_EXECUTION = 0x1000000
     APP_EXTENSION_SAFE = 0x2000000
+
+
+class ObjcClass(Structure):
+    _fields_ = [
+        ('metaclass', c_uint64),
+        ('superclass', c_uint64),
+        ('cache', c_uint64),
+        ('vtable', c_uint64),
+        ('data', c_uint64)
+    ]
+
+
+class ObjcData(Structure):
+    _fields_ = [
+        ('flags', c_uint32),
+        ('instance_start', c_uint32),
+        ('instance_size', c_uint32),
+        ('reserved', c_uint32),
+        ('ivar_layout', c_uint64),
+        ('name', c_uint64),
+        ('base_methods', c_uint64),
+        ('base_protocols', c_uint64),
+        ('ivars', c_uint64),
+        ('weak_ivar_layout', c_uint64),
+        ('base_properties', c_uint64),
+    ]
+
+
+class ObjcMethodList(Structure):
+    _fields_ = [
+        ('flags', c_uint32),
+        ('methcount', c_uint32),
+    ]
+
+
+class ObjcMethod(Structure):
+    _fields_ = [
+        ('name', c_uint64),
+        ('signature', c_uint64),
+        ('implementation', c_uint64)
+    ]

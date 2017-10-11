@@ -422,6 +422,21 @@ class MachoBinary(object):
         binary_address = virtual_address - self.get_virtual_base()
         return self.get_bytes(binary_address, size)
 
+    def parse_classlist(self):
+        classlist_cmd = self.get_section_with_name('__objc_classlist')
+        classlist_data = self.get_section_content(classlist_cmd)
+        classlist_size = len(classlist_data) / sizeof(c_uint64)
+        classlist_off = 0
+        classlist = []
+        for i in range(classlist_size):
+            data_end = classlist_off + sizeof(c_uint64)
+            val = c_uint64.from_buffer(classlist_data[classlist_off:data_end]).value
+            classlist.append(val)
+            classlist_off += sizeof(c_uint64)
+
+        self.classlist = classlist
+        self.crossref_classlist()
+        return classlist
 
     def crossref_classlist(self):
         classlist_entries = []
@@ -429,14 +444,16 @@ class MachoBinary(object):
             file_ptr = ent - self.get_virtual_base()
             raw_struct_data = self.get_bytes(file_ptr, sizeof(ObjcClass))
             class_entry = ObjcClass.from_buffer(bytearray(raw_struct_data))
+
+            # sanitize class_entry
+            # it seems for Swift classes,
+            # the compiler will add 1 to the data field
+            # TODO(pt) detecting this can be a heuristic for finding Swift classes!
+            # mod data field to a byte size
+            overlap = class_entry.data % 0x8
+            class_entry.data -= overlap
+
             classlist_entries.append(class_entry)
-#            print('ObjcClass metaclass {} super {} cache {} vtable {} data {}'.format(
-#                hex((class_entry.metaclass)),
-#                hex((class_entry.superclass)),
-#                hex((class_entry.cache)),
-#                hex((class_entry.vtable)),
-#                hex((class_entry.data)),
-#            ))
         self.parse_classlist_entries(classlist_entries)
 
     def parse_classlist_entries(self, classlist_entries):
@@ -457,8 +474,11 @@ class MachoBinary(object):
 
     def parse_objc_data_entries(self, objc_data_entries):
         # type: (List[ObjcData]) -> None
+        self._selname_to_imp_map = {}
         for ent in objc_data_entries:
             methlist_file_ptr = ent.base_methods - self.get_virtual_base()
+            if ent.base_methods == 0:
+                continue
             raw_struct_data = self.get_bytes(methlist_file_ptr, sizeof(ObjcMethodList))
             methlist = ObjcMethodList.from_buffer(bytearray(raw_struct_data))
 
@@ -467,22 +487,39 @@ class MachoBinary(object):
             for i in range(methlist.methcount):
                 raw_struct_data = self.get_bytes(method_entry_off, sizeof(ObjcMethod))
                 method_ent = ObjcMethod.from_buffer(bytearray(raw_struct_data))
-                print('got method entry w sel {} imp {}'.format(hex(int(method_ent.name)), hex(int(method_ent.implementation))))
+
+                name_start = method_ent.name
+                self._selname_to_imp_map[method_ent.name] = method_ent.implementation
+
                 method_entry_off += sizeof(ObjcMethod)
 
-    def parse_classlist(self):
-        classlist_cmd = self.get_section_with_name('__objc_classlist')
-        classlist_data = self.get_section_content(classlist_cmd)
-        classlist_size = len(classlist_data) / sizeof(c_uint64)
-        classlist_off = 0
-        classlist = []
-        for i in range(classlist_size):
-            data_end = classlist_off + sizeof(c_uint64)
-            val = c_uint64.from_buffer(classlist_data[classlist_off:data_end]).value
-            classlist.append(val)
-            classlist_off += sizeof(c_uint64)
+    def _create_selref_to_name_map(self):
+        selrefs = []
+        selref_cmd = self.get_section_with_name('__objc_selrefs')
+        selref_size = selref_cmd.size / sizeof(c_uint64)
+        selref_file_ptr = selref_cmd.offset
 
-        self.classlist = classlist
-        self.crossref_classlist()
-        return classlist
+        virt_base = self.get_virtual_base()
+        for i in range(selref_size):
+            data = self.get_bytes(selref_file_ptr, sizeof(c_uint64))
+            selref = c_uint64.from_buffer(bytearray(data)).value
+            virt_location = selref_file_ptr + virt_base
+            selrefs.append((virt_location, selref))
+
+            selref_file_ptr += sizeof(c_uint64)
+
+        # we now have an array of tuples of (selref ptr, string literal ptr)
+        # self.selname_to_imp_map contains a map of {string literal ptr, IMP}
+        # create mapping from selref ptr to IMP
+        self._selref_ptr_to_imp_map = {}
+        for selref_ptr, string_ptr in selrefs:
+            try:
+                imp_ptr = self._selname_to_imp_map[string_ptr]
+            except KeyError as e:
+                #self._debug_print('sel name at {} had no imp'.format(hex(int(string_ptr))))
+                continue
+            self._selref_ptr_to_imp_map[selref_ptr] = imp_ptr
+
+    def imp_for_selref(self, selref_ptr):
+        return self._selref_ptr_to_imp_map[selref_ptr]
 

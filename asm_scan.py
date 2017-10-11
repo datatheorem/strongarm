@@ -46,7 +46,6 @@ def test_sta_142(path):
         # x2: session
         # x3: challenge
         # x4: completionHandler
-
         # therefore, we need to track what happens to the block initially in register x4
         block_analyzer = ObjcBlockAnalyzer(macho, instructions, u'x4')
 

@@ -192,16 +192,33 @@ class ObjcFunctionAnalyzer(object):
                 page = instr.operands[1].value.imm
 
                 # instr after this should be ldr into x1
-                function_index = msgsend_index - idx
-                instr2 = self._instructions[function_index + 1]
-                slide_op = instr2.operands[1]
+                # AdobeAcrobat has this in one objc_msgSend invocation:
+                # adrp       x21, #0x1011b1000
+                # movz       x24, #0x0
+                # ldr        x28, [x21, #0xf18]
+                # the movz in the middle is unfortunate as it causes the 'unknown pattern' exception to be raised,
+                # since we expect an ldr directly after an adrp
+                # As a temporary workaround until better data flow analysis is implemented,
+                # check the next 2 instructions after adrp
+                for i in range(2):
+                    function_index = msgsend_index - idx
+                    instr2 = self._instructions[function_index + 1 + i]
+                    if instr2.mnemonic != 'ldr':
+                        continue
+                    slide_op = instr2.operands[1]
 
-                if instr2.mnemonic != 'ldr' or slide_op.type != ARM64_OP_MEM:
-                    raise RuntimeError('encountered unknown pattern while looking for selref')
+                    if instr2.mnemonic != 'ldr' or slide_op.type != ARM64_OP_MEM:
+                        raise RuntimeError('encountered unknown pattern @ {} while looking for selref'.format(
+                            hex(int(instr2.address))
+                        ))
 
-                pageoff = instr2.operands[1].mem.disp
-                selref_ptr_addr = page + pageoff
-                return selref_ptr_addr
+                    pageoff = instr2.operands[1].mem.disp
+                    selref_ptr_addr = page + pageoff
+                    return selref_ptr_addr
+                raise RuntimeError('encountered unknown pattern @ {} while looking for selref'.format(
+                    hex(int(instr.address))
+                ))
+
 
 
 class ObjcBlockAnalyzer(ObjcFunctionAnalyzer):

@@ -30,8 +30,10 @@ class MachoBinary(object):
         self.symtab = None
         self.encryption_info = None
         self.imported_functions = None
-        self.classlist = None
         self.header_flags = []
+
+        self.classlist = None
+        self._contains_objc = False
 
         self._selname_to_imp_map = None
         self._selref_ptr_to_imp_map = None
@@ -61,7 +63,9 @@ class MachoBinary(object):
         # perform analysis on binary
         self.imported_functions = self.parse_imported_symbols()
         self.parse_classlist()
-        self._create_selref_to_name_map()
+
+        if self._contains_objc:
+            self._create_selref_to_name_map()
 
         return True
 
@@ -251,6 +255,9 @@ class MachoBinary(object):
         Returns:
             string containing byte content of mach-o slice at an offset from the start of the slice
         """
+        if offset > 0x100000000:
+            raise RuntimeError('offset to get_bytes looks like a virtual address. Did you mean to use'
+                               'get_content_from_virtual_address?')
         # ensure file is open
         self._file = open(self._file.name)
         # account for the fact that this Macho slice is not necessarily the start of the file!
@@ -420,6 +427,13 @@ class MachoBinary(object):
 
     def parse_classlist(self):
         classlist_cmd = self.get_section_with_name('__objc_classlist')
+        # does this binary contain an Objective-C classlist?
+        if not classlist_cmd:
+            # nothing to do here for purely C or Swift binaries
+            self._contains_objc = False
+            return
+        self._contains_objc = True
+
         classlist_data = self.get_section_content(classlist_cmd)
         classlist_size = len(classlist_data) / sizeof(c_uint64)
         classlist_off = 0

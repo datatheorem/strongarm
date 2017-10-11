@@ -78,6 +78,20 @@ class ObjcFunctionAnalyzer(object):
                 self.debug_print('local goto -> {}'.format(hex(int(target.destination_address))))
                 continue
 
+            # might be objc_msgSend to object of class defined outside binary
+            if target.is_external_objc_call:
+                self.debug_print('objc_msgSend(...) to external class, selref at {}'.format(
+                    hex(int(target.selref))
+                ))
+                continue
+
+            # in debug log, print whether this is a function call or objc_msgSend call
+            call_convention = 'objc_msgSend(id, ' if target.is_msgSend_call else 'func('
+            self.debug_print('{}{})'.format(
+                call_convention,
+                hex(int(target.destination_address)),
+            ))
+
             # recursively check if this destination can call target address
             child_analyzer = ObjcFunctionAnalyzer.get_function_analyzer(self.binary, target.destination_address)
             if child_analyzer.can_execute_call(call_address):

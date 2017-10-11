@@ -520,7 +520,7 @@ class MachoBinary(object):
                 method_entry_off += sizeof(ObjcMethod)
 
     def _create_selref_to_name_map(self):
-        selrefs = []
+        self._selrefs = {}
         selref_cmd = self.get_section_with_name('__objc_selrefs')
         selref_size = selref_cmd.size / sizeof(c_uint64)
         selref_file_ptr = selref_cmd.offset
@@ -530,7 +530,7 @@ class MachoBinary(object):
             data = self.get_bytes(selref_file_ptr, sizeof(c_uint64))
             selref = c_uint64.from_buffer(bytearray(data)).value
             virt_location = selref_file_ptr + virt_base
-            selrefs.append((virt_location, selref))
+            self._selrefs[virt_location] = selref
 
             selref_file_ptr += sizeof(c_uint64)
 
@@ -538,7 +538,7 @@ class MachoBinary(object):
         # self.selname_to_imp_map contains a map of {string literal ptr, IMP}
         # create mapping from selref ptr to IMP
         self._selref_ptr_to_imp_map = {}
-        for selref_ptr, string_ptr in selrefs:
+        for selref_ptr, string_ptr in self._selrefs.iteritems():
             try:
                 imp_ptr = self._selname_to_imp_map[string_ptr]
             except KeyError as e:
@@ -547,5 +547,16 @@ class MachoBinary(object):
             self._selref_ptr_to_imp_map[selref_ptr] = imp_ptr
 
     def imp_for_selref(self, selref_ptr):
-        return self._selref_ptr_to_imp_map[selref_ptr]
+        if not selref_ptr:
+            return None
+        try:
+            return self._selref_ptr_to_imp_map[selref_ptr]
+        except KeyError as e:
+            # if we have a selector reference entry for this pointer but no IMP,
+            # it must be a selector for a class defined outside this binary
+            if selref_ptr in self._selrefs:
+                return None
+            # if we had no record of this selref, it's an invalid pointer and an exception should be raised
+            raise RuntimeError('invalid selector reference pointer {}'.format(hex(int(selref_ptr))))
+
 

@@ -21,9 +21,10 @@ class ObjcFunctionAnalyzer(object):
         self._instructions = instructions
         self.__call_targets = None
 
-    def debug_print(self, output):
-        DebugUtil.log(self, 'func({}) {}'.format(
+    def debug_print(self, idx, output):
+        DebugUtil.log(self, 'func({} + {}) {}'.format(
             hex(int(self._instructions[0].address)),
+            hex(idx),
             output
         ))
 
@@ -56,18 +57,20 @@ class ObjcFunctionAnalyzer(object):
         return targets
 
     def can_execute_call(self, call_address):
-        self.debug_print('recursively searching for invocation of {}'.format(hex(int(call_address))))
+        self.debug_print(0, 'recursively searching for invocation of {}'.format(hex(int(call_address))))
         for target in self.call_targets:
+            instr_idx = self._instructions.index(target.raw_instr)
+
             # is this a direct call?
             if target.destination_address == call_address:
-                self.debug_print('found call to {} at {}'.format(
+                self.debug_print(instr_idx, 'found call to {} at {}'.format(
                     hex(int(call_address)),
                     hex(int(target.address))
                 ))
                 return True
             # don't try to follow this path if it's an external symbol and not an objc_msgSend call
             if target.is_external_c_call and not target.is_msgSend_call:
-                self.debug_print('{}(...)'.format(
+                self.debug_print(instr_idx, '{}(...)'.format(
                     target.symbol
                 ))
                 continue
@@ -75,19 +78,19 @@ class ObjcFunctionAnalyzer(object):
             # any internal branching will eventually be covered by call_targets,
             # so there's no need to follow twice
             if self.is_local_branch(target):
-                self.debug_print('local goto -> {}'.format(hex(int(target.destination_address))))
+                self.debug_print(instr_idx, 'local goto -> {}'.format(hex(int(target.destination_address))))
                 continue
 
             # might be objc_msgSend to object of class defined outside binary
             if target.is_external_objc_call:
-                self.debug_print('objc_msgSend(...) to external class, selref at {}'.format(
+                self.debug_print(instr_idx, 'objc_msgSend(...) to external class, selref at {}'.format(
                     hex(int(target.selref))
                 ))
                 continue
 
             # in debug log, print whether this is a function call or objc_msgSend call
             call_convention = 'objc_msgSend(id, ' if target.is_msgSend_call else 'func('
-            self.debug_print('{}{})'.format(
+            self.debug_print(instr_idx, '{}{})'.format(
                 call_convention,
                 hex(int(target.destination_address)),
             ))
@@ -95,12 +98,12 @@ class ObjcFunctionAnalyzer(object):
             # recursively check if this destination can call target address
             child_analyzer = ObjcFunctionAnalyzer.get_function_analyzer(self.binary, target.destination_address)
             if child_analyzer.can_execute_call(call_address):
-                self.debug_print('found call to {} in child code path'.format(
+                self.debug_print(instr_idx, 'found call to {} in child code path'.format(
                     hex(int(call_address))
                 ))
                 return True
         # no code paths reach desired call
-        self.debug_print('no code paths reach {}'.format(
+        self.debug_print(len(self._instructions), 'no code paths reach {}'.format(
             hex(int(call_address))
         ))
         return False
@@ -203,7 +206,8 @@ class ObjcFunctionAnalyzer(object):
                         # loads something unrelated, instead of the _first_ which contains the correct selref,
                         # since get_selref only searches backwards from objc_msgSend to the first ldr.
                         # TODO(PT): do more rigorous register data flow analysis to fix this bug
-                        self.debug_print('Stronger dataflow analysis required to follow objc_msgSend call at {}'.format(
+                        self.debug_print(0, 'Stronger dataflow analysis required to follow '
+                                         'objc_msgSend call at {}'.format(
                             hex(int(branch_instr.raw_instr.address))
                         ))
                         sel_imp = None

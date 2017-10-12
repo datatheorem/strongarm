@@ -48,7 +48,10 @@ class MachoBinary(object):
         This method may throw an exception if the provided data does not represent a valid or supported
         Mach-O slice.
         """
-        DebugUtil.log(self, 'parsing Mach-O slice from {}'.format(self._file))
+        DebugUtil.log(self, 'parsing Mach-O slice @ {} in {}'.format(
+            hex(int(self.offset_within_fat)),
+            self._file
+        ))
 
         # preliminary Mach-O parsing
         if not self.check_magic():

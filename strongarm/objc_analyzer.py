@@ -173,7 +173,7 @@ class ObjcFunctionAnalyzer(object):
                             'blx',
                             'bxj',
                             ]
-        for instr in self._instructions[start_index::]:
+        for idx, instr in enumerate(self._instructions[start_index::]):
             if instr.mnemonic in branch_mnemonics:
                 # found next branch!
                 # wrap in ObjcBranchInstr object
@@ -182,33 +182,18 @@ class ObjcFunctionAnalyzer(object):
                 # if this is an objc_msgSend target, patch destination_address to be the address of the targeted IMP
                 # note! this means destination_address is *not* the actual destination address of the instruction
                 # the *real* destination will be a stub function corresponding to __objc_msgSend, but
-                # knowledge of this is largely useless, and the much more valuable piece of information is which function
-                # the selector passed to objc_msgSend corresponds to.
+                # knowledge of this is largely useless, and the much more valuable piece of information is
+                # which function the selector passed to objc_msgSend corresponds to.
                 # therefore, replace the 'real' destination address with the requested IMP
                 if branch_instr.is_msgSend_call:
-                    selref = self.get_selref(branch_instr.raw_instr)
+                    selref = None
                     # attempt to get an IMP for this selref
                     try:
+                        selref = self.get_selref(branch_instr.raw_instr)
                         sel_imp = self.analyzer.imp_for_selref(selref)
                     except RuntimeError as e:
-                        # if imp_for_selref threw an exception,
-                        # then the only explanation is that we read the selref incorrectly
-                        # in the assembly of the problematic IMP, this could be the pattern:
-                        # adrp x8, #0x1011bc000
-                        # ldr x22, [x8, #0x370] <-- this is where our selref gets loaded, into x22
-                        # ...
-                        # adrp       x8, #0x1011d2000
-                        # ldr        x24, [x8, #0xf48] <-- unrelated load we don't care about
-                        # mov x1, x22
-                        # bl <objc_msgSend>
-                        # in the above example, get_selref would have incorrectly caught the _second_ ldr, which
-                        # loads something unrelated, instead of the _first_ which contains the correct selref,
-                        # since get_selref only searches backwards from objc_msgSend to the first ldr.
-                        # TODO(PT): do more rigorous register data flow analysis to fix this bug
-                        self.debug_print(0, 'Stronger dataflow analysis required to follow '
-                                         'objc_msgSend call at {}'.format(
-                            hex(int(branch_instr.raw_instr.address))
-                        ))
+                        instr_idx = start_index + idx
+                        self.debug_print(instr_idx, '{}: bl <objc_msgSend> target cannot be determined statically')
                         sel_imp = None
 
                     # if we couldn't find an IMP for this selref,

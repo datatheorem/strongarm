@@ -225,6 +225,25 @@ class ObjcFunctionAnalyzer(object):
         # retrieve whatever data is in x1 at the index of this msgSend call
         return self.determine_register_contents('x1', msgsend_index)
 
+    def _trimmed_reg_name(self, reg_name):
+        # type: (Text) -> Text
+        """Remove 'x' or 'w' from general purpose register name
+        This is so the register strings 'x22' and 'w22', which are two slices of the same register,
+        map to the same register.
+
+        Will return non-GP registers, such as 'sp', as-is.
+
+        Args:
+              reg_name: Full register name to trim
+
+        Returns:
+              Register name with trimmed size prefix, or unmodified name if not a GP register
+
+        """
+        if reg_name[0] in ['x', 'w']:
+            return reg_name[1::]
+        return reg_name
+
     def determine_register_contents(self, desired_reg, start_index):
         # type: (Text, int) -> int
         """Analyze instructions backwards from start_index to find data in reg
@@ -246,15 +265,16 @@ class ObjcFunctionAnalyzer(object):
               An int representing the contents of the register
 
         """
-        DebugUtil.log(self, 'analyzing dataflow to determine data in {} at instr idx {}'.format(
+        target_addr = self._instructions[0].address + (start_index * 4)
+        DebugUtil.log(self, 'analyzing data flow to determine data in {} at {}'.format(
             desired_reg,
-            start_index
+            hex(int(target_addr))
         ))
 
         # TODO(PT): write CsInsn instructions by hand to make this function easy to test w/ different scenarios
         # List of registers whose values we need to find
         # initially, we need to find the value of whatever the user requested
-        unknown_regs = [desired_reg]
+        unknown_regs = [self._trimmed_reg_name(desired_reg)]
         # map of name -> value for registers whose values have been resolved to an immediate
         determined_values = {}
         # map of name -> (name, value). key is register needing to be resolved,
@@ -289,8 +309,7 @@ class ObjcFunctionAnalyzer(object):
             # we're only interested in instructions whose destination is a register
             if dst.type != ARM64_OP_REG:
                 continue
-
-            dst_reg_name = instr.reg_name(dst.value.reg)
+            dst_reg_name = self._trimmed_reg_name(instr.reg_name(dst.value.reg))
             # is this register needed for us to determine the value of the requested register?
             if dst_reg_name not in unknown_regs:
                 continue
@@ -305,7 +324,7 @@ class ObjcFunctionAnalyzer(object):
                 # we now need the value of src before dst can be determined
                 # move dst from list of unknown registers to list of registers waiting for another value
                 unknown_regs.remove(dst_reg_name)
-                src_reg_name = instr.reg_name(src.value.reg)
+                src_reg_name = self._trimmed_reg_name(instr.reg_name(src.value.reg))
 
                 # do we already know the exact value of the source?
                 if src_reg_name in determined_values:
@@ -319,7 +338,7 @@ class ObjcFunctionAnalyzer(object):
                     # and add src to registers to search for
                     unknown_regs.append(src_reg_name)
             elif src.type == ARM64_OP_MEM:
-                src_reg_name = instr.reg_name(src.mem.base)
+                src_reg_name = self._trimmed_reg_name(instr.reg_name(src.mem.base))
                 # dst is being assigned to the value of another register, plus a signed offset
                 unknown_regs.remove(dst_reg_name)
                 if src_reg_name in determined_values:
@@ -374,6 +393,8 @@ class ObjcFunctionAnalyzer(object):
 
         if len(resolved_registers) == 0:
             raise RuntimeError('need at least one known value to resolve data dependencies')
+
+        desired_reg = self._trimmed_reg_name(desired_reg)
         if desired_reg not in links and desired_reg not in resolved_registers:
             raise RuntimeError('invalid data set? desired_reg {} can\'t be determined from '
                                'links {}, resolved_registers {}'.format(
@@ -413,6 +434,7 @@ class ObjcFunctionAnalyzer(object):
         ))
         return final_val
 
+
 class ObjcBlockAnalyzer(ObjcFunctionAnalyzer):
     def __init__(self, binary, instructions, initial_block_reg):
         ObjcFunctionAnalyzer.__init__(self, binary, instructions)
@@ -420,6 +442,7 @@ class ObjcBlockAnalyzer(ObjcFunctionAnalyzer):
         self.registers_containing_block = self.track_reg(initial_block_reg)
         self.load_reg, self.load_index = self.find_block_load()
         self.invoke_instr = self.find_block_invoke()
+        self.invoke_idx = self._instructions.index(self.invoke_instr)
 
     def find_block_load(self):
         """

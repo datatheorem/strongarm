@@ -1,4 +1,3 @@
-from capstone import *
 from capstone.arm64 import *
 from typing import *
 from objc_instruction import *

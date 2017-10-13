@@ -261,8 +261,193 @@ class ObjcFunctionAnalyzer(object):
                 raise RuntimeError('encountered unknown pattern @ {} while looking for selref'.format(
                     hex(int(instr.address))
                 ))
+    def determine_register_contents(self, desired_reg, start_index):
+        # type: (Text, int) -> int
+        """Analyze instructions backwards from start_index to find data in reg
+        This function will read all instructions until it gathers all data and assignments necessary to determine
+        value of desired_reg.
 
+        For example, if we have a function like the following:
+        15  | adrp x8, #0x1011bc000
+        16  | ldr x22, [x8, #0x378]
+        ... | ...
+        130 | mov x1, x22
+        131 | bl objc_msgSend <-- ObjcDataFlowAnalyzer.find_reg_value(31, 'x1') = 0x1011bc378
 
+        Args:
+            desired_reg: string containing name of register whose data should be determined
+            start_index: the instruction index at which desired_reg's value should be found
+
+        Returns:
+              An int representing the contents of the register
+
+        """
+        DebugUtil.log(self, 'analyzing dataflow to determine data in {} at instr idx {}'.format(
+            desired_reg,
+            start_index
+        ))
+
+        # TODO(PT): write CsInsn instructions by hand to make this function easy to test w/ different scenarios
+        # List of registers whose values we need to find
+        # initially, we need to find the value of whatever the user requested
+        unknown_regs = [desired_reg]
+        # map of name -> value for registers whose values have been resolved to an immediate
+        determined_values = {}
+        # map of name -> (name, value). key is register needing to be resolved,
+        # value is tuple containing (register containing source value, signed offset from source register)
+        needed_links = {}
+
+        # find data starting backwards from start_index
+        for instr in self._instructions[start_index::-1]:
+            # still looking for anything?
+            if len(unknown_regs) == 0:
+                # found everything we need
+                break
+
+            # we only care about instructions that could be moving data between registers
+            if len(instr.operands) < 2:
+                continue
+            # some instructions will have the same format as register transformations,
+            # but are actually unrelated to what we're looking for
+            # for example, str x1, [sp, #0x38] would be identified by this function as moving something from sp into
+            # x1, but with that particular instruction it's the other way around: x1 is being stored somewhere offset
+            # from sp.
+            # to avoid this bug, we need to exclude some instructions from being looked at by this method.
+            excluded_instructions = [
+                'str',
+            ]
+            if instr.mnemonic in excluded_instructions:
+                continue
+
+            dst = instr.operands[0]
+            src = instr.operands[1]
+
+            # we're only interested in instructions whose destination is a register
+            if dst.type != ARM64_OP_REG:
+                continue
+
+            dst_reg_name = instr.reg_name(dst.value.reg)
+            # is this register needed for us to determine the value of the requested register?
+            if dst_reg_name not in unknown_regs:
+                continue
+
+            if src.type == ARM64_OP_IMM:
+                # we now know the immediate value in dst_reg_name
+                # remove it from unknown list
+                unknown_regs.remove(dst_reg_name)
+                # add it to known list, along with its value
+                determined_values[dst_reg_name] = src.value.imm
+            elif src.type == ARM64_OP_REG:
+                # we now need the value of src before dst can be determined
+                # move dst from list of unknown registers to list of registers waiting for another value
+                unknown_regs.remove(dst_reg_name)
+                src_reg_name = instr.reg_name(src.value.reg)
+
+                # do we already know the exact value of the source?
+                if src_reg_name in determined_values:
+                    # value of dst will just be whatever src contains
+                    dst_value = determined_values[src_reg_name]
+                    determined_values[dst_reg_name] = dst_value
+                else:
+                    # we'll need to resolve src before we can know dst,
+                    # add dst -> src to links list
+                    needed_links[dst_reg_name] = src_reg_name, 0
+                    # and add src to registers to search for
+                    unknown_regs.append(src_reg_name)
+            elif src.type == ARM64_OP_MEM:
+                src_reg_name = instr.reg_name(src.mem.base)
+                # dst is being assigned to the value of another register, plus a signed offset
+                unknown_regs.remove(dst_reg_name)
+                if src_reg_name in determined_values:
+                    # we know dst value is value in src plus an offset,
+                    # and we know what's in source
+                    # we now know the value of dst
+                    dst_value = determined_values[src_reg_name] + src.mem.disp
+                    determined_values[dst_reg_name] = dst_value
+                else:
+                    # we must find src's value to resolve dst
+                    unknown_regs.append(src_reg_name)
+                    # add dst -> src + offset to links list
+                    needed_links[dst_reg_name] = src_reg_name, src.mem.disp
+
+        # if any of the data dependencies for our desired register uses the stack pointer,
+        # there's no way we can resolve the value.
+        stack_pointer_reg = 'sp'
+        if stack_pointer_reg in needed_links:
+            raise RuntimeError('{} contents depends on stack, cannot determine statically'.format(desired_reg))
+
+        # once we've broken out of the above loop, we should have all the values we need to compute the
+        # final value of the desired register.
+        # additionally, it should be guaranteed that the unknown values list is empty
+        if len(unknown_regs):
+            DebugUtil.log(self, 'Exited loop with unknown list! instr 0 {} idx {} unknown {} links {} known {}'.format(
+                hex(int(self._instructions[0].address)),
+                start_index,
+                unknown_regs,
+                needed_links,
+                determined_values,
+            ))
+            raise RuntimeError('Data-flow loop exited before all unknowns were marked')
+
+        # for every register in the waiting list,
+        # cross reference all its dependent variables to calculate the final value
+        return self._resolve_register_value_from_data_links(desired_reg, needed_links, determined_values)
+
+    def _resolve_register_value_from_data_links(self, desired_reg, links, resolved_registers):
+        # type: (Text, Dict[Text, Tuple[Text, int]], Dict[Text, int]) -> int
+        """Resolve data dependencies for each register to find final value of desired_reg
+        This method will throw an Exception if the arguments cannot be resolved.
+
+        Args:
+              desired_reg: string containing name of register whose value should be determined
+              links: mapping of register data dependencies. For example, x1's value might be x22's value plus an
+              offset of 0x300, so links['x1'] = ('x22', 0x300)
+              resolved_registers: mapping of registers whose final value is already known
+
+        Returns:
+            The final value contained in desired_reg after resolving all data dependencies
+        """
+
+        if len(resolved_registers) == 0:
+            raise RuntimeError('need at least one known value to resolve data dependencies')
+        if desired_reg not in links and desired_reg not in resolved_registers:
+            raise RuntimeError('invalid data set? desired_reg {} can\'t be determined from '
+                               'links {}, resolved_registers {}'.format(
+                desired_reg,
+                links,
+                resolved_registers,
+            ))
+
+        # do we know the value of this register?
+        if desired_reg in resolved_registers:
+            DebugUtil.log(self, '{} is a known immediate: {}'.format(
+                desired_reg,
+                hex(int(resolved_registers[desired_reg]))
+            ))
+            return resolved_registers[desired_reg]
+
+        # to determine value in desired_reg,
+        # we must find the value of source_reg, and then apply any offset
+        source_reg, offset = links[desired_reg]
+        DebugUtil.log(self, '{} has data dependency: [{}, #{}]'.format(
+            desired_reg,
+            source_reg,
+            hex(int(offset))
+        ))
+
+        # resolve source reg value, then add offset
+        final_val = self._resolve_register_value_from_data_links(source_reg, links, resolved_registers) + offset
+
+        # this link has been resolved! remove from links list
+        links.pop(desired_reg)
+        # add to list of known values
+        resolved_registers[desired_reg] = final_val
+
+        DebugUtil.log(self, '{} resolved to {}'.format(
+            desired_reg,
+            hex(int(final_val))
+        ))
+        return final_val
 
 class ObjcBlockAnalyzer(ObjcFunctionAnalyzer):
     def __init__(self, binary, instructions, initial_block_reg):

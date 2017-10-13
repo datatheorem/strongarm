@@ -211,41 +211,20 @@ class ObjcFunctionAnalyzer(object):
         return self.start_address <= branch_instruction.destination_address <= self.end_address
 
     def get_selref(self, msgsend_instr):
-        # search backwards from objc_msgSend call to SEL load
+        # type: (CsInsn) -> int
+        """Retrieve contents of x1 register when control is at provided instruction
+
+        Args:
+              msgsend_instr: Instruction at which data in x1 should be found
+
+        Returns:
+              Data stored in x1 at execution of msgsend_instr
+
+        """
         msgsend_index = self._instructions.index(msgsend_instr)
-        for idx, instr in enumerate(self._instructions[msgsend_index::-1]):
-            if instr.mnemonic == 'adrp':
-                # this instruction loads the virtual page which this selref is contained in
-                # addr is operand 2: adrp x8, 0xdeadbeef
-                page = instr.operands[1].value.imm
+        # retrieve whatever data is in x1 at the index of this msgSend call
+        return self.determine_register_contents('x1', msgsend_index)
 
-                # instr after this should be ldr into x1
-                # AdobeAcrobat has this in one objc_msgSend invocation:
-                # adrp       x21, #0x1011b1000
-                # movz       x24, #0x0
-                # ldr        x28, [x21, #0xf18]
-                # the movz in the middle is unfortunate as it causes the 'unknown pattern' exception to be raised,
-                # since we expect an ldr directly after an adrp
-                # As a temporary workaround until better data flow analysis is implemented,
-                # check the next 2 instructions after adrp
-                for i in range(2):
-                    function_index = msgsend_index - idx
-                    instr2 = self._instructions[function_index + 1 + i]
-                    if instr2.mnemonic != 'ldr':
-                        continue
-                    slide_op = instr2.operands[1]
-
-                    if instr2.mnemonic != 'ldr' or slide_op.type != ARM64_OP_MEM:
-                        raise RuntimeError('encountered unknown pattern @ {} while looking for selref'.format(
-                            hex(int(instr2.address))
-                        ))
-
-                    pageoff = instr2.operands[1].mem.disp
-                    selref_ptr_addr = page + pageoff
-                    return selref_ptr_addr
-                raise RuntimeError('encountered unknown pattern @ {} while looking for selref'.format(
-                    hex(int(instr.address))
-                ))
     def determine_register_contents(self, desired_reg, start_index):
         # type: (Text, int) -> int
         """Analyze instructions backwards from start_index to find data in reg

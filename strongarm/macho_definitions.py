@@ -64,7 +64,7 @@ class MachOLoadCommand(Structure):
     ]
 
 
-class MachoSection64(Structure):
+class MachoSection64Raw(Structure):
     _fields_ = [
         ('sectname', c_char * 16),
         ('segname', c_char * 16),

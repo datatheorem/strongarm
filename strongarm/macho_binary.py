@@ -1,7 +1,16 @@
 from macho_definitions import *
-import macho_load_commands
+from typing import List
 from decorators import memoized
 from debug_util import DebugUtil
+
+
+class MachoSection(object):
+    def __init__(self, binary, section_command):
+        # type: (MachoSection64Raw) -> None
+        self.cmd = section_command
+        self.content = binary.get_bytes(section_command.offset, section_command.size)
+        self.name = section_command.sectname
+        self.address = section_command.addr
 
 
 class MachoStringTableEntry(object):
@@ -24,16 +33,13 @@ class MachoBinary(object):
         self.is_swap = False
 
         self.header = None
-        self.segments = {}
-        self.sections = {}
+        self.segment_commands = {}
+        self.section_commands = {}
         self.dysymtab = None
         self.symtab = None
         self.encryption_info = None
         self.imported_functions = None
         self.header_flags = []
-
-        self.classlist = None
-        self._contains_objc = False
 
         if not self.parse():
             raise RuntimeError('Failed to parse Mach-O')
@@ -61,8 +67,6 @@ class MachoBinary(object):
         self.parse_header()
 
         DebugUtil.log(self, 'header parsed. non-native endianness? {}. 64-bit? {}'.format(self.is_swap, self.is_64bit))
-
-        # perform analysis on binary
         return True
 
     def check_magic(self):
@@ -175,7 +179,7 @@ class MachoBinary(object):
                 segment_bytes = self.get_bytes(offset, sizeof(MachoSegmentCommand64))
                 segment = MachoSegmentCommand64.from_buffer(bytearray(segment_bytes))
                 # TODO(pt) handle byte swap of segment
-                self.segments[segment.segname] = segment
+                self.segment_commands[segment.segname] = segment
                 self.parse_sections(segment, offset)
 
             # move to next load command in header
@@ -195,40 +199,32 @@ class MachoBinary(object):
 
         # the first section of this segment begins directly after the segment
         section_offset = segment_offset + sizeof(MachoSegmentCommand64)
-        section_size = sizeof(MachoSection64)
+        section_size = sizeof(MachoSection64Raw)
 
         for i in range(segment.nsects):
-            section_bytes = self.get_bytes(section_offset, sizeof(MachoSection64))
-            section = MachoSection64.from_buffer(bytearray(section_bytes))
+            section_bytes = self.get_bytes(section_offset, sizeof(MachoSection64Raw))
+            section = MachoSection64Raw.from_buffer(bytearray(section_bytes))
             # TODO(pt) handle byte swap of segment
             # add to our section with the section name as the key
-            self.sections[section.sectname] = section
+            self.section_commands[section.sectname] = section
 
             section_offset += section_size
 
-    def get_section_with_name(self, name):
-        # type: (str) -> Optional[MachoSection64]
+    def get_section(self, name):
+        # type: (str) -> Optional[MachoSection]
         """
-        Convenience method to retrieve a section with a given name from map
+        Construct a MachoSection from the information present in the section command associated with the Mach-O
+        segment with a given name
         Args:
-            name: The name of the section to find
-        Returns:
-            The MachoSection64 command if it is found, None otherwise
-        """
-        if name in self.sections:
-            return self.sections[name]
-        return None
+            name: The name of the Mach-O segment which should be retrieved
 
-    def get_section_content(self, section):
-        # type: (MachoSection64) -> bytearray
-        """
-        Convenience method to retrieve slice content associated with a section command
-        Args:
-            section: The section command whose corresponding content should be found
         Returns:
-            bytearray containing the file contents associated with the section command
+            MachoSection containing section info, or None if no section with the provided name was found
         """
-        return bytearray(self.get_bytes(section.offset, section.size))
+        if name in self.section_commands:
+            section_cmd = self.section_commands[name]
+            return MachoSection(self, section_cmd)
+        return None
 
     def get_virtual_base(self):
         # type: () -> int
@@ -237,7 +233,7 @@ class MachoBinary(object):
         Returns:
             int containing the virtual memory space address that the Mach-O slice requests to begin at
         """
-        text_seg = self.segments['__TEXT']
+        text_seg = self.segment_commands['__TEXT']
         return text_seg.vmaddr
 
     def get_bytes(self, offset, size):
@@ -353,26 +349,27 @@ class MachoBinary(object):
         Returns:
             A list of pointers containing the virtual addresses of each pointer in this section
         """
-        section = self.get_section_with_name('__la_symbol_ptr')
+        lazy_sym_section = self.get_section('__la_symbol_ptr')
         # __la_symbol_ptr is just an array of pointers
         # the number of pointers is the size, in bytes, of the section, divided by a 64b pointer size
-        sym_ptr_count = section.size / sizeof(c_void_p)
+        sym_ptr_count = lazy_sym_section.cmd.size / sizeof(c_void_p)
 
         section_pointers = []
         # this section's data starts at the file offset field
-        section_data_ptr = section.offset
+        section_data_ptr = lazy_sym_section.cmd.offset
 
+        virt_base = self.get_virtual_base()
         # read every pointer in the table
         for i in range(sym_ptr_count):
             # this addr is the address in the file of this data, plus the slide that the file has requested,
             # to result in the final address that would be referenced elsewhere in this Mach-O
-            section_pointers.append(self.get_virtual_base() +  section_data_ptr)
+            section_pointers.append(virt_base + section_data_ptr)
             # go to next pointer in list
             section_data_ptr += sizeof(c_void_p)
         return section_pointers
 
     def get_indirect_symbol_table(self):
-        # type: () -> List[c_uint32_t]
+        # type: () -> List[c_uint32]
         indirect_symtab = []
         # dysymtab has fields that tell us the file offset of the indirect symbol table, as well as the number
         # of indirect symbols present in the mach-o

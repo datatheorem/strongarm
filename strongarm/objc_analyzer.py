@@ -194,7 +194,7 @@ class ObjcFunctionAnalyzer(object):
                     except RuntimeError as e:
                         # if imp_for_selref threw an exception,
                         # then the only explanation is that we read the selref incorrectly
-                        # this could have been the pattern:
+                        # in the assembly of the problematic IMP, this could be the pattern:
                         # adrp x8, #0x1011bc000
                         # ldr x22, [x8, #0x370] <-- this is where our selref gets loaded, into x22
                         # ...

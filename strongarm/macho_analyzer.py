@@ -28,6 +28,9 @@ class MachoAnalyzer(object):
         self._selrefs = None
         self._selname_to_imp_map = None
 
+        self.classlist = None
+        self._contains_objc = False
+
         # store this analyzer in class cache
         MachoAnalyzer.active_analyzer_map[bin] = self
 
@@ -77,7 +80,7 @@ class MachoAnalyzer(object):
     def external_symbol_addr_map(self):
         # type: () -> {int, Text}
         imported_symbol_map = {}
-        lazy_sym_section = self.binary.get_section_with_name('__la_symbol_ptr')
+        lazy_sym_section = self.binary.get_section('__la_symbol_ptr')
         external_symtab = self.binary.get_external_sym_pointers()
         indirect_symtab = self.binary.get_indirect_symbol_table()
         symtab = self.binary.get_symtab_contents()
@@ -88,7 +91,7 @@ class MachoAnalyzer(object):
             # within the indirect symbol table
             # so, for any address in the lazy symbol, its translated address into the indirect symbol table is:
             # lazy_sym_section.reserved1 + index
-            offset = indirect_symtab[lazy_sym_section.reserved1 + index]
+            offset = indirect_symtab[lazy_sym_section.cmd.reserved1 + index]
             sym = symtab[offset]
             strtab_idx = sym.n_un.n_strx
 
@@ -153,10 +156,12 @@ class MachoAnalyzer(object):
     def imp_stub_section_map(self):
         # type: () -> List[MachoImpStub]
         imp_stub_map = self.external_symbol_addr_map
-        stubs_section = self.binary.get_section_with_name('__stubs')
+        stubs_section = self.binary.get_section('__stubs')
 
-        func_str = self.binary.get_bytes(stubs_section.offset, stubs_section.size)
-        instructions = [instr for instr in self.cs.disasm(func_str, self.binary.get_virtual_base() + stubs_section.offset)]
+        func_str = self.binary.get_bytes(stubs_section.cmd.offset, stubs_section.cmd.size)
+        instructions = [instr for instr in self.cs.disasm(
+            func_str,
+            self.binary.get_virtual_base() + stubs_section.cmd.offset)]
 
         stubs = []
         # each stub follows one of two patterns
@@ -303,21 +308,21 @@ class MachoAnalyzer(object):
         return instructions
 
     def parse_classlist(self):
-        classlist_cmd = self.binary.get_section_with_name('__objc_classlist')
+        classlist_sect = self.binary.get_section('__objc_classlist')
         # does this binary contain an Objective-C classlist?
-        if not classlist_cmd:
-            # nothing to do here for purely C or Swift binaries
+        if not classlist_sect:
+            # nothing to do here, must be a purely C or Swift binary
             self._contains_objc = False
             return
         self._contains_objc = True
 
-        classlist_data = self.binary.get_section_content(classlist_cmd)
+        classlist_data = classlist_sect.content
         classlist_size = len(classlist_data) / sizeof(c_uint64)
         classlist_off = 0
         classlist = []
         for i in range(classlist_size):
             data_end = classlist_off + sizeof(c_uint64)
-            val = c_uint64.from_buffer(classlist_data[classlist_off:data_end]).value
+            val = c_uint64.from_buffer(bytearray(classlist_data[classlist_off:data_end])).value
             classlist.append(val)
             classlist_off += sizeof(c_uint64)
 
@@ -340,9 +345,9 @@ class MachoAnalyzer(object):
         return class_entry
 
     def crossref_classlist(self):
-        objc_data_cmd = self.binary.get_section_with_name('__objc_data')
-        objc_data_start = objc_data_cmd.addr
-        objc_data_end = objc_data_start + objc_data_cmd.size
+        objc_data = self.binary.get_section('__objc_data')
+        objc_data_start = objc_data.cmd.addr
+        objc_data_end = objc_data_start + objc_data.cmd.size
 
         classlist_entries = []
         for idx, ent in enumerate(self.classlist):
@@ -398,18 +403,16 @@ class MachoAnalyzer(object):
 
     def _create_selref_to_name_map(self):
         self._selrefs = {}
-        selref_cmd = self.binary.get_section_with_name('__objc_selrefs')
-        selref_size = selref_cmd.size / sizeof(c_uint64)
-        selref_file_ptr = selref_cmd.offset
 
-        virt_base = self.binary.get_virtual_base()
-        for i in range(selref_size):
-            data = self.binary.get_bytes(selref_file_ptr, sizeof(c_uint64))
-            selref = c_uint64.from_buffer(bytearray(data)).value
-            virt_location = selref_file_ptr + virt_base
-            self._selrefs[virt_location] = selref
+        selref_sect = self.binary.get_section('__objc_selrefs')
+        entry_count = selref_sect.cmd.size / sizeof(c_uint64)
 
-            selref_file_ptr += sizeof(c_uint64)
+        for i in range(entry_count):
+            content_off = i * sizeof(c_uint64)
+            selref_val_data = selref_sect.content[content_off:content_off + sizeof(c_uint64)]
+            selref_val = c_uint64.from_buffer(bytearray(selref_val_data)).value
+            virt_location = content_off + selref_sect.cmd.addr
+            self._selrefs[virt_location] = selref_val
 
         # we now have an array of tuples of (selref ptr, string literal ptr)
         # self.selname_to_imp_map contains a map of {string literal ptr, IMP}

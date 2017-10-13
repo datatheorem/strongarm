@@ -20,27 +20,43 @@ class MachoStringTableEntry(object):
 
 
 class MachoBinary(object):
+    _MAG_64 = [
+        MachArch.MH_MAGIC_64,
+        MachArch.MH_CIGAM_64
+    ]
+    _MAG_BIG_ENDIAN = [
+        MachArch.MH_CIGAM,
+        MachArch.MH_CIGAM_64,
+    ]
+    _SUPPORTED_MAG = _MAG_64
+
     def __init__(self, fat_file, offset_within_fat=0):
         # type: (file, int) -> None
+        # info about this Mach-O's file representation
         self._file = fat_file
         self.offset_within_fat = offset_within_fat
 
+        # generic Mach-O header info
         self.is_64bit = False
         self.load_commands_offset = 0
-        self._num_commands = 0
         self.cpu_type = CPU_TYPE.UNKNOWN
         self.magic = 0
         self.is_swap = False
 
+        # Mach-O header data
         self.header = None
+        self.header_flags = []
+
+        # segment and section commands from Mach-O header
         self.segment_commands = {}
         self.section_commands = {}
+
+        # also store specific interesting sections which are useful to us
         self.dysymtab = None
         self.symtab = None
         self.encryption_info = None
-        self.imported_functions = None
-        self.header_flags = []
 
+        # kickoff for parsing this slice
         if not self.parse():
             raise RuntimeError('Failed to parse Mach-O')
 
@@ -64,6 +80,7 @@ class MachoBinary(object):
             return False
         self.is_swap = self.should_swap_bytes()
         self.is_64bit = self.magic_is_64()
+
         self.parse_header()
 
         DebugUtil.log(self, 'header parsed. non-native endianness? {}. 64-bit? {}'.format(self.is_swap, self.is_64bit))
@@ -79,21 +96,7 @@ class MachoBinary(object):
             True if the magic represents a supported file format, False if the magic represents an unknown format
         """
         self.magic = c_uint32.from_buffer(bytearray(self.get_bytes(0, sizeof(c_uint32)))).value
-        valid_mag = [
-            MachArch.MH_MAGIC_64,
-            MachArch.MH_CIGAM_64
-        ]
-        mag32 = [
-            MachArch.MH_MAGIC,
-            MachArch.MH_CIGAM,
-        ]
-        self.is_swap = self.should_swap_bytes()
-
-        if self.magic in mag32:
-            return False
-        if self.magic not in valid_mag:
-            return False
-        return True
+        return self.magic in MachoBinary._SUPPORTED_MAG
 
     def magic_is_64(self):
         # type: () -> bool
@@ -102,7 +105,7 @@ class MachoBinary(object):
         Returns:
             True if self.magic corresponds to a 64 bit MachO slice, False otherwise
         """
-        return self.magic == MachArch.MH_MAGIC_64 or self.magic == MachArch.MH_CIGAM_64
+        return self.magic in MachoBinary._MAG_64
 
     def parse_header(self):
         # type: () -> None
@@ -122,10 +125,9 @@ class MachoBinary(object):
 
         self.parse_header_flags()
 
-        self._num_commands = self.header.ncmds
         # load commands begin directly after Mach O header
         self.load_commands_offset = sizeof(MachoHeader64)
-        self.parse_segment_commands(self.load_commands_offset)
+        self.parse_segment_commands(self.load_commands_offset, self.header.ncmds)
 
     def parse_header_flags(self):
         # type: () -> None
@@ -146,7 +148,7 @@ class MachoBinary(object):
                 # mask is present in bitset
                 self.header_flags.append(mask)
 
-    def parse_segment_commands(self, offset):
+    def parse_segment_commands(self, offset, count):
         # type: (int) -> None
         """
         Parse Mach-O segment commands beginning at a given slice offset
@@ -268,10 +270,7 @@ class MachoBinary(object):
         # TODO(pt): figure out whether we need to swap to little or big endian,
         # based on system endianness and binary endianness
         # everything we touch currently is little endian, so let's not worry about it for now
-        big_endian = [MachArch.MH_CIGAM,
-                      MachArch.MH_CIGAM_64,
-                      ]
-        return self.magic in big_endian
+        return self.magic in MachoBinary._MAG_BIG_ENDIAN
 
     def get_raw_string_table(self):
         # type: () -> List[int]

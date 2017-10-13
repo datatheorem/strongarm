@@ -28,6 +28,7 @@ class MachoAnalyzer(object):
         self._selrefs = None
         self._selname_to_imp_map = None
 
+        self.imported_functions = None
         self.classlist = None
         self._contains_objc = False
 

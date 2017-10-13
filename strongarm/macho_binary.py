@@ -28,7 +28,7 @@ class MachoBinary(object):
         MachArch.MH_CIGAM,
         MachArch.MH_CIGAM_64,
     ]
-    _SUPPORTED_MAG = _MAG_64
+    SUPPORTED_MAG = _MAG_64
 
     def __init__(self, fat_file, offset_within_fat=0):
         # type: (file, int) -> None
@@ -98,7 +98,7 @@ class MachoBinary(object):
             True if the magic represents a supported file format, False if the magic represents an unsupported format
 
         """
-        return self.slice_magic in MachoBinary._SUPPORTED_MAG
+        return self.slice_magic in MachoBinary.SUPPORTED_MAG
 
     def magic_is_64(self):
         # type: () -> bool

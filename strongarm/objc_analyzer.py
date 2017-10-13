@@ -314,6 +314,17 @@ class ObjcFunctionAnalyzer(object):
             if dst_reg_name not in unknown_regs:
                 continue
 
+            # src might not actually be the first operand
+            # this could be an instruction like 'orr', whose invocation might look like this:
+            # orr x1, wzr, #0x2
+            # here, wzr is used as a 'trick' and the real source is the third operand
+            # try to detect this pattern
+            # zr indicates zero-register
+            if len(instr.operands) > 2:
+                if src.type == ARM64_OP_REG:
+                    if self._trimmed_reg_name(instr.reg_name(src.value.reg)) == 'zr':
+                        src = instr.operands[2]
+
             if src.type == ARM64_OP_IMM:
                 # we now know the immediate value in dst_reg_name
                 # remove it from unknown list

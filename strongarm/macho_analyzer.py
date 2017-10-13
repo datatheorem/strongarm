@@ -1,7 +1,9 @@
 from macho_binary import MachoBinary
 from capstone import *
-from typing import Text
+from typing import Text, List
 from decorators import memoized
+from ctypes import c_uint64, sizeof
+from macho_definitions import ObjcClass, ObjcMethod, ObjcMethodList, ObjcData
 
 
 class MachoImpStub(object):
@@ -23,8 +25,45 @@ class MachoAnalyzer(object):
         self.cs = Cs(CS_ARCH_ARM64, CS_MODE_ARM)
         self.cs.detail = True
 
+        self._selrefs = None
+        self._selname_to_imp_map = None
+
         # store this analyzer in class cache
         MachoAnalyzer.active_analyzer_map[bin] = self
+
+        self.imported_functions = self.parse_imported_symbols()
+        self.parse_classlist()
+
+        if self._contains_objc:
+            self._create_selref_to_name_map()
+
+    def parse_imported_symbols(self):
+        # type: () -> List[Text]
+        """
+        Convert packed string table into a list of NULL-terminated strings
+        Returns:
+            List of strings representing symbols in binary's string table
+        """
+        strtab = self.binary.get_raw_string_table()
+        symtab = self.binary.get_symtab_contents()
+        string_table_indexes = self.binary.string_table_index_info_table()
+        symbols = []
+        for sym in symtab:
+            strtab_idx = sym.n_un.n_strx
+
+            # string table is an array of characters
+            # these characters represent symbol names,
+            # with a null character delimiting each symbol name
+            # find the string corresponding to this index
+            # use string index table to avoid any array searching within this loop
+            start_idx, length = string_table_indexes[strtab_idx]
+            end_idx = start_idx + length
+            symbol_str_characters = strtab[start_idx:end_idx:]
+            symbol_str = ''.join(symbol_str_characters)
+
+            symbols.append(symbol_str)
+        return symbols
+
 
     @classmethod
     def get_analyzer(cls, bin):
@@ -262,3 +301,139 @@ class MachoAnalyzer(object):
         func_str = self.binary.get_bytes(start_address - self.binary.get_virtual_base(), function_size)
         instructions = [instr for instr in self.cs.disasm(func_str, start_address)]
         return instructions
+
+    def parse_classlist(self):
+        classlist_cmd = self.binary.get_section_with_name('__objc_classlist')
+        # does this binary contain an Objective-C classlist?
+        if not classlist_cmd:
+            # nothing to do here for purely C or Swift binaries
+            self._contains_objc = False
+            return
+        self._contains_objc = True
+
+        classlist_data = self.binary.get_section_content(classlist_cmd)
+        classlist_size = len(classlist_data) / sizeof(c_uint64)
+        classlist_off = 0
+        classlist = []
+        for i in range(classlist_size):
+            data_end = classlist_off + sizeof(c_uint64)
+            val = c_uint64.from_buffer(classlist_data[classlist_off:data_end]).value
+            classlist.append(val)
+            classlist_off += sizeof(c_uint64)
+
+        self.classlist = classlist
+        self.crossref_classlist()
+        return classlist
+
+    def read_classlist_entry(self, entry_location):
+        file_ptr = entry_location - self.binary.get_virtual_base()
+        raw_struct_data = self.binary.get_bytes(file_ptr, sizeof(ObjcClass))
+        class_entry = ObjcClass.from_buffer(bytearray(raw_struct_data))
+
+        # sanitize class_entry
+        # it seems for Swift classes,
+        # the compiler will add 1 to the data field
+        # TODO(pt) detecting this can be a heuristic for finding Swift classes!
+        # mod data field to a byte size
+        overlap = class_entry.data % 0x8
+        class_entry.data -= overlap
+        return class_entry
+
+    def crossref_classlist(self):
+        objc_data_cmd = self.binary.get_section_with_name('__objc_data')
+        objc_data_start = objc_data_cmd.addr
+        objc_data_end = objc_data_start + objc_data_cmd.size
+
+        classlist_entries = []
+        for idx, ent in enumerate(self.classlist):
+            class_entry = self.read_classlist_entry(ent)
+            classlist_entries.append(class_entry)
+
+            # is the metaclass implemented within this binary?
+            # we know if it's implemented within the binary if the metaclass pointer is within the __objc_data
+            # section.
+            if objc_data_start <= class_entry.metaclass < objc_data_end:
+                # read metaclass as well and append to list
+                metaclass_entry = self.read_classlist_entry(class_entry.metaclass)
+                classlist_entries.append(metaclass_entry)
+
+        self.parse_classlist_entries(classlist_entries)
+
+    def parse_classlist_entries(self, classlist_entries):
+        # type: (List[ObjcClass]) -> None
+        objc_data_entries = []
+        for i, class_ent in enumerate(classlist_entries):
+            data_file_ptr = class_ent.data - self.binary.get_virtual_base()
+            raw_struct_data = self.binary.get_bytes(data_file_ptr, sizeof(ObjcData))
+            data_entry = ObjcData.from_buffer(bytearray(raw_struct_data))
+            # ensure this is a valid entry
+            if data_entry.name < self.binary.get_virtual_base():
+                DebugUtil.log(self, 'caught ObjcData struct with invalid fields at {}'.format(
+                    hex(int(data_file_ptr + self.binary.get_virtual_base()))
+                ))
+                continue
+            objc_data_entries.append(data_entry)
+        self.parse_objc_data_entries(objc_data_entries)
+
+    def parse_objc_data_entries(self, objc_data_entries):
+        # type: (List[ObjcData]) -> None
+        self._selname_to_imp_map = {}
+        for ent in objc_data_entries:
+            methlist_file_ptr = ent.base_methods - self.binary.get_virtual_base()
+            if ent.base_methods == 0:
+                continue
+            raw_struct_data = self.binary.get_bytes(methlist_file_ptr, sizeof(ObjcMethodList))
+            methlist = ObjcMethodList.from_buffer(bytearray(raw_struct_data))
+
+            # parse every entry in method list
+            method_entry_off = methlist_file_ptr + sizeof(ObjcMethodList)
+            for i in range(methlist.methcount):
+                raw_struct_data = self.binary.get_bytes(method_entry_off, sizeof(ObjcMethod))
+                method_ent = ObjcMethod.from_buffer(bytearray(raw_struct_data))
+
+                name_start = method_ent.name
+                self._selname_to_imp_map[method_ent.name] = method_ent.implementation
+
+                method_entry_off += sizeof(ObjcMethod)
+
+    def _create_selref_to_name_map(self):
+        self._selrefs = {}
+        selref_cmd = self.binary.get_section_with_name('__objc_selrefs')
+        selref_size = selref_cmd.size / sizeof(c_uint64)
+        selref_file_ptr = selref_cmd.offset
+
+        virt_base = self.binary.get_virtual_base()
+        for i in range(selref_size):
+            data = self.binary.get_bytes(selref_file_ptr, sizeof(c_uint64))
+            selref = c_uint64.from_buffer(bytearray(data)).value
+            virt_location = selref_file_ptr + virt_base
+            self._selrefs[virt_location] = selref
+
+            selref_file_ptr += sizeof(c_uint64)
+
+        # we now have an array of tuples of (selref ptr, string literal ptr)
+        # self.selname_to_imp_map contains a map of {string literal ptr, IMP}
+        # create mapping from selref ptr to IMP
+        self._selref_ptr_to_imp_map = {}
+        for selref_ptr, string_ptr in self._selrefs.items():
+            try:
+                imp_ptr = self._selname_to_imp_map[string_ptr]
+            except KeyError as e:
+                # if this selref had no IMP, it must be a selector for a method defined outside this binary
+                # we don't mind, just continue
+                continue
+            self._selref_ptr_to_imp_map[selref_ptr] = imp_ptr
+
+    def imp_for_selref(self, selref_ptr):
+        if not selref_ptr:
+            return None
+        try:
+            return self._selref_ptr_to_imp_map[selref_ptr]
+        except KeyError as e:
+            # if we have a selector reference entry for this pointer but no IMP,
+            # it must be a selector for a class defined outside this binary
+            if selref_ptr in self._selrefs:
+                return None
+            # if we had no record of this selref, it's an invalid pointer and an exception should be raised
+            raise RuntimeError('invalid selector reference pointer {}'.format(hex(int(selref_ptr))))
+

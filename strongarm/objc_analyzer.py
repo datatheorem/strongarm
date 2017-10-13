@@ -190,7 +190,7 @@ class ObjcFunctionAnalyzer(object):
                     selref = self.get_selref(branch_instr.raw_instr)
                     # attempt to get an IMP for this selref
                     try:
-                        sel_imp = self.binary.imp_for_selref(selref)
+                        sel_imp = self.analyzer.imp_for_selref(selref)
                     except RuntimeError as e:
                         # if imp_for_selref threw an exception,
                         # then the only explanation is that we read the selref incorrectly

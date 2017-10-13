@@ -193,7 +193,7 @@ class ObjcFunctionAnalyzer(object):
                         sel_imp = self.analyzer.imp_for_selref(selref)
                     except RuntimeError as e:
                         instr_idx = start_index + idx
-                        self.debug_print(instr_idx, '{}: bl <objc_msgSend> target cannot be determined statically')
+                        self.debug_print(instr_idx, 'bl <objc_msgSend> target cannot be determined statically')
                         sel_imp = None
 
                     # if we couldn't find an IMP for this selref,

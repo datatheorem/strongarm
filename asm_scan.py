@@ -1,7 +1,10 @@
-from strongarm.objc_analyzer import *
 from strongarm.objc_analyzer import ObjcBlockAnalyzer
+from strongarm.macho_analyzer import MachoAnalyzer
+from strongarm.debug_util import DebugUtil
 
 from gammaray.ios_app import IosAppPackage
+
+from typing import Text
 
 
 def test_sta_142(path):
@@ -63,7 +66,8 @@ def test_sta_142(path):
         # arg1: credentials disposition
         # arg2: user-provided NSURLCredentials
         # find arg1 to block call
-        block_arg1 = block_analyzer.get_block_arg(1)
+        # TODO(PT): deprecate ObjcBlockAnalyzer.get_block_arg()
+        block_arg1 = block_analyzer.determine_register_contents('x1', block_analyzer.invoke_idx)
 
         authChallengeDispositions = ['NSURLSessionAuthChallengeUseCredential',
                                      'NSURLSessionAuthChallengePerformDefaultHandling',

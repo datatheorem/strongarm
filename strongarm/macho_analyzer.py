@@ -81,7 +81,7 @@ class MachoAnalyzer(object):
     def external_symbol_addr_map(self):
         # type: () -> {int, Text}
         imported_symbol_map = {}
-        lazy_sym_section = self.binary.get_section('__la_symbol_ptr')
+        lazy_sym_section = self.binary.sections['__la_symbol_ptr']
         external_symtab = self.binary.get_external_sym_pointers()
         indirect_symtab = self.binary.get_indirect_symbol_table()
         symtab = self.binary.get_symtab_contents()
@@ -157,7 +157,7 @@ class MachoAnalyzer(object):
     def imp_stub_section_map(self):
         # type: () -> List[MachoImpStub]
         imp_stub_map = self.external_symbol_addr_map
-        stubs_section = self.binary.get_section('__stubs')
+        stubs_section = self.binary.sections['__stubs']
 
         func_str = self.binary.get_bytes(stubs_section.cmd.offset, stubs_section.cmd.size)
         instructions = [instr for instr in self.cs.disasm(
@@ -309,7 +309,7 @@ class MachoAnalyzer(object):
         return instructions
 
     def parse_classlist(self):
-        classlist_sect = self.binary.get_section('__objc_classlist')
+        classlist_sect = self.binary.sections['__objc_classlist']
         # does this binary contain an Objective-C classlist?
         if not classlist_sect:
             # nothing to do here, must be a purely C or Swift binary
@@ -346,7 +346,7 @@ class MachoAnalyzer(object):
         return class_entry
 
     def crossref_classlist(self):
-        objc_data = self.binary.get_section('__objc_data')
+        objc_data = self.binary.sections['__objc_data']
         objc_data_start = objc_data.cmd.addr
         objc_data_end = objc_data_start + objc_data.cmd.size
 
@@ -405,7 +405,7 @@ class MachoAnalyzer(object):
     def _create_selref_to_name_map(self):
         self._selrefs = {}
 
-        selref_sect = self.binary.get_section('__objc_selrefs')
+        selref_sect = self.binary.sections['__objc_selrefs']
         entry_count = selref_sect.cmd.size / sizeof(c_uint64)
 
         for i in range(entry_count):

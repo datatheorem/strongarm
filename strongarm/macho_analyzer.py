@@ -4,7 +4,7 @@ from typing import Text, List
 from decorators import memoized
 from ctypes import c_uint64, sizeof
 from macho_definitions import ObjcClass, ObjcMethod, ObjcMethodList, ObjcData
-
+from debug_util import DebugUtil
 
 class MachoImpStub(object):
     def __init__(self, address, destination):

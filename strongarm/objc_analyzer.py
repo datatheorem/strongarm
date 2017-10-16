@@ -416,7 +416,7 @@ class ObjcFunctionAnalyzer(object):
 
         # do we know the value of this register?
         if desired_reg in resolved_registers:
-            DebugUtil.log(self, '{} is a known immediate: {}'.format(
+            DebugUtil.log(self, 'x{} is a known immediate: {}'.format(
                 desired_reg,
                 hex(int(resolved_registers[desired_reg]))
             ))
@@ -425,7 +425,7 @@ class ObjcFunctionAnalyzer(object):
         # to determine value in desired_reg,
         # we must find the value of source_reg, and then apply any offset
         source_reg, offset = links[desired_reg]
-        DebugUtil.log(self, '{} has data dependency: [{}, #{}]'.format(
+        DebugUtil.log(self, 'x{} has data dependency: [x{}, #{}]'.format(
             desired_reg,
             source_reg,
             hex(int(offset))
@@ -439,7 +439,7 @@ class ObjcFunctionAnalyzer(object):
         # add to list of known values
         resolved_registers[desired_reg] = final_val
 
-        DebugUtil.log(self, '{} resolved to {}'.format(
+        DebugUtil.log(self, 'x{} resolved to {}'.format(
             desired_reg,
             hex(int(final_val))
         ))

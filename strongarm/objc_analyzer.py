@@ -255,7 +255,7 @@ class ObjcFunctionAnalyzer(object):
         16  | ldr x22, [x8, #0x378]
         ... | ...
         130 | mov x1, x22
-        131 | bl objc_msgSend <-- ObjcDataFlowAnalyzer.find_reg_value(31, 'x1') = 0x1011bc378
+        131 | bl objc_msgSend <-- ObjcDataFlowAnalyzer.find_reg_value('x1', 131) = 0x1011bc378
 
         Args:
             desired_reg: string containing name of register whose data should be determined

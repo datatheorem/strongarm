@@ -30,10 +30,10 @@ class TestThinMachO(unittest.TestCase):
     def test_finds_segments(self):
         slice = self.parser.slices[0]
         # ensure standard segments are present
-        self.assertIsNotNone(slice.segments['__PAGEZERO'])
-        self.assertIsNotNone(slice.segments['__TEXT'])
-        self.assertIsNotNone(slice.segments['__DATA'])
-        self.assertIsNotNone(slice.segments['__LINKEDIT'])
+        self.assertIsNotNone(slice.segment_commands['__PAGEZERO'])
+        self.assertIsNotNone(slice.segment_commands['__TEXT'])
+        self.assertIsNotNone(slice.segment_commands['__DATA'])
+        self.assertIsNotNone(slice.segment_commands['__LINKEDIT'])
 
     def test_find_symtabs(self):
         # did we find symtab command and dysymtab command?
@@ -45,15 +45,15 @@ class TestThinMachO(unittest.TestCase):
         slice = self.parser.slices[0]
         # try a few sections from different segment
         # from __TEXT:
-        self.assertIsNotNone(slice.get_section_with_name('__text'))
-        self.assertIsNotNone(slice.get_section_with_name('__stubs'))
-        self.assertIsNotNone(slice.get_section_with_name('__objc_methname'))
-        self.assertIsNotNone(slice.get_section_with_name('__objc_classname'))
-        self.assertIsNotNone(slice.get_section_with_name('__cstring'))
+        self.assertIsNotNone(slice.sections['__text'])
+        self.assertIsNotNone(slice.sections['__stubs'])
+        self.assertIsNotNone(slice.sections['__objc_methname'])
+        self.assertIsNotNone(slice.sections['__objc_classname'])
+        self.assertIsNotNone(slice.sections['__cstring'])
         # from __DATA:
-        self.assertIsNotNone(slice.get_section_with_name('__const'))
-        self.assertIsNotNone(slice.get_section_with_name('__objc_classlist'))
-        self.assertIsNotNone(slice.get_section_with_name('__data'))
+        self.assertIsNotNone(slice.sections['__const'])
+        self.assertIsNotNone(slice.sections['__objc_classlist'])
+        self.assertIsNotNone(slice.sections['__data'])
 
     def test_header_flags(self):
         slice = self.parser.slices[0]

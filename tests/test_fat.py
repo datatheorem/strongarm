@@ -22,6 +22,6 @@ class TestFatMachO(unittest.TestCase):
 
     def test_slices(self):
         for slice in self.parser.slices:
-            magic = slice.magic
+            magic = slice.header.magic
             self.assertTrue(magic == MachArch.MH_MAGIC_64 or magic == MachArch.MH_CIGAM_64)
             self.assertTrue(self.parser._check_is_macho_header(slice.offset_within_fat))

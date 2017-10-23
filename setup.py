@@ -10,5 +10,6 @@ setup(
     packages=['strongarm'],
     install_requires=[
         'typing',
+        'capstone',
     ]
 )

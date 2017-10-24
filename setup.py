@@ -1,5 +1,14 @@
 from setuptools import setup
+from setuptools.command.install import install
+from subprocess import call
+
 from strongarm import __version__
+
+
+class CapstoneInstall(install):
+    def run(self):
+        install.run(self)
+        call(['/usr/bin/sh', './install_dependencies.sh'])
 
 setup(
     name='strongarm',
@@ -11,5 +20,8 @@ setup(
     install_requires=[
         'typing',
         'capstone',
-    ]
+    ],
+    cmdclass={
+        'install': CapstoneInstall,
+    }
 )

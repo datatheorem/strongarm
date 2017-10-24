@@ -14,6 +14,3 @@ case `uname` in
           exit 1
           ;;
 esac
-
-# Python dependencies
-pip install -r requirements.txt --upgrade

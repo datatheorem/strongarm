@@ -8,7 +8,7 @@ from strongarm import __version__
 class CapstoneInstall(install):
     def run(self):
         install.run(self)
-        call(['/usr/bin/sh', './install_dependencies.sh'])
+        call(['/bin/sh', './install_dependencies.sh'])
 
 setup(
     name='strongarm',

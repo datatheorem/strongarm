@@ -1,12 +1,12 @@
 from __future__ import absolute_import
 from __future__ import unicode_literals
 
+import os
 import unittest
 
-from strongarm.macho_analyzer import MachoAnalyzer
-from strongarm.objc_analyzer import ObjcFunctionAnalyzer
 from gammaray.ios_app import IosAppPackage
-import os
+from strongarm.macho.macho_analyzer import MachoAnalyzer
+from strongarm.objc.objc_analyzer import ObjcFunctionAnalyzer
 
 
 class TestFunctionAnalyzer(unittest.TestCase):

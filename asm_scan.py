@@ -1,10 +1,8 @@
-from strongarm.objc_analyzer import ObjcBlockAnalyzer
-from strongarm.macho_analyzer import MachoAnalyzer
-from strongarm.debug_util import DebugUtil
+from typing import Text
 
 from gammaray.ios_app import IosAppPackage
-
-from typing import Text
+from strongarm.macho.macho_analyzer import MachoAnalyzer
+from strongarm.objc.objc_analyzer import ObjcBlockAnalyzer
 
 
 def test_sta_142(path):

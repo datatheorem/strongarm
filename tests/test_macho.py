@@ -3,9 +3,8 @@ from __future__ import unicode_literals
 
 import unittest
 
-from strongarm.macho_parse import MachoParser
-from strongarm.macho_binary import MachoBinary
-from strongarm.macho_definitions import *
+from strongarm.macho.macho_definitions import *
+from strongarm.macho.macho_parse import MachoParser
 
 
 class TestThinMachO(unittest.TestCase):

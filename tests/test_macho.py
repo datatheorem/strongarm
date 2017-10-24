@@ -20,7 +20,7 @@ class TestMachoBinary(unittest.TestCase):
         self.assertIsNotNone(self.binary)
 
     def test_virt_base(self):
-        self.assertEqual(self.binary.get_virtual_base, 0x100000000)
+        self.assertEqual(self.binary.get_virtual_base(), 0x100000000)
 
     def test_single_slice(self):
         self.assertIsNotNone(self.binary)
@@ -68,5 +68,5 @@ class TestMachoBinary(unittest.TestCase):
 
     def test_get_symtab_contents(self):
         from pprint import pprint
-        symtabs = self.binary.get_symtab_contents()
+        symtabs = self.binary.symtab_contents
         self.assertTrue(len(symtabs) == 31)

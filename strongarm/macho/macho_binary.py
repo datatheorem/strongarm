@@ -15,11 +15,6 @@ class MachoSection(object):
         self.address = section_command.addr
 
 
-class MachoStringTableEntry(object):
-    def __init__(self, start_idx, length):
-        self.start_idx = start_idx
-        self.length = length
-
 
 class MachoBinary(object):
     _MAG_64 = [
@@ -59,6 +54,8 @@ class MachoBinary(object):
         # kickoff for parsing this slice
         if not self.parse():
             raise RuntimeError('Failed to parse Mach-O')
+
+        self.symtab_contents = self._get_symtab_contents()
 
     def parse(self):
         # type: () -> bool
@@ -284,8 +281,7 @@ class MachoBinary(object):
         string_table = list(string_table_data)
         return string_table
 
-    @memoized
-    def get_symtab_contents(self):
+    def _get_symtab_contents(self):
         # type: () -> List[MachoNlist64]
         """Parse symbol table containing list of Nlist64's
 
@@ -306,32 +302,6 @@ class MachoBinary(object):
         return symtab
 
     @memoized
-    def string_table_index_info_table(self):
-        # preprocess string table to ensure loops run in O(n) instead of O(n^2)
-        # maintain an array of MachoStringTableEntry's which is the same size as the string table array.
-        # so for each index in the string table's array of characters,
-        # have an entry in another table which contains a copy of a MachoStringTableEntry describing the string
-        # corresponding to that string table entry
-        # this way, we can find the symbol name for a given string table index without having to search for a null-
-        # character inside another loop.
-        string_table_index_info_table = []
-        current_str_start_idx = 0
-        strtab = self.get_raw_string_table()
-        for idx, ch in enumerate(strtab):
-            if ch == '\x00':
-                length = idx - current_str_start_idx
-
-                # record in list
-                ent = (current_str_start_idx, length)
-                # max to ensure there's at least 1 entry in list, even if this string entry is just a null char
-                # also, add 1 entry for null character
-                count_to_include = max(1, length + 1)
-                for j in range(count_to_include):
-                    string_table_index_info_table.append(ent)
-
-                # move to starting index of next string
-                current_str_start_idx = idx + 1
-        return string_table_index_info_table
 
     def get_external_sym_pointers(self):
         # type: () -> List[int]

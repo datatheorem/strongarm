@@ -74,7 +74,7 @@ class TestMachoAnalyzer(unittest.TestCase):
                                         '_rand',
                                         'dyld_stub_binder'
                                         ]
-            found_imported_symbols = analyzer.parse_imported_symbols()
+            found_imported_symbols = analyzer.imported_functions
             # we don't want the test to fail if the arrays contain the same elements but in a different order
             # so, sort the arrays before comparing them
             self.assertEqual(sorted(correct_imported_symbols), sorted(found_imported_symbols))
@@ -93,7 +93,7 @@ class TestMachoAnalyzer(unittest.TestCase):
             analyzer = MachoAnalyzer.get_analyzer(binary)
 
             sym_map = analyzer.external_symbol_addr_map
-            imported_syms = analyzer.parse_imported_symbols()
+            imported_syms = analyzer.imported_functions
             # make sure all the symbols listed in imported_symbols are present here
             for sym in sym_map.itervalues():
                 self.assertTrue(sym in imported_syms)

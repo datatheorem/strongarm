@@ -35,42 +35,16 @@ class MachoAnalyzer(object):
         self.classlist = None
         self._contains_objc = False
 
-        # store this analyzer in class cache
-        MachoAnalyzer.active_analyzer_map[bin] = self
+        self.crossref_helper = MachoCrossReferencer(self.binary)
+        self.imported_functions = self.crossref_helper.imported_symbol_list()
 
-        self.imported_functions = self.parse_imported_symbols()
         self.parse_classlist()
 
         if self._contains_objc:
             self._create_selref_to_name_map()
 
-    def parse_imported_symbols(self):
-        # type: () -> List[Text]
-        """
-        Convert packed string table into a list of NULL-terminated strings
-        Returns:
-            List of strings representing symbols in binary's string table
-        """
-        strtab = self.binary.get_raw_string_table()
-        symtab = self.binary.get_symtab_contents()
-        string_table_indexes = self.binary.string_table_index_info_table()
-        symbols = []
-        for sym in symtab:
-            strtab_idx = sym.n_un.n_strx
-
-            # string table is an array of characters
-            # these characters represent symbol names,
-            # with a null character delimiting each symbol name
-            # find the string corresponding to this index
-            # use string index table to avoid any array searching within this loop
-            start_idx, length = string_table_indexes[strtab_idx]
-            end_idx = start_idx + length
-            symbol_str_characters = strtab[start_idx:end_idx:]
-            symbol_str = ''.join(symbol_str_characters)
-
-            symbols.append(symbol_str)
-        return symbols
-
+        # done setting up, store this analyzer in class cache
+        MachoAnalyzer.active_analyzer_map[bin] = self
 
     @classmethod
     def get_analyzer(cls, bin):
@@ -88,7 +62,7 @@ class MachoAnalyzer(object):
         lazy_sym_section = self.binary.sections['__la_symbol_ptr']
         external_symtab = self.binary.get_external_sym_pointers()
         indirect_symtab = self.binary.get_indirect_symbol_table()
-        symtab = self.binary.get_symtab_contents()
+        symtab = self.binary.symtab_contents
         string_table = self.binary.get_raw_string_table()
 
         for (index, symbol_ptr) in enumerate(external_symtab):

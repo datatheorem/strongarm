@@ -10,14 +10,16 @@ class ObjcFunctionAnalyzer(object):
         # type: (MachoBinary, List[CsInsn]) -> None
         try:
             self.start_address = instructions[0].address
-            last_idx = len(instructions) - 1
-            self.end_address = instructions[last_idx].address
+            last_instruction = instructions[len(instructions) - 1]
+            self.end_address = last_instruction.address
         except IndexError as e:
             raise RuntimeError('ObjcFunctionAnalyzer was passed invalid instructions')
 
         self.binary = binary
         self.analyzer = MachoAnalyzer.get_analyzer(binary)
         self._instructions = instructions
+
+        # List[ObjcBranchInstr]
         self.__call_targets = None
 
     def debug_print(self, idx, output):
@@ -29,22 +31,47 @@ class ObjcFunctionAnalyzer(object):
 
     @classmethod
     def get_function_analyzer(cls, binary, start_address):
+        # type: (MachoBinary, int) -> ObjcFunctionAnalyzer
+        """Get the shared analyzer for the function at start_address in the binary.
+
+        This method uses a cached MachoAnalyzer if available, which is more efficient than analyzing the
+        same binary over and over. Therefore, this method should be used when an ObjcFunctionAnalyzer is needed,
+        instead of constructing it yourself.
+
+        Args:
+            binary: The MachoBinary containing a function at start_address
+            start_address: The entry point address for the function to be analyzed
+
+        Returns:
+            An ObjcFunctionAnalyzer suitable for introspecting a block of code.
+        """
         analyzer = MachoAnalyzer.get_analyzer(binary)
         instructions = analyzer.get_function_instructions(start_address)
         return ObjcFunctionAnalyzer(binary, instructions)
 
     @property
     def call_targets(self):
+        # type: () -> List[ObjcBranchInstr]
+        """Find a List of all branch destinations reachable from the source function
+
+        Returns:
+            A list of objects encapsulating info about the branch destinations from self._instructions
+        """
+        # use cached list if available
         if self.__call_targets is not None:
             return self.__call_targets
-        targets = []
 
+        targets = []
+        # keep track of the index of the last branch destination we saw
         last_branch_idx = 0
+
         while True:
+            # grab the next branch in front of the last one we vistied
             next_branch = self.next_branch(last_branch_idx)
             if not next_branch:
                 # parsed every branch in this function
                 break
+
             targets.append(next_branch)
             # record that we checked this branch
             last_branch_idx = self._instructions.index(next_branch.raw_instr)
@@ -56,8 +83,21 @@ class ObjcFunctionAnalyzer(object):
         return targets
 
     def can_execute_call(self, call_address):
+        # type: (int) -> bool
+        """Determine whether the function starting at call_address is reachable from any code path from source function.
+
+        Args:
+            call_address: address of the entry point of function to search for
+
+        Returns:
+            True if any of the code paths originating from the source function invoke the function at call_address.
+            False if no code paths call that function.
+        """
         self.debug_print(0, 'recursively searching for invocation of {}'.format(hex(int(call_address))))
+
         for target in self.call_targets:
+            # find the address of this branch instruction within the function
+            # we can't use self.call_targets.index(target) because
             instr_idx = self._instructions.index(target.raw_instr)
 
             # is this a direct call?

@@ -20,6 +20,10 @@ setup(
     install_requires=[
         'typing',
         'capstone',
+        'gammaray',
+    ],
+    dependency_links=[
+        'git+ssh://git@bitbucket.org/datatheorem/gammaray-ios.git'
     ],
     cmdclass={
         'install': CapstoneInstall,

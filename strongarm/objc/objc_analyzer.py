@@ -205,6 +205,7 @@ class ObjcFunctionAnalyzer(object):
                     regs_holding_value.remove(dst)
         return regs_holding_value
 
+    # TODO(PT): deprecate & replace with next_branch
     def next_blr_to_reg(self, reg, start_index):
         # type: (Text, int) -> CsInsn
         """
@@ -222,6 +223,7 @@ class ObjcFunctionAnalyzer(object):
             index += 1
         return None
 
+    # TODO(PT): rename find_next_branch
     def next_branch(self, start_index):
         branch_mnemonics = ['b',
                             'bl',
@@ -277,6 +279,11 @@ class ObjcFunctionAnalyzer(object):
               Data stored in x1 at execution of msgsend_instr
 
         """
+        # just as a sanity check, ensure the passed instruction is at least a branch
+        # TODO(PT): we could also check the branch destination to ensure it's really an objc_msgSend call
+        if msgsend_instr.mnemonic != 'bl':
+            raise ValueError('asked to find selref of non-branch instruction')
+
         msgsend_index = self._instructions.index(msgsend_instr)
         # retrieve whatever data is in x1 at the index of this msgSend call
         return self.determine_register_contents('x1', msgsend_index)
@@ -502,6 +509,7 @@ class ObjcFunctionAnalyzer(object):
         return final_val
 
 
+# TODO(PT): update this class to use stronger dataflow analysis
 class ObjcBlockAnalyzer(ObjcFunctionAnalyzer):
     def __init__(self, binary, instructions, initial_block_reg):
         ObjcFunctionAnalyzer.__init__(self, binary, instructions)
@@ -535,6 +543,7 @@ class ObjcBlockAnalyzer(ObjcFunctionAnalyzer):
                         return instr.reg_name(dst.value.reg), index
             index += 1
 
+    # TODO(PT): deprecate and use more up-to-date dataflow API
     def find_block_invoke(self):
         # type: () -> CsInsn
         return self.next_blr_to_reg(self.load_reg, self.load_index)

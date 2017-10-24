@@ -2,6 +2,9 @@ from typing import List, Text, Optional
 
 
 class MachoStringTableEntry(object):
+    """Class encapsulating an entry into the Mach-O string table
+    """
+
     def __init__(self, start_idx, length, content):
         self.start_idx = start_idx
         self.length = length
@@ -9,15 +12,12 @@ class MachoStringTableEntry(object):
 
 
 class MachoCrossReferencer(object):
+    """Class containing helper functions for processing different tables in a Mach-O
+    """
+
     def __init__(self, binary):
         self.binary = binary
         self.string_table_entries = self._process_string_table_entries()
-
-    def full_strtab_entry_for_character_index(self, index):
-        for ent in self.string_table_entries:
-            if ent.start_idx == index:
-                return
-        return None
 
     def _process_string_table_entries(self):
         # type: () -> List[MachoStringTableEntry]
@@ -31,6 +31,9 @@ class MachoCrossReferencer(object):
 
         To avoid this, we preprocess the string table into the full strings it represents. To make these lookups easier,
         we create a list of MachoStringTableEntry's
+
+        Returns:
+            List of string table entry objects equivalent to the raw string table data
         """
         string_table_entries = []
         entry_start_idx = 0
@@ -57,6 +60,11 @@ class MachoCrossReferencer(object):
 
     def string_table_entry_for_strtab_index(self, start_idx):
         # type: (int) -> Optional[MachoStringTableEntry]
+        """For a index in the packed character table, get the corresponding MachoStringTableEntry
+
+        Returns:
+            True if the provided index was the starting character of a string table entry, None if not
+        """
         for ent in self.string_table_entries:
             if ent.start_idx == start_idx:
                 return ent
@@ -76,6 +84,3 @@ class MachoCrossReferencer(object):
             symbol_str = self.string_table_entry_for_strtab_index(strtab_idx).full_string
             symbol_names.append(symbol_str)
         return symbol_names
-
-
-

@@ -7,9 +7,32 @@ from strongarm.debug_util import DebugUtil
 from strongarm.decorators import memoized
 from strongarm.macho.macho_binary import MachoBinary
 from strongarm.macho.macho_definitions import ObjcClass, ObjcMethod, ObjcMethodList, ObjcData
+from macho_cross_referencer import MachoCrossReferencer
 
 
 class MachoImpStub(object):
+    """Encapsulates entry in __imp_stubs section
+
+    An 'entry' in the __imp_stubs section is a very short function which jumps to a pointer in the __got or
+    __la_symbol_ptr lists. This pointer is a 'garbage' value which will be filled by dyld at runtime the first time
+    the stub is invoked by a function called dyld_stub_binder.
+    An entry in the __imp_stubs section might be assembly like the following:
+    0x0000000100006898         nop
+    0x000000010000689c         ldr        x16, #0x100008010
+    0x00000001000068a0         br         x16
+    In this case, 0x100008010 is an address in __la_symbol_ptr, which contains `dq 0x100010000`. I don't know the exact
+    mechanism by which dyld_stub_binder rewrites __imp_stubs/__la_symbol_ptr at runtime to change garbage pointers such
+    as 0x100010000 into the address the symbol was loaded at, but it's not really relevant here.
+    More relevant is the fact that the first address of each stub entry (0x100006898 in this example) will be the
+    branch destination anytime someone addresses the external symbol in question.
+    So, if the imp stub above corresponded to the `__la_symbol_ptr` entry for NSLog, a caller calling NSLog would
+    actually branch to 0x100006898.
+    By chaining all this information together along with symbol names cross-referenced with __la_symbol_ptr from
+    the indirect symbol table + string table, we can cross-reference branch destinations to external symbol names.
+
+    This object contains the starting address of the stub (which will be the destination for branches),
+    as well as the __la_symbol_ptr entry which is targeted by the stub.
+    """
     def __init__(self, address, destination):
         self.address = address
         self.destination = destination

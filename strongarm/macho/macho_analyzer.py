@@ -83,6 +83,7 @@ class MachoAnalyzer(object):
     @memoized
     def external_symbol_addr_map(self):
         # type: () -> {int, Text}
+        # TODO indicate this method automatically cross-refs the stub destinations to their real symbols
         imported_symbol_map = {}
         lazy_sym_section = self.binary.sections['__la_symbol_ptr']
         external_symtab = self.binary.get_external_sym_pointers()
@@ -184,6 +185,7 @@ class MachoAnalyzer(object):
     @property
     @memoized
     def address_to_symbol_name_map(self):
+        # TODO(PT): clarify this is an imported symbols map
         symbol_name_map = {}
         stubs = self.imp_stub_section_map
         imp_stub_map = self.external_symbol_addr_map
@@ -196,6 +198,7 @@ class MachoAnalyzer(object):
     @property
     @memoized
     def symbol_name_to_address_map(self):
+        # TODO(PT): clarify this is an imported symbols map
         call_address_map = {}
         for key, value in self.address_to_symbol_name_map.iteritems():
             call_address_map[value] = key

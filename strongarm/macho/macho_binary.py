@@ -3,6 +3,7 @@ from typing import List
 from strongarm.debug_util import DebugUtil
 from strongarm.decorators import memoized
 from strongarm.macho.macho_definitions import *
+from strongarm.macho.macho_load_commands import MachoLoadCommands
 
 
 class MachoSection(object):

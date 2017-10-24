@@ -13,3 +13,4 @@ pipelines:
         script: # Modify the commands below to build your repository.
           - pip install -r requirements.txt
           - python setup.py install
+          - python run_tests.py

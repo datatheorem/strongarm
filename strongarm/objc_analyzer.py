@@ -3,6 +3,7 @@ from typing import *
 from objc_instruction import *
 from macho_binary import MachoBinary
 from debug_util import DebugUtil
+from objc_query import ObjcPredicateQuery
 
 
 class ObjcFunctionAnalyzer(object):
@@ -81,6 +82,20 @@ class ObjcFunctionAnalyzer(object):
 
         self.__call_targets = targets
         return targets
+
+    def perform_query(self, condition_list):
+        # type: (List[ObjcPredicateQuery]) -> bool
+        DebugUtil.log(self, 'searching for query conditions {} in function {}'.format(
+            condition_list,
+            hex(int(self._instructions[0].address))
+        ))
+
+        for instruction in self._instructions:
+            for condition in condition_list:
+                if not condition.satisfied(instruction):
+                    continue
+            return True
+        return False
 
     def can_execute_call(self, call_address):
         # type: (int) -> bool

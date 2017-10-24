@@ -1,5 +1,5 @@
-from macho_definitions import *
-from macho_binary import MachoBinary
+from strongarm.macho.macho_binary import MachoBinary
+from strongarm.macho.macho_definitions import *
 
 
 class MachoParser(object):

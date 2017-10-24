@@ -1,7 +1,5 @@
-from typing import Text
-from macho_load_commands import MachoLoadCommands
-from ctypes import *
 import struct
+from ctypes import *
 
 
 def swap32(i):

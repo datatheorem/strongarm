@@ -1,10 +1,13 @@
-from macho_binary import MachoBinary
+from ctypes import c_uint64, sizeof
+
 from capstone import *
 from typing import Text, List
-from decorators import memoized
-from ctypes import c_uint64, sizeof
-from macho_definitions import ObjcClass, ObjcMethod, ObjcMethodList, ObjcData
-from debug_util import DebugUtil
+
+from strongarm.debug_util import DebugUtil
+from strongarm.decorators import memoized
+from strongarm.macho.macho_binary import MachoBinary
+from strongarm.macho.macho_definitions import ObjcClass, ObjcMethod, ObjcMethodList, ObjcData
+
 
 class MachoImpStub(object):
     def __init__(self, address, destination):

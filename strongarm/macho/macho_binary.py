@@ -1,7 +1,8 @@
-from macho_definitions import *
 from typing import List
-from decorators import memoized
-from debug_util import DebugUtil
+
+from strongarm.debug_util import DebugUtil
+from strongarm.decorators import memoized
+from strongarm.macho.macho_definitions import *
 
 
 class MachoSection(object):

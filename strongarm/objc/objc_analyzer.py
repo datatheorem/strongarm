@@ -1,9 +1,10 @@
 from capstone.arm64 import *
 from typing import *
+
+from strongarm.debug_util import DebugUtil
 from objc_instruction import *
-from macho_binary import MachoBinary
-from debug_util import DebugUtil
 from objc_query import ObjcPredicateQuery
+from strongarm.macho.macho_binary import MachoBinary
 
 
 class ObjcFunctionAnalyzer(object):

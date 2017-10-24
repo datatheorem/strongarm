@@ -1,6 +1,7 @@
 from capstone import *
-from macho_binary import MachoBinary
-from macho_analyzer import MachoAnalyzer
+
+from strongarm.macho.macho_analyzer import MachoAnalyzer
+from strongarm.macho.macho_binary import MachoBinary
 
 
 class ObjcInstr(object):

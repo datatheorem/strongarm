@@ -1,7 +1,7 @@
 from ctypes import c_uint64, sizeof
 
 from capstone import *
-from typing import Text, List
+from typing import Text, List, Dict, Optional
 
 from strongarm.debug_util import DebugUtil
 from strongarm.decorators import memoized
@@ -52,10 +52,11 @@ class MachoAnalyzer(object):
         self.cs.detail = True
 
         self._selrefs = None
-        self._selname_to_imp_map = None
+        self.selector_names_to_imps = None
 
         self.imported_functions = None
         self.classlist = None
+        self._imp_map = None
         self._contains_objc = False
 
         self.crossref_helper = MachoCrossReferencer(self.binary)
@@ -386,7 +387,7 @@ class MachoAnalyzer(object):
 
     def parse_objc_data_entries(self, objc_data_entries):
         # type: (List[ObjcData]) -> None
-        self._selname_to_imp_map = {}
+        self.selector_names_to_imps = {}
         for ent in objc_data_entries:
             methlist_file_ptr = ent.base_methods - self.binary.get_virtual_base()
             if ent.base_methods == 0:
@@ -401,7 +402,7 @@ class MachoAnalyzer(object):
                 method_ent = ObjcMethod.from_buffer(bytearray(raw_struct_data))
 
                 name_start = method_ent.name
-                self._selname_to_imp_map[method_ent.name] = method_ent.implementation
+                self.selector_names_to_imps[method_ent.name] = method_ent.implementation
 
                 method_entry_off += sizeof(ObjcMethod)
 
@@ -419,12 +420,12 @@ class MachoAnalyzer(object):
             self._selrefs[virt_location] = selref_val
 
         # we now have an array of tuples of (selref ptr, string literal ptr)
-        # self.selname_to_imp_map contains a map of {string literal ptr, IMP}
+        # self.selector_names_to_imps contains a map of {string literal ptr, IMP}
         # create mapping from selref ptr to IMP
         self._selref_ptr_to_imp_map = {}
         for selref_ptr, string_ptr in self._selrefs.items():
             try:
-                imp_ptr = self._selname_to_imp_map[string_ptr]
+                imp_ptr = self.selector_names_to_imps[string_ptr]
             except KeyError as e:
                 # if this selref had no IMP, it must be a selector for a method defined outside this binary
                 # we don't mind, just continue
@@ -444,3 +445,54 @@ class MachoAnalyzer(object):
             # if we had no record of this selref, it's an invalid pointer and an exception should be raised
             raise RuntimeError('invalid selector reference pointer {}'.format(hex(int(selref_ptr))))
 
+    def get_method_imp_address(self, selector):
+        return self.selector_names_to_imps[selector]
+
+    def get_method_address_range(self, selector):
+        # type: (Text) -> Optional[(int, int)]
+        """Retrieve the address range of executable code belonging to the supplied selector's IMP
+
+        The method will throw an Exception if the selector has multiple implementations defined.
+        The return value will be None if the method is not implemented, or will be a tuple containing the
+        start and end addresses of executable code belonging to the function associated with the supplied selector.
+        """
+        # used cached values if available, get_method_imp_address is an expensive operation
+        if selector in self._imp_map:
+            return self._imp_map[selector]
+
+        start_address = self.get_method_imp_address(selector)
+        if not start_address:
+            # get_method_imp_address failed, selector might not exist
+            return None
+
+        macho_analyzer = MachoAnalyzer.get_analyzer(self)
+        end_address = macho_analyzer.get_function_address_range(start_address)
+        # get_content_from_virtual_address wants a size for how much data to grab,
+        # but we don't actually know how big the function is!
+        # start off by grabbing 256 bytes, and keep doubling search area until we encounter the
+        # function boundary.
+        end_address = 0
+        search_size = 0x100
+        while not end_address:
+            end_address = macho_analyzer._find_function_boundary(start_address, search_size)
+            # double search space
+            search_size *= 2
+
+        # put this IMP range in cache as get_method_imp_address is very slow
+        self._imp_map[selector] = start_address, end_address
+
+        return start_address, end_address
+
+    def get_method_size(self, selector):
+        # type: (Text) -> Optional[int]
+        """Retrieve the size of a method implementation for a given selector
+
+        The method will throw an Exception if the selector has multiple implementations defined.
+        The return value will be None if the method is not implemented, or will be an int representing
+        the size, in bytes, of the executable code mapped to the supplied selector.
+        """
+        start_address, end_address = self.get_method_address_range(selector)
+        if not start_address:
+            # get_method_imp_address failed, selector might not exist
+            return None
+        return end_address - start_address

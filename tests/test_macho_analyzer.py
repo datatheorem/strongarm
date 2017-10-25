@@ -80,7 +80,7 @@ class TestMachoAnalyzer(unittest.TestCase):
         self.assertEqual(analyzer1, analyzer2)
 
     def test_external_symbol_addr_map(self):
-        sym_map = self.analyzer.external_symbol_addr_map
+        sym_map = self.analyzer.address_to_imported_symbol_name_map
         imported_syms = self.analyzer.imported_functions
         # make sure all the symbols listed in imported_symbols are present here
         for sym in sym_map.itervalues():

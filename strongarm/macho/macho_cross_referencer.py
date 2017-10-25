@@ -1,4 +1,5 @@
 from typing import List, Text, Optional
+from macho_binary import MachoBinary
 
 
 class MachoStringTableEntry(object):
@@ -16,6 +17,7 @@ class MachoCrossReferencer(object):
     """
 
     def __init__(self, binary):
+        # type: (MachoBinary) -> None
         self.binary = binary
         self.string_table_entries = self._process_string_table_entries()
 

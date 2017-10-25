@@ -46,20 +46,21 @@ class MachoAnalyzer(object):
     active_analyzer_map = {}
 
     def __init__(self, bin):
-        # type: (MachoBinary) -> MachoAnalyzer
+        # type: (MachoBinary) -> None
         self.binary = bin
         self.cs = Cs(CS_ARCH_ARM64, CS_MODE_ARM)
         self.cs.detail = True
 
         self._selrefs = None
         self.selector_names_to_imps = None
+        self._selector_name_pointers_to_imps = None
 
         self.imported_functions = None
         self.classlist = None
-        self._imp_map = None
+        self._imp_map = {}
         self._contains_objc = False
 
-        self.crossref_helper = MachoCrossReferencer(self.binary)
+        self.crossref_helper = MachoCrossReferencer(bin)
         self.imported_functions = self.crossref_helper.imported_symbol_list()
 
         self.parse_classlist()
@@ -387,7 +388,10 @@ class MachoAnalyzer(object):
 
     def parse_objc_data_entries(self, objc_data_entries):
         # type: (List[ObjcData]) -> None
+
         self.selector_names_to_imps = {}
+        self._selector_name_pointers_to_imps = {}
+
         for ent in objc_data_entries:
             methlist_file_ptr = ent.base_methods - self.binary.get_virtual_base()
             if ent.base_methods == 0:
@@ -401,8 +405,26 @@ class MachoAnalyzer(object):
                 raw_struct_data = self.binary.get_bytes(method_entry_off, sizeof(ObjcMethod))
                 method_ent = ObjcMethod.from_buffer(bytearray(raw_struct_data))
 
+                # TODO(PT): preprocess __objc_methname so we don't have to search for null byte for every string here
                 name_start = method_ent.name
-                self.selector_names_to_imps[method_ent.name] = method_ent.implementation
+                name_len = 0
+                found_null_terminator = False
+                # grab 128 bytes
+                name_bytes = self.binary.get_content_from_virtual_address(virtual_address=name_start, size=128)
+                # search for null terminator in this content
+                for ch in name_bytes:
+                    if ch == '\x00':
+                        found_null_terminator = True
+                        break
+                    name_len += 1
+                # did we find null terminator?
+                if not found_null_terminator:
+                    raise RuntimeError('__objc_methname entry was longer than 128 bytes. Fix me!')
+                # read full string
+                symbol_name = str(name_bytes[:name_len:])
+
+                self._selector_name_pointers_to_imps[method_ent.name] = method_ent.implementation
+                self.selector_names_to_imps[symbol_name] = method_ent.implementation
 
                 method_entry_off += sizeof(ObjcMethod)
 
@@ -420,12 +442,12 @@ class MachoAnalyzer(object):
             self._selrefs[virt_location] = selref_val
 
         # we now have an array of tuples of (selref ptr, string literal ptr)
-        # self.selector_names_to_imps contains a map of {string literal ptr, IMP}
+        # self._selector_name_pointers_to_imps contains a map of {string literal ptr, IMP}
         # create mapping from selref ptr to IMP
         self._selref_ptr_to_imp_map = {}
         for selref_ptr, string_ptr in self._selrefs.items():
             try:
-                imp_ptr = self.selector_names_to_imps[string_ptr]
+                imp_ptr = self._selector_name_pointers_to_imps[string_ptr]
             except KeyError as e:
                 # if this selref had no IMP, it must be a selector for a method defined outside this binary
                 # we don't mind, just continue
@@ -465,8 +487,7 @@ class MachoAnalyzer(object):
             # get_method_imp_address failed, selector might not exist
             return None
 
-        macho_analyzer = MachoAnalyzer.get_analyzer(self)
-        end_address = macho_analyzer.get_function_address_range(start_address)
+        end_address = self.get_function_address_range(start_address)
         # get_content_from_virtual_address wants a size for how much data to grab,
         # but we don't actually know how big the function is!
         # start off by grabbing 256 bytes, and keep doubling search area until we encounter the
@@ -474,7 +495,7 @@ class MachoAnalyzer(object):
         end_address = 0
         search_size = 0x100
         while not end_address:
-            end_address = macho_analyzer._find_function_boundary(start_address, search_size)
+            end_address = self._find_function_boundary(start_address, search_size)
             # double search space
             search_size *= 2
 

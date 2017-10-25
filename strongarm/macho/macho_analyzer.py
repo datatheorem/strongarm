@@ -80,37 +80,47 @@ class MachoAnalyzer(object):
 
     @property
     @memoized
-    def external_symbol_addr_map(self):
-        # type: () -> {int, Text}
+    def address_to_imported_symbol_name_map(self):
+        # type: () -> Dict[int, Text]
+        """Cross-reference Mach-O sections to produce branch destination -> external symbol name map.
+        
+        This map will only contain entries for symbols that are defined outside the main binary.
+        This method cross references data in __la_symbol_ptr, the indirect symbol table
+        
+        Returns:
+            Map of branch destinations to the strings corresponding to the name of each symbol
+        """
         # TODO indicate this method automatically cross-refs the stub destinations to their real symbols
         imported_symbol_map = {}
-        lazy_sym_section = self.binary.sections['__la_symbol_ptr']
+
+        # the reserved1 field of the lazy symbol section header holds the starting index of this table's entries,
+        # within the indirect symbol table
+        # so, for any address in the lazy symbol, its translated address into the indirect symbol table is:
+        # lazy_sym_section.reserved1 + index
+        lazy_sym_offset_within_indirect_symtab = self.binary.sections['__la_symbol_ptr'].cmd.reserved1
+        # this list contains the contents of __la_symbol_ptr
         external_symtab = self.binary.get_external_sym_pointers()
+
+        # indirect symbol table is a list of indexes into larger symbol table
         indirect_symtab = self.binary.get_indirect_symbol_table()
+
         symtab = self.binary.symtab_contents
         string_table = self.binary.get_raw_string_table()
 
         for (index, symbol_ptr) in enumerate(external_symtab):
-            # the reserved1 field of the lazy symbol section header holds the starting index of this table's entries,
-            # within the indirect symbol table
-            # so, for any address in the lazy symbol, its translated address into the indirect symbol table is:
-            # lazy_sym_section.reserved1 + index
-            offset = indirect_symtab[lazy_sym_section.cmd.reserved1 + index]
+            # as above, for an index idx in __la_symbol_ptr, the corresponding entry within the symbol table (from which
+            # we can get the string name of this symbol) is given by the value in the indirect symbol table at index:
+            # la_symbol_ptr_command.reserved1 + idx
+            offset = indirect_symtab[lazy_sym_offset_within_indirect_symtab + index]
             sym = symtab[offset]
+
+            # we now have the Nlist64 symbol for the __la_symbol_ptr entry
+            # the starting index of the string within the string table for this symbol is given by the n_strx field
             strtab_idx = sym.n_un.n_strx
 
-            # string table is an array of characters
-            # these characters represent symbol names,
-            # with a null character delimiting each symbol name
-            # find the length of this symbol by looking for the next null character starting from
-            # the first index of the symbol
-            symbol_string_len = string_table[strtab_idx::].index('\x00')
-            strtab_end_idx = strtab_idx + symbol_string_len
-            symbol_str_characters = string_table[strtab_idx:strtab_end_idx:]
-            symbol_str = ''.join(symbol_str_characters)
-
+            symbol_name = self.crossref_helper.string_table_entry_for_strtab_index(strtab_idx).full_string
             # record this mapping of address to symbol name
-            imported_symbol_map[symbol_ptr] = symbol_str
+            imported_symbol_map[symbol_ptr] = symbol_name
         return imported_symbol_map
 
     def parse_stub(self, instr1, instr2, instr3):
@@ -159,7 +169,7 @@ class MachoAnalyzer(object):
     @memoized
     def imp_stub_section_map(self):
         # type: () -> List[MachoImpStub]
-        imp_stub_map = self.external_symbol_addr_map
+        imp_stub_map = self.address_to_imported_symbol_name_map
         stubs_section = self.binary.sections['__stubs']
 
         func_str = self.binary.get_bytes(stubs_section.cmd.offset, stubs_section.cmd.size)
@@ -187,7 +197,7 @@ class MachoAnalyzer(object):
         # TODO(PT): clarify this is an imported symbols map
         symbol_name_map = {}
         stubs = self.imp_stub_section_map
-        imp_stub_map = self.external_symbol_addr_map
+        imp_stub_map = self.address_to_imported_symbol_name_map
 
         for stub in stubs:
             symbol_name = imp_stub_map[stub.destination]

@@ -1,14 +1,8 @@
 from setuptools import setup
-from setuptools.command.install import install
 from subprocess import call
 
 from strongarm import __version__
 
-
-class CapstoneInstall(install):
-    def run(self):
-        install.run(self)
-        call(['/bin/sh', './install_dependencies.sh'])
 
 setup(
     name='strongarm',
@@ -20,12 +14,5 @@ setup(
     install_requires=[
         'typing',
         'capstone',
-        'gammaray-ios',
     ],
-    dependency_links=[
-        'git+ssh://git@bitbucket.org/datatheorem/gammaray-ios.git'
-    ],
-    cmdclass={
-        'install': CapstoneInstall,
-    }
 )

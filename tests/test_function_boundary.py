@@ -2,67 +2,60 @@ from __future__ import absolute_import
 from __future__ import unicode_literals
 
 import unittest
+import os
 
-from gammaray.ios_app import *
+from strongarm.macho.macho_parse import MachoParser
+from strongarm.macho.macho_binary import MachoBinary
+from strongarm.macho.macho_analyzer import MachoAnalyzer
 
 
-class FileChecksTests(unittest.TestCase):
+class FunctionBoundaryTests(unittest.TestCase):
+    FAT_PATH = os.path.join(os.path.dirname(__file__), 'bin', 'StrongarmTarget')
 
-    IPA_PATH = os.path.join(os.path.dirname(__file__), 'bin', 'GammaRayTestGood.ipa')
+    def setUp(self):
+        parser = MachoParser(FunctionBoundaryTests.FAT_PATH)
+        self.binary = parser.slices[0]
+        self.analyzer = MachoAnalyzer.get_analyzer(self.binary)
 
     def test_function_boundary_ret(self):
-        with IosAppPackage(self.IPA_PATH) as app:
-            binary = app.get_main_executable().get_parsed_binary()
-            analyzer = MachoAnalyzer.get_analyzer(binary)
-            # found in Hopper
-            # address of -[DTHAppDelegate application:didFinishLaunchingWithOptions:]
-            # this function ends with a ret instruction
-            start_address = 0x1000045f0
-            end_address = 0x100004834
-            actual_size = end_address - start_address
+        # found in Hopper
+        # address of -[DTHAppDelegate application:didFinishLaunchingWithOptions:]
+        # this function ends with a ret instruction
+        start_address = 0x100006844
+        end_address = 0x100006848
+        actual_size = end_address - start_address
 
-            guessed_end_address = analyzer._find_function_boundary(start_address, actual_size * 2)
-            self.assertEqual(end_address, guessed_end_address)
+        guessed_end_address = self.analyzer._find_function_boundary(start_address, actual_size * 2)
+        self.assertEqual(end_address, guessed_end_address)
 
     def test_function_boundary_bl(self):
-        with IosAppPackage(self.IPA_PATH) as app:
-            binary = app.get_main_executable().get_parsed_binary()
-            analyzer = MachoAnalyzer.get_analyzer(binary)
+        # found in Hopper
+        # address of -[DTHAppDelegate setWindow:]
+        # this function ends with a b/bl instruction
+        start_address = 0x100006870
+        end_address = 0x100006880
 
-            # found in Hopper
-            # address of -[DTHAppDelegate setWindow:]
-            # this function ends with a b/bl instruction
-            start_address = 0x1000049d4
-            end_address = 0x100004a34
-            actual_size = end_address - start_address
+        actual_size = end_address - start_address
 
-            guessed_end_address = analyzer._find_function_boundary(start_address, actual_size * 2)
-            self.assertEqual(end_address, guessed_end_address)
+        guessed_end_address = self.analyzer._find_function_boundary(start_address, actual_size * 2)
+        self.assertEqual(end_address, guessed_end_address)
 
     def test_get_method_address_range(self):
-        with IosAppPackage(self.IPA_PATH) as app:
-            binary = app.get_main_executable().get_parsed_binary()
-            analyzer = MachoAnalyzer.get_analyzer(binary)
+        sel = 'application:didFinishLaunchingWithOptions:'
+        # found in Hopper
+        correct_start_address = 0x100006844
+        correct_end_address = 0x100006848
 
-            sel = 'application:didFinishLaunchingWithOptions:'
-            # found in Hopper
-            correct_start_address = 0x1000045f0
-            correct_end_address = 0x100004834
-
-            found_start_address, found_end_address = app.get_main_executable().get_method_address_range(sel)
-            self.assertEqual(correct_start_address, found_start_address)
-            self.assertEqual(correct_end_address, found_end_address)
+        found_start_address, found_end_address = self.analyzer.get_method_address_range(sel)
+        self.assertEqual(correct_start_address, found_start_address)
+        self.assertEqual(correct_end_address, found_end_address)
 
     def test_get_method_size(self):
-        with IosAppPackage(self.IPA_PATH) as app:
-            binary = app.get_main_executable().get_parsed_binary()
-            analyzer = MachoAnalyzer.get_analyzer(binary)
+        sel = 'application:didFinishLaunchingWithOptions:'
+        # found in Hopper
+        correct_start_address = 0x100006844
+        correct_end_address = 0x100006848
+        correct_size = correct_end_address - correct_start_address
 
-            sel = 'application:didFinishLaunchingWithOptions:'
-            # found in Hopper
-            correct_start_address = 0x1000045f0
-            correct_end_address = 0x100004834
-            correct_size = correct_end_address - correct_start_address
-
-            guessed_size = app.get_main_executable().get_method_size(sel)
-            self.assertEqual(correct_size, guessed_size)
+        guessed_size = self.analyzer.get_method_size(sel)
+        self.assertEqual(correct_size, guessed_size)

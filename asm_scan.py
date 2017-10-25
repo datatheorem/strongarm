@@ -114,6 +114,8 @@ paths = [
 #    u'./tests/bin/GammaRayTestBad.ipa'
 ]
 
+from strongarm.debug_util import DebugUtil
+
 DebugUtil.debug = True
 for app_path in paths:
     print('STA-142 check on {}'.format(app_path))

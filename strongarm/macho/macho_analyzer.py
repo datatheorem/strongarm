@@ -528,34 +528,21 @@ class MachoAnalyzer(object):
             ranges_list.append((start_address, end_address))
         return ranges_list
 
+    def get_implementations(self, selector):
+        # type: (Text) -> List[List[CsInsn]]
+        """Retrieve a list of the disassembled function data for every implementation of a provided selector
+        Args:
+            selector: The selector name who's implementations should be found
 
-        end_address = self.get_function_address_range(start_address)
-        # get_content_from_virtual_address wants a size for how much data to grab,
-        # but we don't actually know how big the function is!
-        # start off by grabbing 256 bytes, and keep doubling search area until we encounter the
-        # function boundary.
-        end_address = 0
-        search_size = 0x100
-        while not end_address:
-            end_address = self._find_function_boundary(start_address, search_size)
-            # double search space
-            search_size *= 2
-
-        # put this IMP range in cache as get_method_imp_address is very slow
-        self._imp_map[selector] = start_address, end_address
-
-        return start_address, end_address
-
-    def get_method_size(self, selector):
-        # type: (Text) -> Optional[int]
-        """Retrieve the size of a method implementation for a given selector
-
-        The method will throw an Exception if the selector has multiple implementations defined.
-        The return value will be None if the method is not implemented, or will be an int representing
-        the size, in bytes, of the executable code mapped to the supplied selector.
+        Returns:
+            A list of lists containing CsInsn objects. Each entry in the outer list represents an implementation of
+            the selector, suitable for being passed to an ObjcFunctionAnalyzer constructor
         """
-        start_address, end_address = self.get_method_address_range(selector)
-        if not start_address:
-            # get_method_imp_address failed, selector might not exist
-            return None
-        return end_address - start_address
+        implementations = []
+        imp_addresses = self.get_method_address_ranges(selector)
+        for imp_start, imp_end in imp_addresses:
+            imp_size = imp_end - imp_start
+            imp_data = self.binary.get_content_from_virtual_address(virtual_address=imp_start, size=imp_size)
+            imp_instructions = [instr for instr in self.cs.disasm(imp_data, imp_start)]
+            implementations.append(imp_instructions)
+        return implementations

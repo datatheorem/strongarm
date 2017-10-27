@@ -2,16 +2,19 @@ from __future__ import absolute_import
 from __future__ import unicode_literals
 
 import unittest
+import os
 
 from strongarm.macho.macho_definitions import *
 from strongarm.macho.macho_parse import MachoParser
 
 
 class TestFatMachO(unittest.TestCase):
+    THIN_BIN_PATH = os.path.join(os.path.dirname(__file__), 'bin', 'StrongarmTarget')
+    FAT_BIN_PATH = os.path.join(os.path.dirname(__file__), 'bin', 'GammaRayTestBad')
 
     def setUp(self):
-        self.thin_parser = MachoParser(u'./bin/StrongarmTarget')
-        self.fat_parser = MachoParser(u'./bin/GammaRayTestBad')
+        self.thin_parser = MachoParser(TestFatMachO.THIN_BIN_PATH)
+        self.fat_parser = MachoParser(TestFatMachO.FAT_BIN_PATH)
 
     def test_fat_parsing(self):
         self.assertFalse(self.thin_parser.is_fat)

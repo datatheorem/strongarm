@@ -12,7 +12,7 @@ class TestMachoBinary(unittest.TestCase):
     FAT_PATH = os.path.join(os.path.dirname(__file__), 'bin', 'GoodCertificateValidation')
 
     def setUp(self):
-        self.parser = MachoParser(u'./bin/GoodCertificateValidation')
+        self.parser = MachoParser(TestMachoBinary.FAT_PATH)
         # ensure only one slice is returned with a thin Mach-O
         slices = self.parser.slices
         self.assertEqual(len(slices), 1)

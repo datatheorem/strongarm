@@ -46,16 +46,7 @@ class FunctionBoundaryTests(unittest.TestCase):
         correct_start_address = 0x100006844
         correct_end_address = 0x100006848
 
-        found_start_address, found_end_address = self.analyzer.get_method_address_range(sel)
+        imp_addresses = self.analyzer.get_method_address_ranges(sel)
+        found_start_address, found_end_address = imp_addresses[0]
         self.assertEqual(correct_start_address, found_start_address)
         self.assertEqual(correct_end_address, found_end_address)
-
-    def test_get_method_size(self):
-        sel = 'application:didFinishLaunchingWithOptions:'
-        # found in Hopper
-        correct_start_address = 0x100006844
-        correct_end_address = 0x100006848
-        correct_size = correct_end_address - correct_start_address
-
-        guessed_size = self.analyzer.get_method_size(sel)
-        self.assertEqual(correct_size, guessed_size)

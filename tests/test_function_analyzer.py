@@ -16,9 +16,11 @@ class TestFunctionAnalyzer(unittest.TestCase):
         parser = MachoParser(TestFunctionAnalyzer.FAT_PATH)
         self.binary = parser.slices[0]
         self.analyzer = MachoAnalyzer.get_analyzer(self.binary)
-        self.imp_addr, _ = self.analyzer.get_method_address_range(
-            'URLSession:didReceiveChallenge:completionHandler:'
+        self.implementations = self.analyzer.get_method_address_ranges(
+            u'URLSession:didReceiveChallenge:completionHandler:'
         )
+        self.imp_addr, _ = self.implementations[0]
+
         self.instructions = self.analyzer.get_function_instructions(self.imp_addr)
         self.function_analyzer = ObjcFunctionAnalyzer(self.binary, self.instructions)
 

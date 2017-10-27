@@ -57,7 +57,6 @@ class MachoAnalyzer(object):
 
         self.imported_functions = None
         self.classlist = None
-        self._imp_map = {}
         self._contains_objc = False
 
         self.crossref_helper = MachoCrossReferencer(bin)
@@ -421,8 +420,9 @@ class MachoAnalyzer(object):
                 name_start = method_ent.name
                 name_len = 0
                 found_null_terminator = False
-                # grab 128 bytes
-                name_bytes = self.binary.get_content_from_virtual_address(virtual_address=name_start, size=128)
+                # grab 512 bytes
+                max_len = 512
+                name_bytes = self.binary.get_content_from_virtual_address(virtual_address=name_start, size=max_len)
                 # search for null terminator in this content
                 for ch in name_bytes:
                     if ch == '\x00':
@@ -431,12 +431,23 @@ class MachoAnalyzer(object):
                     name_len += 1
                 # did we find null terminator?
                 if not found_null_terminator:
-                    raise RuntimeError('__objc_methname entry was longer than 128 bytes. Fix me!')
+                    current_buffer = str(name_bytes[:name_len:])
+                    raise RuntimeError('__objc_methname entry was longer than {} bytes ({}). Fix me!'.format(
+                        max_len,
+                        current_buffer
+                    ))
                 # read full string
                 symbol_name = str(name_bytes[:name_len:])
 
                 self._selector_name_pointers_to_imps[method_ent.name] = method_ent.implementation
-                self.selector_names_to_imps[symbol_name] = method_ent.implementation
+
+                # if this is the first instance of this selector name we've seen,
+                # map it to an array just containing the IMP address
+                if symbol_name not in self.selector_names_to_imps:
+                    self.selector_names_to_imps[symbol_name] = [method_ent.implementation]
+                # if we've already recorded an IMP for this sel name, just add the new one to the list
+                else:
+                    self.selector_names_to_imps[symbol_name].append(method_ent.implementation)
 
                 method_entry_off += sizeof(ObjcMethod)
 
@@ -479,25 +490,44 @@ class MachoAnalyzer(object):
             # if we had no record of this selref, it's an invalid pointer and an exception should be raised
             raise RuntimeError('invalid selector reference pointer {}'.format(hex(int(selref_ptr))))
 
-    def get_method_imp_address(self, selector):
+    def get_method_imp_addresses(self, selector):
+        # type: (Text) -> List[int]
+        """Given a selector, return a list of virtual addresses corresponding to the start of each IMP for that SEL
+        """
         return self.selector_names_to_imps[selector]
 
-    def get_method_address_range(self, selector):
-        # type: (Text) -> Optional[(int, int)]
-        """Retrieve the address range of executable code belonging to the supplied selector's IMP
+    def get_method_address_ranges(self, selector):
+        # type: (Text) -> List[(int, int)]
+        """Retrieve a list of addresses where the provided SEL is implemented
 
-        The method will throw an Exception if the selector has multiple implementations defined.
-        The return value will be None if the method is not implemented, or will be a tuple containing the
-        start and end addresses of executable code belonging to the function associated with the supplied selector.
+        If no implementations exist for the provided selector, an empty list will be returned.
+        If implementations exist, the list will contain tuples in the form: (IMP start address, IMP end address)
         """
-        # used cached values if available, get_method_imp_address is an expensive operation
-        if selector in self._imp_map:
-            return self._imp_map[selector]
-
-        start_address = self.get_method_imp_address(selector)
-        if not start_address:
+        ranges_list = []
+        start_addresses = self.get_method_imp_addresses(selector)
+        print(start_addresses)
+        if not start_addresses:
             # get_method_imp_address failed, selector might not exist
-            return None
+            # return empty list
+            return ranges_list
+
+        for idx, start_address in enumerate(start_addresses):
+            print('idx {} start_address {}'.format(idx, start_address))
+            end_address = self.get_function_address_range(start_address)
+            # get_content_from_virtual_address wants a size for how much data to grab,
+            # but we don't actually know how big the function is!
+            # start off by grabbing 256 bytes, and keep doubling search area until we encounter the
+            # function boundary.
+            end_address = 0
+            search_size = 0x100
+            while not end_address:
+                end_address = self._find_function_boundary(start_address, search_size)
+                # double search space
+                search_size *= 2
+
+            ranges_list.append((start_address, end_address))
+        return ranges_list
+
 
         end_address = self.get_function_address_range(start_address)
         # get_content_from_virtual_address wants a size for how much data to grab,

@@ -80,17 +80,20 @@ class MachoAnalyzer(object):
 
     @property
     @memoized
-    def address_to_imported_symbol_name_map(self):
+    def _la_symbol_ptr_to_symbol_name_map(self):
         # type: () -> Dict[int, Text]
-        """Cross-reference Mach-O sections to produce branch destination -> external symbol name map.
+        """Cross-reference Mach-O sections to produce __la_symbol_ptr pointers -> external symbol name map.
         
         This map will only contain entries for symbols that are defined outside the main binary.
         This method cross references data in __la_symbol_ptr, the indirect symbol table
-        
+
+        The map created by this method DOES NOT correspond to the addresses used by branch destinations.
+        Branch destinations will actually point to entries in __imp_stubs. This is a helper function for a method
+        to map __imp_stubs entries to symbol names
+
         Returns:
-            Map of branch destinations to the strings corresponding to the name of each symbol
+            Map of __la_symbol_ptr pointers to the strings corresponding to the name of each symbol
         """
-        # TODO indicate this method automatically cross-refs the stub destinations to their real symbols
         imported_symbol_map = {}
 
         # the reserved1 field of the lazy symbol section header holds the starting index of this table's entries,
@@ -167,9 +170,8 @@ class MachoAnalyzer(object):
 
     @property
     @memoized
-    def imp_stub_section_map(self):
+    def imp_stubs(self):
         # type: () -> List[MachoImpStub]
-        imp_stub_map = self.address_to_imported_symbol_name_map
         stubs_section = self.binary.sections['__stubs']
 
         func_str = self.binary.get_bytes(stubs_section.cmd.offset, stubs_section.cmd.size)
@@ -193,14 +195,14 @@ class MachoAnalyzer(object):
 
     @property
     @memoized
-    def address_to_symbol_name_map(self):
+    def external_branch_destination_to_symbol_names(self):
         # TODO(PT): clarify this is an imported symbols map
         symbol_name_map = {}
-        stubs = self.imp_stub_section_map
-        imp_stub_map = self.address_to_imported_symbol_name_map
+        stubs = self.imp_stubs
+        la_sym_ptr_name_map = self._la_symbol_ptr_to_symbol_name_map
 
         for stub in stubs:
-            symbol_name = imp_stub_map[stub.destination]
+            symbol_name = la_sym_ptr_name_map[stub.destination]
             symbol_name_map[stub.address] = symbol_name
         return symbol_name_map
 
@@ -209,14 +211,14 @@ class MachoAnalyzer(object):
     def symbol_name_to_address_map(self):
         # TODO(PT): clarify this is an imported symbols map
         call_address_map = {}
-        for key, value in self.address_to_symbol_name_map.iteritems():
+        for key, value in self.external_branch_destination_to_symbol_names.iteritems():
             call_address_map[value] = key
         return call_address_map
 
     def symbol_name_for_branch_destination(self, branch_address):
         # type: (int) -> Text
-        if branch_address in self.address_to_symbol_name_map:
-            return self.address_to_symbol_name_map[branch_address]
+        if branch_address in self.external_branch_destination_to_symbol_names:
+            return self.external_branch_destination_to_symbol_names[branch_address]
         raise RuntimeError('Unknown branch destination {}. Is this a local branch?'.format(
             hex(branch_address)
         ))

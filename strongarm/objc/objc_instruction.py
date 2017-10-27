@@ -23,7 +23,7 @@ class ObjcBranchInstr(ObjcInstr):
         super(ObjcBranchInstr, self).__init__(binary, instruction)
 
         self.destination_address = self.raw_instr.operands[0].value.imm
-        external_c_sym_map = self.analyzer.address_to_symbol_name_map
+        external_c_sym_map = self.analyzer.external_branch_destination_to_symbol_names
 
         self.symbol = None
         if self.destination_address in external_c_sym_map:

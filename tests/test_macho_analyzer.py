@@ -80,19 +80,19 @@ class TestMachoAnalyzer(unittest.TestCase):
         self.assertEqual(analyzer1, analyzer2)
 
     def test_external_symbol_addr_map(self):
-        sym_map = self.analyzer.address_to_imported_symbol_name_map
+        sym_map = self.analyzer._la_symbol_ptr_to_symbol_name_map
         imported_syms = self.analyzer.imported_functions
         # make sure all the symbols listed in imported_symbols are present here
         for sym in sym_map.itervalues():
             self.assertTrue(sym in imported_syms)
 
         # make sure all addresses from stubs have been mapped to real destination addresses
-        stubs_map = self.analyzer.imp_stub_section_map
+        stubs_map = self.analyzer.imp_stubs
         call_destinations_map = [d.destination for d in stubs_map]
         self.assertEqual(sorted(sym_map.keys()), sorted(call_destinations_map))
 
     def test_symbols_to_destination_address_resolving(self):
-        address_to_symbol_map = self.analyzer.address_to_symbol_name_map
+        address_to_symbol_map = self.analyzer.external_branch_destination_to_symbol_names
         symbol_to_address_map = self.analyzer.symbol_name_to_address_map
 
         # verify both contain the same data

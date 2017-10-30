@@ -10,5 +10,6 @@ pipelines:
     - step:
         script:
           - apt-get update -qq
+          - ./install_dependencies.sh
           - python setup.py install
           - python run_tests.py

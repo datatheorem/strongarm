@@ -1,4 +1,4 @@
-from typing import List, Text, Optional
+from typing import List, Text, Optional, Dict
 from macho_binary import MachoBinary
 
 
@@ -22,7 +22,7 @@ class MachoCrossReferencer(object):
         self.string_table_entries = self._process_string_table_entries()
 
     def _process_string_table_entries(self):
-        # type: () -> List[MachoStringTableEntry]
+        # type: () -> Dict[int, MachoStringTableEntry]
         """Create more efficient representation of string table data
 
         Often, tables in a Mach-O will reference data within the string table.
@@ -32,12 +32,12 @@ class MachoCrossReferencer(object):
         do an O(n) loop to find the next NULL character, indicating the end of the string.
 
         To avoid this, we preprocess the string table into the full strings it represents. To make these lookups easier,
-        we create a list of MachoStringTableEntry's
+        we create a map of start indexes to MachoStringTableEntry's
 
         Returns:
-            List of string table entry objects equivalent to the raw string table data
+            Map of string table entry start indexes to MachoStringTableEntry's
         """
-        string_table_entries = []
+        string_table_entries = {}
         entry_start_idx = 0
         strtab = self.binary.get_raw_string_table()
         for idx, ch in enumerate(strtab):
@@ -54,7 +54,7 @@ class MachoCrossReferencer(object):
                 # max to ensure there's at least 1 entry in list, even if this string entry is just a null char
                 # also, add 1 entry for null character
                 count_to_include = max(1, length + 1)
-                string_table_entries.append(ent)
+                string_table_entries[entry_start_idx] = ent
 
                 # move to starting index of next string
                 entry_start_idx = idx + 1

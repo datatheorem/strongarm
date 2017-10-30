@@ -505,14 +505,12 @@ class MachoAnalyzer(object):
         """
         ranges_list = []
         start_addresses = self.get_method_imp_addresses(selector)
-        print(start_addresses)
         if not start_addresses:
             # get_method_imp_address failed, selector might not exist
             # return empty list
             return ranges_list
 
         for idx, start_address in enumerate(start_addresses):
-            print('idx {} start_address {}'.format(idx, start_address))
             end_address = self.get_function_address_range(start_address)
             # get_content_from_virtual_address wants a size for how much data to grab,
             # but we don't actually know how big the function is!

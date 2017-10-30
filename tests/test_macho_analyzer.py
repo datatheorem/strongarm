@@ -92,8 +92,8 @@ class TestMachoAnalyzer(unittest.TestCase):
         self.assertEqual(sorted(sym_map.keys()), sorted(call_destinations_map))
 
     def test_symbols_to_destination_address_resolving(self):
-        address_to_symbol_map = self.analyzer.external_branch_destination_to_symbol_names
-        symbol_to_address_map = self.analyzer.symbol_name_to_address_map
+        address_to_symbol_map = self.analyzer.external_branch_destinations_to_symbol_names
+        symbol_to_address_map = self.analyzer.external_symbol_names_to_branch_destinations
 
         # verify both contain the same data
         for k,v in address_to_symbol_map.iteritems():

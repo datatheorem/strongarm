@@ -35,7 +35,7 @@ class ObjcBranchInstruction(ObjcInstruction):
         instr = ObjcBranchInstruction(instruction)
 
         instr.destination_address = instr.raw_instr.operands[0].value.imm
-        external_c_sym_map = analyzer.external_branch_destination_to_symbol_names
+        external_c_sym_map = analyzer.external_branch_destinations_to_symbol_names
 
         if instr.destination_address in external_c_sym_map:
             instr.symbol = external_c_sym_map[instr.destination_address]

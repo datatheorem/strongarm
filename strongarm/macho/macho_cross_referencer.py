@@ -20,6 +20,7 @@ class MachoCrossReferencer(object):
         # type: (MachoBinary) -> None
         self.binary = binary
         self.string_table_entries = self._process_string_table_entries()
+        self._imported_sym_list = None
 
     def _process_string_table_entries(self):
         # type: () -> Dict[int, MachoStringTableEntry]
@@ -78,10 +79,22 @@ class MachoCrossReferencer(object):
         Returns:
             List of strings representing symbols in binary's string table
         """
+        if self._imported_sym_list:
+            return self._imported_sym_list
+
         symtab = self.binary.symtab_contents
         symbol_names = []
         for sym in symtab:
             strtab_idx = sym.n_un.n_strx
-            symbol_str = self.string_table_entry_for_strtab_index(strtab_idx).full_string
+            string_table_entry = self.string_table_entry_for_strtab_index(strtab_idx)
+            if not string_table_entry:
+                print('Couldn\'t get string for strtab idx {} (len {})'.format(
+                    hex(int(strtab_idx)),
+                    hex(int(len(self.binary.get_raw_string_table())))
+                ))
+                continue
+            symbol_str = string_table_entry.full_string
             symbol_names.append(symbol_str)
-        return symbol_names
+
+        self._imported_sym_list = symbol_names
+        return self._imported_sym_list

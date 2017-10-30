@@ -15,7 +15,8 @@ class ObjcFunctionAnalyzer(object):
             last_instruction = instructions[len(instructions) - 1]
             self.end_address = last_instruction.address
         except IndexError as e:
-            raise RuntimeError('ObjcFunctionAnalyzer was passed invalid instructions')
+            # this method must have just been a stub with no real instructions!
+            pass
 
         self.binary = binary
         self.analyzer = MachoAnalyzer.get_analyzer(binary)
@@ -24,11 +25,16 @@ class ObjcFunctionAnalyzer(object):
         self.__call_targets = None
 
     def debug_print(self, idx, output):
-        DebugUtil.log(self, 'func({} + {}) {}'.format(
-            hex(int(self._instructions[0].address)),
-            hex(idx),
-            output
-        ))
+        if not len(self._instructions):
+            DebugUtil.log(self, 'func(stub) {}'.format(
+                output
+            ))
+        else:
+            DebugUtil.log(self, 'func({} + {}) {}'.format(
+                hex(int(self._instructions[0].address)),
+                hex(idx),
+                output
+            ))
 
     @classmethod
     def get_function_analyzer(cls, binary, start_address):
@@ -137,9 +143,12 @@ class ObjcFunctionAnalyzer(object):
 
             # might be objc_msgSend to object of class defined outside binary
             if target.is_external_objc_call:
-                self.debug_print(instr_idx, 'objc_msgSend(...) to external class, selref at {}'.format(
-                    hex(int(target.selref))
-                ))
+                if target.selref:
+                    self.debug_print(instr_idx, 'objc_msgSend(...) to external class, selref at {}'.format(
+                        hex(int(target.selref))
+                    ))
+                else:
+                    self.debug_print(instr_idx, 'objc_msgSend(...) to external class, unknown selref')
                 continue
 
             # in debug log, print whether this is a function call or objc_msgSend call
@@ -206,7 +215,7 @@ class ObjcFunctionAnalyzer(object):
 
     # TODO(PT): deprecate & replace with next_branch
     def next_blr_to_reg(self, reg, start_index):
-        # type: (Text, int) -> CsInsn
+        # type: (Text, int) -> Optional[CsInsn]
         """
         Search for the next 'blr' instruction to a target register, starting from the instruction at start_index
         :param reg: Register whose 'branch to' instruction should be found

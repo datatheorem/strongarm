@@ -1,5 +1,5 @@
 from typing import List
-from capstone import Cs
+from capstone import Cs, CsInsn
 
 from strongarm.macho.macho_binary import MachoBinary
 
@@ -41,6 +41,8 @@ class MachoImpStubsParser(object):
 
     @staticmethod
     def _parse_stub_from_instructions(instr1, instr2, instr3):
+        # type: (CsInsn, CsInsn, CsInsn) -> MachoImpStub
+        # TODO(PT): write CsInsn by hand to test this function
         # each stub follows one of two patterns
         # pattern 1: nop / ldr x16, <sym> / br x16
         # pattern 2: adrp x16, <page> / ldr x16, [x16 <offset>] / br x16
@@ -57,7 +59,7 @@ class MachoImpStubsParser(object):
             pattern_idx = 1
         else:
             # unknown stub format
-            return None
+            raise NotImplementedError()
 
         expected_ops = patterns[pattern_idx]
         for idx, op in enumerate([instr1, instr2, instr3]):

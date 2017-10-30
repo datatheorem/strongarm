@@ -138,7 +138,7 @@ class MachoAnalyzer(object):
 
     @property
     @memoized
-    def external_branch_destination_to_symbol_names(self):
+    def external_branch_destinations_to_symbol_names(self):
         # TODO(PT): clarify this is an imported symbols map
         symbol_name_map = {}
         stubs = self.imp_stubs
@@ -151,17 +151,17 @@ class MachoAnalyzer(object):
 
     @property
     @memoized
-    def symbol_name_to_address_map(self):
+    def external_symbol_names_to_branch_destinations(self):
         # TODO(PT): clarify this is an imported symbols map
         call_address_map = {}
-        for key, value in self.external_branch_destination_to_symbol_names.iteritems():
+        for key, value in self.external_branch_destinations_to_symbol_names.iteritems():
             call_address_map[value] = key
         return call_address_map
 
     def symbol_name_for_branch_destination(self, branch_address):
         # type: (int) -> Text
-        if branch_address in self.external_branch_destination_to_symbol_names:
-            return self.external_branch_destination_to_symbol_names[branch_address]
+        if branch_address in self.external_branch_destinations_to_symbol_names:
+            return self.external_branch_destinations_to_symbol_names[branch_address]
         raise RuntimeError('Unknown branch destination {}. Is this a local branch?'.format(
             hex(branch_address)
         ))

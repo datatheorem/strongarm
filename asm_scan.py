@@ -45,7 +45,7 @@ def test_sta_142(path):
 
             # does this IMP have any branches calling out to _SecTrustEvaluate?
             search_target = '_SecTrustEvaluate'
-            target_stub_addr = analyzer.symbol_name_to_address_map[search_target]
+            target_stub_addr = analyzer.external_symbol_names_to_branch_destinations[search_target]
             print('Target {} implementation stub at {}'.format(
                 search_target,
                 hex(int(target_stub_addr))

@@ -21,7 +21,6 @@ class ObjcFunctionAnalyzer(object):
         self.analyzer = MachoAnalyzer.get_analyzer(binary)
         self._instructions = instructions
 
-        # List[ObjcBranchInstr]
         self.__call_targets = None
 
     def debug_print(self, idx, output):
@@ -53,7 +52,7 @@ class ObjcFunctionAnalyzer(object):
 
     @property
     def call_targets(self):
-        # type: () -> List[ObjcBranchInstr]
+        # type: () -> List[ObjcBranchInstruction]
         """Find a List of all branch destinations reachable from the source function
 
         Returns:
@@ -234,8 +233,8 @@ class ObjcFunctionAnalyzer(object):
         for idx, instr in enumerate(self._instructions[start_index::]):
             if instr.mnemonic in branch_mnemonics:
                 # found next branch!
-                # wrap in ObjcBranchInstr object
-                branch_instr = ObjcBranchInstr(self.binary, instr)
+                # wrap in ObjcBranchInstruction object
+                branch_instr = ObjcBranchInstruction.parse_instruction(self.binary, instr)
 
                 # if this is an objc_msgSend target, patch destination_address to be the address of the targeted IMP
                 # note! this means destination_address is *not* the actual destination address of the instruction

@@ -301,44 +301,6 @@ class MachoBinary(object):
 
         return symtab
 
-    @memoized
-
-    def get_external_sym_pointers(self):
-        # type: () -> List[int]
-        """Parse lazy symbol section into a list of pointers
-        The lazy symbol section contains dummy pointers to known locations, which dyld_stub_binder will
-        rewrite into their real runtime addresses when the dylibs are loaded.
-
-        * IMPORTANT *
-        This method actually records the _virtual address where the destination pointer is recorded_, not the value
-        of the garbage pointer.
-        This is because the actual content of these pointers is useless until runtime (since they point to nonexistent
-        data), but their ordering in the lazy symbol table is the same as described in other symbol tables, so
-        we need the index
-
-        Returns:
-            A list of pointers containing the virtual addresses of each pointer in this section
-
-        """
-        lazy_sym_section = self.sections['__la_symbol_ptr']
-        # __la_symbol_ptr is just an array of pointers
-        # the number of pointers is the size, in bytes, of the section, divided by a 64b pointer size
-        sym_ptr_count = lazy_sym_section.cmd.size / sizeof(c_void_p)
-
-        section_pointers = []
-        # this section's data starts at the file offset field
-        section_data_ptr = lazy_sym_section.cmd.offset
-
-        virt_base = self.get_virtual_base()
-        # read every pointer in the table
-        for i in range(sym_ptr_count):
-            # this addr is the address in the file of this data, plus the slide that the file has requested,
-            # to result in the final address that would be referenced elsewhere in this Mach-O
-            section_pointers.append(virt_base + section_data_ptr)
-            # go to next pointer in list
-            section_data_ptr += sizeof(c_void_p)
-        return section_pointers
-
     def get_indirect_symbol_table(self):
         # type: () -> List[c_uint32]
         indirect_symtab = []

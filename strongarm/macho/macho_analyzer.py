@@ -1,4 +1,4 @@
-from ctypes import c_uint64, sizeof
+from ctypes import c_uint64, sizeof, c_void_p
 
 from capstone import *
 from typing import Text, List, Dict, Optional
@@ -77,6 +77,43 @@ class MachoAnalyzer(object):
             return cls.active_analyzer_map[bin]
         return MachoAnalyzer(bin)
 
+    @memoized
+    def _parse_la_symbol_ptr_list(self):
+        # type: () -> List[int]
+        """Parse lazy symbol section into a list of pointers
+        The lazy symbol section contains dummy pointers to known locations, which dyld_stub_binder will
+        rewrite into their real runtime addresses when the dylibs are loaded.
+
+        * IMPORTANT *
+        This method actually records the _virtual address where the destination pointer is recorded_, not the value
+        of the garbage pointer.
+        This is because the actual content of these pointers is useless until runtime (since they point to nonexistent
+        data), but their ordering in the lazy symbol table is the same as described in other symbol tables, so
+        we need the index
+
+        Returns:
+            A list of pointers containing the virtual addresses of each pointer in this section
+
+        """
+        lazy_sym_section = self.binary.sections['__la_symbol_ptr']
+        # __la_symbol_ptr is just an array of pointers
+        # the number of pointers is the size, in bytes, of the section, divided by a 64b pointer size
+        sym_ptr_count = lazy_sym_section.cmd.size / sizeof(c_void_p)
+
+        section_pointers = []
+        # this section's data starts at the file offset field
+        section_data_ptr = lazy_sym_section.cmd.offset
+
+        virt_base = self.binary.get_virtual_base()
+        # read every pointer in the table
+        for i in range(sym_ptr_count):
+            # this addr is the address in the file of this data, plus the slide that the file has requested,
+            # to result in the final address that would be referenced elsewhere in this Mach-O
+            section_pointers.append(virt_base + section_data_ptr)
+            # go to next pointer in list
+            section_data_ptr += sizeof(c_void_p)
+        return section_pointers
+
     @property
     @memoized
     def _la_symbol_ptr_to_symbol_name_map(self):
@@ -101,7 +138,7 @@ class MachoAnalyzer(object):
         # lazy_sym_section.reserved1 + index
         lazy_sym_offset_within_indirect_symtab = self.binary.sections['__la_symbol_ptr'].cmd.reserved1
         # this list contains the contents of __la_symbol_ptr
-        external_symtab = self.binary.get_external_sym_pointers()
+        external_symtab = self._parse_la_symbol_ptr_list()
 
         # indirect symbol table is a list of indexes into larger symbol table
         indirect_symtab = self.binary.get_indirect_symbol_table()
@@ -431,13 +468,13 @@ class MachoAnalyzer(object):
                     name_len += 1
                 # did we find null terminator?
                 if not found_null_terminator:
-                    current_buffer = str(name_bytes[:name_len:])
+                    current_buffer = bytes(name_bytes[:name_len:])
                     raise RuntimeError('__objc_methname entry was longer than {} bytes ({}). Fix me!'.format(
                         max_len,
                         current_buffer
                     ))
                 # read full string
-                symbol_name = str(name_bytes[:name_len:])
+                symbol_name = bytes(name_bytes[:name_len:])
 
                 self._selector_name_pointers_to_imps[method_ent.name] = method_ent.implementation
 

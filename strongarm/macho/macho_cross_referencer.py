@@ -65,11 +65,10 @@ class MachoCrossReferencer(object):
         """For a index in the packed character table, get the corresponding MachoStringTableEntry
 
         Returns:
-            True if the provided index was the starting character of a string table entry, None if not
+            A MachoStringTableEntry if provided index was the starting character of a string table entry, None if not
         """
-        for ent in self.string_table_entries:
-            if ent.start_idx == start_idx:
-                return ent
+        if start_idx in self.string_table_entries:
+            return self.string_table_entries[start_idx]
         return None
 
     def imported_symbol_list(self):

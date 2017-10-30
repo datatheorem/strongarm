@@ -1,5 +1,4 @@
-from setuptools import setup
-from subprocess import call
+from setuptools import setup, find_packages
 
 from strongarm import __version__
 
@@ -10,7 +9,7 @@ setup(
     description='Mach-O/ARM64 analyzer',
     author='Data Theorem',
     url='https://bitbucket.org/datatheorem/strongarm',
-    packages=['strongarm'],
+    packages=find_packages(exclude=['tests']),
     install_requires=[
         'typing',
         'capstone',

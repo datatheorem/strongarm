@@ -1,12 +1,13 @@
 import struct
 from ctypes import *
+from enum import IntEnum
 
 
 def swap32(i):
     return struct.unpack("<I", struct.pack(">I", i))[0]
 
 
-class MachArch(object):
+class MachArch(IntEnum):
     MH_MAGIC = 0xfeedface
     MH_CIGAM = 0xcefaedfe
     MH_MAGIC_64 = 0xfeedfacf
@@ -20,7 +21,7 @@ class MachArch(object):
     MH_CPU_TYPE_ARM64 = MH_CPU_TYPE_ARM | MH_CPU_ARCH_ABI64
 
 
-class CPU_TYPE(object):
+class CPU_TYPE(IntEnum):
     ARMV7 = 0
     ARM64 = 1
     UNKNOWN = 2
@@ -187,7 +188,7 @@ class MachoFatArch(Structure):
     ]
 
 
-class HEADER_FLAGS(object):
+class HEADER_FLAGS(IntEnum):
     NOUNDEFS = 0x1
     INCRLINK = 0x2
     DYLDLINK = 0x4

@@ -125,30 +125,24 @@ class MachoBinary(object):
         else:
             self.cpu_type = CPU_TYPE.UNKNOWN
 
-        self.parse_header_flags()
+        self._parse_header_flags()
 
         # load commands begin directly after Mach O header, so the offset is the size of the header
         load_commands_off = sizeof(MachoHeader64)
-        self.parse_segment_commands(load_commands_off, self.header.ncmds)
+        self._parse_segment_commands(load_commands_off, self.header.ncmds)
 
-    def parse_header_flags(self):
+    def _parse_header_flags(self):
         # type: () -> None
         """Interpret binary's header bitset and populate self.header_flags"""
         flags_bitset = self.header.flags
-        # get all fields from HEADER_FLAGS
-        # we get class members by getting all fields of the class,
-        # and filtering out private names, and methods
-        flags_as_dict = HEADER_FLAGS.__dict__
-        possible_flags = {key:value for key, value in flags_as_dict.items() \
-                          if not key.startswith('__') and not callable(key)}
-        for name in possible_flags:
-            mask = flags_as_dict[name]
+        flag_values = list(map(int, HEADER_FLAGS))
+        for mask in flag_values:
             # is this mask set in the binary's flags?
             if (flags_bitset & mask) == mask:
-                # mask is present in bitset
+                # mask is present in bitset, add to list of included flags
                 self.header_flags.append(mask)
 
-    def parse_segment_commands(self, offset, segment_count):
+    def _parse_segment_commands(self, offset, segment_count):
         # type: (int) -> None
         """Parse Mach-O segment commands beginning at a given slice offset
 
@@ -185,12 +179,12 @@ class MachoBinary(object):
                 segment = MachoSegmentCommand64.from_buffer(bytearray(segment_bytes))
                 # TODO(pt) handle byte swap of segment if necessary
                 self.segment_commands[segment.segname] = segment
-                self.parse_sections(segment, offset)
+                self._parse_sections(segment, offset)
 
             # move to next load command in header
             offset += load_command.cmdsize
 
-    def parse_sections(self, segment, segment_offset):
+    def _parse_sections(self, segment, segment_offset):
         # type: (MachoSegmentCommand64, int) -> None
         """Parse all sections contained within a Mach-O segment, and add them to our list of sections
 

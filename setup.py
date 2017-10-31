@@ -23,5 +23,6 @@ setup(
     install_requires=[
         'typing',
         'capstone',
+        'enum34'
     ],
 )

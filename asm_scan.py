@@ -42,7 +42,7 @@ def test_sta_142(path):
             if not block_invoke_instr:
                 print('Buggy app! -[NSURLSessionDelegate URLSession:didReceiveChallenge:completionHandler:] completion '
                       'block never invoked.')
-                return False
+                return False, 0
 
             # does this IMP have any branches calling out to _SecTrustEvaluate?
             search_target = '_SecTrustEvaluate'
@@ -58,6 +58,17 @@ def test_sta_142(path):
                 hex(int(imp_addr)),
                 is_target_reachable
             ))
+
+            # check if there's any control flow before block invocation
+            local_branches = block_analyzer.get_local_branches()
+            for b in local_branches:
+                branch_idx = instructions.index(b.raw_instr)
+                # did the branch happen before the block invocation?
+                if branch_idx < block_analyzer.invoke_idx:
+                    # no way to know what's going on with control flow
+                    print('branch idx {} block invoke idx {}'.format(branch_idx, block_analyzer.invoke_idx))
+                    print('control flow before block invocation, assuming correct behavior')
+                    return False, 0
 
             # signature for block invocation:
             # arg0: Block object (applies to all Block invocations)

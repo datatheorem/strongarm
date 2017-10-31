@@ -364,8 +364,8 @@ class MachoAnalyzer(object):
                 name_start = method_ent.name
                 name_len = 0
                 found_null_terminator = False
-                # grab 512 bytes
-                max_len = 512
+                # grab 2048 bytes
+                max_len = 2048
                 name_bytes = self.binary.get_content_from_virtual_address(virtual_address=name_start, size=max_len)
                 # search for null terminator in this content
                 for ch in name_bytes:
@@ -382,6 +382,8 @@ class MachoAnalyzer(object):
                     ))
                 # read full string
                 symbol_name = bytes(name_bytes[:name_len:])
+                if name_len > 512:
+                    print('Encountered very long SEL: {}'.format(symbol_name))
 
                 self._selector_name_pointers_to_imps[method_ent.name] = method_ent.implementation
 
@@ -438,6 +440,8 @@ class MachoAnalyzer(object):
         # type: (Text) -> List[int]
         """Given a selector, return a list of virtual addresses corresponding to the start of each IMP for that SEL
         """
+        if selector not in self.selector_names_to_imps:
+            return []
         return self.selector_names_to_imps[selector]
 
     def get_method_address_ranges(self, selector):

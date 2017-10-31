@@ -1,4 +1,5 @@
 from typing import Text
+import os
 
 from gammaray.ios_app import IosAppPackage
 from strongarm.macho.macho_analyzer import MachoAnalyzer
@@ -7,7 +8,7 @@ from strongarm.objc.objc_analyzer import ObjcBlockAnalyzer
 
 
 def test_sta_142(path):
-    # type: (Text) -> bool
+    # type: (Text) -> (bool, int)
     with IosAppPackage(path) as app_package:
         print('--- STA 142 test on {} ---'.format(path))
 
@@ -96,7 +97,7 @@ def test_sta_142(path):
                       'not call SecTrustEvaluate, but uses NSURLSessionAuthChallengeUseCredential. '
                       'This app does not perform certificate validation.')
                 # return insecure - True
-                return True
+                return True, imp_addr
             else:
                 print('App appears to handle certificate validation correctly. AuthDisposition: {} '
                       'SecTrustEvaluate called? {}'.format(
@@ -105,23 +106,32 @@ def test_sta_142(path):
                 ))
     # exited loop and no implementations of the selector failed test
     # not insecure, return False
-    return False
-
-paths = [
-#   u'./tests/bin/Sportacular.ipa',
-#   u'./tests/bin/Events.ipa',
-    u'./tests/bin/AdobeAcrobat.ipa',
-#   u'./tests/bin/Cricket.ipa',
-#   u'./tests/bin/Airbnb.ipa',
-
-#   u'./tests/bin/HealthHub.ipa',
-#   u'./tests/bin/GammaRayTestBad.ipa'
-]
+    return False, 0
 
 from strongarm.debug_util import DebugUtil
 
-DebugUtil.debug = True
-for app_path in paths:
-    print('STA-142 check on {}'.format(app_path))
-    vulnerable = test_sta_142(app_path)
-    print('{} passed? {}'.format(app_path, not vulnerable))
+#DebugUtil.debug = True
+vulnerable_apps = []
+safe_apps = []
+
+apps_dir = os.path.join(os.path.dirname(__file__), 'sta-142/')
+for app_path in os.listdir(apps_dir):
+    app_path = os.path.join(apps_dir, app_path)
+    app_path = unicode(app_path)
+
+    if app_path.endswith('.ipa'):
+        print('STA-142 check on {}'.format(app_path))
+        is_vulnerable, vuln_method_addr = test_sta_142(app_path)
+        if is_vulnerable:
+            vulnerable_apps.append((app_path, vuln_method_addr))
+        else:
+            safe_apps.append(app_path)
+        print('{} passed? {}'.format(app_path, not is_vulnerable))
+
+with open('STA-142-Results.txt', 'w') as output:
+    output.write('Passing apps:\n')
+    for name in safe_apps:
+        output.write('{}\n'.format(name))
+    output.write('\nFailing apps:\n')
+    for name, addr in vulnerable_apps:
+        output.write('{} at {}\n'.format(name, hex(int(addr))))

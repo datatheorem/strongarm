@@ -103,6 +103,17 @@ class ObjcFunctionAnalyzer(object):
             return True
         return False
 
+    def get_local_branches(self):
+        # type: () -> List[ObjcBranchInstruction]
+        """Return all instructions in the analyzed function representing a branch to a destination within the function
+        """
+        local_branches = []
+        for target in self.call_targets:
+            # find the address of this branch instruction within the function
+            if self.is_local_branch(target):
+                local_branches.append(target)
+        return local_branches
+
     def can_execute_call(self, call_address):
         # type: (int) -> bool
         """Determine whether the function starting at call_address is reachable from any code path from source function.
@@ -118,7 +129,6 @@ class ObjcFunctionAnalyzer(object):
 
         for target in self.call_targets:
             # find the address of this branch instruction within the function
-            # we can't use self.call_targets.index(target) because
             instr_idx = self._instructions.index(target.raw_instr)
 
             # is this a direct call?

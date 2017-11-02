@@ -29,14 +29,13 @@ class MachoAnalyzer(object):
         self._selector_name_pointers_to_imps = None
 
         self.imported_functions = None
-        self.classlist = None
         self._contains_objc = False
 
         self.crossref_helper = MachoCrossReferencer(bin)
         self.imported_functions = self.crossref_helper.imported_symbol_list()
         self.imp_stubs = MachoImpStubsParser(bin, self.cs).imp_stubs
 
-        self.parse_classlist()
+        self.parse_static_objc_runtime_info()
 
         if self._contains_objc:
             self._create_selref_to_name_map()
@@ -46,6 +45,9 @@ class MachoAnalyzer(object):
 
     @classmethod
     def get_analyzer(cls, bin):
+        # type: (MachoBinary) -> MachoAnalyzer
+        """Get a cached analyzer for a given MachoBinary
+        """
         if bin in cls.active_analyzer_map:
             # use cached analyzer for this binary
             return cls.active_analyzer_map[bin]
@@ -118,7 +120,6 @@ class MachoAnalyzer(object):
         indirect_symtab = self.binary.get_indirect_symbol_table()
 
         symtab = self.binary.symtab_contents
-        string_table = self.binary.get_raw_string_table()
 
         for (index, symbol_ptr) in enumerate(external_symtab):
             # as above, for an index idx in __la_symbol_ptr, the corresponding entry within the symbol table (from which
@@ -139,7 +140,9 @@ class MachoAnalyzer(object):
     @property
     @memoized
     def external_branch_destinations_to_symbol_names(self):
-        # TODO(PT): clarify this is an imported symbols map
+        # type: () -> Dict[int, Text]
+        """Return a Dict of addresses to the external symbols they correspond to
+        """
         symbol_name_map = {}
         stubs = self.imp_stubs
         la_sym_ptr_name_map = self._la_symbol_ptr_to_symbol_name_map
@@ -152,7 +155,9 @@ class MachoAnalyzer(object):
     @property
     @memoized
     def external_symbol_names_to_branch_destinations(self):
-        # TODO(PT): clarify this is an imported symbols map
+        # type: () -> Dict[Text, int]
+        """Return a Dict of external symbol names to the addresses they'll be called at
+        """
         call_address_map = {}
         for key, value in self.external_branch_destinations_to_symbol_names.iteritems():
             call_address_map[value] = key
@@ -160,6 +165,8 @@ class MachoAnalyzer(object):
 
     def symbol_name_for_branch_destination(self, branch_address):
         # type: (int) -> Text
+        """Get the associated symbol name for a given branch destination
+        """
         if branch_address in self.external_branch_destinations_to_symbol_names:
             return self.external_branch_destinations_to_symbol_names[branch_address]
         raise RuntimeError('Unknown branch destination {}. Is this a local branch?'.format(
@@ -259,6 +266,9 @@ class MachoAnalyzer(object):
         return function_address, end_address
 
     def get_function_instructions(self, start_address):
+        # type: (int) -> List[CsInsn]
+        """Get a list of disassembled instructions for the function beginning at start_address
+        """
         _, end_address = self.get_function_address_range(start_address)
         if not end_address:
             raise RuntimeError('Couldn\'t parse function @ {}'.format(start_address))
@@ -268,30 +278,27 @@ class MachoAnalyzer(object):
         instructions = [instr for instr in self.cs.disasm(func_str, start_address)]
         return instructions
 
-    def parse_classlist(self):
-        classlist_sect = self.binary.sections['__objc_classlist']
-        # does this binary contain an Objective-C classlist?
-        if not classlist_sect:
-            # nothing to do here, must be a purely C or Swift binary
-            self._contains_objc = False
-            return
-        self._contains_objc = True
-
-        classlist_data = classlist_sect.content
+    def _get_classlist_entries(self):
+        # type: () -> List[int]
+        """Read pointers in __objc_classlist into list
+        """
+        classlist_data = self.binary.sections['__objc_classlist'].content
         classlist_size = len(classlist_data) / sizeof(c_uint64)
+
+        classlist_entries = []
         classlist_off = 0
-        classlist = []
         for i in range(classlist_size):
             data_end = classlist_off + sizeof(c_uint64)
             val = c_uint64.from_buffer(bytearray(classlist_data[classlist_off:data_end])).value
-            classlist.append(val)
+            classlist_entries.append(val)
             classlist_off += sizeof(c_uint64)
+        return classlist_entries
 
-        self.classlist = classlist
-        self.crossref_classlist()
-        return classlist
-
-    def read_classlist_entry(self, entry_location):
+    def _get_objc_class_from_classlist_pointer(self, entry_location):
+        # type: (int) -> ObjcClass
+        """Read a struct __objc_class from the virtual address of the pointer
+        Typically, this pointer will come from an entry in __objc_classlist
+        """
         file_ptr = entry_location - self.binary.get_virtual_base()
         raw_struct_data = self.binary.get_bytes(file_ptr, sizeof(ObjcClass))
         class_entry = ObjcClass.from_buffer(bytearray(raw_struct_data))
@@ -305,97 +312,142 @@ class MachoAnalyzer(object):
         class_entry.data -= overlap
         return class_entry
 
-    def crossref_classlist(self):
-        objc_data = self.binary.sections['__objc_data']
-        objc_data_start = objc_data.cmd.addr
-        objc_data_end = objc_data_start + objc_data.cmd.size
+    def _get_objc_data_from_objc_class(self, objc_class):
+        # type: (ObjcClass) -> Optional[ObjcData]
+        """Read a struct __objc_data from a provided struct __objc_class
+        If the struct __objc_class describe invalid or no corresponding data, None will be returned.
+        """
+        data_file_ptr = objc_class.data - self.binary.get_virtual_base()
+        raw_struct_data = self.binary.get_bytes(data_file_ptr, sizeof(ObjcData))
+        data_entry = ObjcData.from_buffer(bytearray(raw_struct_data))
+        # ensure this is a valid entry
+        if data_entry.name < self.binary.get_virtual_base():
+            DebugUtil.log(self, 'caught ObjcData struct with invalid fields at {}'.format(
+                hex(int(data_file_ptr + self.binary.get_virtual_base()))
+            ))
+            return None
+        return data_entry
 
-        classlist_entries = []
-        for idx, ent in enumerate(self.classlist):
-            class_entry = self.read_classlist_entry(ent)
-            classlist_entries.append(class_entry)
+    def parse_static_objc_runtime_info(self):
+        # type: () -> None
+        """Read Objective-C class data in __objc_classlist, __objc_data to get classes and selectors in binary
+        """
+        classlist_pointers = self._get_classlist_entries()
+        # if the classlist had no entries, there's no Objective-C data in this binary
+        # in this case, the binary must be implemented purely in C or Swift
+        if not len(classlist_pointers):
+            self._contains_objc = False
+            return
+        self._contains_objc = True
 
-            # is the metaclass implemented within this binary?
-            # we know if it's implemented within the binary if the metaclass pointer is within the __objc_data
-            # section.
-            if objc_data_start <= class_entry.metaclass < objc_data_end:
-                # read metaclass as well and append to list
-                metaclass_entry = self.read_classlist_entry(class_entry.metaclass)
-                classlist_entries.append(metaclass_entry)
+        # read actual list of ObjcClass structs from list of pointers
+        objc_classes = []
+        for class_ptr in classlist_pointers:
+            objc_classes.append(self._get_objc_class_from_classlist_pointer(class_ptr))
 
-        self.parse_classlist_entries(classlist_entries)
+        # TODO(PT): use ObjcClass objects in objc_classes to create list of classes in binary
+        # we could even make a list of all selectors for a given class
+        # and, when requesting an IMP for a selector, we could request the class too (for SEL collisions)
 
-    def parse_classlist_entries(self, classlist_entries):
-        # type: (List[ObjcClass]) -> None
+        # read data for each class
         objc_data_entries = []
-        for i, class_ent in enumerate(classlist_entries):
-            data_file_ptr = class_ent.data - self.binary.get_virtual_base()
-            raw_struct_data = self.binary.get_bytes(data_file_ptr, sizeof(ObjcData))
-            data_entry = ObjcData.from_buffer(bytearray(raw_struct_data))
-            # ensure this is a valid entry
-            if data_entry.name < self.binary.get_virtual_base():
-                DebugUtil.log(self, 'caught ObjcData struct with invalid fields at {}'.format(
-                    hex(int(data_file_ptr + self.binary.get_virtual_base()))
-                ))
-                continue
-            objc_data_entries.append(data_entry)
-        self.parse_objc_data_entries(objc_data_entries)
+        for class_ent in objc_classes:
+            objc_data_entries.append(self._get_objc_data_from_objc_class(class_ent))
+        self._parse_objc_data_entries(objc_data_entries)
 
-    def parse_objc_data_entries(self, objc_data_entries):
+    def _get_methlist_from_objc_data(self, data_struct):
+        # type: (ObjcData) -> Optional[(ObjcMethodList, int)]
+        """Return the ObjcMethodList and file offset described by the provided ObjcData struct
+        Some __objc_data entries will describe classes that have no methods implemented. In this case, the method
+        list will not exist, and this method will return None.
+        If the method list does exist, a tuple of the ObjcMethodList and the file offset where the entry is located
+        will be returned
+
+        Args:
+            data_struct: The struct __objc_data whose method list entry should be read
+
+        Returns:
+            A tuple of the data's ObjcMethodList and the file pointer to this method list structure.
+            If the data has no methods, None will be returned.
+        """
+        # does this data entry describe any methods?
+        if data_struct.base_methods == 0:
+            return None
+
+        methlist_file_ptr = data_struct.base_methods - self.binary.get_virtual_base()
+        raw_struct_data = self.binary.get_bytes(methlist_file_ptr, sizeof(ObjcMethodList))
+        methlist = ObjcMethodList.from_buffer(bytearray(raw_struct_data))
+        return (methlist, methlist_file_ptr)
+
+    def _get_sel_name_imp_pairs_from_methlist(self, methlist, methlist_file_ptr):
+        # type: (ObjcMethodList, int) -> List[(Text, int, int)]
+        """Given a method list, return a List of tuples of selector name, selref, and IMP address for each method
+        """
+        methods_data = []
+        # parse every entry in method list
+        # the first entry appears directly after the ObjcMethodList structure
+        method_entry_off = methlist_file_ptr + sizeof(ObjcMethodList)
+        for i in range(methlist.methcount):
+            raw_struct_data = self.binary.get_bytes(method_entry_off, sizeof(ObjcMethod))
+            method_ent = ObjcMethod.from_buffer(bytearray(raw_struct_data))
+
+            # TODO(PT): preprocess __objc_methname so we don't have to search for null byte for every string here
+            name_start = method_ent.name
+            name_len = 0
+            found_null_terminator = False
+            # grab 2048 bytes
+            # TODO(PT): most SELs are way shorter than 2048 so this is wasted effort
+            # either preprocess __objc_methname, or do similar double-search-space trick as _find_function_boundary
+            max_len = 2048
+            name_bytes = self.binary.get_content_from_virtual_address(virtual_address=name_start, size=max_len)
+            # search for null terminator in this content
+            for ch in name_bytes:
+                if ch == '\x00':
+                    found_null_terminator = True
+                    break
+                name_len += 1
+            # did we find null terminator?
+            if not found_null_terminator:
+                current_buffer = bytes(name_bytes[:name_len:])
+                raise RuntimeError('__objc_methname entry was longer than {} bytes ({}). Fix me!'.format(
+                    max_len,
+                    current_buffer
+                ))
+            # read full string
+            symbol_name = bytes(name_bytes[:name_len:])
+            if name_len > 512:
+                print('Encountered very long SEL: {}'.format(symbol_name))
+
+            methods_data.append((symbol_name, method_ent.name, method_ent.implementation))
+            method_entry_off += sizeof(ObjcMethod)
+        return methods_data
+
+    def _parse_objc_data_entries(self, objc_data_entries):
         # type: (List[ObjcData]) -> None
+        """For each ObjcData, find the selector name, selref, and IMP address, and record in instance maps
+        """
 
         self.selector_names_to_imps = {}
         self._selector_name_pointers_to_imps = {}
 
         for ent in objc_data_entries:
-            methlist_file_ptr = ent.base_methods - self.binary.get_virtual_base()
-            if ent.base_methods == 0:
+            methlist_info = self._get_methlist_from_objc_data(ent)
+            if not methlist_info:
                 continue
-            raw_struct_data = self.binary.get_bytes(methlist_file_ptr, sizeof(ObjcMethodList))
-            methlist = ObjcMethodList.from_buffer(bytearray(raw_struct_data))
+            methlist = methlist_info[0]
+            methlist_file_ptr = methlist_info[1]
 
-            # parse every entry in method list
-            method_entry_off = methlist_file_ptr + sizeof(ObjcMethodList)
-            for i in range(methlist.methcount):
-                raw_struct_data = self.binary.get_bytes(method_entry_off, sizeof(ObjcMethod))
-                method_ent = ObjcMethod.from_buffer(bytearray(raw_struct_data))
-
-                # TODO(PT): preprocess __objc_methname so we don't have to search for null byte for every string here
-                name_start = method_ent.name
-                name_len = 0
-                found_null_terminator = False
-                # grab 2048 bytes
-                max_len = 2048
-                name_bytes = self.binary.get_content_from_virtual_address(virtual_address=name_start, size=max_len)
-                # search for null terminator in this content
-                for ch in name_bytes:
-                    if ch == '\x00':
-                        found_null_terminator = True
-                        break
-                    name_len += 1
-                # did we find null terminator?
-                if not found_null_terminator:
-                    current_buffer = bytes(name_bytes[:name_len:])
-                    raise RuntimeError('__objc_methname entry was longer than {} bytes ({}). Fix me!'.format(
-                        max_len,
-                        current_buffer
-                    ))
-                # read full string
-                symbol_name = bytes(name_bytes[:name_len:])
-                if name_len > 512:
-                    print('Encountered very long SEL: {}'.format(symbol_name))
-
-                self._selector_name_pointers_to_imps[method_ent.name] = method_ent.implementation
+            methods_in_methlist = self._get_sel_name_imp_pairs_from_methlist(methlist, methlist_file_ptr)
+            for selector_name, selref, imp in methods_in_methlist:
+                self._selector_name_pointers_to_imps[selref] = imp
 
                 # if this is the first instance of this selector name we've seen,
                 # map it to an array just containing the IMP address
-                if symbol_name not in self.selector_names_to_imps:
-                    self.selector_names_to_imps[symbol_name] = [method_ent.implementation]
+                if selector_name not in self.selector_names_to_imps:
+                    self.selector_names_to_imps[selector_name] = [imp]
                 # if we've already recorded an IMP for this sel name, just add the new one to the list
                 else:
-                    self.selector_names_to_imps[symbol_name].append(method_ent.implementation)
-
-                method_entry_off += sizeof(ObjcMethod)
+                    self.selector_names_to_imps[selector_name].append(imp)
 
     def _create_selref_to_name_map(self):
         self._selrefs = {}
@@ -440,6 +492,8 @@ class MachoAnalyzer(object):
         # type: (Text) -> List[int]
         """Given a selector, return a list of virtual addresses corresponding to the start of each IMP for that SEL
         """
+        if not self.selector_names_to_imps:
+            return []
         if selector not in self.selector_names_to_imps:
             return []
         return self.selector_names_to_imps[selector]

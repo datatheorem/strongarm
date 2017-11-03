@@ -84,14 +84,10 @@ class MachoCrossReferencer(object):
 
         symtab = self.binary.symtab_contents
         symbol_names = []
-        for sym in symtab:
+        for idx, sym in enumerate(symtab):
             strtab_idx = sym.n_un.n_strx
             string_table_entry = self.string_table_entry_for_strtab_index(strtab_idx)
             if not string_table_entry:
-                print('Couldn\'t get string for strtab idx {} (len {})'.format(
-                    hex(int(strtab_idx)),
-                    hex(int(len(self.binary.get_raw_string_table())))
-                ))
                 continue
             symbol_str = string_table_entry.full_string
             symbol_names.append(symbol_str)

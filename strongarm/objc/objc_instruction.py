@@ -32,9 +32,9 @@ class ObjcBranchInstruction(ObjcInstruction):
         # type: (objc_analyzer.ObjcFunctionAnalyzer, CsInsn) -> ObjcBranchInstruction
         # use appropriate subclass
         if instruction.mnemonic in ObjcUnconditionalBranchInstruction.UNCONDITIONAL_BRANCH_MNEMONICS:
-            instr = ObjcUnconditionalBranchInstruction(instruction)
+            instr = ObjcUnconditionalBranchInstruction(function_analyzer, instruction)
         elif instruction.mnemonic in ObjcConditionalBranchInstruction.CONDITIONAL_BRANCH_MNEMONICS:
-            instr = ObjcConditionalBranchInstruction(instruction)
+            instr = ObjcConditionalBranchInstruction(function_analyzer, instruction)
         else:
             instr = ObjcBranchInstruction(instruction)
 
@@ -54,9 +54,10 @@ class ObjcUnconditionalBranchInstruction(ObjcBranchInstruction):
                                       'blx',
                                       'bxj',
                                       ]
-    def __init__(self, instruction):
-        # type: (CsInsn) -> None
-        super(ObjcBranchInstruction, self).__init__(instruction)
+
+    def __init__(self, function_analyzer, instruction):
+        # type: (objc_analyzer.ObjcFunctionAnalyzer, CsInsn) -> None
+        ObjcBranchInstruction.__init__(self, instruction)
 
         if instruction.mnemonic not in ObjcUnconditionalBranchInstruction.UNCONDITIONAL_BRANCH_MNEMONICS:
             raise ValueError('ObjcUnconditionalBranchInstruction instantiated with invalid mnemonic {}'.format(
@@ -64,20 +65,14 @@ class ObjcUnconditionalBranchInstruction(ObjcBranchInstruction):
             ))
         self.destination_address = self.raw_instr.operands[0].value.imm
 
-    @classmethod
-    def parse_instruction(cls, function_analyzer, instruction):
-        # type: (objc_analyzer.ObjcFunctionAnalyzer, CsInsn) -> ObjcBranchInstruction
-        instr = ObjcBranchInstruction.parse_instruction(instruction)
-
         macho_analyzer = MachoAnalyzer.get_analyzer(function_analyzer.binary)
         external_c_sym_map = macho_analyzer.external_branch_destinations_to_symbol_names
-        if instr.destination_address in external_c_sym_map:
-            instr.symbol = external_c_sym_map[instr.destination_address]
-            if instr.symbol == '_objc_msgSend':
-                instr.is_msgSend_call = True
+        if instruction.destination_address in external_c_sym_map:
+            instruction.symbol = external_c_sym_map[instruction.destination_address]
+            if instruction.symbol == '_objc_msgSend':
+                instruction.is_msgSend_call = True
 
-        instr.is_external_c_call = instr.symbol is not None
-        return instr
+        instruction.is_external_c_call = instruction.symbol is not None
 
 
 class ObjcConditionalBranchInstruction(ObjcBranchInstruction):
@@ -85,9 +80,9 @@ class ObjcConditionalBranchInstruction(ObjcBranchInstruction):
                                     'cbnz',
                                     ]
 
-    def __init__(self, instruction):
-        # type: (CsInsn) -> None
-        super(ObjcBranchInstruction, self).__init__(instruction)
+    def __init__(self, function_analyzer, instruction):
+        # type: (objc_analyzer.ObjcFunctionAnalyzer, CsInsn) -> None
+        ObjcBranchInstruction.__init__(self, instruction)
         if instruction.mnemonic not in ObjcConditionalBranchInstruction.CONDITIONAL_BRANCH_MNEMONICS:
             raise ValueError('ObjcConditionalBranchInstruction instantiated with invalid mnemonic {}'.format(
                 instruction.mnemonic

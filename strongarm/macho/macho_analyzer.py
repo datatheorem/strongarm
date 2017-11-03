@@ -398,7 +398,7 @@ class MachoAnalyzer(object):
             # grab 2048 bytes
             # TODO(PT): most SELs are way shorter than 2048 so this is wasted effort
             # either preprocess __objc_methname, or do similar double-search-space trick as _find_function_boundary
-            max_len = 2048
+            max_len = 4096
             name_bytes = self.binary.get_content_from_virtual_address(virtual_address=name_start, size=max_len)
             # search for null terminator in this content
             for ch in name_bytes:

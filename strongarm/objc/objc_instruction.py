@@ -67,12 +67,12 @@ class ObjcUnconditionalBranchInstruction(ObjcBranchInstruction):
 
         macho_analyzer = MachoAnalyzer.get_analyzer(function_analyzer.binary)
         external_c_sym_map = macho_analyzer.external_branch_destinations_to_symbol_names
-        if instruction.destination_address in external_c_sym_map:
-            instruction.symbol = external_c_sym_map[instruction.destination_address]
-            if instruction.symbol == '_objc_msgSend':
-                instruction.is_msgSend_call = True
+        if self.destination_address in external_c_sym_map:
+            self.symbol = external_c_sym_map[self.destination_address]
+            if self.symbol == '_objc_msgSend':
+                self.is_msgSend_call = True
 
-        instruction.is_external_c_call = instruction.symbol is not None
+        self.is_external_c_call = self.symbol is not None
 
 
 class ObjcConditionalBranchInstruction(ObjcBranchInstruction):

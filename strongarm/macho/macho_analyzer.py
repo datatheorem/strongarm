@@ -379,6 +379,35 @@ class MachoAnalyzer(object):
         methlist = ObjcMethodList.from_buffer(bytearray(raw_struct_data))
         return (methlist, methlist_file_ptr)
 
+    def _get_full_string_from_start_address(self, start_address):
+        # type: (int) -> Text
+        """Return a string containing the bytes from start_address up to the next NULL character
+        """
+        max_len = 128
+        symbol_name_characters = []
+        found_null_terminator = False
+
+        while not found_null_terminator:
+            name_len = 0
+            name_bytes = self.binary.get_content_from_virtual_address(virtual_address=start_address, size=max_len)
+            # search for null terminator in this content
+            for ch in name_bytes:
+                if ch == '\x00':
+                    found_null_terminator = True
+                    break
+                symbol_name_characters.append(ch)
+
+            # do we need to keep searching for the end of the symbol name?
+            if not found_null_terminator:
+                # since we read [start_address:start_address + max_len], trim that from search space
+                start_address += max_len
+                # double search space for next iteration
+                max_len *= 2
+            else:
+                # read full string!
+                symbol_name = ''.join(symbol_name_characters)
+                return symbol_name
+
     def _get_sel_name_imp_pairs_from_methlist(self, methlist, methlist_file_ptr):
         # type: (ObjcMethodList, int) -> List[(Text, int, int)]
         """Given a method list, return a List of tuples of selector name, selref, and IMP address for each method
@@ -392,30 +421,8 @@ class MachoAnalyzer(object):
             method_ent = ObjcMethod.from_buffer(bytearray(raw_struct_data))
 
             # TODO(PT): preprocess __objc_methname so we don't have to search for null byte for every string here
-            name_start = method_ent.name
-            name_len = 0
-            found_null_terminator = False
-            # grab 2048 bytes
-            # TODO(PT): most SELs are way shorter than 2048 so this is wasted effort
-            # either preprocess __objc_methname, or do similar double-search-space trick as _find_function_boundary
-            max_len = 4096
-            name_bytes = self.binary.get_content_from_virtual_address(virtual_address=name_start, size=max_len)
-            # search for null terminator in this content
-            for ch in name_bytes:
-                if ch == '\x00':
-                    found_null_terminator = True
-                    break
-                name_len += 1
-            # did we find null terminator?
-            if not found_null_terminator:
-                current_buffer = bytes(name_bytes[:name_len:])
-                raise RuntimeError('__objc_methname entry was longer than {} bytes ({}). Fix me!'.format(
-                    max_len,
-                    current_buffer
-                ))
-            # read full string
-            symbol_name = bytes(name_bytes[:name_len:])
-            if name_len > 512:
+            symbol_name = self._get_full_string_from_start_address(method_ent.name)
+            if len(symbol_name) > 512:
                 print('Encountered very long SEL: {}'.format(symbol_name))
 
             methods_data.append((symbol_name, method_ent.name, method_ent.implementation))

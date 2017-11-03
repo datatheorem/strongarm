@@ -2,9 +2,10 @@ from capstone.arm64 import *
 from typing import *
 
 from strongarm.debug_util import DebugUtil
-from objc_instruction import *
+from objc_instruction import ObjcBranchInstruction
 from objc_query import ObjcPredicateQuery
 from strongarm.macho.macho_binary import MachoBinary
+from strongarm.macho.macho_analyzer import MachoAnalyzer
 
 
 class ObjcFunctionAnalyzer(object):
@@ -242,18 +243,14 @@ class ObjcFunctionAnalyzer(object):
         return None
 
     # TODO(PT): rename find_next_branch
+    # TODO(PT): this should return the branch and the instruction index for caller convenience
     def next_branch(self, start_index):
-        branch_mnemonics = ['b',
-                            'bl',
-                            'bx',
-                            'blx',
-                            'bxj',
-                            ]
+        # type: (int) -> ObjcBranchInstruction
         for idx, instr in enumerate(self._instructions[start_index::]):
-            if instr.mnemonic in branch_mnemonics:
+            if ObjcBranchInstruction.is_branch_instruction(instr):
                 # found next branch!
                 # wrap in ObjcBranchInstruction object
-                branch_instr = ObjcBranchInstruction.parse_instruction(self.binary, instr)
+                branch_instr = ObjcBranchInstruction.parse_instruction(self, instr)
 
                 # if this is an objc_msgSend target, patch destination_address to be the address of the targeted IMP
                 # note! this means destination_address is *not* the actual destination address of the instruction
@@ -279,7 +276,6 @@ class ObjcFunctionAnalyzer(object):
 
                     branch_instr.selref = selref
                     branch_instr.destination_address = sel_imp
-
                 return branch_instr
         return None
 

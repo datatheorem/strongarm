@@ -42,6 +42,9 @@ class ObjcBranchInstruction(ObjcInstruction):
         return instr
 
     @classmethod
+    def is_branch_instruction(cls, instruction):
+        return instruction.mnemonic in ObjcUnconditionalBranchInstruction.UNCONDITIONAL_BRANCH_MNEMONICS \
+               or instruction.mnemonic in ObjcConditionalBranchInstruction.CONDITIONAL_BRANCH_MNEMONICS
 
 
 class ObjcUnconditionalBranchInstruction(ObjcBranchInstruction):

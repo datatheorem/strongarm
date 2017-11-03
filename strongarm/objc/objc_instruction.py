@@ -38,7 +38,7 @@ class ObjcBranchInstruction(ObjcInstruction):
         else:
             instr = ObjcBranchInstruction(instruction)
 
-        instr.is_local_branch = function_analyzer.is_local_branch(instruction)
+        instr.is_local_branch = function_analyzer.is_local_branch(instr)
         return instr
 
     @classmethod

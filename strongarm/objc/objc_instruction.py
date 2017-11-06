@@ -58,9 +58,11 @@ class ObjcUnconditionalBranchInstruction(ObjcBranchInstruction):
                                       'bx',
                                       'blx',
                                       'bxj',
-                                      'b.eq', # TODO(PT): b.eq and b.ne are not strictly unconditional branches, but
+                                      'b.eq', # TODO(PT): these b-suffix are not strictly unconditional branches, but
                                               # they're functionally unconditional for what we care about
-                                      'b.ne'
+                                      'b.ne',
+                                      'b.lt',
+                                      'b.gt'
                                       ]
 
     def __init__(self, function_analyzer, instruction):
@@ -84,9 +86,12 @@ class ObjcUnconditionalBranchInstruction(ObjcBranchInstruction):
 
 
 class ObjcConditionalBranchInstruction(ObjcBranchInstruction):
-    CONDITIONAL_BRANCH_MNEMONICS = ['cbz',
-                                    'cbnz',
-                                    ]
+    SINGLE_OP_MNEMONICS = ['cbz',
+                           'cbnz',
+                           ]
+    DOUBLE_OP_MNEMONICS = ['tbnz',
+                           ]
+    CONDITIONAL_BRANCH_MNEMONICS = SINGLE_OP_MNEMONICS + DOUBLE_OP_MNEMONICS
 
     def __init__(self, function_analyzer, instruction):
         # type: (objc_analyzer.ObjcFunctionAnalyzer, CsInsn) -> None
@@ -94,5 +99,14 @@ class ObjcConditionalBranchInstruction(ObjcBranchInstruction):
             raise ValueError('ObjcConditionalBranchInstruction instantiated with invalid mnemonic {}'.format(
                 instruction.mnemonic
             ))
-        # a conditional branch will hold the destination address in its second operand
-        ObjcBranchInstruction.__init__(self, instruction, instruction.operands[1].value.imm)
+
+        # a conditional branch will either hold the destination in first or second operand, depending on mnemonic
+        dest_op_idx = 1
+        if instruction.mnemonic in ObjcConditionalBranchInstruction.SINGLE_OP_MNEMONICS:
+            dest_op_idx = 1
+        elif instruction.mnemonic in ObjcConditionalBranchInstruction.DOUBLE_OP_MNEMONICS:
+            dest_op_idx = 2
+        else:
+            raise ValueError('Unknown conditional mnemonic {}'.format(instruction.mnemonic))
+
+        ObjcBranchInstruction.__init__(self, instruction, instruction.operands[dest_op_idx].value.imm)

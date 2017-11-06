@@ -13,13 +13,12 @@ class ObjcBasicBlock(object):
     def get_basic_blocks(cls, function_analyzer):
         # type: (objc_analyzer.ObjcFunctionAnalyzer) -> List[ObjcBasicBlock]
         local_branch_instructions = function_analyzer.get_local_branches()
-        DebugUtil.log(ObjcBasicBlock, 'local branches: {}'.format(local_branch_instructions))
 
         # TODO(PT): make it more efficient to get the start indexes of local branches
         # first basic block is at index 0
         basic_block_start_indexes = [0]
         # last basic block ends at the last instruction in the function
-        basic_block_end_indexes = [len(function_analyzer._instructions)]
+        basic_block_end_indexes = [len(function_analyzer._instructions)+1]
 
         for branch in local_branch_instructions:
             # TODO(PT): use instruction address offset from start_address to get instr index

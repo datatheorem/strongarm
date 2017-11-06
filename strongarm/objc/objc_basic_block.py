@@ -48,6 +48,11 @@ class ObjcBasicBlock(object):
         basic_block_end_indexes.sort()
 
         basic_block_indexes = zip(basic_block_start_indexes, basic_block_end_indexes)
+        # trim empty blocks
+        for start, end in list(basic_block_indexes):
+            if start == end:
+                basic_block_indexes.remove((start, end))
+
         DebugUtil.log(cls, 'local branch indexes: {}'.format(basic_block_indexes))
 
         basic_blocks = []

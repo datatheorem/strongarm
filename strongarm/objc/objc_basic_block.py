@@ -17,26 +17,37 @@ class ObjcBasicBlock(object):
 
         # TODO(PT): make it more efficient to get the start indexes of local branches
         # first basic block is at index 0
-        local_branch_start_indexes = [0]
+        basic_block_start_indexes = [0]
+        # last basic block ends at the last instruction in the function
+        basic_block_end_indexes = [len(function_analyzer._instructions)]
+
         for branch in local_branch_instructions:
-            idx = function_analyzer._instructions.index(branch.raw_instr)
-            local_branch_start_indexes.append(idx)
+            # TODO(PT): use instruction address offset from start_address to get instr index
+            # this is a constant-time way to get an instruction index from an instruction
 
-        # sort basic block start index order so we can figure out where each block ends
-        local_branch_start_indexes.sort()
+            # TODO(PT): this is O(n^2) on the size of the analyzed function! bad bad bad
+            instruction_index = 0
+            for instr in function_analyzer._instructions:
+                if instr.address == branch.destination_address:
+                    break
+                instruction_index += 1
 
-        # the end index of each basic block is one less than the start index of the next basic block
-        local_branch_end_indexes = []
-        # start from the first basic block after instruction at index 0
-        for idx in local_branch_start_indexes[1::]:
-            local_branch_end_indexes.append(idx-1)
-        # the last basic block ends at the end of the function
-        local_branch_end_indexes.append(len(function_analyzer._instructions))
+            # a basic block begins at the branch destination
+            basic_block_start_indexes.append(instruction_index)
+            # a basic block ends just before the branch destination
+            basic_block_end_indexes.append(instruction_index)
 
-        DebugUtil.log(cls, 'local branch start indexes {}'.format(local_branch_start_indexes))
-        DebugUtil.log(cls, 'local branch end   indexes {}'.format(local_branch_end_indexes))
+            branch_index = function_analyzer._instructions.index(branch.raw_instr)
+            # a basic block ends at this branch
+            basic_block_start_indexes.append(branch_index+1)
+            # a basic block begins after this branch
+            basic_block_end_indexes.append(branch_index+1)
 
-        basic_block_indexes = zip(local_branch_start_indexes, local_branch_end_indexes)
+        # sort arrays of basic block start/end addresses so we can zip them together into basic block ranges
+        basic_block_start_indexes.sort()
+        basic_block_end_indexes.sort()
+
+        basic_block_indexes = zip(basic_block_start_indexes, basic_block_end_indexes)
         DebugUtil.log(cls, 'local branch indexes: {}'.format(basic_block_indexes))
 
         basic_blocks = []

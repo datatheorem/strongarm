@@ -58,6 +58,9 @@ class ObjcUnconditionalBranchInstruction(ObjcBranchInstruction):
                                       'bx',
                                       'blx',
                                       'bxj',
+                                      'b.e', # TODO(PT): b.e and b.ne are not strictly unconditional branches, but
+                                             # they're functionally unconditional for what we care about
+                                      'b.ne'
                                       ]
 
     def __init__(self, function_analyzer, instruction):

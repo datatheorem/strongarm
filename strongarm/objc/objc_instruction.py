@@ -30,6 +30,8 @@ class ObjcBranchInstruction(ObjcInstruction):
     @classmethod
     def parse_instruction(cls, function_analyzer, instruction):
         # type: (objc_analyzer.ObjcFunctionAnalyzer, CsInsn) -> ObjcBranchInstruction
+        """Read a branch instruction and encapsulate it in the appropriate ObjcBranchInstruction subclass
+        """
         # use appropriate subclass
         if instruction.mnemonic in ObjcUnconditionalBranchInstruction.UNCONDITIONAL_BRANCH_MNEMONICS:
             instr = ObjcUnconditionalBranchInstruction(function_analyzer, instruction)
@@ -43,6 +45,9 @@ class ObjcBranchInstruction(ObjcInstruction):
 
     @classmethod
     def is_branch_instruction(cls, instruction):
+        # type: (CsInsn) -> bool
+        """Returns True if the CsInsn represents a branch instruction, False otherwise
+        """
         return instruction.mnemonic in ObjcUnconditionalBranchInstruction.UNCONDITIONAL_BRANCH_MNEMONICS \
                or instruction.mnemonic in ObjcConditionalBranchInstruction.CONDITIONAL_BRANCH_MNEMONICS
 

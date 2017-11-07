@@ -20,7 +20,7 @@ class ObjcFunctionAnalyzer(object):
             pass
 
         self.binary = binary
-        self.analyzer = MachoAnalyzer.get_analyzer(binary)
+        self.macho_analyzer = MachoAnalyzer.get_analyzer(binary)
         self._instructions = instructions
 
         self.__call_targets = None
@@ -252,31 +252,14 @@ class ObjcFunctionAnalyzer(object):
                 # wrap in ObjcBranchInstruction object
                 branch_instr = ObjcBranchInstruction.parse_instruction(self, instr)
 
-                # if this is an objc_msgSend target, patch destination_address to be the address of the targeted IMP
-                # note! this means destination_address is *not* the actual destination address of the instruction
-                # the *real* destination will be a stub function corresponding to __objc_msgSend, but
-                # knowledge of this is largely useless, and the much more valuable piece of information is
-                # which function the selector passed to objc_msgSend corresponds to.
-                # therefore, replace the 'real' destination address with the requested IMP
-                if branch_instr.is_msgSend_call:
-                    selref = None
-                    # attempt to get an IMP for this selref
-                    try:
-                        selref = self.get_selref(branch_instr.raw_instr)
-                        sel_imp = self.analyzer.imp_for_selref(selref)
-                    except RuntimeError as e:
-                        instr_idx = start_index + idx
-                        self.debug_print(instr_idx, 'bl <objc_msgSend> target cannot be determined statically')
-                        sel_imp = None
+                # were we able to resolve the destination of this call?
+                # some objc_msgSend calls are too difficult to be parsed, for example if they depend on addresses
+                # in the stack. detect this fail case
+                if branch_instr.is_msgSend_call and not branch_instr.destination_address:
+                    instr_idx = start_index + idx
+                    self.debug_print(instr_idx, 'bl <objc_msgSend> target cannot be determined statically')
 
-                    # if we couldn't find an IMP for this selref,
-                    # it is defined in a class outside this binary
-                    if not sel_imp:
-                        branch_instr.is_external_objc_call = True
-
-                    branch_instr.selref = selref
-                    branch_instr.destination_address = sel_imp
-                return branch_instr
+                return ObjcBranchInstruction.parse_instruction(self, instr)
         return None
 
     def is_local_branch(self, branch_instruction):

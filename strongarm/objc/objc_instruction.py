@@ -81,8 +81,45 @@ class ObjcUnconditionalBranchInstruction(ObjcBranchInstruction):
             self.symbol = external_c_sym_map[self.destination_address]
             if self.symbol == '_objc_msgSend':
                 self.is_msgSend_call = True
+                self._patch_msgSend_destination(function_analyzer)
 
         self.is_external_c_call = self.symbol is not None
+
+    def _patch_msgSend_destination(self, function_analyzer):
+        # type: (objc_analyzer.ObjcFunctionAnalyzer) -> None
+        # validate instruction
+        if not self.is_msgSend_call or \
+           self.raw_instr.mnemonic != 'bl' or \
+           self.symbol != '_objc_msgSend':
+            print('self.is_msgSend_call {} self.raw_instr.mnemonic {} self.symbol {}'.format(
+                self.is_msgSend_call,
+                self.raw_instr.mnemonic,
+                self.symbol,
+            ))
+            raise ValueError('cannot parse objc_msgSend destination on non-msgSend instruction {}'.format(function_analyzer.format_instruction(self.raw_instr)))
+        # if this is an objc_msgSend target, patch destination_address to be the address of the targeted IMP
+        # note! this means destination_address is *not* the actual destination address of the instruction
+        # the *real* destination will be a stub function corresponding to _objc_msgSend, but
+        # knowledge of this is largely useless, and the much more valuable piece of information is
+        # which function the selector passed to objc_msgSend corresponds to.
+        # therefore, replace the 'real' destination address with the requested IMP
+        selref = None
+        # attempt to get an IMP for this selref
+        try:
+            selref = function_analyzer.get_selref(self.raw_instr)
+            sel_imp = function_analyzer.macho_analyzer.imp_for_selref(selref)
+        except RuntimeError as e:
+            # if this raised an exception, we couldn't find an IMP for this SEL name, which means
+            # the SEL is not implemented within this binary
+            sel_imp = None
+
+        # if we couldn't find an IMP for this selref,
+        # it is defined in a class outside this binary
+        if not sel_imp:
+            self.is_external_objc_call = True
+
+        self.selref = selref
+        self.destination_address = sel_imp
 
 
 class ObjcConditionalBranchInstruction(ObjcBranchInstruction):

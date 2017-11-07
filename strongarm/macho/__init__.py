@@ -1,6 +1,6 @@
 import macho_analyzer
 import macho_binary
-import macho_cross_referencer
+import macho_string_table_helper
 import macho_definitions
 import macho_load_commands
 import macho_parse

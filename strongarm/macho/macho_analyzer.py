@@ -8,7 +8,7 @@ from strongarm.decorators import memoized
 from strongarm.macho.macho_binary import MachoBinary
 from strongarm.macho.macho_imp_stubs import MachoImpStubsParser
 from strongarm.macho.macho_definitions import ObjcClass, ObjcMethod, ObjcMethodList, ObjcData
-from macho_cross_referencer import MachoCrossReferencer
+from macho_string_table_helper import MachoStringTableHelper
 
 
 class MachoAnalyzer(object):
@@ -31,7 +31,7 @@ class MachoAnalyzer(object):
         self.imported_functions = None
         self._contains_objc = False
 
-        self.crossref_helper = MachoCrossReferencer(bin)
+        self.crossref_helper = MachoStringTableHelper(bin)
         self.imported_functions = self.crossref_helper.imported_symbol_list()
         self.imp_stubs = MachoImpStubsParser(bin, self.cs).imp_stubs
 

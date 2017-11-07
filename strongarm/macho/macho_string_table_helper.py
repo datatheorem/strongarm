@@ -12,7 +12,7 @@ class MachoStringTableEntry(object):
         self.full_string = content
 
 
-class MachoCrossReferencer(object):
+class MachoStringTableHelper(object):
     """Class containing helper functions for processing different tables in a Mach-O
     """
 

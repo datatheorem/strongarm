@@ -27,17 +27,27 @@ class ObjcFunctionAnalyzer(object):
         self.macho_analyzer = MachoAnalyzer.get_analyzer(binary)
         self.instructions = instructions
 
-        self.__call_targets = None
+        self._call_targets = None
 
     def debug_print(self, idx, output):
+        # type: (int, Text) -> None
+        """Helper function to pretty-print debug logs
+
+        Args:
+            idx: instruction offset within function the message references
+            output: string to output to debug log
+        """
         if not len(self.instructions):
             DebugUtil.log(self, 'func(stub) {}'.format(
                 output
             ))
         else:
-            DebugUtil.log(self, 'func({} + {}) {}'.format(
-                hex(int(self.instructions[0].address)),
-                hex(idx),
+            func_base = self.instructions[0].address
+            # each instruction is 4 bytes
+            instruction_size = 4
+            instruction_address = func_base + (idx * instruction_size)
+            DebugUtil.log(self, 'func({}) {}'.format(
+                hex(int(instruction_address)),
                 output
             ))
 
@@ -70,16 +80,16 @@ class ObjcFunctionAnalyzer(object):
             A list of objects encapsulating info about the branch destinations from self.instructions
         """
         # use cached list if available
-        if self.__call_targets is not None:
-            return self.__call_targets
+        if self._call_targets is not None:
+            return self._call_targets
 
         targets = []
         # keep track of the index of the last branch destination we saw
         last_branch_idx = 0
 
         while True:
-            # grab the next branch in front of the last one we vistied
-            next_branch = self.next_branch(last_branch_idx)
+            # grab the next branch in front of the last one we visited
+            next_branch = self.next_branch_after_instruction_index(last_branch_idx)
             if not next_branch:
                 # parsed every branch in this function
                 break
@@ -91,7 +101,7 @@ class ObjcFunctionAnalyzer(object):
             # we start searching for branches following this instruction which is known to have a branch
             last_branch_idx += 1
 
-        self.__call_targets = targets
+        self._call_targets = targets
         return targets
 
     def perform_query(self, condition_list):
@@ -143,6 +153,7 @@ class ObjcFunctionAnalyzer(object):
                     hex(int(target.address))
                 ))
                 return True
+
             # don't try to follow this path if it's an external symbol and not an objc_msgSend call
             if target.is_external_c_call and not target.is_msgSend_call:
                 self.debug_print(instr_idx, '{}(...)'.format(
@@ -190,8 +201,10 @@ class ObjcFunctionAnalyzer(object):
     def format_instruction(cls, instr):
         # type: (CsInsn) -> Text
         """Stringify a CsInsn for printing
-        :param instr: Instruction to create formatted string representation for
-        :return: Formatted string representing instruction
+        Args:
+            instr: Instruction to create formatted string representation for
+        Returns:
+            Formatted string representing instruction
         """
         return "{addr}:\t{mnemonic}\t{ops}".format(addr=hex(int(instr.address)),
                                                    mnemonic=instr.mnemonic,
@@ -201,8 +214,10 @@ class ObjcFunctionAnalyzer(object):
         # type: (Text) -> List[Text]
         """
         Track the flow of data starting in a register through a list of instructions
-        :param reg: Register containing initial location of data
-        :return: List containing all registers which contain data originally in reg
+        Args:
+            reg: Register containing initial location of data
+        Returns:
+            List containing all registers which contain data originally in reg
         """
         # list containing all registers which hold the same value as initial argument reg
         regs_holding_value = [reg]
@@ -228,7 +243,7 @@ class ObjcFunctionAnalyzer(object):
                     regs_holding_value.remove(dst)
         return regs_holding_value
 
-    # TODO(PT): deprecate & replace with next_branch
+    # TODO(PT): deprecate & replace with next_branch_after_instruction_index
     def next_blr_to_reg(self, reg, start_index):
         # type: (Text, int) -> Optional[CsInsn]
         """
@@ -248,7 +263,7 @@ class ObjcFunctionAnalyzer(object):
 
     # TODO(PT): rename find_next_branch
     # TODO(PT): this should return the branch and the instruction index for caller convenience
-    def next_branch(self, start_index):
+    def next_branch_after_instruction_index(self, start_index):
         # type: (int) -> ObjcBranchInstruction
         for idx, instr in enumerate(self.instructions[start_index::]):
             if ObjcBranchInstruction.is_branch_instruction(instr):
@@ -329,7 +344,8 @@ class ObjcFunctionAnalyzer(object):
               An int representing the contents of the register
 
         """
-        target_addr = self.instructions[0].address + (start_index * 4)
+        bytes_in_instruction = 4
+        target_addr = self.instructions[0].address + (start_index * bytes_in_instruction)
         DebugUtil.log(self, 'analyzing data flow to determine data in {} at {}'.format(
             desired_reg,
             hex(int(target_addr))
@@ -346,6 +362,8 @@ class ObjcFunctionAnalyzer(object):
         needed_links = {}
 
         # find data starting backwards from start_index
+        # TODO(PT): instead of blindly going through instructions backwards,
+        # only follow possible code paths split into basic blocks from ObjcBasicBlock
         for instr in self.instructions[start_index::-1]:
             # still looking for anything?
             if len(unknown_regs) == 0:
@@ -353,6 +371,7 @@ class ObjcFunctionAnalyzer(object):
                 break
 
             # we only care about instructions that could be moving data between registers
+            # therefore, the minimum number of operands an instruction we're interested in could have is 2
             if len(instr.operands) < 2:
                 continue
             # some instructions will have the same format as register transformations,
@@ -413,6 +432,9 @@ class ObjcFunctionAnalyzer(object):
                     # and add src to registers to search for
                     unknown_regs.append(src_reg_name)
             elif src.type == ARM64_OP_MEM:
+                # an instruction with an operand of type ARM64_OP_MEM might look like:
+                # ldr x1, [x3, #0x1000]
+                # here, the bracketed portion is accessible through src.mem, which has a reg base and imm disp property
                 src_reg_name = self._trimmed_reg_name(instr.reg_name(src.mem.base))
                 # dst is being assigned to the value of another register, plus a signed offset
                 unknown_regs.remove(dst_reg_name)
@@ -517,8 +539,9 @@ class ObjcBlockAnalyzer(ObjcFunctionAnalyzer):
 
         self.registers_containing_block = self.track_reg(initial_block_reg)
         self.load_reg, self.load_index = self.find_block_load()
-        self.invoke_instr = self.find_block_invoke()
-        self.invoke_idx = self.instructions.index(self.invoke_instr)
+        self.invoke_instruction = self.find_block_invoke()
+        self.invocation_instruction_index = self.instructions.index(self.invoke_instruction)
+
 
     def find_block_load(self):
         """
@@ -560,7 +583,7 @@ class ObjcBlockAnalyzer(ObjcFunctionAnalyzer):
         """
         desired_register = u'x{}'.format(arg_index)
 
-        invoke_index = self.instructions.index(self.invoke_instr)
+        invoke_index = self.instructions.index(self.invoke_instruction)
         for instr in self.instructions[invoke_index::-1]:
             if instr.mnemonic == 'movz' or instr.mnemonic == 'mov':
                 # arg1 will be stored in x1

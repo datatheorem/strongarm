@@ -16,12 +16,10 @@ class TestFunctionAnalyzer(unittest.TestCase):
         parser = MachoParser(TestFunctionAnalyzer.FAT_PATH)
         self.binary = parser.slices[0]
         self.analyzer = MachoAnalyzer.get_analyzer(self.binary)
-        self.implementations = self.analyzer.get_method_address_ranges(
-            u'URLSession:didReceiveChallenge:completionHandler:'
-        )
-        self.imp_addr, _ = self.implementations[0]
 
-        self.instructions = self.analyzer.get_function_instructions(self.imp_addr)
+        self.implementations = self.analyzer.get_implementations(u'URLSession:didReceiveChallenge:completionHandler:')
+        self.instructions = self.implementations[0]
+        self.imp_addr = self.instructions[0].address
         self.function_analyzer = ObjcFunctionAnalyzer(self.binary, self.instructions)
 
     def test_call_targets(self):
@@ -86,7 +84,7 @@ class TestFunctionAnalyzer(unittest.TestCase):
 
     def test_find_next_branch(self):
         # find first branch
-        branch = self.function_analyzer.next_branch(0)
+        branch = self.function_analyzer.next_branch_after_instruction_index(0)
         self.assertIsNotNone(branch)
         self.assertFalse(branch.is_msgSend_call)
         self.assertFalse(branch.is_external_objc_call)
@@ -95,13 +93,13 @@ class TestFunctionAnalyzer(unittest.TestCase):
         self.assertEqual(branch.destination_address,  0x100006910)
 
         # find branch in middle of function
-        branch = self.function_analyzer.next_branch(25)
+        branch = self.function_analyzer.next_branch_after_instruction_index(25)
         self.assertIsNotNone(branch)
         self.assertTrue(branch.is_msgSend_call)
         self.assertIsNotNone(branch.selref)
 
         # there's only 68 instructions, there's no way there could be another branch after this index
-        branch = self.function_analyzer.next_branch(68)
+        branch = self.function_analyzer.next_branch_after_instruction_index(68)
         self.assertIsNone(branch)
 
     def test_track_register(self):

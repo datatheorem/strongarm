@@ -17,12 +17,18 @@ def control_flow_before_block(block_analyzer):
     # check if there's any control flow before block invocation
     local_branches = block_analyzer.get_local_branches()
     for b in local_branches:
-        branch_idx = block_analyzer._instructions.index(b.raw_instr)
-        print('branch index {} block invoke index {}'.format(hex(branch_idx), hex(block_analyzer.invoke_idx)))
+        branch_idx = block_analyzer.instructions.index(b.raw_instr)
+        print('branch index {} block invoke index {}'.format(
+            hex(branch_idx),
+            hex(block_analyzer.invocation_instruction_index)
+        ))
         # did the branch happen before the block invocation?
-        if branch_idx < block_analyzer.invoke_idx:
+        if branch_idx < block_analyzer.invocation_instruction_index:
             # no way to know what's going on with control flow
-            print('branch idx {} block invoke idx {}'.format(branch_idx, block_analyzer.invoke_idx))
+            print('branch idx {} block invoke idx {}'.format(
+                branch_idx,
+                block_analyzer.invocation_instruction_index
+            ))
             return True
     print('no control flow before block invocation')
     return False
@@ -35,7 +41,7 @@ def get_auth_challenge_disposition(block_analyzer):
     # arg2: user-provided NSURLCredentials
     # find arg1 to block call
     # TODO(PT): deprecate ObjcBlockAnalyzer.get_block_arg()
-    block_arg1 = block_analyzer.determine_register_contents('x1', block_analyzer.invoke_idx)
+    block_arg1 = block_analyzer.determine_register_contents('x1', block_analyzer.invocation_instruction_index)
     # see what kind of behavior this app is requesting for the completion block
     try:
         # if the block argument is a register rather than an immediate, this line will crash,
@@ -84,7 +90,7 @@ def test_sta_142(path):
                 return False, 0
 
             # get details about completion block invocation
-            block_invoke_instr = block_analyzer.invoke_instr
+            block_invoke_instr = block_analyzer.invoke_instruction
             if not block_invoke_instr:
                 print('Buggy app! -[NSURLSessionDelegate URLSession:didReceiveChallenge:completionHandler:] completion '
                       'block never invoked.')

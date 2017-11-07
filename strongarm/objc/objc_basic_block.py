@@ -18,7 +18,7 @@ class ObjcBasicBlock(object):
         # first basic block is at index 0
         basic_block_start_indexes = [0]
         # last basic block ends at the last instruction in the function
-        basic_block_end_indexes = [len(function_analyzer._instructions)+1]
+        basic_block_end_indexes = [len(function_analyzer.instructions)+1]
 
         for branch in local_branch_instructions:
             # TODO(PT): use instruction address offset from start_address to get instr index
@@ -26,7 +26,7 @@ class ObjcBasicBlock(object):
 
             # TODO(PT): this is O(n^2) on the size of the analyzed function! bad bad bad
             instruction_index = 0
-            for instr in function_analyzer._instructions:
+            for instr in function_analyzer.instructions:
                 if instr.address == branch.destination_address:
                     break
                 instruction_index += 1
@@ -36,7 +36,7 @@ class ObjcBasicBlock(object):
             # a basic block ends just before the branch destination
             basic_block_end_indexes.append(instruction_index)
 
-            branch_index = function_analyzer._instructions.index(branch.raw_instr)
+            branch_index = function_analyzer.instructions.index(branch.raw_instr)
             # a basic block ends at this branch
             basic_block_start_indexes.append(branch_index+1)
             # a basic block begins after this branch
@@ -56,7 +56,7 @@ class ObjcBasicBlock(object):
 
         basic_blocks = []
         for start_idx, end_idx in basic_block_indexes:
-            basic_blocks.append(function_analyzer._instructions[start_idx:end_idx])
+            basic_blocks.append(function_analyzer.instructions[start_idx:end_idx])
 
         DebugUtil.log(cls, 'Basic blocks for function @ {}'.format(hex(int(function_analyzer.start_address))))
         for idx, block in enumerate(basic_blocks):

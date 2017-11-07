@@ -1,4 +1,5 @@
 from capstone.arm64 import *
+from capstone import CsInsn
 from typing import *
 
 from strongarm.debug_util import DebugUtil
@@ -9,6 +10,9 @@ from strongarm.macho.macho_analyzer import MachoAnalyzer
 
 
 class ObjcFunctionAnalyzer(object):
+    """Provides utility functions for introspecting on a set of instructions which represent a function body.
+    """
+
     def __init__(self, binary, instructions):
         # type: (MachoBinary, List[CsInsn]) -> None
         try:
@@ -21,18 +25,18 @@ class ObjcFunctionAnalyzer(object):
 
         self.binary = binary
         self.macho_analyzer = MachoAnalyzer.get_analyzer(binary)
-        self._instructions = instructions
+        self.instructions = instructions
 
         self.__call_targets = None
 
     def debug_print(self, idx, output):
-        if not len(self._instructions):
+        if not len(self.instructions):
             DebugUtil.log(self, 'func(stub) {}'.format(
                 output
             ))
         else:
             DebugUtil.log(self, 'func({} + {}) {}'.format(
-                hex(int(self._instructions[0].address)),
+                hex(int(self.instructions[0].address)),
                 hex(idx),
                 output
             ))
@@ -63,7 +67,7 @@ class ObjcFunctionAnalyzer(object):
         """Find a List of all branch destinations reachable from the source function
 
         Returns:
-            A list of objects encapsulating info about the branch destinations from self._instructions
+            A list of objects encapsulating info about the branch destinations from self.instructions
         """
         # use cached list if available
         if self.__call_targets is not None:
@@ -82,7 +86,7 @@ class ObjcFunctionAnalyzer(object):
 
             targets.append(next_branch)
             # record that we checked this branch
-            last_branch_idx = self._instructions.index(next_branch.raw_instr)
+            last_branch_idx = self.instructions.index(next_branch.raw_instr)
             # add 1 to last branch so on the next loop iteration,
             # we start searching for branches following this instruction which is known to have a branch
             last_branch_idx += 1
@@ -94,10 +98,10 @@ class ObjcFunctionAnalyzer(object):
         # type: (List[ObjcPredicateQuery]) -> bool
         DebugUtil.log(self, 'searching for query conditions {} in function {}'.format(
             condition_list,
-            hex(int(self._instructions[0].address))
+            hex(int(self.instructions[0].address))
         ))
 
-        for instruction in self._instructions:
+        for instruction in self.instructions:
             for condition in condition_list:
                 if not condition.satisfied(instruction):
                     continue
@@ -130,7 +134,7 @@ class ObjcFunctionAnalyzer(object):
 
         for target in self.call_targets:
             # find the address of this branch instruction within the function
-            instr_idx = self._instructions.index(target.raw_instr)
+            instr_idx = self.instructions.index(target.raw_instr)
 
             # is this a direct call?
             if target.destination_address == call_address:
@@ -177,7 +181,7 @@ class ObjcFunctionAnalyzer(object):
                 ))
                 return True
         # no code paths reach desired call
-        self.debug_print(len(self._instructions), 'no code paths reach {}'.format(
+        self.debug_print(len(self.instructions), 'no code paths reach {}'.format(
             hex(int(call_address))
         ))
         return False
@@ -202,7 +206,7 @@ class ObjcFunctionAnalyzer(object):
         """
         # list containing all registers which hold the same value as initial argument reg
         regs_holding_value = [reg]
-        for instr in self._instructions:
+        for instr in self.instructions:
             # TODO(pt) track other versions of move w/ suffix e.g. movz
             # do instructions like movz only operate on literals? we only care about reg to reg
             if instr.mnemonic == 'mov':
@@ -234,7 +238,7 @@ class ObjcFunctionAnalyzer(object):
         :return: Index of next 'blr' instruction to reg
         """
         index = start_index
-        for instr in self._instructions[start_index::]:
+        for instr in self.instructions[start_index::]:
             if instr.mnemonic == 'blr':
                 dst = instr.operands[0]
                 if instr.reg_name(dst.value.reg) == reg:
@@ -246,7 +250,7 @@ class ObjcFunctionAnalyzer(object):
     # TODO(PT): this should return the branch and the instruction index for caller convenience
     def next_branch(self, start_index):
         # type: (int) -> ObjcBranchInstruction
-        for idx, instr in enumerate(self._instructions[start_index::]):
+        for idx, instr in enumerate(self.instructions[start_index::]):
             if ObjcBranchInstruction.is_branch_instruction(instr):
                 # found next branch!
                 # wrap in ObjcBranchInstruction object
@@ -281,7 +285,7 @@ class ObjcFunctionAnalyzer(object):
         if msgsend_instr.mnemonic != 'bl':
             raise ValueError('asked to find selref of non-branch instruction')
 
-        msgsend_index = self._instructions.index(msgsend_instr)
+        msgsend_index = self.instructions.index(msgsend_instr)
         # retrieve whatever data is in x1 at the index of this msgSend call
         return self.determine_register_contents('x1', msgsend_index)
 
@@ -325,7 +329,7 @@ class ObjcFunctionAnalyzer(object):
               An int representing the contents of the register
 
         """
-        target_addr = self._instructions[0].address + (start_index * 4)
+        target_addr = self.instructions[0].address + (start_index * 4)
         DebugUtil.log(self, 'analyzing data flow to determine data in {} at {}'.format(
             desired_reg,
             hex(int(target_addr))
@@ -342,7 +346,7 @@ class ObjcFunctionAnalyzer(object):
         needed_links = {}
 
         # find data starting backwards from start_index
-        for instr in self._instructions[start_index::-1]:
+        for instr in self.instructions[start_index::-1]:
             # still looking for anything?
             if len(unknown_regs) == 0:
                 # found everything we need
@@ -435,7 +439,7 @@ class ObjcFunctionAnalyzer(object):
         # additionally, it should be guaranteed that the unknown values list is empty
         if len(unknown_regs):
             DebugUtil.log(self, 'Exited loop with unknown list! instr 0 {} idx {} unknown {} links {} known {}'.format(
-                hex(int(self._instructions[0].address)),
+                hex(int(self.instructions[0].address)),
                 start_index,
                 unknown_regs,
                 needed_links,
@@ -514,7 +518,7 @@ class ObjcBlockAnalyzer(ObjcFunctionAnalyzer):
         self.registers_containing_block = self.track_reg(initial_block_reg)
         self.load_reg, self.load_index = self.find_block_load()
         self.invoke_instr = self.find_block_invoke()
-        self.invoke_idx = self._instructions.index(self.invoke_instr)
+        self.invoke_idx = self.instructions.index(self.invoke_instr)
 
     def find_block_load(self):
         """
@@ -522,7 +526,7 @@ class ObjcBlockAnalyzer(ObjcFunctionAnalyzer):
         :return: Tuple of register containing Block->invoke, and the index this instruction was found at
         """
         index = 0
-        for instr in self._instructions:
+        for instr in self.instructions:
             if instr.mnemonic == 'ldr':
                 if len(instr.operands) != 2:
                     raise RuntimeError('Encountered ldr with more than 2 operands! {}'.format(
@@ -556,8 +560,8 @@ class ObjcBlockAnalyzer(ObjcFunctionAnalyzer):
         """
         desired_register = u'x{}'.format(arg_index)
 
-        invoke_index = self._instructions.index(self.invoke_instr)
-        for instr in self._instructions[invoke_index::-1]:
+        invoke_index = self.instructions.index(self.invoke_instr)
+        for instr in self.instructions[invoke_index::-1]:
             if instr.mnemonic == 'movz' or instr.mnemonic == 'mov':
                 # arg1 will be stored in x1
                 dst = instr.operands[0]

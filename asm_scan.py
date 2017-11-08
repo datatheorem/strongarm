@@ -39,7 +39,6 @@ def get_auth_challenge_disposition(block_analyzer):
     # arg0: Block object (applies to all Block invocations)
     # arg1: credentials disposition
     # arg2: user-provided NSURLCredentials
-    # find arg1 to block call
     # TODO(PT): deprecate ObjcBlockAnalyzer.get_block_arg()
     block_arg1 = block_analyzer.determine_register_contents('x1', block_analyzer.invocation_instruction_index)
     # see what kind of behavior this app is requesting for the completion block

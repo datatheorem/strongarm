@@ -302,7 +302,7 @@ class ObjcFunctionAnalyzer(object):
 
         msgsend_index = self.instructions.index(msgsend_instr)
         # retrieve whatever data is in x1 at the index of this msgSend call
-        return self.determine_register_contents('x1', msgsend_index)
+        return self.determine_register_contents('x1', msgsend_index)[0]
 
     def _trimmed_reg_name(self, reg_name):
         # type: (Text) -> Text
@@ -544,66 +544,39 @@ class ObjcFunctionAnalyzer(object):
         return final_val
 
 
-# TODO(PT): update this class to use stronger dataflow analysis
 class ObjcBlockAnalyzer(ObjcFunctionAnalyzer):
     def __init__(self, binary, instructions, initial_block_reg):
         ObjcFunctionAnalyzer.__init__(self, binary, instructions)
 
-        self.registers_containing_block = self.track_reg(initial_block_reg)
-        self.load_reg, self.load_index = self.find_block_load()
-        self.invoke_instruction = self.find_block_invoke()
-        self.invocation_instruction_index = self.instructions.index(self.invoke_instruction)
+        self.initial_block_reg = initial_block_reg
+        self.block_arg_index = int(self._trimmed_reg_name(self.initial_block_reg))
+        self.invoke_instruction, self.invocation_instruction_index = self.find_block_invoke()
 
-
-    def find_block_load(self):
-        """
-        Find instruction where Block->invoke is loaded into
-        :return: Tuple of register containing Block->invoke, and the index this instruction was found at
-        """
-        index = 0
-        for instr in self.instructions:
-            if instr.mnemonic == 'ldr':
-                if len(instr.operands) != 2:
-                    raise RuntimeError('Encountered ldr with more than 2 operands! {}'.format(
-                        self.format_instruction(instr)
-                    ))
-                # we're looking for an instruction in the format:
-                # ldr <reg> [<reg_containing_block>, #0x10]
-                # block->invoke is always 0x10 from start of block
-                # so if we see the above then we know we're loading the block's executable start addr
-                dst = instr.operands[0]
-                src = instr.operands[1]
-                if src.type == ARM64_OP_MEM:
-                    if instr.reg_name(src.mem.base) in self.registers_containing_block and src.mem.disp == 0x10:
-                        # found load of block's invoke addr!
-                        return instr.reg_name(dst.value.reg), index
-            index += 1
-
-    # TODO(PT): deprecate and use more up-to-date dataflow API
     def find_block_invoke(self):
-        # type: () -> CsInsn
-        return self.next_blr_to_reg(self.load_reg, self.load_index)
+        # type: () -> (CsInsn, int)
+        """Find instruction where the targeted Block->invoke is loaded into
 
-    def get_block_arg(self, arg_index):
-        # type: (int) -> int
+        Returns:
+             Tuple of register containing target Block->invoke, and the index this instruction was found at
         """
-        Starting from the index where a function is called, search backwards for the assigning of
-        a register corresponding to function argument at index arg_index
-        Currently this function will only detect arguments who are assigned to an immediate value
-        :param arg_index: Positional argument index (0 for first argument, 1 for second, etc.)
-        :return: Index of instruction where argument is assigned
-        """
-        desired_register = u'x{}'.format(arg_index)
-
-        invoke_index = self.instructions.index(self.invoke_instruction)
-        for instr in self.instructions[invoke_index::-1]:
-            if instr.mnemonic == 'movz' or instr.mnemonic == 'mov':
-                # arg1 will be stored in x1
-                dst = instr.operands[0]
-                src = instr.operands[1]
-                if instr.reg_name(dst.value.reg) == desired_register:
-                    # return immediate value if source is not a register
-                    if instr.mnemonic == 'movz':
-                        return src.value.imm
-                    # source is a register, return register name
-                    return instr.reg_name(src.value.reg)
+        for idx, instr in enumerate(self.instructions):
+            if instr.mnemonic == 'blr':
+                # check if the register being loaded from contains the Block pointer
+                # TODO(PT): I removed code which more strictly found the block invocation
+                # In the past, this would find the block load from an instruction like:
+                # ldr x8, [<block containing reg>, 0x10]
+                # then, we look for a block invoke instruction:
+                # blr x8
+                # Now, we just look for a blr to a register that has a dependency on the data originally in the register
+                # containing the block pointer.
+                # this is very likely to work more or less all the time.
+                function_arg_idx, is_function_arg = self.determine_register_contents(
+                    self.initial_block_reg,
+                    idx
+                )
+                if not is_function_arg:
+                    continue
+                if function_arg_idx == self.block_arg_index:
+                    # found desired block invocation!
+                    return instr, idx
+        raise RuntimeError('never found block invoke')

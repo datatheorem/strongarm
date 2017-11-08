@@ -324,7 +324,7 @@ class ObjcFunctionAnalyzer(object):
         return reg_name
 
     def determine_register_contents(self, desired_reg, start_index):
-        # type: (Text, int) -> int
+        # type: (Text, int) -> (int, bool)
         """Analyze instructions backwards from start_index to find data in reg
         This function will read all instructions until it gathers all data and assignments necessary to determine
         value of desired_reg.
@@ -341,7 +341,12 @@ class ObjcFunctionAnalyzer(object):
             start_index: the instruction index at which desired_reg's value should be found
 
         Returns:
-              An int representing the contents of the register
+            A tuple of the register value and a bool.
+            If the bool is True, the contents of the requested register value depend on
+            a function argument. The index of this function argument (where 0 is the first argument passed to
+             the function) is stored in the first field of the return.
+            If the bool is False, the first field is the resolved value contained in the requested register at the requested
+            index.
 
         """
         bytes_in_instruction = 4
@@ -458,20 +463,27 @@ class ObjcFunctionAnalyzer(object):
 
         # once we've broken out of the above loop, we should have all the values we need to compute the
         # final value of the desired register.
-        # additionally, it should be guaranteed that the unknown values list is empty
+
+        # if we broke out of the above loop and there is still content in unknown_regs,
+        # the desired value must have been an argument to the function
         if len(unknown_regs):
-            DebugUtil.log(self, 'Exited loop with unknown list! instr 0 {} idx {} unknown {} links {} known {}'.format(
-                hex(int(self.instructions[0].address)),
-                start_index,
-                unknown_regs,
-                needed_links,
-                determined_values,
-            ))
-            raise RuntimeError('Data-flow loop exited before all unknowns were marked')
+            # if the above assumption is correct, there should only be 1 reg in unknown_regs
+            if len(unknown_regs) > 1:
+                DebugUtil.log(self, 'Exited loop with unknown list! instr 0 {} idx {} unknown {} links {} known {}'.format(
+                    hex(int(self.instructions[0].address)),
+                    start_index,
+                    unknown_regs,
+                    needed_links,
+                    determined_values,
+                ))
+
+                raise RuntimeError('Data-flow loop exited before all unknowns were marked {}'.format(unknown_regs))
+            arg_index = int(unknown_regs[0])
+            return arg_index, True
 
         # for every register in the waiting list,
         # cross reference all its dependent variables to calculate the final value
-        return self._resolve_register_value_from_data_links(desired_reg, needed_links, determined_values)
+        return self._resolve_register_value_from_data_links(desired_reg, needed_links, determined_values), False
 
     def _resolve_register_value_from_data_links(self, desired_reg, links, resolved_registers):
         # type: (Text, Dict[Text, Tuple[Text, int]], Dict[Text, int]) -> int

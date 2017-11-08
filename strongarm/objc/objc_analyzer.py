@@ -559,24 +559,29 @@ class ObjcBlockAnalyzer(ObjcFunctionAnalyzer):
         Returns:
              Tuple of register containing target Block->invoke, and the index this instruction was found at
         """
-        for idx, instr in enumerate(self.instructions):
-            if instr.mnemonic == 'blr':
-                # check if the register being loaded from contains the Block pointer
-                # TODO(PT): I removed code which more strictly found the block invocation
-                # In the past, this would find the block load from an instruction like:
+        search_index = 0
+        while search_index < len(self.instructions):
+            mnemonic_predicate = ObjcPredicateMnemonicQuery(self.binary, 'blr')
+            operand_predicate = ObjcPredicateOperandQuery(self.binary,
+                                                          operand_index=0,
+                                                          operand_type=ARM64_OP_REG)
+            index_predicate = ObjcPredicateInstructionIndexQuery(self.binary, minimum_index=search_index)
+            found_branch = self.perform_query([mnemonic_predicate, operand_predicate, index_predicate])
+            if found_branch is not None:
+                # in the past, find_block_invoke would find a block load from an instruction like:
                 # ldr x8, [<block containing reg>, 0x10]
                 # then, we look for a block invoke instruction:
                 # blr x8
                 # Now, we just look for a blr to a register that has a dependency on the data originally in the register
                 # containing the block pointer.
                 # this is very likely to work more or less all the time.
-                function_arg_idx, is_function_arg = self.determine_register_contents(
-                    self.initial_block_reg,
-                    idx
-                )
-                if not is_function_arg:
-                    continue
-                if function_arg_idx == self.block_arg_index:
-                    # found desired block invocation!
-                    return instr, idx
-        raise RuntimeError('never found block invoke')
+                # TODO(PT): ObjcPredicateDataDependencyQuery?
+                instruction_index = self.instructions.index(found_branch)
+                reg, is_func_arg = self.determine_register_contents(self.initial_block_reg, instruction_index)
+                if not is_func_arg or reg != self.initial_block_reg:
+                    # not the instruction we're looking for, move search_index past this
+                    search_index = instruction_index + 1
+                return found_branch, instruction_index
+            if not found_branch:
+                # no more satisfactory branches!
+                raise RuntimeError('never found block invoke')

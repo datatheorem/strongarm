@@ -4,7 +4,11 @@ from typing import *
 
 from strongarm.debug_util import DebugUtil
 from objc_instruction import ObjcBranchInstruction
-from objc_query import ObjcPredicateQuery
+from objc_query import ObjcPredicateQuery, \
+    ObjcPredicateMnemonicQuery, \
+    ObjcPredicateOperandQuery, \
+    ObjcPredicateInstructionIndexQuery
+
 from strongarm.macho.macho_binary import MachoBinary
 from strongarm.macho.macho_analyzer import MachoAnalyzer
 
@@ -105,18 +109,33 @@ class ObjcFunctionAnalyzer(object):
         return targets
 
     def perform_query(self, condition_list):
-        # type: (List[ObjcPredicateQuery]) -> bool
+        # type: (List[ObjcPredicateQuery]) -> Optional[CsInsn]
+        """Given a List of predicates to satisfy, return the instruction within the function satisfying the conditions.
+        If no satisfying instruction is found in the function, None will be returned.
+        """
         DebugUtil.log(self, 'searching for query conditions {} in function {}'.format(
             condition_list,
             hex(int(self.instructions[0].address))
         ))
 
-        for instruction in self.instructions:
+        # if we have an instruction index predicate, we can save work by only iterating instructions which can possibly
+        # be satisfied.
+        minimum_index = 0
+        for c in condition_list:
+            if type(c) is ObjcPredicateInstructionIndexQuery:
+                if c.exact_index is not None:
+                    minimum_index = c.exact_index
+                elif c.minimum_index is not None:
+                    minimum_index = c.minimum_index
+        for instruction in self.instructions[minimum_index::]:
+            did_condition_fail = False
             for condition in condition_list:
-                if not condition.satisfied(instruction):
-                    continue
-            return True
-        return False
+                if not condition.satisfied(self, instruction):
+                    did_condition_fail = True
+                    break
+            if not did_condition_fail:
+                return instruction
+        return None
 
     def get_local_branches(self):
         # type: () -> List[ObjcBranchInstruction]

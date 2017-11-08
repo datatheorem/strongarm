@@ -243,28 +243,9 @@ class ObjcFunctionAnalyzer(object):
                     regs_holding_value.remove(dst)
         return regs_holding_value
 
-    # TODO(PT): deprecate & replace with next_branch_after_instruction_index
-    def next_blr_to_reg(self, reg, start_index):
-        # type: (Text, int) -> Optional[CsInsn]
-        """
-        Search for the next 'blr' instruction to a target register, starting from the instruction at start_index
-        :param reg: Register whose 'branch to' instruction should be found
-        :param start_index: Instruction index to begin search at
-        :return: Index of next 'blr' instruction to reg
-        """
-        index = start_index
-        for instr in self.instructions[start_index::]:
-            if instr.mnemonic == 'blr':
-                dst = instr.operands[0]
-                if instr.reg_name(dst.value.reg) == reg:
-                    return instr
-            index += 1
-        return None
-
-    # TODO(PT): rename find_next_branch
     # TODO(PT): this should return the branch and the instruction index for caller convenience
     def next_branch_after_instruction_index(self, start_index):
-        # type: (int) -> ObjcBranchInstruction
+        # type: (int) -> Optional[ObjcBranchInstruction]
         for idx, instr in enumerate(self.instructions[start_index::]):
             if ObjcBranchInstruction.is_branch_instruction(instr):
                 # found next branch!

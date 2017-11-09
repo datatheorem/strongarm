@@ -108,3 +108,67 @@ So, to map `__stubs` to symbol names:
   external symbol table.
 * Read symbol names from string table using string table index from symbol structure
 
+##### Possible Functionality
+
+Imagine you have a set of assembly instructions which represent a function. 
+To analyze this function, you would iterate these instructions one-by-one. 
+
+However, one class of instructions (branches) can actually redirect where the next  instruction should be executed from.
+This ability to redirect code execution splits the function into blocks called basic blocks.
+
+Each basic block is the destination of some branch instruction, and each basic block ends in its own branch instruction.
+This even applies for the last basic block in a function, which would end in `ret`:
+`ret`, internally, would really do something like `bx lr`, which branches back to the instruction after the one which
+initiated the function call.
+
+There a few boundaries which splits code into basic blocks:
+
+At a branch instruction, the instruction immediately following the branch is the start of a new basic block. 
+The branch instruction also marks the end of its basic block. This also applies to `ret`.
+
+Additionally, whatever destination is targeted by the branch is the start of a basic block. By definition, the start
+and end of functions are basic block boundaries.
+
+Branches are split into two classes: unconditional and conditional. 
+
+Unconditional branches will jump to their
+destination address no matter what, once the branch instruction is executed. A branch instruction might look like:
+```
+0x1000066ee    b 0x100008800
+```
+where `b` is a mnemonic for `branch`.
+
+Conditional branches will jump to their destination address, but only if a bit in the status register is set.
+The bit in the status register which is checked depends on the specific mnemonic used. For example, a function
+could check if two numbers were equal, then jump to another basic block if so:
+```
+0x100004400    cmp x0, x1
+0x100004404    b.eq #0x100008800
+0x100004408    mov x0, #3
+0x10000440c    mov x0, #5
+```
+
+In an assembly function, if there is an instruction with a conditional branch such as `cbz` ('compare and branch if 
+zero-flag is set), we cannot statically determine which of the two possible basic-block destinations. 
+
+Theoretically it would be possible to statically determine code paths for runtime conditions we're interested in,
+but I don't think this is a good thing to invest time in right now.
+
+Again: when we see a conditional branch instruction, the test will either fail or succeed. As a result, one of
+two basic blocks will be executed: if the test failed, the basic block directly following the branch instruction will
+be run. If the test succeeded, the basic block at the branch destination will be run. 
+
+And, we don't know whether a given test will fail or succeed.
+
+Therefore, we can imagine that every test has a 50/50 chance of passing. To put this in more accurate terms, there are
+two possible code paths that will be executed, and we can say that 50% of existing code paths reach the first code 
+path, and 50% reach the second code path.
+
+Chaining this with other conditionals, we could identify some bad code, look at the conditional branches required to
+pass for its basic block to be executed, and say that it has a 12.5% of being hit.
+
+Is this useful? Would we ever want to report 'code run probability' in a finding? 
+
+i.e. 'there exists a code path 
+where an SSL certificate is accepted without validation which is run in 25% of all code paths.'
+

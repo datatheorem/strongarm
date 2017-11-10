@@ -187,6 +187,10 @@ This means, if we like, we can see which selector and class refs are being loade
 In turn, this means that we can actually model object allocations, ivar assignments, property set/gets, 
 what objects are being returned by methods, etc. 
 
+In addition to seeing what objects are returned by methods, we can see what immediates are returned by methods too.
+In the case of multiple code paths, we can return a List of all possible return values, as well as their 
+'code coverage percent', i.e. the percent of total code paths within the function that return a given return value.
+
 ### More cross-ref magic
 
 Currently, you can get a List of implementations for a given selector. There's no reason we can't expand this,
@@ -213,5 +217,29 @@ and reads instructions in reverse-sequential order to determine register content
 Once we have basic blocks parsed, we could have `determine_register_contents_control_flow`, which will 
 read register contents but respect basic blocks. How could we specify which code paths to take?
 
+Check if critical validation delegates have really short implementations?
 
+Again, depending on how far we go with tracking object references, we could look at `-didReceiveMemoryWarning`
+implementations and see how much resources are being freed. We could do similar behavior with other system-wide
+event delegates. Maybe the app has a camera view that doesn't get paused when app gets a telephony notification, 
+or something.
 
+I still like the idea of looking for high entropy strings in `sections[__cstring]`. Would have to fiddle with 
+thresholds, but I think it could be useful. Could even just do regex checks if gammaray doesn't already (does it?)
+
+We can see all protocols any class conforms to, along with the class hierarchy. Objc leaves lots of runtime data
+in the MachO.
+
+We can look if an app passes `nil` to an `error:` out-parameter, or `nil` to a completion block. This could allow us
+to create some interesting checks.
+
+On the same thread, we could even look at any system API accessed, and see what arguments are being passed in every
+invocation of a given signature. This could be seperated from a single `ObjcFunctionAnalyzer`.
+
+For example, we could take the whole binary, and call 
+`get_invocation_arguments('NSURL', 'dataTaskWithURL:completionHandler:)`,
+which would return a List like:
+```
+('https://google.com', 0x100008800),
+('http://my_unsafe_site.com', nil),
+```

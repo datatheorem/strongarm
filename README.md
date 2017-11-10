@@ -144,10 +144,12 @@ Conditional branches will jump to their destination address, but only if a bit i
 The bit in the status register which is checked depends on the specific mnemonic used. For example, a function
 could check if two numbers were equal, then jump to another basic block if so:
 ```
-0x100004400    cmp x0, x1
-0x100004404    b.eq #0x100008800
-0x100004408    mov x0, #3
-0x10000440c    mov x0, #5
+0x100004400    cmp x0, x1           <-- compare two registers for equality
+0x100004404    b.eq #0x100004410    <-- pick a basic block based on result of comparison
+0x100004408    mov x0, #3           <-- basic block 1, executed if branch failed
+0x10000440c    b 0x100004414        <-- go to end of loop
+0x100004410    mov x0, #5           <-- basic block 2, executed if branch passed 
+0x100004414    ....                 <-- basic block 3, executed after either basic block
 ```
 
 ### Yeah, so what?

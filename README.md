@@ -108,7 +108,7 @@ So, to map `__stubs` to symbol names:
   external symbol table.
 * Read symbol names from string table using string table index from symbol structure
 
-##### Possible Functionality
+### Branches and basic blocks
 
 Imagine you have a set of assembly instructions which represent a function. 
 
@@ -150,8 +150,11 @@ could check if two numbers were equal, then jump to another basic block if so:
 0x10000440c    mov x0, #5
 ```
 
+### Yeah, so what?
+
 In an assembly function, if there is an instruction with a conditional branch such as `cbz` ('compare and branch if 
-zero-flag is set), we cannot statically determine which of the two possible basic-block destinations. 
+zero-flag is set), we cannot statically determine which of the two possible basic-block destinations will be chosen
+at runtime. 
 
 Theoretically it would be possible to statically determine code paths for some runtime conditions we're interested in,
 but I don't think this is a good thing to invest time in right now.
@@ -169,8 +172,46 @@ existing code paths reach the first code path, and 50% reach the second code pat
 Chaining this with other conditionals, we could identify some bad code, look at the conditional branches required to
 pass for its basic block to be executed, and say that 12.5% of code paths hit this insecure code.
 
-Is this useful? Would we ever want to report 'code run probability' in a finding? 
+Is this useful? Would we ever want to report 'unsafe code path coverage' in a finding? 
 
 i.e. 'there exists a code path 
-where an SSL certificate is accepted without validation which is run in 25% of all code paths.'
+where an SSL certificate is accepted without validation which is run in 25% of all code paths of the delegate method.
+Here is the address and basic block of code where this happens, and the address and instructions for every test that
+needs to pass at runtime for this to happen.'
+
+### Taking dataflow tracking further
+
+Thanks to strongarm's data-flow tracking, we can pretty accurately see any address being referenced in code.
+This means, if we like, we can see which selector and class refs are being loaded and passed to objc_msgSend.
+
+In turn, this means that we can actually model object allocations, ivar assignments, property set/gets, 
+what objects are being returned by methods, etc. 
+
+### More cross-ref magic
+
+Currently, you can get a List of implementations for a given selector. There's no reason we can't expand this,
+and let the client also specify the desired class.
+
+You could have an API where you specify the exact signature you're interested in, and strongarm will give you
+an `ObjcFunctionAnalyzer` for it if it's found.
+
+### One-off ideas
+
+We could see exactly which APIs are being accessed (`imported_functions`) - we could change that API so we can
+query imported classes as well. Could report when an unsafe/deprecated API is used. "In function `-[ClassSignature
+methodSignature]`, `UIAlertView` is created, which was deprecated in iOS x.x. Update to supported APIs."
+
+
+Port 'privacy sensitive APIs' check from interject (what does that do?)
+
+If we implement the described idea for expanding dataflow tracking to see every object instantiation/associated
+method calls, we can see exactly what filesystem paths are hit by the app. Maybe some FS paths are insecure/shared by
+apps? Ask Alban. Could also see keychain access maybe. See when app spawns/listens to local web server?
+
+Could have two data flow routines: `determine_register_contents_basic`, which is a bootstrap to mark basic blocks, 
+and reads instructions in reverse-sequential order to determine register contents (which ignores control flow).
+Once we have basic blocks parsed, we could have `determine_register_contents_control_flow`, which will 
+read register contents but respect basic blocks. How could we specify which code paths to take?
+
+
 

@@ -21,6 +21,8 @@ Components
     - identify Objective-C blocks, their call locations,
     arguments, etc
     - check for calls to specific Objective-C selectors and their call locations
+    - break functions into basic blocks
+    - determine register contents at an arbitrary instruction index
     
 Usage
 --------------
@@ -147,7 +149,7 @@ could check if two numbers were equal, then jump to another basic block if so:
 0x100004400    cmp x0, x1           <-- compare two registers for equality
 0x100004404    b.eq #0x100004410    <-- pick a basic block based on result of comparison
 0x100004408    mov x0, #3           <-- basic block 1, executed if branch failed
-0x10000440c    b 0x100004414        <-- go to end of loop
+0x10000440c    b 0x100004414        <-- continue past comparison blocks
 0x100004410    mov x0, #5           <-- basic block 2, executed if branch passed 
 0x100004414    ....                 <-- basic block 3, executed after either basic block
 ```
@@ -245,3 +247,97 @@ which would return a List like:
 ('https://google.com', 0x100008800),
 ('http://my_unsafe_site.com', nil),
 ```
+
+### Rewrite of Data Dependency to be more efficient for analyzing entire binaries
+
+todo - while writing this, I realized dataflow analysis might do the wrong thing with sub instruction, because
+it always just takes the immediate as a signed offset, so the sign would be wrong. Think about if this happens with
+any other instructions?
+
+todo - make data dependency respect basic blocks! 
+
+### Dataflow Analysis? More about that!
+
+Currently, the API for performing dataflow analysis is reachable through `ObjcFunctionAnalyzer.`
+`determine_register_contents(desired_reg, start_index)`. The algorithm is split into a few main tasks:
+
+1) Search the instructions in the function up to start_index, marking every register which contains some piece of data
+which is eventually combined into the value of `desired_reg`. 
+
+All of these register's values must be determined to determine the final value of `desired_reg`. This means that we also
+need to determine the value of every one of these registers before we can calculate the final value of `desired_reg`.
+
+Because of this, work expands:
+
+2) In addition, we must also mark any register which has data needed by any of the registers which 
+`desired_reg` needs to be resolved. 
+
+When we do find an immediate value for a register, store the register along with its value. 
+
+An immediate value for a register looks like this:
+```
+0x1000044cc    ldr x16, #0xdeadbeef
+```
+If we see a register depending on another, store that the register has a 'data dependency' for the other register.
+A register depending on another register for its value looks like this:
+```
+0x1000044cc    adrp x3, [x5 #0xdeadbeef]
+```
+Here, before we can say what's in `x3`, we need to know what's in `x5`, and then we know to offset `x5`'s value by
+`0xdeadbeef` to get `x3`'s value at this instruction. Thus, a data dependency can be stored as `(x5, 0xdeadbeef)`
+
+Now that we know the chain of all registers that need known values to compute `desired_reg`, we need to resolve
+that whole chain.
+
+3) For every register in the dependency chain, use the rest of the chain to resolve its value. 
+Do this recursively until `desired_reg` has been resolved.
+
+### Make it better?
+
+todo - even only analyze a func for the first time when it's requested, not the whole binary at once
+
+Right now, you have to make a call to `determine_register_contents` each time you want to find the contents of any
+register any time, and every time it goes through the ordeal of the above. Steps 1 and 2 are combined into an O(n) loop
+over the instruction count of the function, and step 3 is O(n^2) over the size of the dependency chain.
+
+If we want strongarm to be able to do lots of on-the-fly analysis over a whole binary, this is just not feasible.
+Luckily, we can vastly improve the overall speed of binary analysis if we eat the cost of dataflow analysis upfront:
+
+The first time we're asked to analyze a register in a function, do this:
+
+Unlike `ObjcFunctionAnalyzer.determine_register_contents()` which resolves backwards, we should just read the function
+sequentially and record the register state at every instruction index. This is kind of similar to actually running
+the code. 
+
+We can use basic dataflow, `ObjcFunctionAnalyzer.determine_register_contents`, to find basic block boundaries.
+Then, we can find register values while respecting basic blocks! This means that for any instruction index in the 
+function, we can report the correct value for any client-chosen register based on any client-chosen code path!
+
+This is an inefficient description that we can improve, but to provide a model:
+Store a List the same size as the function instruction list. 
+At each index, have a map of register names, r0 to r30, including pc, to their immediate value at index (or unassigned). 
+In the far future, this map could even include 
+the stack pointer.
+
+Wow, I guess what I'm describing here is an arm64 interpreter which saves machine state snapshots at every instruction
+in the binary.
+
+The above could also only happen once for every function, and would only be done on a function the first time a
+register value lookup for that function is requested.
+
+Using the cross ref'ing of classrefs and selrefs, we can actually do higher-level interpretation of code, and track
+object lifecycles/states. 
+We can have a check to if a method is called on a specific instance of an object, if an
+ivar value ever equals a certain value, if certain objects are created, if classes/methods are accessed, introspect 
+stuff about an object at certain points in code, whatever we want. 
+Lots of cool possibilities in this space.
+
+The more words I put into this document, the more I realize strongarm is either a strong static analysis tool, or
+an iOS simulator. 
+It's hard to argue, with the above scheme, that we are not interpreting assembly, or simulating the 
+CPU with extra steps. 
+Kind of crazy, I don't know where this could go. If it gets advanced enough, we could even port 'dynamic' checks?
+No idea. 
+
+I'd really really like some input here, there's so many places we could take this but I think I need someone to tell
+me what's feasible/valuable and what isn't.

@@ -341,3 +341,12 @@ No idea.
 
 I'd really really like some input here, there's so many places we could take this but I think I need someone to tell
 me what's feasible/valuable and what isn't.
+
+Things like this from aster can totally be ported to strongarm:
+```python
+class ClassSignatureFilter(AndroguardCodeFilter):
+    """
+    Find a class whose name matches a specific classname or extends a mentioned superclass or implements a list of
+        interfaces or has a specific method
+    """
+```

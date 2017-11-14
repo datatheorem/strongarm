@@ -28,11 +28,12 @@ class MachoAnalyzer(object):
         self.selector_names_to_imps = None
         self._selector_name_pointers_to_imps = None
 
-        self.imported_functions = None
         self._contains_objc = False
 
         self.crossref_helper = MachoStringTableHelper(bin)
-        self.imported_functions = self.crossref_helper.imported_symbols
+        self.imported_symbols = self.crossref_helper.imported_symbols
+        self.exported_symbols = self.crossref_helper.exported_symbols
+
         self.imp_stubs = MachoImpStubsParser(bin, self.cs).imp_stubs
 
         self.parse_static_objc_runtime_info()

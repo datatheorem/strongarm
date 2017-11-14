@@ -10,7 +10,7 @@ from strongarm.macho.macho_binary import MachoBinary
 
 
 class TestMachoAnalyzer(unittest.TestCase):
-    FAT_PATH = os.path.join(os.path.dirname(__file__), 'bin', 'StrongarmTarget')
+    FAT_PATH = os.path.join(os.path.dirname(__file__), 'bin', 'StrongarmControlFlowTarget')
 
     def setUp(self):
         parser = MachoParser(TestMachoAnalyzer.FAT_PATH)
@@ -38,7 +38,7 @@ class TestMachoAnalyzer(unittest.TestCase):
         start, end = self.analyzer.get_function_address_range(start_addr)
         self.assertEqual(end, correct_end_addr)
 
-    def test_parse_imported_symbols(self):
+    def test_find_imported_symbols(self):
         correct_imported_symbols = ['_NSLog',
                                     '_NSStringFromCGRect',
                                     '_NSStringFromClass',
@@ -66,10 +66,21 @@ class TestMachoAnalyzer(unittest.TestCase):
                                     '_rand',
                                     'dyld_stub_binder'
                                     ]
-        found_imported_symbols = self.analyzer.imported_functions
+        found_imported_symbols = self.analyzer.imported_symbols
         # we don't want the test to fail if the arrays contain the same elements but in a different order
         # so, sort the arrays before comparing them
         self.assertEqual(sorted(correct_imported_symbols), sorted(found_imported_symbols))
+
+    def test_find_exported_symbols(self):
+        # TODO(PT): figure out how to export symbols ourselves so we can write a better test for this
+        # simply defining a function in C code does not work, and simply delcaring an ObjC class does not
+        # automatically export it either. We should try making a framework, a hunch says they'd have lots of
+        # exported symbols :}
+        correct_exported_symbols = ['__mh_execute_header']
+        found_exported_symbols = self.analyzer.exported_symbols
+        # we don't want the test to fail if the arrays contain the same elements but in a different order
+        # so, sort the arrays before comparing them
+        self.assertEqual(sorted(correct_exported_symbols), sorted(found_exported_symbols))
 
     def test_cached_analyzer(self):
         # there should only be one MachoAnalyzer for a given MachoBinary

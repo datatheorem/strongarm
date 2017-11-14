@@ -39,9 +39,7 @@ class TestMachoAnalyzer(unittest.TestCase):
         self.assertEqual(end, correct_end_addr)
 
     def test_parse_imported_symbols(self):
-        correct_imported_symbols = ['radr://5614542',
-                                    '__mh_execute_header',
-                                    '_NSLog',
+        correct_imported_symbols = ['_NSLog',
                                     '_NSStringFromCGRect',
                                     '_NSStringFromClass',
                                     '_OBJC_CLASS_$_NSURLCredential',

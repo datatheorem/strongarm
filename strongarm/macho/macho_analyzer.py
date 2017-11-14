@@ -71,12 +71,15 @@ class MachoAnalyzer(object):
             A list of pointers containing the virtual addresses of each pointer in this section
 
         """
+        section_pointers = []
+        if '__la_symbol_ptr' not in self.binary.sections:
+            return section_pointers
+
         lazy_sym_section = self.binary.sections['__la_symbol_ptr']
         # __la_symbol_ptr is just an array of pointers
         # the number of pointers is the size, in bytes, of the section, divided by a 64b pointer size
         sym_ptr_count = lazy_sym_section.cmd.size / sizeof(c_void_p)
 
-        section_pointers = []
         # this section's data starts at the file offset field
         section_data_ptr = lazy_sym_section.cmd.offset
 
@@ -107,6 +110,8 @@ class MachoAnalyzer(object):
             Map of __la_symbol_ptr pointers to the strings corresponding to the name of each symbol
         """
         imported_symbol_map = {}
+        if '__la_symbol_ptr' not in self.binary.sections:
+            return imported_symbol_map
 
         # the reserved1 field of the lazy symbol section header holds the starting index of this table's entries,
         # within the indirect symbol table
@@ -282,10 +287,13 @@ class MachoAnalyzer(object):
         # type: () -> List[int]
         """Read pointers in __objc_classlist into list
         """
+        classlist_entries = []
+        if '__objc_classlist' not in self.binary.sections:
+            return classlist_entries
+
         classlist_data = self.binary.sections['__objc_classlist'].content
         classlist_size = len(classlist_data) / sizeof(c_uint64)
 
-        classlist_entries = []
         classlist_off = 0
         for i in range(classlist_size):
             data_end = classlist_off + sizeof(c_uint64)
@@ -458,6 +466,10 @@ class MachoAnalyzer(object):
 
     def _create_selref_to_name_map(self):
         self._selrefs = {}
+        self._selref_ptr_to_imp_map = {}
+
+        if '__objc_selrefs' not in self.binary.sections:
+            return
 
         selref_sect = self.binary.sections['__objc_selrefs']
         entry_count = selref_sect.cmd.size / sizeof(c_uint64)
@@ -472,7 +484,6 @@ class MachoAnalyzer(object):
         # we now have an array of tuples of (selref ptr, string literal ptr)
         # self._selector_name_pointers_to_imps contains a map of {string literal ptr, IMP}
         # create mapping from selref ptr to IMP
-        self._selref_ptr_to_imp_map = {}
         for selref_ptr, string_ptr in self._selrefs.items():
             try:
                 imp_ptr = self._selector_name_pointers_to_imps[string_ptr]

@@ -1,5 +1,6 @@
 from typing import List, Text, Optional, Dict
 from macho_binary import MachoBinary
+from macho_definitions import NLIST_NTYPE, NTYPE_VALUES
 
 
 class MachoStringTableEntry(object):
@@ -20,7 +21,9 @@ class MachoStringTableHelper(object):
         # type: (MachoBinary) -> None
         self.binary = binary
         self.string_table_entries = self._process_string_table_entries()
-        self._imported_sym_list = None
+        self.imported_symbols = None
+        self.exported_symbols = None
+        self.parse_sym_lists()
 
     def _process_string_table_entries(self):
         # type: () -> Dict[int, MachoStringTableEntry]
@@ -72,25 +75,41 @@ class MachoStringTableHelper(object):
             return self.string_table_entries[start_idx]
         return None
 
-    def imported_symbol_list(self):
-        # type: () -> List[Text]
-        """Read symbol names referenced by the symtab command from the string table.
-
-        Returns:
-            List of strings representing symbols in binary's string table
+    def parse_sym_lists(self):
+        # type: () -> None
+        """Read imported and exported symbol names referenced by symtab from the string table.
         """
-        if self._imported_sym_list:
-            return self._imported_sym_list
+
+        self.imported_symbols = []
+        self.exported_symbols = []
 
         symtab = self.binary.symtab_contents
-        symbol_names = []
         for idx, sym in enumerate(symtab):
             strtab_idx = sym.n_un.n_strx
             string_table_entry = self.string_table_entry_for_strtab_index(strtab_idx)
             if not string_table_entry:
                 continue
             symbol_str = string_table_entry.full_string
-            symbol_names.append(symbol_str)
 
-        self._imported_sym_list = symbol_names
-        return self._imported_sym_list
+            is_shared_symbol = int(sym.n_type & NLIST_NTYPE.N_EXT)
+            symbol_type = sym.n_type & NLIST_NTYPE.N_TYPE
+
+            if symbol_type == NTYPE_VALUES.N_UNDF:
+                # symbols marked (imported, shared) are actually duplicated as exported symbols later in the symbol
+                # table. I don't know why this is.
+                # Let's just ignore (imported, shared) symbols. If they do contain duplicate entries as exported
+                # symbols later, they'll be caught then.
+                if not is_shared_symbol:
+                    continue
+                self.imported_symbols.append(symbol_str)
+            elif symbol_type == NTYPE_VALUES.N_SECT:
+                self.exported_symbols.append(symbol_str)
+            elif symbol_type == NTYPE_VALUES.N_ABS:
+                raise NotImplementedError()
+            elif symbol_type == NTYPE_VALUES.N_PBUD:
+                raise NotImplementedError()
+            elif symbol_type == NTYPE_VALUES.N_INDR:
+                raise NotImplementedError()
+
+
+

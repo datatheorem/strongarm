@@ -188,6 +188,21 @@ class MachoFatArch(Structure):
     ]
 
 
+class NLIST_NTYPE(IntEnum):
+    N_STAB = 0xe0 # symbollic debugging entry
+    N_PEXT = 0x10 # private external symbol bit
+    N_TYPE = 0x0e # mask for type bits
+    N_EXT = 0x01 # external symbol bit
+
+
+class NTYPE_VALUES(IntEnum):
+    N_UNDF = 0x0 # undefined, n_sect == NO_SECT
+    N_ABS = 0x2 # absolute, n_sect == NO_SECT
+    N_SECT = 0xe # defined in section n_sect
+    N_PBUD = 0xc # prebound undefined (defined in a dylib)
+    N_INDR = 0xa # indirect
+
+
 class HEADER_FLAGS(IntEnum):
     NOUNDEFS = 0x1
     INCRLINK = 0x2

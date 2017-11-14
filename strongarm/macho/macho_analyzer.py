@@ -32,7 +32,7 @@ class MachoAnalyzer(object):
         self._contains_objc = False
 
         self.crossref_helper = MachoStringTableHelper(bin)
-        self.imported_functions = self.crossref_helper.imported_symbol_list()
+        self.imported_functions = self.crossref_helper.imported_symbols
         self.imp_stubs = MachoImpStubsParser(bin, self.cs).imp_stubs
 
         self.parse_static_objc_runtime_info()

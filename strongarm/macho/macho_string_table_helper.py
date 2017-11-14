@@ -107,6 +107,13 @@ class MachoStringTableHelper(object):
             elif symbol_type == NTYPE_VALUES.N_ABS:
                 raise NotImplementedError()
             elif symbol_type == NTYPE_VALUES.N_PBUD:
+                # this symtab entry is in every Mach-O.
+                # I've tried to figure out why online, but not much luck.
+                # There's some sort of bug which manifests when the string table is empty? So the solution is to always
+                # include a dummy string. The dummy string they used was the actual radar of the bug!
+                # add an exclusion for this entry
+                if symbol_str == 'radr://5614542':
+                    continue
                 raise NotImplementedError()
             elif symbol_type == NTYPE_VALUES.N_INDR:
                 raise NotImplementedError()

@@ -4,7 +4,6 @@ from capstone import Cs, CsInsn, CS_ARCH_ARM64, CS_MODE_ARM
 from typing import Text, List, Dict, Optional
 
 from strongarm.debug_util import DebugUtil
-from strongarm.decorators import memoized
 from strongarm.macho.macho_binary import MachoBinary
 from strongarm.macho.macho_imp_stubs import MachoImpStubsParser
 from strongarm.macho.macho_definitions import ObjcClass, ObjcMethod, ObjcMethodList, ObjcData
@@ -23,6 +22,12 @@ class MachoAnalyzer(object):
         self.binary = bin
         self.cs = Cs(CS_ARCH_ARM64, CS_MODE_ARM)
         self.cs.detail = True
+
+        # data cached by various methods
+        self._lazy_symbol_entry_pointers = None
+        self._imported_symbol_map = None
+        self._external_branch_destinations_to_symbol_names = None
+        self._external_symbol_names_to_branch_destinations = None
 
         self._selrefs = None
         self.selector_names_to_imps = None
@@ -54,7 +59,6 @@ class MachoAnalyzer(object):
             return cls.active_analyzer_map[bin]
         return MachoAnalyzer(bin)
 
-    @memoized
     def _parse_la_symbol_ptr_list(self):
         # type: () -> List[int]
         """Parse lazy symbol section into a list of pointers
@@ -72,6 +76,9 @@ class MachoAnalyzer(object):
             A list of pointers containing the virtual addresses of each pointer in this section
 
         """
+        if self._lazy_symbol_entry_pointers:
+            return self._lazy_symbol_entry_pointers
+
         section_pointers = []
         if '__la_symbol_ptr' not in self.binary.sections:
             return section_pointers
@@ -92,10 +99,11 @@ class MachoAnalyzer(object):
             section_pointers.append(virt_base + section_data_ptr)
             # go to next pointer in list
             section_data_ptr += sizeof(c_void_p)
+
+        self._lazy_symbol_entry_pointers = section_pointers
         return section_pointers
 
     @property
-    @memoized
     def _la_symbol_ptr_to_symbol_name_map(self):
         # type: () -> Dict[int, Text]
         """Cross-reference Mach-O sections to produce __la_symbol_ptr pointers -> external symbol name map.
@@ -110,6 +118,9 @@ class MachoAnalyzer(object):
         Returns:
             Map of __la_symbol_ptr pointers to the strings corresponding to the name of each symbol
         """
+        if self._imported_symbol_map:
+            return self._imported_symbol_map
+
         imported_symbol_map = {}
         if '__la_symbol_ptr' not in self.binary.sections:
             return imported_symbol_map
@@ -141,14 +152,18 @@ class MachoAnalyzer(object):
             symbol_name = self.crossref_helper.string_table_entry_for_strtab_index(strtab_idx).full_string
             # record this mapping of address to symbol name
             imported_symbol_map[symbol_ptr] = symbol_name
+
+        self._imported_symbol_map = imported_symbol_map
         return imported_symbol_map
 
     @property
-    @memoized
     def external_branch_destinations_to_symbol_names(self):
         # type: () -> Dict[int, Text]
         """Return a Dict of addresses to the external symbols they correspond to
         """
+        if self._external_branch_destinations_to_symbol_names:
+            return self._external_branch_destinations_to_symbol_names
+
         symbol_name_map = {}
         stubs = self.imp_stubs
         la_sym_ptr_name_map = self._la_symbol_ptr_to_symbol_name_map
@@ -156,17 +171,23 @@ class MachoAnalyzer(object):
         for stub in stubs:
             symbol_name = la_sym_ptr_name_map[stub.destination]
             symbol_name_map[stub.address] = symbol_name
+
+        self._external_branch_destinations_to_symbol_names = symbol_name_map
         return symbol_name_map
 
     @property
-    @memoized
     def external_symbol_names_to_branch_destinations(self):
         # type: () -> Dict[Text, int]
         """Return a Dict of external symbol names to the addresses they'll be called at
         """
+        if self._external_symbol_names_to_branch_destinations:
+            return self._external_symbol_names_to_branch_destinations
+
         call_address_map = {}
         for key, value in self.external_branch_destinations_to_symbol_names.iteritems():
             call_address_map[value] = key
+
+        self._external_symbol_names_to_branch_destinations = call_address_map
         return call_address_map
 
     def symbol_name_for_branch_destination(self, branch_address):

@@ -568,7 +568,7 @@ class ObjcBlockAnalyzer(ObjcFunctionAnalyzer):
         """
         search_index = 0
         while search_index < len(self.instructions):
-            mnemonic_predicate = ObjcPredicateMnemonicQuery(self.binary, 'blr')
+            mnemonic_predicate = ObjcPredicateMnemonicQuery(self.binary, allow_mnemonics=['blr'])
             operand_predicate = ObjcPredicateOperandQuery(self.binary,
                                                           operand_index=0,
                                                           operand_type=ARM64_OP_REG)

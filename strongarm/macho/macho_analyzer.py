@@ -431,10 +431,8 @@ class MachoAnalyzer(object):
 
             # TODO(PT): preprocess __objc_methname so we don't have to search for null byte for every string here
             symbol_name = self._get_full_string_from_start_address(method_ent.name)
-            if len(symbol_name) > 512:
-                print('Encountered very long SEL: {}'.format(symbol_name))
-
             methods_data.append((symbol_name, method_ent.name, method_ent.implementation))
+
             method_entry_off += sizeof(ObjcMethod)
         return methods_data
 

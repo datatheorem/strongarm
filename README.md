@@ -205,44 +205,47 @@ an `ObjcFunctionAnalyzer` for it if it's found.
 
 ### One-off ideas
 
-We could see exactly which APIs are being accessed (`imported_functions`) - we could change that API so we can
+* We could see exactly which APIs are being accessed (`imported_functions`) - we could change that API so we can
 query imported classes as well. Could report when an unsafe/deprecated API is used. "In function `-[ClassSignature
 methodSignature]`, `UIAlertView` is created, which was deprecated in iOS x.x. Update to supported APIs."
 
+    - We can also see exactly which private APIs are accessed, and where in the code. We don't even have to hard-code
+    classes to look for, we can just look at the symbol entry and see the path the symbol is referenced from.
+    If the path contains `/System/Library/PrivateFrameworks/` (or similar), we know a private API is being accessed.
+    We could make an App Store Blocker check?
 
-Port 'privacy sensitive APIs' check from interject (what does that do?)
+* Port 'privacy sensitive APIs' check from interject (what does that do?)
 
-If we implement the described idea for expanding dataflow tracking to see every object instantiation/associated
+* If we implement the described idea for expanding dataflow tracking to see every object instantiation/associated
 method calls, we can see exactly what filesystem paths are hit by the app. Maybe some FS paths are insecure/shared by
 apps? Ask Alban. Could also see keychain access maybe. See when app spawns/listens to local web server?
 
-Could have two data flow routines: `determine_register_contents_basic`, which is a bootstrap to mark basic blocks, 
+* Could have two data flow routines: `determine_register_contents_basic`, which is a bootstrap to mark basic blocks, 
 and reads instructions in reverse-sequential order to determine register contents (which ignores control flow).
 Once we have basic blocks parsed, we could have `determine_register_contents_control_flow`, which will 
 read register contents but respect basic blocks. How could we specify which code paths to take?
 
-Check if critical validation delegates have really short implementations?
+* Check if critical validation delegates have really short implementations?
 
-Again, depending on how far we go with tracking object references, we could look at `-didReceiveMemoryWarning`
+* Again, depending on how far we go with tracking object references, we could look at `-didReceiveMemoryWarning`
 implementations and see how much resources are being freed. We could do similar behavior with other system-wide
 event delegates. Maybe the app has a camera view that doesn't get paused when app gets a telephony notification, 
 or something.
 
-I still like the idea of looking for high entropy strings in `sections[__cstring]`. Would have to fiddle with 
+* I still like the idea of looking for high entropy strings in `sections[__cstring]`. Would have to fiddle with 
 thresholds, but I think it could be useful. Could even just do regex checks if gammaray doesn't already (does it?)
 
-We can see all protocols any class conforms to, along with the class hierarchy. Objc leaves lots of runtime data
+* We can see all protocols any class conforms to, along with the class hierarchy. Objc leaves lots of runtime data
 in the MachO.
 
-We can look if an app passes `nil` to an `error:` out-parameter, or `nil` to a completion block. This could allow us
+* We can look if an app passes `nil` to an `error:` out-parameter, or `nil` to a completion block. This could allow us
 to create some interesting checks.
 
-On the same thread, we could even look at any system API accessed, and see what arguments are being passed in every
+On the same note, we could even look at any system API accessed, and see what arguments are being passed in every
 invocation of a given signature. This could be seperated from a single `ObjcFunctionAnalyzer`.
 
 For example, we could take the whole binary, and call 
-`get_invocation_arguments('NSURL', 'dataTaskWithURL:completionHandler:)`,
-which would return a List like:
+`get_invocation_arguments('NSURL', 'dataTaskWithURL:completionHandler:)`, which would return a List like:
 ```
 ('https://google.com', 0x100008800),
 ('http://my_unsafe_site.com', nil),
@@ -264,8 +267,10 @@ Currently, the API for performing dataflow analysis is reachable through `ObjcFu
 1) Search the instructions in the function up to start_index, marking every register which contains some piece of data
 which is eventually combined into the value of `desired_reg`. 
 
-All of these register's values must be determined to determine the final value of `desired_reg`. This means that we also
-need to determine the value of every one of these registers before we can calculate the final value of `desired_reg`.
+All of the integer values in these marked registers must be determined to determine the final value of `desired_reg`. 
+This means that for every register marked by 1), we must repeat 1) with the marked register as `desired_reg`, 
+so we obtain the full dependency tree of registers whose values must be known before the original `desired_reg` can 
+be calculated.
 
 Because of this, work expands:
 
@@ -278,13 +283,15 @@ An immediate value for a register looks like this:
 ```
 0x1000044cc    ldr x16, #0xdeadbeef
 ```
+Thus, a resolved register value might be stored as `x16: 0xdeadbeef`
+
 If we see a register depending on another, store that the register has a 'data dependency' for the other register.
 A register depending on another register for its value looks like this:
 ```
 0x1000044cc    adrp x3, [x5 #0xdeadbeef]
 ```
 Here, before we can say what's in `x3`, we need to know what's in `x5`, and then we know to offset `x5`'s value by
-`0xdeadbeef` to get `x3`'s value at this instruction. Thus, a data dependency can be stored as `(x5, 0xdeadbeef)`
+`0xdeadbeef` to get `x3`'s value at this instruction. Thus, a data dependency can be stored as `x3: (x5, 0xdeadbeef)`
 
 Now that we know the chain of all registers that need known values to compute `desired_reg`, we need to resolve
 that whole chain.
@@ -298,7 +305,7 @@ todo - even only analyze a func for the first time when it's requested, not the 
 
 Right now, you have to make a call to `determine_register_contents` each time you want to find the contents of any
 register any time, and every time it goes through the ordeal of the above. Steps 1 and 2 are combined into an O(n) loop
-over the instruction count of the function, and step 3 is O(n^2) over the size of the dependency chain.
+over the instruction count of the function, and step 3 is O(n^2) over the size of the register dependency chain.
 
 If we want strongarm to be able to do lots of on-the-fly analysis over a whole binary, this is just not feasible.
 Luckily, we can vastly improve the overall speed of binary analysis if we eat the cost of dataflow analysis upfront:
@@ -316,10 +323,9 @@ function, we can report the correct value for any client-chosen register based o
 This is an inefficient description that we can improve, but to provide a model:
 Store a List the same size as the function instruction list. 
 At each index, have a map of register names, r0 to r30, including pc, to their immediate value at index (or unassigned). 
-In the far future, this map could even include 
-the stack pointer.
+In the far future, this map could even include the stack pointer.
 
-Wow, I guess what I'm describing here is an arm64 interpreter which saves machine state snapshots at every instruction
+I guess what I'm describing here is an arm64 interpreter which saves machine state snapshots at every instruction
 in the binary.
 
 The above could also only happen once for every function, and would only be done on a function the first time a
@@ -332,8 +338,8 @@ ivar value ever equals a certain value, if certain objects are created, if class
 stuff about an object at certain points in code, whatever we want. 
 Lots of cool possibilities in this space.
 
-The more words I put into this document, the more I realize strongarm is either a strong static analysis tool, or
-an iOS simulator. 
+If we rewrite dataflow analysis to do this, strongarm could be seen as either a strong static analysis tool, or an
+ARM simulator
 It's hard to argue, with the above scheme, that we are not interpreting assembly, or simulating the 
 CPU with extra steps. 
 Kind of crazy, I don't know where this could go. If it gets advanced enough, we could even port 'dynamic' checks?
@@ -350,3 +356,11 @@ class ClassSignatureFilter(AndroguardCodeFilter):
         interfaces or has a specific method
     """
 ```
+
+We need a way to iterate every class's methods, or simply every function entry point. 
+Looking at the ObjC class data in the MachO header is likely a good approach as it gives an easy way to iterate
+each class's selectors, and we'll know exactly which class/SEL is being iterated.
+
+The downside of that is it will miss C functions. However, while analyzing, we can look at branch destinations
+and add them to our function entry list if not already in it (similar to what `ObjcFunctionAnalyzer.can_execute_call()`
+does).

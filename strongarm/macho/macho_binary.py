@@ -38,17 +38,17 @@ class MachoBinary(object):
         self._offset_within_fat = offset_within_fat
 
         # generic Mach-O header info
-        self.is_64bit = False
-        self.cpu_type = CPU_TYPE.UNKNOWN
-        self.is_swap = False
+        self.is_64bit = None
+        self.is_swap = None
+        self.cpu_type = None
 
         # Mach-O header data
         self.header = None
-        self.header_flags = []
+        self.header_flags = None
 
         # segment and section commands from Mach-O header
-        self.segment_commands = {}
-        self.sections = {}
+        self.segment_commands = None
+        self.sections = None
         # also store specific interesting sections which are useful to us
         self.dysymtab = None
         self.symtab = None
@@ -139,9 +139,10 @@ class MachoBinary(object):
         # type: () -> None
         """Interpret binary's header bitset and populate self.header_flags
         """
+        self.header_flags = []
+
         flags_bitset = self.header.flags
-        flag_values = list(map(int, HEADER_FLAGS))
-        for mask in flag_values:
+        for mask in [x.value for x in HEADER_FLAGS]:
             # is this mask set in the binary's flags?
             if (flags_bitset & mask) == mask:
                 # mask is present in bitset, add to list of included flags
@@ -156,6 +157,8 @@ class MachoBinary(object):
             segment_count: Number of segments to parse, as declared by the header's ncmds field
 
         """
+        self.segment_commands = {}
+        self.sections = {}
         for i in range(segment_count):
             load_command_bytes = self.get_bytes(offset, sizeof(MachOLoadCommand))
             load_command = MachOLoadCommand.from_buffer(bytearray(load_command_bytes))

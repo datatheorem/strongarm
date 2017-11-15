@@ -36,7 +36,7 @@ class MachoImpStubsParser(object):
     def __init__(self, binary, capstone_disasm):
         # type: (MachoBinary, Cs) -> None
         self.binary = binary
-        self.cs = capstone_disasm
+        self._cs = capstone_disasm
         self.imp_stubs = self._parse_all_stubs()
 
     @staticmethod
@@ -89,7 +89,7 @@ class MachoImpStubsParser(object):
         stubs_section = self.binary.sections['__stubs']
 
         func_str = self.binary.get_bytes(stubs_section.cmd.offset, stubs_section.cmd.size)
-        instructions = [instr for instr in self.cs.disasm(
+        instructions = [instr for instr in self._cs.disasm(
             func_str,
             self.binary.get_virtual_base() + stubs_section.cmd.offset
         )]

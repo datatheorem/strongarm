@@ -32,12 +32,12 @@ class MachoParser(object):
 
     def __init__(self, filename):
         # type: (Text) -> MachoParser
-        self.is_swapped = False
         self.filename = filename
 
         self.header = None
-
+        self.is_swapped = None
         self.slices = []
+
         self.parse()
 
     def parse(self):

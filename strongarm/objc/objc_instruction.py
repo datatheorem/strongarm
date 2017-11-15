@@ -10,7 +10,7 @@ class ObjcInstruction(object):
         self.raw_instr = instruction
         self.address = self.raw_instr.address
 
-        self.is_msgSend_call = False
+        self.is_msgSend_call = None
         self.symbol = None
 
 
@@ -82,6 +82,8 @@ class ObjcUnconditionalBranchInstruction(ObjcBranchInstruction):
             if self.symbol == '_objc_msgSend':
                 self.is_msgSend_call = True
                 self._patch_msgSend_destination(function_analyzer)
+            else:
+                self.is_msgSend_call = False
 
         self.is_external_c_call = self.symbol is not None
 

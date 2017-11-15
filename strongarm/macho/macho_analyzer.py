@@ -33,16 +33,14 @@ class MachoAnalyzer(object):
         self.selector_names_to_imps = None
         self._selector_name_pointers_to_imps = None
 
-        self._contains_objc = False
-
         self.crossref_helper = MachoStringTableHelper(bin)
         self.imported_symbols = self.crossref_helper.imported_symbols
         self.exported_symbols = self.crossref_helper.exported_symbols
 
         self.imp_stubs = MachoImpStubsParser(bin, self.cs).imp_stubs
 
+        self._contains_objc = None
         self.parse_static_objc_runtime_info()
-
         if self._contains_objc:
             self._create_selref_to_name_map()
 

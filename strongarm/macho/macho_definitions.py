@@ -1,5 +1,5 @@
 import struct
-from ctypes import *
+from ctypes import Union, Structure, c_uint8, c_uint16, c_uint32, c_uint64, c_int32, c_char, c_int64
 from enum import IntEnum
 
 

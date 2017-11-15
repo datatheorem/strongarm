@@ -1,6 +1,6 @@
 from ctypes import c_uint64, sizeof, c_void_p
 
-from capstone import *
+from capstone import Cs, CsInsn, CS_ARCH_ARM64, CS_MODE_ARM
 from typing import Text, List, Dict, Optional
 
 from strongarm.debug_util import DebugUtil

@@ -1,19 +1,23 @@
 from typing import List
 
 from strongarm.debug_util import DebugUtil
-from strongarm.decorators import memoized
-from strongarm.macho.macho_definitions import *
+
+from strongarm.macho.macho_definitions import MachoSection64Raw, MachArch, CPU_TYPE, MachoHeader64, HEADER_FLAGS
+from strongarm.macho.macho_definitions import MachOLoadCommand, MachoSymtabCommand, MachoDysymtabCommand
+from strongarm.macho.macho_definitions import MachoSegmentCommand64, MachoEncryptionInfo64Command, MachoNlist64
+
 from strongarm.macho.macho_load_commands import MachoLoadCommands
+
+from ctypes import c_uint32, sizeof
 
 
 class MachoSection(object):
     def __init__(self, binary, section_command):
-        # type: (MachoSection64Raw) -> None
+        # type: (MachoBinary, MachoSection64Raw) -> None
         self.cmd = section_command
         self.content = binary.get_bytes(section_command.offset, section_command.size)
         self.name = section_command.sectname
         self.address = section_command.addr
-
 
 
 class MachoBinary(object):
@@ -45,7 +49,6 @@ class MachoBinary(object):
         # segment and section commands from Mach-O header
         self.segment_commands = {}
         self.sections = {}
-
         # also store specific interesting sections which are useful to us
         self.dysymtab = None
         self.symtab = None
@@ -86,7 +89,8 @@ class MachoBinary(object):
     @property
     def slice_magic(self):
         # type: () -> None
-        """Read magic number identifier from this Mach-O slice"""
+        """Read magic number identifier from this Mach-O slice
+        """
         return c_uint32.from_buffer(bytearray(self.get_bytes(0, sizeof(c_uint32)))).value
 
     def verify_magic(self):
@@ -133,7 +137,8 @@ class MachoBinary(object):
 
     def _parse_header_flags(self):
         # type: () -> None
-        """Interpret binary's header bitset and populate self.header_flags"""
+        """Interpret binary's header bitset and populate self.header_flags
+        """
         flags_bitset = self.header.flags
         flag_values = list(map(int, HEADER_FLAGS))
         for mask in flag_values:
@@ -312,6 +317,7 @@ class MachoBinary(object):
         return indirect_symtab
 
     def get_content_from_virtual_address(self, virtual_address, size):
+        # type: (int, int) -> str
         binary_address = virtual_address - self.get_virtual_base()
         return self.get_bytes(binary_address, size)
 

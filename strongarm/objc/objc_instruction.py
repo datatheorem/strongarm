@@ -1,4 +1,4 @@
-from capstone import *
+from capstone import CsInsn
 
 from strongarm.macho.macho_analyzer import MachoAnalyzer
 import objc_analyzer

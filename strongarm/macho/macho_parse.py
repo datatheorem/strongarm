@@ -1,5 +1,8 @@
 from strongarm.macho.macho_binary import MachoBinary
-from strongarm.macho.macho_definitions import *
+from strongarm.macho.macho_definitions import MachArch, MachoFatHeader, MachoFatArch, swap32
+
+from ctypes import sizeof, c_uint32
+from typing import Text
 
 
 class ArchitectureNotSupportedError(Exception):

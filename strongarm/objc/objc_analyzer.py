@@ -1,6 +1,6 @@
-from capstone.arm64 import *
+from capstone.arm64 import ARM64_OP_REG, ARM64_OP_IMM, ARM64_OP_MEM
 from capstone import CsInsn
-from typing import *
+from typing import Text, List, Optional, Dict, Tuple
 
 from strongarm.debug_util import DebugUtil
 from objc_instruction import ObjcBranchInstruction

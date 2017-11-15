@@ -402,6 +402,10 @@ def scan_binary(binary):
                 if reachable_function in unscanned_targets + scanned_targets:
                     continue
                 unscanned_targets.append(reachable_function)
+            
+            # this function has been scanned, move from waiting list to complete list
+            unscanned_targets.remove(function)
+            scanned_targets.append(function)
     # once we exit the above loop, we've iterated every Objc method in the binary, as well as any C functions
     # referenced by any Objc method
 ```

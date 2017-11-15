@@ -357,10 +357,50 @@ class ClassSignatureFilter(AndroguardCodeFilter):
     """
 ```
 
+### Finding entry points
+
 We need a way to iterate every class's methods, or simply every function entry point. 
+
 Looking at the ObjC class data in the MachO header is likely a good approach as it gives an easy way to iterate
 each class's selectors, and we'll know exactly which class/SEL is being iterated.
 
 The downside of that is it will miss C functions. However, while analyzing, we can look at branch destinations
 and add them to our function entry list if not already in it (similar to what `ObjcFunctionAnalyzer.can_execute_call()`
 does).
+
+The downside of _that_ is it means we need to iterate the entire binary if we want to have a complete list of all 
+branch destinations before we begin analyzing.
+
+So, here's the approach:
+
+`MachoEntryPoint.get_objc_entry_points()` will return a `List[MachoEntryPoint]` only containing the IMPs
+described by MachO sections. We can then iterate this list and find any other functions/method that weren't caught
+just by looking at ObjC sections:
+```python
+def scan_binary(binary):
+    unscanned_targets = MachoEntryPoint.get_objc_entry_points(binary)
+    scanned_targets = []
+
+    # we're going to incrementally add to unscanned_targets, so loop while it contains anything
+    while len(unscanned_targets):
+        # make copy of list so we can modify it
+        for function in list(unscanned_targets):
+            # ...
+            # do some work here
+            # ...
+            if function.is_c_function:
+                print('C function at {}'.format(hex(function.address)))
+            elif function.is_objc_method:
+                print('-[{} {}] at {}'.format(function.objc_class, function.objc_selector, hex(function.address)))
+            
+            # track anything reachable from this function
+            function_analyzer = ObjcFunctionAnalyzer.get_function_analyzer(binary, function.start_address)
+            functions_reachable_from_here = function_analyzer.call_targets
+            for reachable_function in functions_reachable_from_here:
+                # skip functions that we already know about
+                if reachable_function in unscanned_targets + scanned_targets:
+                    continue
+                unscanned_targets.append(reachable_function)
+    # once we exit the above loop, we've iterated every Objc method in the binary, as well as any C functions
+    # referenced by any Objc method
+```

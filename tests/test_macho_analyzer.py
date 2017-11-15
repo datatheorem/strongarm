@@ -10,7 +10,7 @@ from strongarm.macho.macho_binary import MachoBinary
 
 
 class TestMachoAnalyzer(unittest.TestCase):
-    FAT_PATH = os.path.join(os.path.dirname(__file__), 'bin', 'StrongarmControlFlowTarget')
+    FAT_PATH = os.path.join(os.path.dirname(__file__), 'bin', 'StrongarmTarget')
 
     def setUp(self):
         parser = MachoParser(TestMachoAnalyzer.FAT_PATH)
@@ -90,7 +90,7 @@ class TestMachoAnalyzer(unittest.TestCase):
 
     def test_external_symbol_addr_map(self):
         sym_map = self.analyzer._la_symbol_ptr_to_symbol_name_map
-        imported_syms = self.analyzer.imported_functions
+        imported_syms = self.analyzer.imported_symbols
         # make sure all the symbols listed in imported_symbols are present here
         for sym in sym_map.itervalues():
             self.assertTrue(sym in imported_syms)

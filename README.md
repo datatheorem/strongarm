@@ -369,7 +369,8 @@ and add them to our function entry list if not already in it (similar to what `O
 does).
 
 The downside of _that_ is it means we need to iterate the entire binary if we want to have a complete list of all 
-branch destinations before we begin analyzing.
+branch destinations before we begin analyzing. A better approach is to start off with just looking at the Objc IMPs,
+and expand our search space as we encounter more branch destinations while iterating the binary.
 
 So, here's the approach:
 

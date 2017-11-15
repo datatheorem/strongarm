@@ -33,25 +33,19 @@ class MachoParser(object):
     def __init__(self, filename):
         # type: (Text) -> MachoParser
         self.is_swapped = False
-        self._file = None
+        self.filename = filename
 
         self.header = None
 
         self.slices = []
-        self.parse(filename)
+        self.parse()
 
-    def parse(self, filename):
-        # type: (Text) -> None
+    def parse(self):
+        # type: () -> None
         """Parse a Mach-O or FAT archive represented by file at a given path
         This method will throw an exception if an binary is passed which is malformed or not a
         valid Mach-O or FAT archive
-
-        Args:
-            filename: path to binary to interpret
-
         """
-        self._file = open(filename, 'rb')
-
         if not self.is_magic_supported():
             raise ArchitectureNotSupportedError('armv7 is not supported')
 
@@ -79,7 +73,7 @@ class MachoParser(object):
 
         # MachoBinary constructor will throw an exception if the header can't be parsed
         try:
-            attempt = MachoBinary(self._file, fileoff)
+            attempt = MachoBinary(self.filename, fileoff)
             # if the MachoBinary does not have a header, there was a problem parsing it
             if attempt.header:
                 self.slices.append(attempt)
@@ -193,10 +187,6 @@ class MachoParser(object):
             Byte list representing contents of file at provided address
 
         """
-        self._file.seek(offset)
-        return self._file.read(size)
-
-    def __del__(self):
-        # don't waste this file descriptor!
-        # close open file once the object is destroyed
-        self._file.close()
+        with open(self.filename, 'rb') as binary_file:
+            binary_file.seek(offset)
+            return binary_file.read(size)

@@ -1,4 +1,4 @@
-from typing import List
+from typing import List, Text
 
 from strongarm.debug_util import DebugUtil
 
@@ -31,11 +31,11 @@ class MachoBinary(object):
     ]
     SUPPORTED_MAG = _MAG_64
 
-    def __init__(self, fat_file, offset_within_fat=0):
-        # type: (file, int) -> None
+    def __init__(self, filename, offset_within_fat=0):
+        # type: (Text, int) -> None
         # info about this Mach-O's file representation
-        self._file = fat_file
-        self.offset_within_fat = offset_within_fat
+        self.filename = filename
+        self._offset_within_fat = offset_within_fat
 
         # generic Mach-O header info
         self.is_64bit = False
@@ -70,8 +70,8 @@ class MachoBinary(object):
 
         """
         DebugUtil.log(self, 'parsing Mach-O slice @ {} in {}'.format(
-            hex(int(self.offset_within_fat)),
-            self._file
+            hex(int(self._offset_within_fat)),
+            self.filename
         ))
 
         # preliminary Mach-O parsing
@@ -246,12 +246,11 @@ class MachoBinary(object):
             raise RuntimeError('offset to get_bytes looks like a virtual address. Did you mean to use'
                                'get_content_from_virtual_address?')
         # ensure file is open
-        with open(self._file.name) as file:
+        with open(self.filename) as binary_file:
             # account for the fact that this Macho slice is not necessarily the start of the file!
             # add slide to our macho slice to file seek
-            file.seek(offset + self.offset_within_fat)
-            content = file.read(size)
-        return content
+            binary_file.seek(offset + self._offset_within_fat)
+            return binary_file.read(size)
 
     def should_swap_bytes(self):
         # type: () -> bool

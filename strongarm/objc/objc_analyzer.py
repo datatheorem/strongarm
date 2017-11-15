@@ -112,6 +112,12 @@ class ObjcFunctionAnalyzer(object):
         # type: (List[ObjcPredicateQuery]) -> Optional[CsInsn]
         """Given a List of predicates to satisfy, return the instruction within the function satisfying the conditions.
         If no satisfying instruction is found in the function, None will be returned.
+
+        Args:
+            condition_list: list of ObjcPredicateQuery, each of which must succeed for the returned instruction
+
+        Returns:
+            The instruction within the search space which passes all provided conditions
         """
         DebugUtil.log(self, 'searching for query conditions {} in function {}'.format(
             condition_list,
@@ -530,18 +536,19 @@ class ObjcFunctionAnalyzer(object):
         ))
 
         # resolve source reg value, then add offset
-        final_val = self._resolve_register_value_from_data_links(source_reg, links, resolved_registers) + offset
+        source_reg_val = self._resolve_register_value_from_data_links(source_reg, links, resolved_registers)
+        desired_reg_val = source_reg_val + offset
 
         # this link has been resolved! remove from links list
         links.pop(desired_reg)
         # add to list of known values
-        resolved_registers[desired_reg] = final_val
+        resolved_registers[desired_reg] = desired_reg_val
 
         DebugUtil.log(self, 'x{} resolved to {}'.format(
             desired_reg,
-            hex(int(final_val))
+            hex(int(desired_reg_val))
         ))
-        return final_val
+        return desired_reg_val
 
 
 class ObjcBlockAnalyzer(ObjcFunctionAnalyzer):

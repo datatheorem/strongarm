@@ -2,6 +2,10 @@ from strongarm.macho.macho_binary import MachoBinary
 from strongarm.macho.macho_definitions import *
 
 
+class ArchitectureNotSupportedError(Exception):
+    pass
+
+
 class MachoParser(object):
     _FAT_MAGIC = [
         MachArch.FAT_MAGIC,
@@ -46,9 +50,7 @@ class MachoParser(object):
         self._file = open(filename, 'rb')
 
         if not self.is_magic_supported():
-            raise RuntimeError('Unsupported Mach-O magic {}'.format(
-                hex(int(self.file_magic))
-            ))
+            raise ArchitectureNotSupportedError('armv7 is not supported')
 
         self.is_swapped = self.should_swap_bytes()
 

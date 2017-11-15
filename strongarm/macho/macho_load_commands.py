@@ -1,4 +1,7 @@
-class MachoLoadCommands(object):
+from enum import IntEnum
+
+
+class MachoLoadCommands(IntEnum):
     LC_REQ_DYLD = 0x80000000
 
     LC_SEGMENT = 0x1

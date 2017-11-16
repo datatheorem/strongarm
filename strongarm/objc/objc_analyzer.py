@@ -108,13 +108,15 @@ class ObjcFunctionAnalyzer(object):
         self._call_targets = targets
         return targets
 
-    def perform_query(self, condition_list):
-        # type: (List[ObjcPredicateQuery]) -> Optional[CsInsn]
+    def perform_query(self, condition_list, start_index=0, search_backwards=False):
+        # type: (List[ObjcPredicateQuery], bool) -> Optional[CsInsn]
         """Given a List of predicates to satisfy, return the instruction within the function satisfying the conditions.
         If no satisfying instruction is found in the function, None will be returned.
 
         Args:
             condition_list: list of ObjcPredicateQuery, each of which must succeed for the returned instruction
+            start_index: index of first instruction to search
+            search_backwards: if set, iterate instructions backwards
 
         Returns:
             The instruction within the search space which passes all provided conditions
@@ -126,14 +128,20 @@ class ObjcFunctionAnalyzer(object):
 
         # if we have an instruction index predicate, we can save work by only iterating instructions which can possibly
         # be satisfied.
-        minimum_index = 0
+        minimum_index = start_index
+        maximum_index = len(self.instructions) - 1
         for c in condition_list:
             if type(c) is ObjcPredicateInstructionIndexQuery:
                 if c.exact_index is not None:
                     minimum_index = c.exact_index
                 elif c.minimum_index is not None:
                     minimum_index = c.minimum_index
-        for instruction in self.instructions[minimum_index::]:
+                elif c.maximum_index is not None:
+                    maximum_index = c.maximum_index
+        step = 1
+        if search_backwards:
+            step = -1
+        for instruction in self.instructions[minimum_index:maximum_index:step]:
             did_condition_fail = False
             for condition in condition_list:
                 if not condition.satisfied(self, instruction):

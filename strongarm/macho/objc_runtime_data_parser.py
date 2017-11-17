@@ -6,14 +6,83 @@ from strongarm.debug_util import DebugUtil
 
 
 class ObjcClass(object):
-    def __init__(self, raw_objc_class_struct):
-        self.raw_objc_class_struct = raw_objc_class_struct
-        self.name = None
+    def __init__(self, name, selectors):
+        # type: (Text, List[ObjcSelector]) -> None
+        self.name = name
+        self.selectors = selectors
 
 
-class ObjcData(object):
-    def __init__(self, raw_objc_data_struct):
-        self.raw_objc_data_struct = raw_objc_data_struct
+class ObjcSelector(object):
+    def __init__(self, name, signature, implementation_address):
+        self.name = name
+        self.signature = signature
+        self.implementation_address = implementation_address
+
+
+class ObjcDataEntryParser(object):
+    """Class encapsulating logic to retrieve a list of selectors from an __objc_data struct
+    """
+
+    def __init__(self, binary, objc_data_raw_struct):
+        self._objc_data_raw_struct = objc_data_raw_struct
+        self._binary = binary
+
+    def get_selectors(self):
+        """For each ObjcDataRaw, find the selector name, selref, and IMP address, and record in instance maps
+        """
+        methlist_info = self._get_methlist()
+        if not methlist_info:
+            return
+        methlist = methlist_info[0]
+        methlist_file_ptr = methlist_info[1]
+
+        methods_in_methlist = self._get_sel_name_imp_pairs_from_methlist(methlist, methlist_file_ptr)
+        for selector_name, selref, imp in methods_in_methlist:
+            #self._selector_name_pointers_to_imps[selref] = imp
+            #self.selector_names_to_imps[selector_name].append(imp)
+
+    def _get_sel_name_imp_pairs_from_methlist(self, methlist, methlist_file_ptr):
+        # type: (ObjcMethodList, int) -> List[(Text, int, int)]
+        """Given a method list, return a List of tuples of selector name, selref, and IMP address for each method
+        """
+        methods_data = []
+        # parse every entry in method list
+        # the first entry appears directly after the ObjcMethodList structure
+        method_entry_off = methlist_file_ptr + sizeof(ObjcMethodList)
+        for i in range(methlist.methcount):
+            raw_struct_data = self._binary.get_bytes(method_entry_off, sizeof(ObjcMethod))
+            method_ent = ObjcMethod.from_buffer(bytearray(raw_struct_data))
+
+            # TODO(PT): preprocess __objc_methname so we don't have to search for null byte for every string here
+            symbol_name = self._binary.get_full_string_from_start_address(method_ent.name)
+            methods_data.append((symbol_name, method_ent.name, method_ent.implementation))
+
+            method_entry_off += sizeof(ObjcMethod)
+        return methods_data
+
+    def _get_methlist(self):
+        # type: () -> Optional[(ObjcMethodList, int)]
+        """Return the ObjcMethodList and file offset described by the ObjcDataRaw struct
+        Some __objc_data entries will describe classes that have no methods implemented. In this case, the method
+        list will not exist, and this method will return None.
+        If the method list does exist, a tuple of the ObjcMethodList and the file offset where the entry is located
+        will be returned
+
+        Args:
+            data_struct: The struct __objc_data whose method list entry should be read
+
+        Returns:
+            A tuple of the data's ObjcMethodList and the file pointer to this method list structure.
+            If the data has no methods, None will be returned.
+        """
+        # does the data entry describe any methods?
+        if self._objc_data_raw_struct.base_methods == 0:
+            return None
+
+        methlist_file_ptr = self._objc_data_raw_struct.base_methods - self._binary.get_virtual_base()
+        raw_struct_data = self._binary.get_bytes(methlist_file_ptr, sizeof(ObjcMethodList))
+        methlist = ObjcMethodList.from_buffer(bytearray(raw_struct_data))
+        return (methlist, methlist_file_ptr)
 
 
 class ObjcRuntimeDataParser(object):
@@ -57,34 +126,8 @@ class ObjcRuntimeDataParser(object):
         objc_class = ObjcClass(objc_class_raw)
         name = self.binary.get_full_string_from_start_address(objc_data_raw.name)
         objc_class.name = name
+
         print('found class with name {}'.format(name))
-
-    def _parse_objc_data_entries(self, objc_data_entries):
-        # type: (List[ObjcDataRaw]) -> None
-        """For each ObjcDataRaw, find the selector name, selref, and IMP address, and record in instance maps
-        """
-
-        self.selector_names_to_imps = {}
-        self._selector_name_pointers_to_imps = {}
-
-        for ent in objc_data_entries:
-            methlist_info = self._get_methlist_from_objc_data(ent)
-            if not methlist_info:
-                continue
-            methlist = methlist_info[0]
-            methlist_file_ptr = methlist_info[1]
-
-            methods_in_methlist = self._get_sel_name_imp_pairs_from_methlist(methlist, methlist_file_ptr)
-            for selector_name, selref, imp in methods_in_methlist:
-                self._selector_name_pointers_to_imps[selref] = imp
-
-                # if this is the first instance of this selector name we've seen,
-                # map it to an array just containing the IMP address
-                if selector_name not in self.selector_names_to_imps:
-                    self.selector_names_to_imps[selector_name] = [imp]
-                # if we've already recorded an IMP for this sel name, just add the new one to the list
-                else:
-                    self.selector_names_to_imps[selector_name].append(imp)
 
     def _get_classlist_pointers(self):
         # type: () -> List[int]
@@ -138,48 +181,4 @@ class ObjcRuntimeDataParser(object):
             ))
             return None
         return data_entry
-
-
-    def _get_methlist_from_objc_data(self, data_struct):
-        # type: (ObjcDataRaw) -> Optional[(ObjcMethodList, int)]
-        """Return the ObjcMethodList and file offset described by the provided ObjcDataRaw struct
-        Some __objc_data entries will describe classes that have no methods implemented. In this case, the method
-        list will not exist, and this method will return None.
-        If the method list does exist, a tuple of the ObjcMethodList and the file offset where the entry is located
-        will be returned
-
-        Args:
-            data_struct: The struct __objc_data whose method list entry should be read
-
-        Returns:
-            A tuple of the data's ObjcMethodList and the file pointer to this method list structure.
-            If the data has no methods, None will be returned.
-        """
-        # does this data entry describe any methods?
-        if data_struct.base_methods == 0:
-            return None
-
-        methlist_file_ptr = data_struct.base_methods - self.binary.get_virtual_base()
-        raw_struct_data = self.binary.get_bytes(methlist_file_ptr, sizeof(ObjcMethodList))
-        methlist = ObjcMethodList.from_buffer(bytearray(raw_struct_data))
-        return (methlist, methlist_file_ptr)
-
-    def _get_sel_name_imp_pairs_from_methlist(self, methlist, methlist_file_ptr):
-        # type: (ObjcMethodList, int) -> List[(Text, int, int)]
-        """Given a method list, return a List of tuples of selector name, selref, and IMP address for each method
-        """
-        methods_data = []
-        # parse every entry in method list
-        # the first entry appears directly after the ObjcMethodList structure
-        method_entry_off = methlist_file_ptr + sizeof(ObjcMethodList)
-        for i in range(methlist.methcount):
-            raw_struct_data = self.binary.get_bytes(method_entry_off, sizeof(ObjcMethod))
-            method_ent = ObjcMethod.from_buffer(bytearray(raw_struct_data))
-
-            # TODO(PT): preprocess __objc_methname so we don't have to search for null byte for every string here
-            symbol_name = self.binary._get_full_string_from_start_address(method_ent.name)
-            methods_data.append((symbol_name, method_ent.name, method_ent.implementation))
-
-            method_entry_off += sizeof(ObjcMethod)
-        return methods_data
 

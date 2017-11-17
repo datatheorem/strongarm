@@ -16,6 +16,8 @@ class MachoStringTableEntry(object):
 class MachoStringTableHelper(object):
     """Class containing helper functions for processing different tables in a Mach-O
     """
+    # TODO(PT): generalize the preprocessing of a string table where we efficiently map string start addresses to
+    # full strings, so we don't need to do an O(n) search for a (struct __objc_data).name or something
 
     def __init__(self, binary):
         # type: (MachoBinary) -> None

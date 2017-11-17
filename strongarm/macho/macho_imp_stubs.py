@@ -86,6 +86,9 @@ class MachoImpStubsParser(object):
 
     def _parse_all_stubs(self):
         # type: () -> List[MachoImpStub]
+        if '__stubs' not in self.binary.sections:
+            return []
+
         stubs_section = self.binary.sections['__stubs']
 
         func_str = self.binary.get_bytes(stubs_section.cmd.offset, stubs_section.cmd.size)

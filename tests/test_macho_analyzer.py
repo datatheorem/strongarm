@@ -22,7 +22,7 @@ class TestMachoAnalyzer(unittest.TestCase):
         imp_within_bin_selref = 0x100008ef8
         found_imp_address = self.analyzer.imp_for_selref(imp_within_bin_selref)
         correct_imp_address = 0x100006514
-        self.assertTrue(found_imp_address == correct_imp_address)
+        self.assertEqual(found_imp_address, correct_imp_address)
 
         # selref for -[UIFont systemFontOfSize:]
         imp_outside_bin_selref = 0x100008f08

@@ -3,6 +3,7 @@ from ctypes import sizeof, c_uint64
 
 from strongarm.macho.macho_definitions import ObjcClassRaw, ObjcDataRaw, ObjcMethodList, ObjcMethod
 from strongarm.debug_util import DebugUtil
+from strongarm.macho.macho_binary import MachoBinary
 
 
 class ObjcClass(object):
@@ -13,14 +14,15 @@ class ObjcClass(object):
 
 
 class ObjcSelector(object):
-    def __init__(self, name, signature, selref, implementation_address):
+    def __init__(self, name, selref, signature, implementation):
+        # type: (Text, int, Text, int) -> None
         self.name = name
-        self.signature = signature
         self.selref = selref
-        self.implementation_address = implementation_address
+        self.signature = signature
+        self.implementation = implementation
 
     def __str__(self):
-        return '<@selector({}) at {}>'.format(self.name, hex(int(self.implementation_address)))
+        return '<@selector({}) at {}>'.format(self.name, hex(int(self.implementation)))
     __repr__ = __str__
 
 
@@ -29,8 +31,9 @@ class ObjcDataEntryParser(object):
     """
 
     def __init__(self, binary, objc_data_raw_struct):
-        self._objc_data_raw_struct = objc_data_raw_struct
+        # type: (MachoBinary, ObjcDataRaw) -> None
         self._binary = binary
+        self._objc_data_raw_struct = objc_data_raw_struct
 
     def get_selectors(self):
         """Parse every ObjcSelector described by the struct __objc_data
@@ -93,22 +96,43 @@ class ObjcDataEntryParser(object):
 class ObjcRuntimeDataParser(object):
     def __init__(self, binary):
         self.binary = binary
-        self.parse_static_objc_runtime_info()
+        self.classes = self._parse_static_objc_runtime_info()
 
-    def parse_static_objc_runtime_info(self):
-        # type: () -> None
+    def imp_for_selref(self, selref):
+        # type: (int) -> Optional[int]
+        for objc_class in self.classes:
+            for sel in objc_class.selectors:
+                print('got selref {}'.format(hex(int(sel.selref))))
+                if sel.selref == selref:
+                    return sel.implementation
+        return None
+
+    def get_method_imp_addresses(self, selector):
+        # type: (Text) -> List[int]
+        """Given a selector, return a list of virtual addresses corresponding to the start of each IMP for that SEL
+        """
+        imp_addresses = []
+        for objc_class in self.classes:
+            for objc_sel in objc_class.selectors:
+                if objc_sel.name == selector:
+                    imp_addresses.append(objc_sel.implementation)
+        return imp_addresses
+
+    def _parse_static_objc_runtime_info(self):
+        # type: () -> List[ObjcClass]
         """Read Objective-C class data in __objc_classlist, __objc_data to get classes and selectors in binary
         """
+        objc_classes = []
         classlist_pointers = self._get_classlist_pointers()
         # if the classlist had no entries, there's no Objective-C data in this binary
         # in this case, the binary must be implemented purely in C or Swift
         if not len(classlist_pointers):
-            return
+            return objc_classes
 
         # read actual list of ObjcClassRaw structs from list of pointers
-        objc_classes = []
+        raw_objc_classes = []
         for class_ptr in classlist_pointers:
-            objc_classes.append(self._get_objc_class_from_classlist_pointer(class_ptr))
+            raw_objc_classes.append(self._get_objc_class_from_classlist_pointer(class_ptr))
 
         # TODO(PT): use ObjcClassRaw objects in objc_classes to create list of classes in binary
         # we could even make a list of all selectors for a given class
@@ -116,15 +140,13 @@ class ObjcRuntimeDataParser(object):
 
         # read data for each class
         objc_data_entries = []
-        for class_ent in objc_classes:
+        for class_ent in raw_objc_classes:
             objc_data_entries.append(self._get_objc_data_from_objc_class(class_ent))
 
         # read information from each struct __objc_data
         for objc_data in objc_data_entries:
-            self._parse_objc_data_entry(objc_data)
-
-        import sys
-        sys.exit(0)
+            objc_classes.append(self._parse_objc_data_entry(objc_data))
+        return objc_classes
 
     def _parse_objc_data_entry(self, objc_data_raw):
         # type: (ObjcDataRaw) -> ObjcClass

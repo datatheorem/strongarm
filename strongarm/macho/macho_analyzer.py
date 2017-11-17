@@ -1,9 +1,8 @@
-from ctypes import c_uint64, sizeof, c_void_p
+from ctypes import sizeof, c_void_p
 
 from capstone import Cs, CsInsn, CS_ARCH_ARM64, CS_MODE_ARM
-from typing import Text, List, Dict, Optional
+from typing import Text, List, Dict
 
-from strongarm.debug_util import DebugUtil
 from strongarm.macho.macho_binary import MachoBinary
 from strongarm.macho.macho_imp_stubs import MachoImpStubsParser
 from macho_string_table_helper import MachoStringTableHelper
@@ -125,7 +124,6 @@ class MachoAnalyzer(object):
 
         # indirect symbol table is a list of indexes into larger symbol table
         indirect_symtab = self.binary.get_indirect_symbol_table()
-
         symtab = self.binary.symtab_contents
 
         for (index, symbol_ptr) in enumerate(external_symtab):
@@ -296,7 +294,10 @@ class MachoAnalyzer(object):
         return instructions
 
     def imp_for_selref(self, selref_ptr):
-        return self.objc_helper.imp_for_selref(selref_ptr)
+        return self.objc_helper.selector_for_selref(selref_ptr).implementation
+
+    def selector_for_selref(self, selref_ptr):
+        return self.objc_helper.selector_for_selref(selref_ptr)
 
     def get_method_imp_addresses(self, selector):
         # type: (Text) -> List[int]

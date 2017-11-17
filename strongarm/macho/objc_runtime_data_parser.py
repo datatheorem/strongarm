@@ -1,7 +1,7 @@
-from typing import List, Optional, Text
+from typing import List, Optional, Text, Dict
 from ctypes import sizeof, c_uint64
 
-from strongarm.macho.macho_definitions import ObjcClassRaw, ObjcDataRaw, ObjcMethodList, ObjcMethod
+from strongarm.macho.macho_definitions import ObjcClassRaw, ObjcDataRaw, ObjcMethodList, ObjcMethod, DylibCommandStruct
 from strongarm.debug_util import DebugUtil
 from strongarm.macho.macho_binary import MachoBinary
 
@@ -35,11 +35,11 @@ class ObjcSelref(object):
 
 
 class ObjcDataEntryParser(object):
-    """Class encapsulating logic to retrieve a list of selectors from an __objc_data struct
+    """Class encapsulating logic to retrieve a list of selectors from a struct __objc_data
     """
 
     def __init__(self, binary, selref_list, objc_data_raw_struct):
-        # type: (MachoBinary, ObjcDataRaw) -> None
+        # type: (MachoBinary, List[ObjcSelref], ObjcDataRaw) -> None
         self._binary = binary
         self._selrefs = selref_list
         self._objc_data_raw_struct = objc_data_raw_struct
@@ -111,9 +111,49 @@ class ObjcDataEntryParser(object):
 
 class ObjcRuntimeDataParser(object):
     def __init__(self, binary):
+        # type: (MachoBinary) -> None
         self.binary = binary
         self._selrefs = self._parse_selrefs()
         self.classes = self._parse_static_objc_runtime_info()
+
+        self._sym_to_dylib_path = self._parse_linked_dylib_symbols()
+
+    def _parse_linked_dylib_symbols(self):
+        # type: () -> Dict[Text, Text]
+        syms_to_dylib_path = {}
+
+        symtab = self.binary.symtab
+        symtab_contents = self.binary.symtab_contents
+        dysymtab = self.binary.dysymtab
+        for undef_sym_idx in range(dysymtab.nundefsym):
+            symtab_idx = dysymtab.iundefsym + undef_sym_idx
+            sym = symtab_contents[symtab_idx]
+
+            strtab_idx = sym.n_un.n_strx
+            string_virt_address = symtab.stroff + strtab_idx + self.binary.get_virtual_base()
+            symbol_name = self.binary.get_full_string_from_start_address(string_virt_address)
+
+            source_dylib = self._dylib_from_library_ordinal(self._library_ordinal_from_n_desc(sym.n_desc))
+            source_name_addr = source_dylib.fileoff + source_dylib.dylib.name.offset + self.binary.get_virtual_base()
+            source_name = self.binary.get_full_string_from_start_address(source_name_addr)
+
+            syms_to_dylib_path[symbol_name] = source_name
+        return syms_to_dylib_path
+
+    def path_for_external_symbol(self, symbol):
+        # type: (Text) -> Optional[Text]
+        if symbol in self._sym_to_dylib_path:
+            return self._sym_to_dylib_path[symbol]
+        return None
+
+    @staticmethod
+    def _library_ordinal_from_n_desc(n_desc):
+        # type: (int) -> int
+        return (n_desc >> 8) & 0xff
+
+    def _dylib_from_library_ordinal(self, ordinal):
+        # type: (int) -> DylibCommandStruct
+        return self.binary.load_dylib_commands[ordinal - 1]
 
     def _parse_selrefs(self):
         # type: (None) -> List[ObjcSelref]
@@ -134,14 +174,14 @@ class ObjcRuntimeDataParser(object):
             selrefs.append(ObjcSelref(virt_location, selref_val, selref_contents))
         return selrefs
 
-    def imp_for_selref(self, selref_addr):
-        # type: (int) -> Optional[int]
+    def selector_for_selref(self, selref_addr):
+        # type: (int) -> Optional[ObjcSelector]
         for objc_class in self.classes:
             for sel in objc_class.selectors:
                 if not sel.selref:
                     continue
                 if sel.selref.source_address == selref_addr:
-                    return sel.implementation
+                    return sel
         return None
 
     def get_method_imp_addresses(self, selector):
@@ -188,11 +228,9 @@ class ObjcRuntimeDataParser(object):
     def _parse_objc_data_entry(self, objc_data_raw):
         # type: (ObjcDataRaw) -> ObjcClass
         data_parser = ObjcDataEntryParser(self.binary, self._selrefs, objc_data_raw)
-        selectors = data_parser.get_selectors()
 
         name = self.binary.get_full_string_from_start_address(objc_data_raw.name)
-
-        print('{} selectors {}'.format(name, selectors))
+        selectors = data_parser.get_selectors()
         return ObjcClass(name, selectors)
 
     def _get_classlist_pointers(self):

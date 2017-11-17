@@ -144,7 +144,8 @@ class TestMachoAnalyzer(unittest.TestCase):
             0x100008f30: 0x100006640,
         }
         # did analyzer map all selrefs?
-        self.assertEqual(sorted(correct_selref_to_imp_map), sorted(self.analyzer._selref_ptr_to_imp_map))
+        for selref in correct_selref_to_imp_map:
+            self.assertEqual(correct_selref_to_imp_map[selref], self.analyzer.imp_for_selref(selref))
 
         # can we get an IMP from a selref?
         self.assertEqual(self.analyzer.imp_for_selref(0x100008f38), 0x100006678)

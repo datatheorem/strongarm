@@ -1,5 +1,5 @@
 import struct
-from ctypes import Union, Structure, c_uint8, c_uint16, c_uint32, c_uint64, c_int32, c_char, c_int64
+from ctypes import Union, Structure, c_uint8, c_uint16, c_uint32, c_uint64, c_int32, c_char, c_int64, c_char_p
 from enum import IntEnum
 
 
@@ -271,3 +271,29 @@ class ObjcMethod(Structure):
         ('signature', c_uint64),
         ('implementation', c_uint64)
     ]
+
+
+class LcStrUnion(Union):
+    _fields_ = [
+        ('offset', c_uint32),
+        ('ptr', c_char_p)
+    ]
+
+
+class DylibStruct(Structure):
+    _fields_ = [
+        ('name', LcStrUnion),
+        ('timestamp', c_uint32),
+        ('current_version', c_uint32),
+        ('compatibility_version', c_uint32),
+    ]
+
+
+class DylibCommandStruct(Structure):
+    _fields_ = [
+        ('cmd', c_uint32),
+        ('cmdsize', c_uint32),
+        ('dylib', DylibStruct),
+    ]
+    def __init__(self):
+        self.fileoff = None

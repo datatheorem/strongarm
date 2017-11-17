@@ -5,6 +5,7 @@ from strongarm.debug_util import DebugUtil
 from strongarm.macho.macho_definitions import MachoSection64Raw, MachArch, CPU_TYPE, MachoHeader64, HEADER_FLAGS
 from strongarm.macho.macho_definitions import MachOLoadCommand, MachoSymtabCommand, MachoDysymtabCommand
 from strongarm.macho.macho_definitions import MachoSegmentCommand64, MachoEncryptionInfo64Command, MachoNlist64
+from strongarm.macho.macho_definitions import DylibCommandStruct
 
 from strongarm.macho.macho_load_commands import MachoLoadCommands
 
@@ -53,6 +54,7 @@ class MachoBinary(object):
         self.dysymtab = None
         self.symtab = None
         self.encryption_info = None
+        self.load_dylib_commands = None
 
         # kickoff for parsing this slice
         if not self.parse():
@@ -159,6 +161,8 @@ class MachoBinary(object):
         """
         self.segment_commands = {}
         self.sections = {}
+        self.load_dylib_commands = []
+
         for i in range(segment_count):
             load_command_bytes = self.get_bytes(offset, sizeof(MachOLoadCommand))
             load_command = MachOLoadCommand.from_buffer(bytearray(load_command_bytes))
@@ -167,27 +171,28 @@ class MachoBinary(object):
                 # 32 bit segments unsupported!
                 DebugUtil.log(self, "skipping 32-bit LC_SEGMENT")
                 continue
-
             # some commands have their own structure that we interpret separately from a normal load command
             # if we want to interpret more commands in the future, this is the place to do it
             if load_command.cmd == MachoLoadCommands.LC_SYMTAB:
                 symtab_bytes = self.get_bytes(offset, sizeof(MachoSymtabCommand))
                 self.symtab = MachoSymtabCommand.from_buffer(bytearray(symtab_bytes))
-
             elif load_command.cmd == MachoLoadCommands.LC_DYSYMTAB:
                 dysymtab_bytes = self.get_bytes(offset, sizeof(MachoDysymtabCommand))
                 self.dysymtab = MachoDysymtabCommand.from_buffer(bytearray(dysymtab_bytes))
-
             elif load_command.cmd == MachoLoadCommands.LC_ENCRYPTION_INFO_64:
                 encryption_info_bytes = self.get_bytes(offset, sizeof(MachoEncryptionInfo64Command))
                 self.encryption_info = MachoEncryptionInfo64Command.from_buffer(bytearray(encryption_info_bytes))
-
             elif load_command.cmd == MachoLoadCommands.LC_SEGMENT_64:
                 segment_bytes = self.get_bytes(offset, sizeof(MachoSegmentCommand64))
                 segment = MachoSegmentCommand64.from_buffer(bytearray(segment_bytes))
                 # TODO(pt) handle byte swap of segment if necessary
                 self.segment_commands[segment.segname] = segment
                 self._parse_sections(segment, offset)
+            elif load_command.cmd == MachoLoadCommands.LC_LOAD_DYLIB:
+                dylib_load_bytes = self.get_bytes(offset, sizeof(DylibCommandStruct))
+                dylib_load_command = DylibCommandStruct.from_buffer(bytearray(dylib_load_bytes))
+                dylib_load_command.fileoff = offset
+                self.load_dylib_commands.append(dylib_load_command)
 
             # move to next load command in header
             offset += load_command.cmdsize

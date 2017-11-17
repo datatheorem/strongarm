@@ -29,19 +29,12 @@ class MachoAnalyzer(object):
         self._external_branch_destinations_to_symbol_names = None
         self._external_symbol_names_to_branch_destinations = None
 
-        self._selrefs = None
-        self.selector_names_to_imps = None
-        self._selector_name_pointers_to_imps = None
-
         self.crossref_helper = MachoStringTableHelper(bin)
         self.imported_symbols = self.crossref_helper.imported_symbols
         self.exported_symbols = self.crossref_helper.exported_symbols
 
         self.imp_stubs = MachoImpStubsParser(bin, self.cs).imp_stubs
-
-        runtime_data_parser = ObjcRuntimeDataParser(bin)
-        self.parse_static_objc_runtime_info()
-        self._create_selref_to_name_map()
+        self.objc_helper = ObjcRuntimeDataParser(bin)
 
         # done setting up, store this analyzer in class cache
         MachoAnalyzer.active_analyzer_map[bin] = self
@@ -302,57 +295,14 @@ class MachoAnalyzer(object):
         instructions = [instr for instr in self.cs.disasm(func_str, start_address)]
         return instructions
 
-    def _create_selref_to_name_map(self):
-        self._selrefs = {}
-        self._selref_ptr_to_imp_map = {}
-
-        if '__objc_selrefs' not in self.binary.sections:
-            return
-
-        selref_sect = self.binary.sections['__objc_selrefs']
-        entry_count = selref_sect.cmd.size / sizeof(c_uint64)
-
-        for i in range(entry_count):
-            content_off = i * sizeof(c_uint64)
-            selref_val_data = selref_sect.content[content_off:content_off + sizeof(c_uint64)]
-            selref_val = c_uint64.from_buffer(bytearray(selref_val_data)).value
-            virt_location = content_off + selref_sect.cmd.addr
-            self._selrefs[virt_location] = selref_val
-
-        # we now have an array of tuples of (selref ptr, string literal ptr)
-        # self._selector_name_pointers_to_imps contains a map of {string literal ptr, IMP}
-        # create mapping from selref ptr to IMP
-        for selref_ptr, string_ptr in self._selrefs.items():
-            try:
-                imp_ptr = self._selector_name_pointers_to_imps[string_ptr]
-            except KeyError as e:
-                # if this selref had no IMP, it must be a selector for a method defined outside this binary
-                # we don't mind, just continue
-                continue
-            self._selref_ptr_to_imp_map[selref_ptr] = imp_ptr
-
     def imp_for_selref(self, selref_ptr):
-        if not selref_ptr:
-            return None
-        try:
-            return self._selref_ptr_to_imp_map[selref_ptr]
-        except KeyError as e:
-            # if we have a selector reference entry for this pointer but no IMP,
-            # it must be a selector for a class defined outside this binary
-            if selref_ptr in self._selrefs:
-                return None
-            # if we had no record of this selref, it's an invalid pointer and an exception should be raised
-            raise RuntimeError('invalid selector reference pointer {}'.format(hex(int(selref_ptr))))
+        return self.objc_helper.imp_for_selref(selref_ptr)
 
     def get_method_imp_addresses(self, selector):
         # type: (Text) -> List[int]
         """Given a selector, return a list of virtual addresses corresponding to the start of each IMP for that SEL
         """
-        if not self.selector_names_to_imps:
-            return []
-        if selector not in self.selector_names_to_imps:
-            return []
-        return self.selector_names_to_imps[selector]
+        return self.objc_helper.get_method_imp_addresses(selector)
 
     def get_method_address_ranges(self, selector):
         # type: (Text) -> List[(int, int)]

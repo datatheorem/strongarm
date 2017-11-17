@@ -151,6 +151,6 @@ class TestMachoAnalyzer(unittest.TestCase):
 
         # nonexistent or missing selref handled correctly?
         self.assertIsNone(self.analyzer.imp_for_selref(None))
-        self.assertRaises(RuntimeError, self.analyzer.imp_for_selref, 0xdeadbeef)
+        self.assertIsNone(self.analyzer.imp_for_selref(0xdeadbeef))
 
         # TODO(PT): handle checking selref which is defined outside binary

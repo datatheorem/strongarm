@@ -13,10 +13,15 @@ class ObjcClass(object):
 
 
 class ObjcSelector(object):
-    def __init__(self, name, signature, implementation_address):
+    def __init__(self, name, signature, selref, implementation_address):
         self.name = name
         self.signature = signature
+        self.selref = selref
         self.implementation_address = implementation_address
+
+    def __str__(self):
+        return '<@selector({}) at {}>'.format(self.name, hex(int(self.implementation_address)))
+    __repr__ = __str__
 
 
 class ObjcDataEntryParser(object):
@@ -28,7 +33,7 @@ class ObjcDataEntryParser(object):
         self._binary = binary
 
     def get_selectors(self):
-        """For each ObjcDataRaw, find the selector name, selref, and IMP address, and record in instance maps
+        """Parse every ObjcSelector described by the struct __objc_data
         """
         methlist_info = self._get_methlist()
         if not methlist_info:
@@ -36,16 +41,13 @@ class ObjcDataEntryParser(object):
         methlist = methlist_info[0]
         methlist_file_ptr = methlist_info[1]
 
-        methods_in_methlist = self._get_sel_name_imp_pairs_from_methlist(methlist, methlist_file_ptr)
-        for selector_name, selref, imp in methods_in_methlist:
-            #self._selector_name_pointers_to_imps[selref] = imp
-            #self.selector_names_to_imps[selector_name].append(imp)
+        return self._get_selectors_from_methlist(methlist, methlist_file_ptr)
 
-    def _get_sel_name_imp_pairs_from_methlist(self, methlist, methlist_file_ptr):
-        # type: (ObjcMethodList, int) -> List[(Text, int, int)]
-        """Given a method list, return a List of tuples of selector name, selref, and IMP address for each method
+    def _get_selectors_from_methlist(self, methlist, methlist_file_ptr):
+        # type: (ObjcMethodList, int) -> List[ObjcSelector]
+        """Given a method list, return a List of ObjcSelectors encapsulating each method
         """
-        methods_data = []
+        selectors = []
         # parse every entry in method list
         # the first entry appears directly after the ObjcMethodList structure
         method_entry_off = methlist_file_ptr + sizeof(ObjcMethodList)
@@ -55,10 +57,13 @@ class ObjcDataEntryParser(object):
 
             # TODO(PT): preprocess __objc_methname so we don't have to search for null byte for every string here
             symbol_name = self._binary.get_full_string_from_start_address(method_ent.name)
-            methods_data.append((symbol_name, method_ent.name, method_ent.implementation))
+            signature = self._binary.get_full_string_from_start_address(method_ent.signature)
+
+            selector = ObjcSelector(symbol_name, method_ent.name, signature, method_ent.implementation)
+            selectors.append(selector)
 
             method_entry_off += sizeof(ObjcMethod)
-        return methods_data
+        return selectors
 
     def _get_methlist(self):
         # type: () -> Optional[(ObjcMethodList, int)]
@@ -114,20 +119,22 @@ class ObjcRuntimeDataParser(object):
         for class_ent in objc_classes:
             objc_data_entries.append(self._get_objc_data_from_objc_class(class_ent))
 
-        # for each ObjcClassRaw/ObjcDataRaw pair, parse details about the class implementation
-        for objc_class, objc_data in zip(objc_classes, objc_data_entries):
-            self.parse_class_data_pair(objc_class, objc_data)
-            #self._parse_objc_data_entries(objc_data_entries)
+        # read information from each struct __objc_data
+        for objc_data in objc_data_entries:
+            self._parse_objc_data_entry(objc_data)
+
         import sys
         sys.exit(0)
 
-    def parse_class_data_pair(self, objc_class_raw, objc_data_raw):
-        # type: (ObjcClassRaw, ObjcDataRaw) -> None
-        objc_class = ObjcClass(objc_class_raw)
-        name = self.binary.get_full_string_from_start_address(objc_data_raw.name)
-        objc_class.name = name
+    def _parse_objc_data_entry(self, objc_data_raw):
+        # type: (ObjcDataRaw) -> ObjcClass
+        data_parser = ObjcDataEntryParser(self.binary, objc_data_raw)
+        selectors = data_parser.get_selectors()
 
-        print('found class with name {}'.format(name))
+        name = self.binary.get_full_string_from_start_address(objc_data_raw.name)
+
+        print('{} selectors {}'.format(name, selectors))
+        return ObjcClass(name, selectors)
 
     def _get_classlist_pointers(self):
         # type: () -> List[int]

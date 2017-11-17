@@ -323,4 +323,30 @@ class MachoBinary(object):
         binary_address = virtual_address - self.get_virtual_base()
         return self.get_bytes(binary_address, size)
 
+    def get_full_string_from_start_address(self, start_address):
+        # type: (int) -> Text
+        """Return a string containing the bytes from start_address up to the next NULL character
+        """
+        max_len = 128
+        symbol_name_characters = []
+        found_null_terminator = False
 
+        while not found_null_terminator:
+            name_bytes = self.get_content_from_virtual_address(virtual_address=start_address, size=max_len)
+            # search for null terminator in this content
+            for ch in name_bytes:
+                if ch == '\x00':
+                    found_null_terminator = True
+                    break
+                symbol_name_characters.append(ch)
+
+            # do we need to keep searching for the end of the symbol name?
+            if not found_null_terminator:
+                # since we read [start_address:start_address + max_len], trim that from search space
+                start_address += max_len
+                # double search space for next iteration
+                max_len *= 2
+            else:
+                # read full string!
+                symbol_name = ''.join(symbol_name_characters)
+                return symbol_name

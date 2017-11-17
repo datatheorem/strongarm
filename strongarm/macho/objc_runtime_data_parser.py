@@ -15,7 +15,7 @@ class ObjcClass(object):
 
 class ObjcSelector(object):
     def __init__(self, name, selref, signature, implementation):
-        # type: (Text, int, Text, int) -> None
+        # type: (Text, ObjcSelref, Text, int) -> None
         self.name = name
         self.selref = selref
         self.signature = signature
@@ -26,13 +26,22 @@ class ObjcSelector(object):
     __repr__ = __str__
 
 
+class ObjcSelref(object):
+    def __init__(self, source_address, destination_address, selector_literal):
+        # type: (int, int, Text) -> None
+        self.source_address = source_address
+        self.destination_address = destination_address
+        self.selector_literal = selector_literal
+
+
 class ObjcDataEntryParser(object):
     """Class encapsulating logic to retrieve a list of selectors from an __objc_data struct
     """
 
-    def __init__(self, binary, objc_data_raw_struct):
+    def __init__(self, binary, selref_list, objc_data_raw_struct):
         # type: (MachoBinary, ObjcDataRaw) -> None
         self._binary = binary
+        self._selrefs = selref_list
         self._objc_data_raw_struct = objc_data_raw_struct
 
     def get_selectors(self):
@@ -62,7 +71,14 @@ class ObjcDataEntryParser(object):
             symbol_name = self._binary.get_full_string_from_start_address(method_ent.name)
             signature = self._binary.get_full_string_from_start_address(method_ent.signature)
 
-            selector = ObjcSelector(symbol_name, method_ent.name, signature, method_ent.implementation)
+            # figure out which selref this corresponds to
+            selref = None
+            for s in self._selrefs:
+                if s.destination_address == method_ent.name:
+                    selref = s
+                    break
+
+            selector = ObjcSelector(symbol_name, selref, signature, method_ent.implementation)
             selectors.append(selector)
 
             method_entry_off += sizeof(ObjcMethod)
@@ -96,14 +112,35 @@ class ObjcDataEntryParser(object):
 class ObjcRuntimeDataParser(object):
     def __init__(self, binary):
         self.binary = binary
+        self._selrefs = self._parse_selrefs()
         self.classes = self._parse_static_objc_runtime_info()
 
-    def imp_for_selref(self, selref):
+    def _parse_selrefs(self):
+        # type: (None) -> List[ObjcSelref]
+        selrefs = []
+        if '__objc_selrefs' not in self.binary.sections:
+            return selrefs
+
+        selref_sect = self.binary.sections['__objc_selrefs']
+        entry_count = selref_sect.cmd.size / sizeof(c_uint64)
+
+        for i in range(entry_count):
+            content_off = i * sizeof(c_uint64)
+            selref_val_data = selref_sect.content[content_off:content_off + sizeof(c_uint64)]
+            selref_val = c_uint64.from_buffer(bytearray(selref_val_data)).value
+            virt_location = content_off + selref_sect.cmd.addr
+
+            selref_contents = self.binary.get_full_string_from_start_address(selref_val)
+            selrefs.append(ObjcSelref(virt_location, selref_val, selref_contents))
+        return selrefs
+
+    def imp_for_selref(self, selref_addr):
         # type: (int) -> Optional[int]
         for objc_class in self.classes:
             for sel in objc_class.selectors:
-                print('got selref {}'.format(hex(int(sel.selref))))
-                if sel.selref == selref:
+                if not sel.selref:
+                    continue
+                if sel.selref.source_address == selref_addr:
                     return sel.implementation
         return None
 
@@ -150,7 +187,7 @@ class ObjcRuntimeDataParser(object):
 
     def _parse_objc_data_entry(self, objc_data_raw):
         # type: (ObjcDataRaw) -> ObjcClass
-        data_parser = ObjcDataEntryParser(self.binary, objc_data_raw)
+        data_parser = ObjcDataEntryParser(self.binary, self._selrefs, objc_data_raw)
         selectors = data_parser.get_selectors()
 
         name = self.binary.get_full_string_from_start_address(objc_data_raw.name)

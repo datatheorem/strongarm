@@ -232,7 +232,7 @@ class HEADER_FLAGS(IntEnum):
     APP_EXTENSION_SAFE = 0x2000000
 
 
-class ObjcClass(Structure):
+class ObjcClassRaw(Structure):
     _fields_ = [
         ('metaclass', c_uint64),
         ('superclass', c_uint64),
@@ -242,7 +242,7 @@ class ObjcClass(Structure):
     ]
 
 
-class ObjcData(Structure):
+class ObjcDataRaw(Structure):
     _fields_ = [
         ('flags', c_uint32),
         ('instance_start', c_uint32),

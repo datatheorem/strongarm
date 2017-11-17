@@ -105,7 +105,7 @@ class ObjcUnconditionalBranchInstruction(ObjcBranchInstruction):
         # knowledge of this is largely useless, and the much more valuable piece of information is
         # which function the selector passed to objc_msgSend corresponds to.
         # therefore, replace the 'real' destination address with the requested IMP
-        selref = None
+        selector = None
         # attempt to get an IMP for this selref
         try:
             selref = function_analyzer.get_selref(self.raw_instr)

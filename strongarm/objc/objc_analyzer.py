@@ -490,8 +490,8 @@ class ObjcFunctionAnalyzer(object):
                     needed_links,
                     determined_values,
                 ))
-
                 raise RuntimeError('Data-flow loop exited before all unknowns were marked {}'.format(unknown_regs))
+
             arg_index = int(unknown_regs[0])
             return arg_index, True
 

@@ -32,7 +32,7 @@ class MachoParser(object):
 
     def __init__(self, filename):
         # type: (Text) -> MachoParser
-        self.filename = filename
+        self.filename = filename.encode('utf-8')
 
         self.header = None
         self.is_swapped = None

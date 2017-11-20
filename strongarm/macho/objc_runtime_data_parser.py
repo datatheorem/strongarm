@@ -15,14 +15,19 @@ class ObjcClass(object):
 
 class ObjcSelector(object):
     def __init__(self, name, selref, signature, implementation):
-        # type: (Text, ObjcSelref, Text, int) -> None
+        # type: (Text, ObjcSelref, Optional[Text], Optional[int]) -> None
         self.name = name
         self.selref = selref
         self.signature = signature
         self.implementation = implementation
 
+        self.is_external_definition = (not self.implementation)
+
     def __str__(self):
-        return '<@selector({}) at {}>'.format(self.name, hex(int(self.implementation)))
+        imp_addr = 'NaN'
+        if self.implementation:
+            imp_addr = hex(int(self.implementation))
+        return '<@selector({}) at {}>'.format(self.name, imp_addr)
     __repr__ = __str__
 
 
@@ -182,7 +187,17 @@ class ObjcRuntimeDataParser(object):
                     continue
                 if sel.selref.source_address == selref_addr:
                     return sel
-        return None
+        # selref wasn't referenced in classes implemented within the binary
+        # make sure it's a valid selref
+        selref = [x for x in self._selrefs if x.source_address == selref_addr]
+        if not len(selref):
+            return None
+        selref = selref[0]
+
+        # therefore, the selref must refer to a selector which is defined outside this binary
+        # this is fine, just construct an ObjcSelector with what we know
+        sel = ObjcSelector(selref.selector_literal, selref, None, None)
+        return sel
 
     def get_method_imp_addresses(self, selector):
         # type: (Text) -> List[int]

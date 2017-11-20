@@ -1,12 +1,12 @@
 from ctypes import sizeof, c_void_p
 
 from capstone import Cs, CsInsn, CS_ARCH_ARM64, CS_MODE_ARM
-from typing import Text, List, Dict
+from typing import Text, List, Dict, Optional
 
 from strongarm.macho.macho_binary import MachoBinary
 from strongarm.macho.macho_imp_stubs import MachoImpStubsParser
 from macho_string_table_helper import MachoStringTableHelper
-from objc_runtime_data_parser import ObjcRuntimeDataParser
+from objc_runtime_data_parser import ObjcRuntimeDataParser, ObjcSelector
 
 
 class MachoAnalyzer(object):
@@ -294,9 +294,14 @@ class MachoAnalyzer(object):
         return instructions
 
     def imp_for_selref(self, selref_ptr):
-        return self.objc_helper.selector_for_selref(selref_ptr).implementation
+        # type: (int) -> Optional[int]
+        selector = self.objc_helper.selector_for_selref(selref_ptr)
+        if not selector:
+            return None
+        return selector.implementation
 
     def selector_for_selref(self, selref_ptr):
+        # type: (int) -> Optional[ObjcSelector]
         return self.objc_helper.selector_for_selref(selref_ptr)
 
     def get_method_imp_addresses(self, selector):

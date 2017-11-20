@@ -105,23 +105,16 @@ class ObjcUnconditionalBranchInstruction(ObjcBranchInstruction):
         # knowledge of this is largely useless, and the much more valuable piece of information is
         # which function the selector passed to objc_msgSend corresponds to.
         # therefore, replace the 'real' destination address with the requested IMP
-        selector = None
-        # attempt to get an IMP for this selref
-        try:
-            selref = function_analyzer.get_selref(self.raw_instr)
-            sel_imp = function_analyzer.macho_analyzer.imp_for_selref(selref)
-        except RuntimeError as e:
-            # if this raised an exception, we couldn't find an IMP for this SEL name, which means
-            # the SEL is not implemented within this binary
-            sel_imp = None
+        selref_ptr = function_analyzer.get_selref_ptr(self.raw_instr)
+        selector = function_analyzer.macho_analyzer.selector_for_selref(selref_ptr)
+        if not selector:
+            raise RuntimeError('Couldnt get sel for selref ptr {}'.format(selref_ptr))
 
         # if we couldn't find an IMP for this selref,
         # it is defined in a class outside this binary
-        if not sel_imp:
-            self.is_external_objc_call = True
-
-        self.selref = selref
-        self.destination_address = sel_imp
+        self.is_external_objc_call = selector.is_external_definition
+        self.destination_address = selector.implementation
+        self.selref = selector.selref
 
 
 class ObjcConditionalBranchInstruction(ObjcBranchInstruction):

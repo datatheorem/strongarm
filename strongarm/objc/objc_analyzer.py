@@ -203,8 +203,8 @@ class ObjcFunctionAnalyzer(object):
             # might be objc_msgSend to object of class defined outside binary
             if target.is_external_objc_call:
                 if target.selref:
-                    self.debug_print(instr_idx, 'objc_msgSend(...) to external class, selref at {}'.format(
-                        hex(int(target.selref))
+                    self.debug_print(instr_idx, 'objc_msgSend(...) to external class, selector {}'.format(
+                        target.selref.selector_literal
                     ))
                 else:
                     self.debug_print(instr_idx, 'objc_msgSend(...) to external class, unknown selref')
@@ -298,7 +298,7 @@ class ObjcFunctionAnalyzer(object):
     def is_local_branch(self, branch_instruction):
         return self.start_address <= branch_instruction.destination_address <= self.end_address
 
-    def get_selref(self, msgsend_instr):
+    def get_selref_ptr(self, msgsend_instr):
         # type: (CsInsn) -> int
         """Retrieve contents of x1 register when control is at provided instruction
 

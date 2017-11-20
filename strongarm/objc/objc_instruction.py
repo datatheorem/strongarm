@@ -98,7 +98,8 @@ class ObjcUnconditionalBranchInstruction(ObjcBranchInstruction):
                 self.raw_instr.mnemonic,
                 self.symbol,
             ))
-            raise ValueError('cannot parse objc_msgSend destination on non-msgSend instruction {}'.format(function_analyzer.format_instruction(self.raw_instr)))
+            raise ValueError('cannot parse objc_msgSend destination on non-msgSend '
+                             'instruction {}'.format(function_analyzer.format_instruction(self.raw_instr)))
         # if this is an objc_msgSend target, patch destination_address to be the address of the targeted IMP
         # note! this means destination_address is *not* the actual destination address of the instruction
         # the *real* destination will be a stub function corresponding to _objc_msgSend, but

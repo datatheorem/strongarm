@@ -25,6 +25,8 @@ class ObjcFunctionAnalyzer(object):
             self.end_address = last_instruction.address
         except IndexError as e:
             # this method must have just been a stub with no real instructions!
+            self.start_address = 0
+            self.end_address = 0
             pass
 
         self.binary = binary
@@ -46,7 +48,7 @@ class ObjcFunctionAnalyzer(object):
                 output
             ))
         else:
-            func_base = self.instructions[0].address
+            func_base = self.start_address
             # each instruction is 4 bytes
             instruction_size = 4
             instruction_address = func_base + (idx * instruction_size)
@@ -123,7 +125,7 @@ class ObjcFunctionAnalyzer(object):
         """
         DebugUtil.log(self, 'searching for query conditions {} in function {}'.format(
             condition_list,
-            hex(int(self.instructions[0].address))
+            self.start_address
         ))
 
         # if we have an instruction index predicate, we can save work by only iterating instructions which can possibly
@@ -364,7 +366,7 @@ class ObjcFunctionAnalyzer(object):
 
         """
         bytes_in_instruction = 4
-        target_addr = self.instructions[0].address + (start_index * bytes_in_instruction)
+        target_addr = self.start_address + (start_index * bytes_in_instruction)
         DebugUtil.log(self, 'analyzing data flow to determine data in {} at {}'.format(
             desired_reg,
             hex(int(target_addr))
@@ -484,7 +486,7 @@ class ObjcFunctionAnalyzer(object):
             # if the above assumption is correct, there should only be 1 reg in unknown_regs
             if len(unknown_regs) > 1:
                 DebugUtil.log(self, 'Exited loop with unknown list! instr 0 {} idx {} unknown {} links {} known {}'.format(
-                    hex(int(self.instructions[0].address)),
+                    hex(int(self.start_address)),
                     start_index,
                     unknown_regs,
                     needed_links,

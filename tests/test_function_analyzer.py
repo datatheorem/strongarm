@@ -74,11 +74,11 @@ class TestFunctionAnalyzer(unittest.TestCase):
 
     def test_get_selref(self):
         objc_msgSendInstr = self.instructions[16]
-        selref = self.function_analyzer.get_selref(objc_msgSendInstr)
+        selref = self.function_analyzer.get_selref_ptr(objc_msgSendInstr)
         self.assertEqual(selref, 0x100008f40)
 
         non_branch_instruction = self.instructions[15]
-        self.assertRaises(ValueError, self.function_analyzer.get_selref, non_branch_instruction)
+        self.assertRaises(ValueError, self.function_analyzer.get_selref_ptr, non_branch_instruction)
 
     def test_find_next_branch(self):
         # find first branch

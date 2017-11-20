@@ -6,7 +6,7 @@ from typing import Text, List, Dict, Optional
 from strongarm.macho.macho_binary import MachoBinary
 from strongarm.macho.macho_imp_stubs import MachoImpStubsParser
 from macho_string_table_helper import MachoStringTableHelper
-from objc_runtime_data_parser import ObjcRuntimeDataParser, ObjcSelector
+from objc_runtime_data_parser import ObjcRuntimeDataParser, ObjcSelector, ObjcClass
 
 
 class MachoAnalyzer(object):
@@ -47,6 +47,10 @@ class MachoAnalyzer(object):
             # use cached analyzer for this binary
             return cls.active_analyzer_map[bin]
         return MachoAnalyzer(bin)
+
+    def objc_classes(self):
+        # type: () -> List[ObjcClass]
+        return self.objc_helper.classes
 
     def _parse_la_symbol_ptr_list(self):
         # type: () -> List[int]
@@ -172,7 +176,8 @@ class MachoAnalyzer(object):
             return self._external_symbol_names_to_branch_destinations
 
         call_address_map = {}
-        for key, value in self.external_branch_destinations_to_symbol_names.iteritems():
+        for key in self.external_branch_destinations_to_symbol_names:
+            value = self.external_branch_destinations_to_symbol_names[key]
             call_address_map[value] = key
 
         self._external_symbol_names_to_branch_destinations = call_address_map

@@ -188,7 +188,7 @@ class MachoBinary(object):
                 # TODO(pt) handle byte swap of segment if necessary
                 self.segment_commands[segment.segname] = segment
                 self._parse_sections(segment, offset)
-            elif load_command.cmd == MachoLoadCommands.LC_LOAD_DYLIB:
+            elif load_command.cmd in [MachoLoadCommands.LC_LOAD_DYLIB, MachoLoadCommands.LC_LOAD_WEAK_DYLIB]:
                 dylib_load_bytes = self.get_bytes(offset, sizeof(DylibCommandStruct))
                 dylib_load_command = DylibCommandStruct.from_buffer(bytearray(dylib_load_bytes))
                 dylib_load_command.fileoff = offset

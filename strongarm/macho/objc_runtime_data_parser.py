@@ -50,11 +50,12 @@ class ObjcDataEntryParser(object):
         self._objc_data_raw_struct = objc_data_raw_struct
 
     def get_selectors(self):
+        # type: () -> List[ObjcSelector]
         """Parse every ObjcSelector described by the struct __objc_data
         """
         methlist_info = self._get_methlist()
         if not methlist_info:
-            return
+            return []
         methlist = methlist_info[0]
         methlist_file_ptr = methlist_info[1]
 
@@ -138,7 +139,8 @@ class ObjcRuntimeDataParser(object):
             string_virt_address = symtab.stroff + strtab_idx + self.binary.get_virtual_base()
             symbol_name = self.binary.get_full_string_from_start_address(string_virt_address)
 
-            source_dylib = self._dylib_from_library_ordinal(self._library_ordinal_from_n_desc(sym.n_desc))
+            library_ordinal = self._library_ordinal_from_n_desc(sym.n_desc)
+            source_dylib = self._dylib_from_library_ordinal(library_ordinal)
             source_name_addr = source_dylib.fileoff + source_dylib.dylib.name.offset + self.binary.get_virtual_base()
             source_name = self.binary.get_full_string_from_start_address(source_name_addr)
 

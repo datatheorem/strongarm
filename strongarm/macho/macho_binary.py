@@ -266,7 +266,7 @@ class MachoBinary(object):
 
         """
         if offset > 0x100000000:
-            raise RuntimeError('offset to get_bytes looks like a virtual address. Did you mean to use'
+            raise RuntimeError('offset to get_bytes looks like a virtual address. Did you mean to use '
                                'get_content_from_virtual_address?')
         # ensure file is open
         with open(self.filename) as binary_file:
@@ -370,3 +370,18 @@ class MachoBinary(object):
                 # read full string!
                 symbol_name = ''.join(symbol_name_characters)
                 return symbol_name
+
+    def read_embedded_string(self, address):
+        # type: (int) -> Text
+        """Read a string embedded in the binary at address
+        This method will automatically parse a CFString and return the string literal if address points to one
+        """
+        section_name = self.section_name_for_address(address)
+        # special case if this is a __cfstring entry
+        if section_name == '__cfstring':
+            # we must parse the CFString
+            cfstring_bytes = self.get_content_from_virtual_address(address, sizeof(CFStringStruct))
+            cfstring_ent = CFStringStruct.from_buffer(bytearray(cfstring_bytes))
+            # patch address to read string from to be the string literal address of this CFString
+            address = cfstring_ent.literal
+        return self.get_full_string_from_start_address(address)

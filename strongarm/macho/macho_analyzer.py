@@ -7,6 +7,8 @@ from strongarm.macho.macho_binary import MachoBinary
 from strongarm.macho.macho_imp_stubs import MachoImpStubsParser
 from macho_string_table_helper import MachoStringTableHelper
 from objc_runtime_data_parser import ObjcRuntimeDataParser, ObjcSelector, ObjcClass
+from strongarm.objc.objc_query import ObjcPredicateQuery
+from strongarm.objc.objc_analyzer import ObjcFunctionAnalyzer
 
 
 class MachoAnalyzer(object):
@@ -363,3 +365,52 @@ class MachoAnalyzer(object):
             imp_instructions = [instr for instr in self.cs.disasm(imp_data, imp_start)]
             implementations.append(imp_instructions)
         return implementations
+
+    def perform_query(self, predicate_lists):
+        # type: (List[List[ObjcPredicateQuery]]) -> List[ObjcPredicateResult]
+        """Run a set of predicates on the analyzed binary, and return a list of code matching criteria
+
+        Each list will only be matched if all predicates in the list are matched by an instruction. For example,
+        you can look for two separate conditions by passing [[condition1], [condition2]]. If you want to only
+        match an instruction when two conditions are met, specify them in the same list, such as:
+        [[condition1, condition2]]
+
+        Args:
+            predicate_lists: List of lists of predicates sets to search for.
+
+        Returns:
+            List of search results
+        """
+        search_results = []
+        entry_point_list = []
+        for objc_class in self.objc_classes():
+            for objc_sel in objc_class.selectors:
+                imp_addr = objc_sel.implementation
+                entry_point_list.append((objc_class, objc_sel, imp_addr))
+
+        for objc_class, objc_sel, imp in entry_point_list:
+            function_analyzer = ObjcFunctionAnalyzer.get_function_analyzer(self.binary, imp)
+            for predicate_list in predicate_lists:
+                # TODO(PT): perform_query() should let us specify OR predicates as well as AND predicates
+                # TODO(PT): perform_query() should return a List of all matching instructions, not just the first
+                search_result_instr = function_analyzer.perform_query(predicate_list)
+                if search_result_instr:
+                    search_result = ObjcPredicateResult(self.binary,
+                                                        predicate_list,
+                                                        objc_class,
+                                                        objc_sel,
+                                                        function_analyzer,
+                                                        search_result_instr)
+                    search_results.append(search_result)
+        return search_results
+
+
+class ObjcPredicateResult(object):
+    def __init__(self, binary, predicate_list, objc_class, objc_selector, function_analyzer, instruction):
+        # type: (MachoBinary, List[ObjcPredicateQuery], ObjcClass, ObjcSelector, ObjcFunctionAnalyzer, CsInsn) -> None
+        self.binary = binary
+        self.predicate_list = predicate_list
+        self.objc_class = objc_class
+        self.objc_selector = objc_selector
+        self.function_analyzer = function_analyzer
+        self.instruction = instruction

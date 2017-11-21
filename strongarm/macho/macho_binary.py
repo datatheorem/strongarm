@@ -57,6 +57,9 @@ class MachoBinary(object):
         self.encryption_info = None
         self.load_dylib_commands = None
 
+        # cache to save work on calls to self.get_bytes
+        self._cached_binary_contents = {}
+
         # kickoff for parsing this slice
         if not self.parse():
             raise RuntimeError('Failed to parse Mach-O')
@@ -268,12 +271,20 @@ class MachoBinary(object):
         if offset > 0x100000000:
             raise RuntimeError('offset to get_bytes looks like a virtual address. Did you mean to use '
                                'get_content_from_virtual_address?')
+
+        if (offset, size) in self._cached_binary_contents:
+            return self._cached_binary_contents[(offset, size)]
+
         # ensure file is open
         with open(self.filename) as binary_file:
             # account for the fact that this Macho slice is not necessarily the start of the file!
             # add slide to our macho slice to file seek
             binary_file.seek(offset + self._offset_within_fat)
-            return binary_file.read(size)
+
+            contents = binary_file.read(size)
+            # add to cache
+            self._cached_binary_contents[(offset, size)] = contents
+            return contents
 
     def should_swap_bytes(self):
         # type: () -> bool

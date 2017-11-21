@@ -10,7 +10,7 @@ from objc_query import ObjcPredicateQuery, \
     ObjcPredicateInstructionIndexQuery
 
 from strongarm.macho.macho_binary import MachoBinary
-from strongarm.macho.macho_analyzer import MachoAnalyzer
+import strongarm.macho.macho_analyzer
 
 
 class ObjcFunctionAnalyzer(object):
@@ -30,7 +30,7 @@ class ObjcFunctionAnalyzer(object):
             pass
 
         self.binary = binary
-        self.macho_analyzer = MachoAnalyzer.get_analyzer(binary)
+        self.macho_analyzer = strongarm.macho.macho_analyzer.MachoAnalyzer.get_analyzer(binary)
         self.instructions = instructions
 
         self._call_targets = None
@@ -73,7 +73,7 @@ class ObjcFunctionAnalyzer(object):
         Returns:
             An ObjcFunctionAnalyzer suitable for introspecting a block of code.
         """
-        analyzer = MachoAnalyzer.get_analyzer(binary)
+        analyzer = strongarm.macho.macho_analyzer.MachoAnalyzer.get_analyzer(binary)
         instructions = analyzer.get_function_instructions(start_address)
         return ObjcFunctionAnalyzer(binary, instructions)
 
@@ -111,7 +111,7 @@ class ObjcFunctionAnalyzer(object):
         return targets
 
     def perform_query(self, condition_list, start_index=0, search_backwards=False):
-        # type: (List[ObjcPredicateQuery], bool) -> Optional[CsInsn]
+        # type: (List[ObjcPredicateQuery], int, bool) -> Optional[CsInsn]
         """Given a List of predicates to satisfy, return the instruction within the function satisfying the conditions.
         If no satisfying instruction is found in the function, None will be returned.
 

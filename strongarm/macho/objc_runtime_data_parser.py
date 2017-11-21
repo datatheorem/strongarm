@@ -73,9 +73,10 @@ class ObjcDataEntryParser(object):
             raw_struct_data = self._binary.get_bytes(method_entry_off, sizeof(ObjcMethod))
             method_ent = ObjcMethod.from_buffer(bytearray(raw_struct_data))
 
-            # TODO(PT): preprocess __objc_methname so we don't have to search for null byte for every string here
             symbol_name = self._binary.get_full_string_from_start_address(method_ent.name)
-            signature = self._binary.get_full_string_from_start_address(method_ent.signature)
+            signature = ''
+            if method_ent.signature != 0:
+                signature = self._binary.get_full_string_from_start_address(method_ent.signature)
 
             # figure out which selref this corresponds to
             selref = None

@@ -297,3 +297,12 @@ class DylibCommandStruct(Structure):
     ]
     def __init__(self):
         self.fileoff = None
+
+
+class CFStringStruct(Structure):
+    _fields_ = [
+        ('base', c_uint64),
+        ('flags', c_uint64),
+        ('literal', c_uint64),
+        ('length', c_uint64)
+    ]

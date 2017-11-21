@@ -198,6 +198,20 @@ class MachoBinary(object):
             # move to next load command in header
             offset += load_command.cmdsize
 
+    def section_name_for_address(self, virt_addr):
+        # type: (int) -> Optional[Text]
+        """Given an address in the virtual address space, return the name of the section which contains it.
+        """
+        # invalid address?
+        if virt_addr < self.get_virtual_base():
+            return None
+
+        for section_name in self.sections:
+            section = self.sections[section_name]
+            if section.address <= virt_addr < section.end_address:
+                return section_name
+        return None
+
     def _parse_sections(self, segment, segment_offset):
         # type: (MachoSegmentCommand64, int) -> None
         """Parse all sections contained within a Mach-O segment, and add them to our list of sections

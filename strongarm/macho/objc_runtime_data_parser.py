@@ -14,11 +14,10 @@ class ObjcClass(object):
 
 
 class ObjcSelector(object):
-    def __init__(self, name, selref, signature, implementation):
-        # type: (Text, ObjcSelref, Optional[Text], Optional[int]) -> None
+    def __init__(self, name, selref, implementation):
+        # type: (Text, ObjcSelref, Optional[int]) -> None
         self.name = name
         self.selref = selref
-        self.signature = signature
         self.implementation = implementation
 
         self.is_external_definition = (not self.implementation)
@@ -74,9 +73,6 @@ class ObjcDataEntryParser(object):
             method_ent = ObjcMethod.from_buffer(bytearray(raw_struct_data))
 
             symbol_name = self._binary.get_full_string_from_start_address(method_ent.name)
-            signature = ''
-            if method_ent.signature != 0:
-                signature = self._binary.get_full_string_from_start_address(method_ent.signature)
 
             # figure out which selref this corresponds to
             selref = None
@@ -85,7 +81,7 @@ class ObjcDataEntryParser(object):
                     selref = s
                     break
 
-            selector = ObjcSelector(symbol_name, selref, signature, method_ent.implementation)
+            selector = ObjcSelector(symbol_name, selref, method_ent.implementation)
             selectors.append(selector)
 
             method_entry_off += sizeof(ObjcMethod)

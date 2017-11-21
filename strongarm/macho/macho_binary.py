@@ -1,11 +1,11 @@
-from typing import List, Text
+from typing import List, Text, Optional
 
 from strongarm.debug_util import DebugUtil
 
 from strongarm.macho.macho_definitions import MachoSection64Raw, MachArch, CPU_TYPE, MachoHeader64, HEADER_FLAGS
 from strongarm.macho.macho_definitions import MachOLoadCommand, MachoSymtabCommand, MachoDysymtabCommand
 from strongarm.macho.macho_definitions import MachoSegmentCommand64, MachoEncryptionInfo64Command, MachoNlist64
-from strongarm.macho.macho_definitions import DylibCommandStruct
+from strongarm.macho.macho_definitions import DylibCommandStruct, CFStringStruct
 
 from strongarm.macho.macho_load_commands import MachoLoadCommands
 
@@ -19,6 +19,7 @@ class MachoSection(object):
         self.content = binary.get_bytes(section_command.offset, section_command.size)
         self.name = section_command.sectname
         self.address = section_command.addr
+        self.end_address = self.address + section_command.size
 
 
 class MachoBinary(object):

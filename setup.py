@@ -24,5 +24,9 @@ setup(
         'typing',
         'capstone',
         'enum34'
+        'njas==0.1.3',
+    ],
+    dependency_links=[
+        'git+ssh://git@bitbucket.org/datatheorem/njas.git@0.1.3#egg=njas-0.1.3',
     ],
 )

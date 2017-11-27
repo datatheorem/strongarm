@@ -18,6 +18,8 @@ class MachoSection(object):
         self.content = binary.get_bytes(section_command.offset, section_command.size)
         self.name = section_command.sectname
         self.address = section_command.addr
+        self.offset = section_command.offset
+        self.end_address = self.address + section_command.size
 
 
 class MachoBinary(object):
@@ -41,6 +43,7 @@ class MachoBinary(object):
         self.is_64bit = None
         self.is_swap = None
         self.cpu_type = None
+        self._load_commands_end_addr = None
 
         # Mach-O header data
         self.header = None
@@ -53,6 +56,13 @@ class MachoBinary(object):
         self.dysymtab = None
         self.symtab = None
         self.encryption_info = None
+
+        self.load_dylib_commands = None
+
+        # cache to save work on calls to get_bytes()
+        self._cached_binary_contents = {}
+        # cache to save work on calls to get_full_string_from_start_address()
+        self._binary_string_cache = {}
 
         # kickoff for parsing this slice
         if not self.parse():
@@ -133,6 +143,8 @@ class MachoBinary(object):
 
         # load commands begin directly after Mach O header, so the offset is the size of the header
         load_commands_off = sizeof(MachoHeader64)
+
+        self._load_commands_end_addr = load_commands_off + self.header.sizeofcmds
         self._parse_segment_commands(load_commands_off, self.header.ncmds)
 
     def _parse_header_flags(self):
@@ -339,9 +351,85 @@ class MachoBinary(object):
             indirect_symtab_off += sizeof(c_uint32)
         return indirect_symtab
 
+    def file_offset_for_virtual_address(self, virtual_address):
+        # if this address is within the initial Mach-O load commands, it must be handled seperately
+        # this unslid virtual address is just a 'best guess' of the physical file address, and it'll be the correct
+        # address if the virtual address was within the initial load commands
+        # if the virtual address was in the section contents, however, we must use another method to translate addresses
+        unslid_virtual_address = virtual_address - self.get_virtual_base()
+        if unslid_virtual_address < self._load_commands_end_addr:
+            return unslid_virtual_address
+
+        section_for_address = self.section_for_address(virtual_address)
+        if not section_for_address:
+            raise RuntimeError('Couldn\'t map virtual address {} to a section!'.format(hex(int(virtual_address))))
+
+        # the virtual address is contained within a section's contents
+        # use this formula to convert a virtual address within a section to the file offset:
+        # https://reverseengineering.stackexchange.com/questions/8177/convert-mach-o-vm-address-to-file-offset
+        binary_address = (virtual_address - section_for_address.address) + section_for_address.offset
+        return binary_address
+
     def get_content_from_virtual_address(self, virtual_address, size):
         # type: (int, int) -> str
-        binary_address = virtual_address - self.get_virtual_base()
+        binary_address = self.file_offset_for_virtual_address(virtual_address)
         return self.get_bytes(binary_address, size)
 
+    def get_full_string_from_start_address(self, start_address, virtual=True):
+        # type: (int) -> Text
+        """Return a string containing the bytes from start_address up to the next NULL character
+        """
+        #if start_address in self._binary_string_cache:
+        #    return self._binary_string_cache[start_address]
 
+        max_len = 16
+        symbol_name_characters = []
+        found_null_terminator = False
+
+        while not found_null_terminator:
+            if virtual:
+                name_bytes = self.get_content_from_virtual_address(virtual_address=start_address, size=max_len)
+            else:
+                name_bytes = self.get_bytes(start_address, max_len)
+            # search for null terminator in this content
+            #for ch in name_bytes:
+            #    if ch == '\x00':
+            #        found_null_terminator = True
+            #        break
+            #    symbol_name_characters.append(ch)
+            null_idx = [idx for idx, ch in enumerate(name_bytes) if ch == '\x00']
+            last = len(name_bytes)
+            if null_idx:
+                last = null_idx[0]
+                found_null_terminator = True
+            symbol_name_characters.append(name_bytes[:last])
+
+            # do we need to keep searching for the end of the symbol name?
+            if not found_null_terminator:
+                # since we read [start_address:start_address + max_len], trim that from search space
+                start_address += max_len
+                # double search space for next iteration
+                max_len *= 2
+            else:
+                # read full string!
+                symbol_name = ''.join(symbol_name_characters)
+
+                # place into cache
+                #self._binary_string_cache[start_address] = symbol_name
+
+                return symbol_name
+
+    def read_embedded_string(self, address):
+        # type: (int) -> Text
+        """Read a string embedded in the binary at address
+        This method will automatically parse a CFString and return the string literal if address points to one
+        """
+        section_name = self.section_name_for_address(address)
+        # special case if this is a __cfstring entry
+        if section_name == '__cfstring':
+            # we must parse the CFString
+            cfstring_bytes = self.get_content_from_virtual_address(address, sizeof(CFStringStruct))
+            cfstring_ent = CFStringStruct.from_buffer(bytearray(cfstring_bytes))
+            # patch address to read string from to be the string literal address of this CFString
+            address = cfstring_ent.literal
+        return self.get_full_string_from_start_address(address)

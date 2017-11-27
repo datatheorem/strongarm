@@ -61,8 +61,6 @@ class MachoBinary(object):
 
         # cache to save work on calls to get_bytes()
         self._cached_binary_contents = {}
-        # cache to save work on calls to get_full_string_from_start_address()
-        self._binary_string_cache = {}
 
         # kickoff for parsing this slice
         if not self.parse():
@@ -363,6 +361,7 @@ class MachoBinary(object):
         return indirect_symtab
 
     def file_offset_for_virtual_address(self, virtual_address):
+        # type: (int) -> int
         # if this address is within the initial Mach-O load commands, it must be handled seperately
         # this unslid virtual address is just a 'best guess' of the physical file address, and it'll be the correct
         # address if the virtual address was within the initial load commands
@@ -383,19 +382,22 @@ class MachoBinary(object):
 
     def get_content_from_virtual_address(self, virtual_address, size):
         # type: (int, int) -> str
-        binary_address = virtual_address - self.get_virtual_base()
+        binary_address = self.file_offset_for_virtual_address(virtual_address)
         return self.get_bytes(binary_address, size)
 
-    def get_full_string_from_start_address(self, start_address):
+    def get_full_string_from_start_address(self, start_address, virtual=True):
         # type: (int) -> Text
         """Return a string containing the bytes from start_address up to the next NULL character
         """
-        max_len = 128
+        max_len = 16
         symbol_name_characters = []
         found_null_terminator = False
 
         while not found_null_terminator:
-            name_bytes = self.get_content_from_virtual_address(virtual_address=start_address, size=max_len)
+            if virtual:
+                name_bytes = self.get_content_from_virtual_address(virtual_address=start_address, size=max_len)
+            else:
+                name_bytes = self.get_bytes(start_address, max_len)
             # search for null terminator in this content
             for ch in name_bytes:
                 if ch == '\x00':

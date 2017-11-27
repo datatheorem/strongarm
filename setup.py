@@ -23,7 +23,7 @@ setup(
     install_requires=[
         'typing',
         'capstone',
-        'enum34'
+        'enum'
         'njas==0.1.3',
     ],
     dependency_links=[

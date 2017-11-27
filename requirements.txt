@@ -1,6 +1,7 @@
 # Requirements for strongarm as a python module
 typing
+enum
 capstone
-enum34
+
 git+ssh://git@bitbucket.org/datatheorem/njas.git@0.1.3#egg=njas
 --process-dependency-links

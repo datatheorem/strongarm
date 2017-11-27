@@ -19,6 +19,19 @@ class TestMachoBinary(unittest.TestCase):
         self.binary = self.parser.slices[0]
         self.assertIsNotNone(self.binary)
 
+    def test_translate_virtual_address(self):
+        # ensure virtual addresses are correctly translated to file offsets
+        virt = 0x100006dd0
+        correct_bytes = 'application:didRegisterUserNotificationSettings:\x00'
+        found_bytes = self.binary.get_content_from_virtual_address(virtual_address=virt, size=len(correct_bytes))
+        self.assertEqual(found_bytes, correct_bytes)
+
+        # test an address before the end of load commands
+        virt = 0x100000ad0
+        correct_phys = 0xad0
+        found_phys = self.binary.file_offset_for_virtual_address(virt)
+        self.assertEqual(correct_phys, found_phys)
+
     def test_virt_base(self):
         self.assertEqual(self.binary.get_virtual_base(), 0x100000000)
 

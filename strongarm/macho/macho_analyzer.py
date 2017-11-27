@@ -35,10 +35,17 @@ class MachoAnalyzer(object):
         self.exported_symbols = self.crossref_helper.exported_symbols
 
         self.imp_stubs = MachoImpStubsParser(bin, self.cs).imp_stubs
-        self.objc_helper = ObjcRuntimeDataParser(bin)
+        self._objc_helper = None
 
         # done setting up, store this analyzer in class cache
         MachoAnalyzer.active_analyzer_map[bin] = self
+
+    @property
+    def objc_helper(self):
+        # type: () -> ObjcRuntimeDataParser
+        if not self._objc_helper:
+            self._objc_helper = ObjcRuntimeDataParser(self.binary)
+        return self._objc_helper
 
     @classmethod
     def get_analyzer(cls, bin):

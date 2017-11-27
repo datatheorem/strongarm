@@ -116,9 +116,12 @@ class ObjcRuntimeDataParser(object):
     def __init__(self, binary):
         # type: (MachoBinary) -> None
         self.binary = binary
+        DebugUtil.log(self, 'Parsing selrefs...')
         self._selrefs = self._parse_selrefs()
+        DebugUtil.log(self, 'Parsing static ObjC runtime info...')
         self.classes = self._parse_static_objc_runtime_info()
 
+        DebugUtil.log(self, 'Resolving symbol name to source dylib map...')
         self._sym_to_dylib_path = self._parse_linked_dylib_symbols()
 
     def _parse_linked_dylib_symbols(self):
@@ -195,7 +198,7 @@ class ObjcRuntimeDataParser(object):
 
         # therefore, the selref must refer to a selector which is defined outside this binary
         # this is fine, just construct an ObjcSelector with what we know
-        sel = ObjcSelector(selref.selector_literal, selref, None, None)
+        sel = ObjcSelector(selref.selector_literal, selref, None)
         return sel
 
     def get_method_imp_addresses(self, selector):
@@ -213,6 +216,7 @@ class ObjcRuntimeDataParser(object):
         # type: () -> List[ObjcClass]
         """Read Objective-C class data in __objc_classlist, __objc_data to get classes and selectors in binary
         """
+        DebugUtil.log(self, 'Reading objc_classlist pointers...')
         objc_classes = []
         classlist_pointers = self._get_classlist_pointers()
         # if the classlist had no entries, there's no Objective-C data in this binary
@@ -221,6 +225,7 @@ class ObjcRuntimeDataParser(object):
             return objc_classes
 
         # read actual list of ObjcClassRaw structs from list of pointers
+        DebugUtil.log(self, 'Reading __objc_class structs...')
         raw_objc_classes = []
         for class_ptr in classlist_pointers:
             raw_objc_classes.append(self._get_objc_class_from_classlist_pointer(class_ptr))
@@ -230,11 +235,13 @@ class ObjcRuntimeDataParser(object):
         # and, when requesting an IMP for a selector, we could request the class too (for SEL collisions)
 
         # read data for each class
+        DebugUtil.log(self, 'Reading __objc_data structs...')
         objc_data_entries = []
         for class_ent in raw_objc_classes:
             objc_data_entries.append(self._get_objc_data_from_objc_class(class_ent))
 
         # read information from each struct __objc_data
+        DebugUtil.log(self, 'Parsing runtime data from __objc_data structs...')
         for objc_data in objc_data_entries:
             objc_classes.append(self._parse_objc_data_entry(objc_data))
         return objc_classes
@@ -244,6 +251,7 @@ class ObjcRuntimeDataParser(object):
         data_parser = ObjcDataEntryParser(self.binary, self._selrefs, objc_data_raw)
 
         name = self.binary.get_full_string_from_start_address(objc_data_raw.name)
+        DebugUtil.log(self, 'Parsing class {} selectors...'.format(name))
         selectors = data_parser.get_selectors()
         return ObjcClass(name, selectors)
 

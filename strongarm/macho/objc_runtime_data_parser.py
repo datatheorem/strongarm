@@ -136,8 +136,8 @@ class ObjcRuntimeDataParser(object):
             sym = symtab_contents[symtab_idx]
 
             strtab_idx = sym.n_un.n_strx
-            string_virt_address = symtab.stroff + strtab_idx + self.binary.get_virtual_base()
-            symbol_name = self.binary.get_full_string_from_start_address(string_virt_address)
+            string_file_address = symtab.stroff + strtab_idx
+            symbol_name = self.binary.get_full_string_from_start_address(string_file_address, virtual=False)
 
             library_ordinal = self._library_ordinal_from_n_desc(sym.n_desc)
             source_dylib = self._dylib_from_library_ordinal(library_ordinal)
@@ -177,6 +177,7 @@ class ObjcRuntimeDataParser(object):
             selref_val = c_uint64.from_buffer(bytearray(selref_val_data)).value
             virt_location = content_off + selref_sect.cmd.addr
 
+            # read selector string literal from selref pointer
             selref_contents = self.binary.get_full_string_from_start_address(selref_val)
             selrefs.append(ObjcSelref(virt_location, selref_val, selref_contents))
         return selrefs
@@ -251,7 +252,7 @@ class ObjcRuntimeDataParser(object):
         data_parser = ObjcDataEntryParser(self.binary, self._selrefs, objc_data_raw)
 
         name = self.binary.get_full_string_from_start_address(objc_data_raw.name)
-        DebugUtil.log(self, 'Parsing class {} selectors...'.format(name))
+        DebugUtil.log(self, 'Parsing selectors for class class {}...'.format(name))
         selectors = data_parser.get_selectors()
         return ObjcClass(name, selectors)
 

@@ -19,6 +19,7 @@ class MachoSection(object):
         self.content = binary.get_bytes(section_command.offset, section_command.size)
         self.name = section_command.sectname
         self.address = section_command.addr
+        self.offset = section_command.offset
         self.end_address = self.address + section_command.size
 
 
@@ -43,6 +44,7 @@ class MachoBinary(object):
         self.is_64bit = None
         self.is_swap = None
         self.cpu_type = None
+        self._load_commands_end_addr = None
 
         # Mach-O header data
         self.header = None
@@ -57,8 +59,10 @@ class MachoBinary(object):
         self.encryption_info = None
         self.load_dylib_commands = None
 
-        # cache to save work on calls to self.get_bytes
+        # cache to save work on calls to get_bytes()
         self._cached_binary_contents = {}
+        # cache to save work on calls to get_full_string_from_start_address()
+        self._binary_string_cache = {}
 
         # kickoff for parsing this slice
         if not self.parse():
@@ -139,6 +143,8 @@ class MachoBinary(object):
 
         # load commands begin directly after Mach O header, so the offset is the size of the header
         load_commands_off = sizeof(MachoHeader64)
+
+        self._load_commands_end_addr = load_commands_off + self.header.sizeofcmds
         self._parse_segment_commands(load_commands_off, self.header.ncmds)
 
     def _parse_header_flags(self):
@@ -214,6 +220,13 @@ class MachoBinary(object):
             if section.address <= virt_addr < section.end_address:
                 return section_name
         return None
+
+    def section_for_address(self, virt_addr):
+        # type: (int) -> Optional[MachoSection]
+        section_name = self.section_name_for_address(virt_addr)
+        if not section_name:
+            return None
+        return self.sections[section_name]
 
     def _parse_sections(self, segment, segment_offset):
         # type: (MachoSegmentCommand64, int) -> None
@@ -348,6 +361,25 @@ class MachoBinary(object):
             # traverse to next pointer
             indirect_symtab_off += sizeof(c_uint32)
         return indirect_symtab
+
+    def file_offset_for_virtual_address(self, virtual_address):
+        # if this address is within the initial Mach-O load commands, it must be handled seperately
+        # this unslid virtual address is just a 'best guess' of the physical file address, and it'll be the correct
+        # address if the virtual address was within the initial load commands
+        # if the virtual address was in the section contents, however, we must use another method to translate addresses
+        unslid_virtual_address = virtual_address - self.get_virtual_base()
+        if unslid_virtual_address < self._load_commands_end_addr:
+            return unslid_virtual_address
+
+        section_for_address = self.section_for_address(virtual_address)
+        if not section_for_address:
+            raise RuntimeError('Couldn\'t map virtual address {} to a section!'.format(hex(int(virtual_address))))
+
+        # the virtual address is contained within a section's contents
+        # use this formula to convert a virtual address within a section to the file offset:
+        # https://reverseengineering.stackexchange.com/questions/8177/convert-mach-o-vm-address-to-file-offset
+        binary_address = (virtual_address - section_for_address.address) + section_for_address.offset
+        return binary_address
 
     def get_content_from_virtual_address(self, virtual_address, size):
         # type: (int, int) -> str

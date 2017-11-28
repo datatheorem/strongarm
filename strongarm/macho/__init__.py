@@ -1,6 +1,4 @@
-import macho_analyzer
-import macho_binary
-import macho_string_table_helper
-import macho_definitions
-import macho_load_commands
-import macho_parse
+# -*- coding: utf-8 -*-
+from __future__ import absolute_import
+from __future__ import unicode_literals
+from __future__ import print_function

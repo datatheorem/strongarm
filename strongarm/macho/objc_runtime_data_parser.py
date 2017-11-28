@@ -1,3 +1,8 @@
+# -*- coding: utf-8 -*-
+from __future__ import absolute_import
+from __future__ import unicode_literals
+from __future__ import print_function
+
 from typing import List, Optional, Text, Dict
 from ctypes import sizeof, c_uint64
 

@@ -1,3 +1,8 @@
+# -*- coding: utf-8 -*-
+from __future__ import absolute_import
+from __future__ import unicode_literals
+from __future__ import print_function
+
 from ctypes import sizeof, c_void_p
 
 from capstone import Cs, CsInsn, CS_ARCH_ARM64, CS_MODE_ARM

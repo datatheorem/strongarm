@@ -1,3 +1,8 @@
+# -*- coding: utf-8 -*-
+from __future__ import absolute_import
+from __future__ import unicode_literals
+from __future__ import print_function
+
 import struct
 from ctypes import Union, Structure, c_uint8, c_uint16, c_uint32, c_uint64, c_int32, c_char, c_int64, c_char_p
 from enum import IntEnum

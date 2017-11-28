@@ -1,3 +1,8 @@
+# -*- coding: utf-8 -*-
+from __future__ import absolute_import
+from __future__ import unicode_literals
+from __future__ import print_function
+
 from capstone.arm64 import ARM64_OP_REG, ARM64_OP_IMM, ARM64_OP_MEM
 from capstone import CsInsn
 from typing import Text, List, Optional, Dict, Tuple

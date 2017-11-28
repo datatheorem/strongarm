@@ -10,10 +10,8 @@ from typing import Text, List, Dict, Optional
 
 from strongarm.macho.macho_binary import MachoBinary
 from strongarm.macho.macho_imp_stubs import MachoImpStubsParser
-from macho_string_table_helper import MachoStringTableHelper
-from objc_runtime_data_parser import ObjcRuntimeDataParser, ObjcSelector, ObjcClass
-from strongarm.objc.objc_query import ObjcPredicateQuery
-from strongarm.objc.objc_analyzer import ObjcFunctionAnalyzer
+from strongarm.macho.macho_string_table_helper import MachoStringTableHelper
+from strongarm.macho.objc_runtime_data_parser import ObjcRuntimeDataParser, ObjcSelector, ObjcClass
 
 
 class MachoAnalyzer(object):
@@ -379,7 +377,7 @@ class MachoAnalyzer(object):
         return implementations
 
     def perform_query(self, predicate_lists):
-        # type: (List[List[ObjcPredicateQuery]]) -> List[ObjcPredicateResult]
+        # type: (List[List[q.ObjcPredicateQuery]]) -> List[ObjcPredicateResult]
         """Run a set of predicates on the analyzed binary, and return a list of code matching criteria
 
         Each list will only be matched if all predicates in the list are matched by an instruction. For example,
@@ -393,6 +391,8 @@ class MachoAnalyzer(object):
         Returns:
             List of search results
         """
+        import strongarm.objc.objc_query as q
+        import strongarm.objc.objc_analyzer as objc_analyzer
         search_results = []
         entry_point_list = []
         for objc_class in self.objc_classes():
@@ -401,7 +401,7 @@ class MachoAnalyzer(object):
                 entry_point_list.append((objc_class, objc_sel, imp_addr))
 
         for objc_class, objc_sel, imp in entry_point_list:
-            function_analyzer = ObjcFunctionAnalyzer.get_function_analyzer(self.binary, imp)
+            function_analyzer = objc_analyzer.ObjcFunctionAnalyzer.get_function_analyzer(self.binary, imp)
             for predicate_list in predicate_lists:
                 # TODO(PT): perform_query() should let us specify OR predicates as well as AND predicates
                 # TODO(PT): perform_query() should return a List of all matching instructions, not just the first
@@ -419,7 +419,9 @@ class MachoAnalyzer(object):
 
 class ObjcPredicateResult(object):
     def __init__(self, binary, predicate_list, objc_class, objc_selector, function_analyzer, instruction):
-        # type: (MachoBinary, List[ObjcPredicateQuery], ObjcClass, ObjcSelector, ObjcFunctionAnalyzer, CsInsn) -> None
+        # type: (MachoBinary, List[q.ObjcPredicateQuery], ObjcClass, ObjcSelector, analyzer.ObjcFunctionAnalyzer, CsInsn) -> None
+        import strongarm.objc.objc_query as q
+        import strongarm.objc.objc_analyzer as analyzer
         self.binary = binary
         self.predicate_list = predicate_list
         self.objc_class = objc_class

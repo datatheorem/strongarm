@@ -8,14 +8,8 @@ from capstone import CsInsn
 from typing import Text, List, Optional, Dict, Tuple
 
 from strongarm.debug_util import DebugUtil
-from objc_instruction import ObjcBranchInstruction
-from objc_query import ObjcPredicateQuery, \
-    ObjcPredicateMnemonicQuery, \
-    ObjcPredicateOperandQuery, \
-    ObjcPredicateInstructionIndexQuery
 
 from strongarm.macho.macho_binary import MachoBinary
-import strongarm.macho.macho_analyzer
 
 
 class ObjcFunctionAnalyzer(object):
@@ -116,7 +110,7 @@ class ObjcFunctionAnalyzer(object):
         return targets
 
     def perform_query(self, condition_list, start_index=0, search_backwards=False):
-        # type: (List[ObjcPredicateQuery], int, bool) -> Optional[CsInsn]
+        # type: (List[query.ObjcPredicateQuery], int, bool) -> Optional[CsInsn]
         """Given a List of predicates to satisfy, return the instruction within the function satisfying the conditions.
         If no satisfying instruction is found in the function, None will be returned.
 
@@ -128,6 +122,7 @@ class ObjcFunctionAnalyzer(object):
         Returns:
             The instruction within the search space which passes all provided conditions
         """
+        import strongarm.objc.objc_query as query
         DebugUtil.log(self, 'searching for query conditions {} in function {}'.format(
             condition_list,
             self.start_address
@@ -138,7 +133,7 @@ class ObjcFunctionAnalyzer(object):
         minimum_index = start_index
         maximum_index = len(self.instructions) - 1
         for c in condition_list:
-            if type(c) is ObjcPredicateInstructionIndexQuery:
+            if type(c) is query.ObjcPredicateInstructionIndexQuery:
                 if c.exact_index is not None:
                     minimum_index = c.exact_index
                 elif c.minimum_index is not None:
@@ -581,13 +576,14 @@ class ObjcBlockAnalyzer(ObjcFunctionAnalyzer):
         Returns:
              Tuple of register containing target Block->invoke, and the index this instruction was found at
         """
+        import strongarm.objc.objc_query as query
         search_index = 0
         while search_index < len(self.instructions):
-            mnemonic_predicate = ObjcPredicateMnemonicQuery(self.binary, allow_mnemonics=['blr'])
-            operand_predicate = ObjcPredicateOperandQuery(self.binary,
+            mnemonic_predicate = query.ObjcPredicateMnemonicQuery(self.binary, allow_mnemonics=['blr'])
+            operand_predicate = query.ObjcPredicateOperandQuery(self.binary,
                                                           operand_index=0,
                                                           operand_type=ARM64_OP_REG)
-            index_predicate = ObjcPredicateInstructionIndexQuery(self.binary, minimum_index=search_index)
+            index_predicate = query.ObjcPredicateInstructionIndexQuery(self.binary, minimum_index=search_index)
             found_branch = self.perform_query([mnemonic_predicate, operand_predicate, index_predicate])
             if found_branch is not None:
                 # in the past, find_block_invoke would find a block load from an instruction like:

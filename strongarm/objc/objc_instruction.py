@@ -5,7 +5,6 @@ from __future__ import print_function
 
 from capstone import CsInsn
 
-import objc_analyzer
 import strongarm.macho.macho_analyzer
 
 
@@ -34,7 +33,7 @@ class ObjcBranchInstruction(ObjcInstruction):
 
     @classmethod
     def parse_instruction(cls, function_analyzer, instruction):
-        # type: (objc_analyzer.ObjcFunctionAnalyzer, CsInsn) -> ObjcBranchInstruction
+        # type: (strongarm.objc.objc_analyzer.ObjcFunctionAnalyzer, CsInsn) -> ObjcBranchInstruction
         """Read a branch instruction and encapsulate it in the appropriate ObjcBranchInstruction subclass
         """
         # use appropriate subclass

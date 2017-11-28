@@ -292,7 +292,7 @@ class MachoBinary(object):
             return self._cached_binary_contents[(offset, size)]
 
         # ensure file is open
-        with open(self.filename) as binary_file:
+        with open(self.filename, 'rb') as binary_file:
             # account for the fact that this Macho slice is not necessarily the start of the file!
             # add slide to our macho slice to file seek
             binary_file.seek(offset + self._offset_within_fat)

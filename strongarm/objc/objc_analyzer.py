@@ -73,7 +73,8 @@ class ObjcFunctionAnalyzer(object):
         Returns:
             An ObjcFunctionAnalyzer suitable for introspecting a block of code.
         """
-        analyzer = strongarm.macho.macho_analyzer.MachoAnalyzer.get_analyzer(binary)
+        from strongarm.macho.macho_analyzer import MachoAnalyzer
+        analyzer = MachoAnalyzer.get_analyzer(binary)
         instructions = analyzer.get_function_instructions(start_address)
         return ObjcFunctionAnalyzer(binary, instructions)
 
@@ -95,6 +96,7 @@ class ObjcFunctionAnalyzer(object):
 
         while True:
             # grab the next branch in front of the last one we visited
+            # TODO(PT): this should use a mnemonic and instruction index search predicate
             next_branch = self.next_branch_after_instruction_index(last_branch_idx)
             if not next_branch:
                 # parsed every branch in this function
@@ -300,6 +302,9 @@ class ObjcFunctionAnalyzer(object):
         return None
 
     def is_local_branch(self, branch_instruction):
+        # if there's no destination address, the destination is outside the binary, and it couldn't possible be local
+        if not branch_instruction.destination_address:
+            return False
         return self.start_address <= branch_instruction.destination_address <= self.end_address
 
     def get_selref_ptr(self, msgsend_instr):

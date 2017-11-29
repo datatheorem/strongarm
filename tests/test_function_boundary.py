@@ -23,8 +23,8 @@ class FunctionBoundaryTests(unittest.TestCase):
         # found in Hopper
         # address of -[DTHAppDelegate application:didFinishLaunchingWithOptions:]
         # this function ends with a ret instruction
-        start_address = 0x100006844
-        end_address = 0x100006848
+        start_address = 0x1000066dc
+        end_address = 0x1000066e0
         actual_size = end_address - start_address
 
         guessed_end_address = self.analyzer._find_function_boundary(start_address, actual_size * 2)
@@ -34,8 +34,8 @@ class FunctionBoundaryTests(unittest.TestCase):
         # found in Hopper
         # address of -[DTHAppDelegate setWindow:]
         # this function ends with a b/bl instruction
-        start_address = 0x100006870
-        end_address = 0x100006880
+        start_address = 0x100006708
+        end_address = 0x100006718
 
         actual_size = end_address - start_address
 
@@ -45,8 +45,8 @@ class FunctionBoundaryTests(unittest.TestCase):
     def test_get_method_address_range(self):
         sel = 'application:didFinishLaunchingWithOptions:'
         # found in Hopper
-        correct_start_address = 0x100006844
-        correct_end_address = 0x100006848
+        correct_start_address = 0x1000066dc
+        correct_end_address = 0x1000066e0
 
         imp_addresses = self.analyzer.get_method_address_ranges(sel)
         found_start_address, found_end_address = imp_addresses[0]

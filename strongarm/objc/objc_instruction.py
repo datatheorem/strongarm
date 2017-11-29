@@ -118,6 +118,7 @@ class ObjcUnconditionalBranchInstruction(ObjcBranchInstruction):
         # if we couldn't find an IMP for this selref,
         # it is defined in a class outside this binary
         self.is_external_objc_call = selector.is_external_definition
+
         self.destination_address = selector.implementation
         self.selref = selector.selref
 

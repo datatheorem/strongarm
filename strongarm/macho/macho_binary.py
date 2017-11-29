@@ -85,7 +85,7 @@ class MachoBinary(object):
         """
         DebugUtil.log(self, 'parsing Mach-O slice @ {} in {}'.format(
             hex(int(self._offset_within_fat)),
-            self.filename
+            self.filename.decode('utf-8')
         ))
 
         # preliminary Mach-O parsing

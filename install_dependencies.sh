@@ -3,9 +3,11 @@
 case `uname` in
     Darwin)
         # capstone
+        brew update
         brew install capstone
         ;;
     Linux)
+        apt-get update -qq
         # capstone
         apt-get install libcapstone3 -y
         ;;

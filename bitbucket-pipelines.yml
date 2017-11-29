@@ -6,4 +6,5 @@ pipelines:
         script:
           - pip install -U tox
           - pip install -I --no-use-wheel capstone
+          - apt-get install python-capstone
           - tox

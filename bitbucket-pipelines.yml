@@ -4,7 +4,5 @@ pipelines:
   default:
     - step:
         script:
-          - apt-get update
-          - apt-get install libcapstone3 -y
           - pip install -U tox
           - tox

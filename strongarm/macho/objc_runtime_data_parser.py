@@ -175,6 +175,7 @@ class ObjcRuntimeDataParser(object):
 
         selref_sect = self.binary.sections['__objc_selrefs']
         entry_count = selref_sect.cmd.size / sizeof(c_uint64)
+        entry_count = int(entry_count)
 
         for i in range(entry_count):
             content_off = i * sizeof(c_uint64)
@@ -270,7 +271,7 @@ class ObjcRuntimeDataParser(object):
             return classlist_entries
 
         classlist_data = self.binary.sections['__objc_classlist'].content
-        classlist_size = len(classlist_data) / sizeof(c_uint64)
+        classlist_size = int(len(classlist_data) / sizeof(c_uint64))
 
         classlist_off = 0
         for i in range(classlist_size):

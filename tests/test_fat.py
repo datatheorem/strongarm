@@ -6,7 +6,7 @@ from __future__ import print_function
 import unittest
 import os
 
-from strongarm.macho.macho_definitions import *
+from strongarm.macho.macho_definitions import MachArch
 from strongarm.macho.macho_parse import MachoParser
 
 

@@ -54,12 +54,12 @@ class MachoStringTableHelper(object):
         strtab = self.binary.get_raw_string_table()
         for idx, ch in enumerate(strtab):
             # end of current string?
-            if ch == '\x00':
+            if ch == 0x00:
                 length = idx - entry_start_idx
 
                 # read this string now that we know the start index and length
                 entry_end_idx = entry_start_idx + length
-                entry_content = ''.join(strtab[entry_start_idx:entry_end_idx:])
+                entry_content = bytearray(strtab[entry_start_idx:entry_end_idx:]).decode('UTF-8')
 
                 # record in list
                 ent = MachoStringTableEntry(entry_start_idx, length, entry_content)

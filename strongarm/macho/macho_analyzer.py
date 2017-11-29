@@ -91,7 +91,7 @@ class MachoAnalyzer(object):
         lazy_sym_section = self.binary.sections['__la_symbol_ptr']
         # __la_symbol_ptr is just an array of pointers
         # the number of pointers is the size, in bytes, of the section, divided by a 64b pointer size
-        sym_ptr_count = lazy_sym_section.cmd.size / sizeof(c_void_p)
+        sym_ptr_count = int(lazy_sym_section.cmd.size / sizeof(c_void_p))
 
         # this section's data starts at the file offset field
         section_data_ptr = lazy_sym_section.cmd.offset

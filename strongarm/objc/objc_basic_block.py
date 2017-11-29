@@ -5,18 +5,18 @@ from __future__ import print_function
 
 from typing import List, Text
 
-import objc_analyzer
+from .objc_analyzer import ObjcFunctionAnalyzer
 from strongarm.debug_util import DebugUtil
 
 
 class ObjcBasicBlock(object):
     def __init__(self, function_analyzer, start_index):
-        # type: (objc_analyzer.ObjcFunctionAnalyzer) -> None
+        # type: (ObjcFunctionAnalyzer) -> None
         self._function_analyzer = function_analyzer
 
     @classmethod
     def get_basic_blocks(cls, function_analyzer):
-        # type: (objc_analyzer.ObjcFunctionAnalyzer) -> List[ObjcBasicBlock]
+        # type: (ObjcFunctionAnalyzer) -> List[ObjcBasicBlock]
         local_branch_instructions = function_analyzer.get_local_branches()
 
         # TODO(PT): make it more efficient to get the start indexes of local branches
@@ -51,7 +51,7 @@ class ObjcBasicBlock(object):
         basic_block_start_indexes.sort()
         basic_block_end_indexes.sort()
 
-        basic_block_indexes = zip(basic_block_start_indexes, basic_block_end_indexes)
+        basic_block_indexes = list(zip(basic_block_start_indexes, basic_block_end_indexes))
         # trim empty blocks
         for start, end in list(basic_block_indexes):
             if start == end:
@@ -67,7 +67,7 @@ class ObjcBasicBlock(object):
         for idx, block in enumerate(basic_blocks):
             DebugUtil.log(cls, 'Basic Block #{}:'.format(idx))
             for instr in block:
-                DebugUtil.log(cls, objc_analyzer.ObjcFunctionAnalyzer.format_instruction(instr))
+                DebugUtil.log(cls, ObjcFunctionAnalyzer.format_instruction(instr))
 
         return basic_blocks
 

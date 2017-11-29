@@ -199,7 +199,7 @@ class MachoBinary(object):
                 segment_bytes = self.get_bytes(offset, sizeof(MachoSegmentCommand64))
                 segment = MachoSegmentCommand64.from_buffer(bytearray(segment_bytes))
                 # TODO(pt) handle byte swap of segment if necessary
-                self.segment_commands[segment.segname] = segment
+                self.segment_commands[segment.segname.decode('UTF8')] = segment
                 self._parse_sections(segment, offset)
             elif load_command.cmd in [MachoLoadCommands.LC_LOAD_DYLIB, MachoLoadCommands.LC_LOAD_WEAK_DYLIB]:
                 dylib_load_bytes = self.get_bytes(offset, sizeof(DylibCommandStruct))
@@ -214,6 +214,8 @@ class MachoBinary(object):
         # type: (int) -> Optional[Text]
         """Given an address in the virtual address space, return the name of the section which contains it.
         """
+        return self.section_for_address(virt_addr).name.decode('UTF8')
+
     def section_for_address(self, virt_addr):
         # type: (int) -> Optional[MachoSection]
         import six
@@ -262,7 +264,7 @@ class MachoBinary(object):
             # encapsulate header and content into one object, and store that
             section = MachoSection(self, section_command)
             # add to map with the key being the name of the section
-            self.sections[section_command.sectname] = section
+            self.sections[section_command.sectname.decode('UTF8')] = section
 
             # go to next section in list
             section_offset += section_size
@@ -279,7 +281,7 @@ class MachoBinary(object):
         return text_seg.vmaddr
 
     def get_bytes(self, offset, size):
-        # type: (int, int) -> str
+        # type: (int, int) -> bytes
         """Retrieve bytes from Mach-O slice, taking into account that the slice could be at an offset within a FAT
 
         Args:
@@ -305,8 +307,8 @@ class MachoBinary(object):
 
             contents = binary_file.read(size)
             # add to cache
-            self._cached_binary_contents[(offset, size)] = contents
-            return contents
+            self._cached_binary_contents[(offset, size)] = bytes(contents)
+            return bytes(contents)
 
     def should_swap_bytes(self):
         # type: () -> bool
@@ -392,7 +394,7 @@ class MachoBinary(object):
         return binary_address
 
     def get_content_from_virtual_address(self, virtual_address, size):
-        # type: (int, int) -> str
+        # type: (int, int) -> bytes
         binary_address = self.file_offset_for_virtual_address(virtual_address)
         return self.get_bytes(binary_address, size)
 
@@ -411,7 +413,7 @@ class MachoBinary(object):
                 name_bytes = self.get_bytes(start_address, max_len)
             # search for null terminator in this content
             for ch in name_bytes:
-                if ch == '\x00':
+                if ch == 0x00:
                     found_null_terminator = True
                     break
                 symbol_name_characters.append(ch)
@@ -424,7 +426,8 @@ class MachoBinary(object):
                 max_len *= 2
             else:
                 # read full string!
-                symbol_name = ''.join(symbol_name_characters)
+
+                symbol_name = bytearray(symbol_name_characters).decode('UTF-8')
                 return symbol_name
 
     def read_embedded_string(self, address):

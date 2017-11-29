@@ -12,6 +12,7 @@ from strongarm.objc.objc_analyzer import ObjcFunctionAnalyzer
 from strongarm.objc.objc_basic_block import ObjcBasicBlock
 from strongarm.debug_util import DebugUtil
 
+
 class TestBasicBlocks(unittest.TestCase):
     TARGET_PATH = os.path.join(os.path.dirname(__file__), 'bin', 'StrongarmControlFlowTarget')
 

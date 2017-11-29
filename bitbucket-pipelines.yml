@@ -6,5 +6,8 @@ pipelines:
         script:
           - pip install -U tox
           - pip install -I --no-use-wheel capstone
+          - pip3 install capstone
+          - apt-get update
           - apt-get install python-capstone
+          - mv /usr/local/lib/python2.7/dist-packages/usr/lib/python2.7/dist-packages/capstone/libcapstone.so /usr/local/lib/python2.7/dist-packages/capstone/libcapstone.so
           - tox

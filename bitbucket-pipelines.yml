@@ -1,9 +1,11 @@
-image: python:3.6.1
+image: python:2.7-stretch
 
 pipelines:
   default:
     - step:
         script:
+          - apt-get update
+          - apt-get install libcapstone3 -y
           - pip install -U tox
           - pip install https://pypi.python.org/packages/44/3f/2ae09118f1c890b98e7b87ff1ce3d3a36e8e72ddac74ddcf0bbe8f005210/capstone-3.0.5rc2.tar.gz#md5=7033143d43d9a0b6a353acff17de80bb
           - python -c "import capstone"

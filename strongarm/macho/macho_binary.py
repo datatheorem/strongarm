@@ -15,6 +15,7 @@ from strongarm.macho.macho_definitions import DylibCommandStruct, CFStringStruct
 from strongarm.macho.macho_load_commands import MachoLoadCommands
 
 from ctypes import c_uint32, sizeof
+import io
 
 
 class MachoSection(object):
@@ -281,7 +282,7 @@ class MachoBinary(object):
         return text_seg.vmaddr
 
     def get_bytes(self, offset, size):
-        # type: (int, int) -> bytes
+        # type: (int, int) -> bytearray
         """Retrieve bytes from Mach-O slice, taking into account that the slice could be at an offset within a FAT
 
         Args:
@@ -300,15 +301,15 @@ class MachoBinary(object):
             return self._cached_binary_contents[(offset, size)]
 
         # ensure file is open
-        with open(self.filename, 'rb') as binary_file:
+        with io.open(self.filename, 'rb') as binary_file:
             # account for the fact that this Macho slice is not necessarily the start of the file!
             # add slide to our macho slice to file seek
             binary_file.seek(offset + self._offset_within_fat)
 
             contents = binary_file.read(size)
             # add to cache
-            self._cached_binary_contents[(offset, size)] = bytes(contents)
-            return bytes(contents)
+            self._cached_binary_contents[(offset, size)] = bytearray(contents)
+            return bytearray(contents)
 
     def should_swap_bytes(self):
         # type: () -> bool
@@ -394,7 +395,7 @@ class MachoBinary(object):
         return binary_address
 
     def get_content_from_virtual_address(self, virtual_address, size):
-        # type: (int, int) -> bytes
+        # type: (int, int) -> bytearray
         binary_address = self.file_offset_for_virtual_address(virtual_address)
         return self.get_bytes(binary_address, size)
 

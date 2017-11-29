@@ -215,7 +215,7 @@ class MachoAnalyzer(object):
         """
 
         # get executable code in requested region
-        func_str = self.binary.get_content_from_virtual_address(virtual_address=start_address, size=size)
+        func_str = bytes(self.binary.get_content_from_virtual_address(virtual_address=start_address, size=size))
 
         # transform func_str into list of CsInstr
         instructions = [instr for instr in self.cs.disasm(func_str, start_address)]
@@ -306,7 +306,7 @@ class MachoAnalyzer(object):
             raise RuntimeError('Couldn\'t parse function @ {}'.format(start_address))
         function_size = end_address - start_address
 
-        func_str = self.binary.get_bytes(start_address - self.binary.get_virtual_base(), function_size)
+        func_str = bytes(self.binary.get_bytes(start_address - self.binary.get_virtual_base(), function_size))
         instructions = [instr for instr in self.cs.disasm(func_str, start_address)]
         return instructions
 
@@ -371,7 +371,7 @@ class MachoAnalyzer(object):
         imp_addresses = self.get_method_address_ranges(selector)
         for imp_start, imp_end in imp_addresses:
             imp_size = imp_end - imp_start
-            imp_data = self.binary.get_content_from_virtual_address(virtual_address=imp_start, size=imp_size)
+            imp_data = bytes(self.binary.get_content_from_virtual_address(virtual_address=imp_start, size=imp_size))
             imp_instructions = [instr for instr in self.cs.disasm(imp_data, imp_start)]
             implementations.append(imp_instructions)
         return implementations

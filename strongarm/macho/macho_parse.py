@@ -7,6 +7,7 @@ from strongarm.macho.macho_binary import MachoBinary
 from strongarm.macho.macho_definitions import MachArch, MachoFatHeader, MachoFatArch, swap32
 
 from ctypes import sizeof, c_uint32
+import io
 from typing import Text
 
 
@@ -192,6 +193,6 @@ class MachoParser(object):
             Byte list representing contents of file at provided address
 
         """
-        with open(self.filename, 'rb') as binary_file:
+        with io.open(self.filename, 'rb') as binary_file:
             binary_file.seek(offset)
             return binary_file.read(size)

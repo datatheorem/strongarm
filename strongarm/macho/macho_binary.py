@@ -445,3 +445,4 @@ class MachoBinary(object):
             # patch address to read string from to be the string literal address of this CFString
             address = cfstring_ent.literal
         return self.get_full_string_from_start_address(address)
+

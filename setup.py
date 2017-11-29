@@ -24,6 +24,7 @@ setup(
         'typing',
         'capstone',
         'enum34',
+        'six',
         'njas==0.1.4',
     ],
     dependency_links=[

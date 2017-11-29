@@ -11,5 +11,4 @@ pipelines:
         script:
           - apt-get update -qq
           - chmod +x ./install_dependencies.sh
-          - python setup.py install
-          - python run_tests.py
+          - tox

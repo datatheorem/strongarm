@@ -3,5 +3,6 @@ typing
 capstone
 enum34
 six
+tox
 git+ssh://git@bitbucket.org/datatheorem/njas.git@0.1.4#egg=njas
 --process-dependency-links

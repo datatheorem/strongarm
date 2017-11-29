@@ -4,7 +4,5 @@ pipelines:
   default:
     - step:
         script:
-          - chmod +x ./install_dependencies.sh
-          - ./install_dependencies.sh
           - pip install -U tox
           - tox

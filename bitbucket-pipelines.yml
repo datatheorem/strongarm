@@ -5,4 +5,5 @@ pipelines:
     - step:
         script:
           - pip install -U tox
+          - pip install -U capstone
           - tox

@@ -7,7 +7,8 @@ case `uname` in
         brew install capstone
         ;;
     Linux)
-        apt-get update -qq
+        add-apt-repository universe
+        apt-get update
         # capstone
         apt-get install libcapstone3 -y
         ;;

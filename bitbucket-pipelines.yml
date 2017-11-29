@@ -11,4 +11,5 @@ pipelines:
         script:
           - apt-get update -qq
           - chmod +x ./install_dependencies.sh
+          - pip install -U tox
           - tox

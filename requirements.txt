@@ -3,5 +3,5 @@ typing
 capstone
 enum34
 six
-git+ssh://git@bitbucket.org/datatheorem/njas.git@0.1.4#egg=njas
+git+ssh://git@bitbucket.org/datatheorem/njas.git@1.0.1#egg=njas
 --process-dependency-links

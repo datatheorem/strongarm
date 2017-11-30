@@ -8,9 +8,8 @@ from strongarm.macho.macho_parse import MachoParser
 from strongarm.objc.objc_query import ObjcPredicateBranchQuery
 from strongarm.debug_util import DebugUtil
 
-import njas
+from njas.resolve_sym import SymbolResolver
 
-DebugUtil.debug = False
 binary = MachoParser('./tests/bin/StrongarmTarget').slices[0]
 analyzer = MachoAnalyzer.get_analyzer(binary)
 
@@ -20,8 +19,7 @@ dlopen_check = [ObjcPredicateBranchQuery(binary, destination_symbol='_dlopen')]
 
 matches = analyzer.perform_query([nsclass_from_string_check, objc_get_class_check, dlopen_check])
 
-sym_resolver = njas.resolve_sym.SymbolResolver()
-
+sym_resolver = SymbolResolver()
 
 def print_dlopen_finding(search_result, function_name, function_arg):
     print('-[{} {}]'.format(search_result.objc_class.name, search_result.objc_selector.name))

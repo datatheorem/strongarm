@@ -73,6 +73,7 @@ class MachoBinary(object):
             raise RuntimeError('Failed to parse Mach-O')
 
         self.symtab_contents = self._get_symtab_contents()
+        DebugUtil.log(self, "parsed symtab, len = {}".format(len(self.symtab_contents)))
 
     def parse(self):
         # type: () -> bool
@@ -346,6 +347,8 @@ class MachoBinary(object):
             Array of Nlist64's representing binary's symbol table
 
         """
+        DebugUtil.log(self, 'parsing {} symtab entries'.format(self.symtab.nsyms))
+
         symtab = []
         # start reading from symoff and increment by one Nlist64 each iteration
         symoff = self.symtab.symoff

@@ -147,6 +147,13 @@ class MachoAnalyzer(object):
             # we can get the string name of this symbol) is given by the value in the indirect symbol table at index:
             # la_symbol_ptr_command.reserved1 + idx
             offset = indirect_symtab[lazy_sym_offset_within_indirect_symtab + index]
+
+            # T1Twitter.framework has several thousand symtab entries whose offset is 0xc00000000
+            # I don't know why these are in the symbol table but they clearly don't point to real data
+            # if an offset points to a bad index, let's just ignore it
+            if offset >= len(symtab):
+                continue
+
             sym = symtab[offset]
 
             # we now have the Nlist64 symbol for the __la_symbol_ptr entry

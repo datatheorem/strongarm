@@ -53,7 +53,7 @@ class MachoParser(object):
         valid Mach-O or FAT archive
         """
         if not self.is_magic_supported():
-            raise ArchitectureNotSupportedError('armv7 is not supported')
+            raise ArchitectureNotSupportedError()
 
         self.is_swapped = self.should_swap_bytes()
 

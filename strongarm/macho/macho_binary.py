@@ -20,7 +20,7 @@ from strongarm.macho.macho_definitions import DylibCommandStruct, CFStringStruct
 
 from strongarm.macho.macho_load_commands import MachoLoadCommands
 
-from ctypes import c_uint32, sizeof, Structure
+from ctypes import c_uint32, sizeof
 import io
 
 
@@ -39,7 +39,8 @@ class ArchIndependentStructure(object):
         for field_name, _ in struct._fields_:
             # clone fields from struct to this class
             setattr(self, field_name, getattr(struct, field_name))
-        self.struct_type = struct_type
+        # record size of underlying struct, for when traversing file by structs
+        self.sizeof = sizeof(struct_type)
 
 
 class MachoHeaderStruct(ArchIndependentStructure):
@@ -199,7 +200,7 @@ class MachoBinary(object):
         self._parse_header_flags()
 
         # load commands begin directly after Mach O header, so the offset is the size of the header
-        load_commands_off = sizeof(self.header.struct_type)
+        load_commands_off = self.header.sizeof
 
         self._load_commands_end_addr = load_commands_off + self.header.sizeofcmds
         self._parse_segment_commands(load_commands_off, self.header.ncmds)
@@ -302,7 +303,7 @@ class MachoBinary(object):
             return
 
         # the first section of this segment begins directly after the segment
-        section_offset = segment_offset + sizeof(segment.struct_type)
+        section_offset = segment_offset + segment.sizeof
         for i in range(segment.nsects):
             # read section header from file
             # TODO(PT): handle byte swap of segment
@@ -313,7 +314,7 @@ class MachoBinary(object):
             self.sections[section_command.sectname.decode('UTF8')] = section
 
             # go to next section in list
-            section_offset += sizeof(section_command.struct_type)
+            section_offset += section_command.sizeof
 
     def get_virtual_base(self):
         # type: () -> int
@@ -400,7 +401,7 @@ class MachoBinary(object):
             nlist = MachoNlistStruct(self, symoff)
             symtab.append(nlist)
             # go to next Nlist in file
-            symoff += sizeof(nlist.struct_type)
+            symoff += nlist.sizeof
 
         return symtab
 

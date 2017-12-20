@@ -425,10 +425,10 @@ class MachoAnalyzer(object):
 
 
 class ObjcPredicateResult(object):
+    import strongarm.objc.objc_query as q
+    import strongarm.objc.objc_analyzer as analyzer
     def __init__(self, binary, predicate_list, objc_class, objc_selector, function_analyzer, instruction):
         # type: (MachoBinary, List[q.ObjcPredicateQuery], ObjcClass, ObjcSelector, analyzer.ObjcFunctionAnalyzer, CsInsn) -> None
-        import strongarm.objc.objc_query as q
-        import strongarm.objc.objc_analyzer as analyzer
         self.binary = binary
         self.predicate_list = predicate_list
         self.objc_class = objc_class

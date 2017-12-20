@@ -4,7 +4,7 @@ from __future__ import unicode_literals
 from __future__ import print_function
 
 import struct
-from ctypes import Union, Structure, c_uint8, c_uint16, c_uint32, c_uint64, c_int32, c_char, c_int64, c_char_p
+from ctypes import Union, Structure, c_uint8, c_uint16, c_uint32, c_uint64, c_int32, c_char, c_int64, c_char_p, c_int16
 from enum import IntEnum
 
 
@@ -32,6 +32,18 @@ class CPU_TYPE(IntEnum):
     UNKNOWN = 2
 
 
+class MachoHeader32(Structure):
+    _fields_ = [
+        ('magic', c_uint32),
+        ('cputype', c_uint32),
+        ('cpusubtype', c_uint32),
+        ('filetype', c_uint32),
+        ('ncmds', c_uint32),
+        ('sizeofcmds', c_uint32),
+        ('flags', c_uint32),
+    ]
+
+
 class MachoHeader64(Structure):
     _fields_ = [
         ('magic', c_uint32),
@@ -45,10 +57,26 @@ class MachoHeader64(Structure):
     ]
 
 
+class MachoSegmentCommand32(Structure):
+    _fields_ = [
+        ('cmd', c_uint32),
+        ('cmdsize', c_uint32),
+        ('segname', c_char * 16),
+        ('vmaddr', c_uint32),
+        ('vmsize', c_uint32),
+        ('fileoff', c_uint32),
+        ('filesize', c_uint32),
+        ('maxprot', c_uint32),
+        ('initprot', c_uint32),
+        ('nsects', c_uint32),
+        ('flags', c_uint32),
+    ]
+
+
 class MachoSegmentCommand64(Structure):
     _fields_ = [
-        ('cmd', c_int32),
-        ('cmdsize', c_int32),
+        ('cmd', c_uint32),
+        ('cmdsize', c_uint32),
         ('segname', c_char * 16),
         ('vmaddr', c_uint64),
         ('vmsize', c_uint64),
@@ -68,20 +96,36 @@ class MachOLoadCommand(Structure):
     ]
 
 
+class MachoSection32Raw(Structure):
+    _fields_ = [
+        ('sectname', c_char * 16),
+        ('segname', c_char * 16),
+        ('addr', c_uint32),
+        ('size', c_uint32),
+        ('offset', c_uint32),
+        ('align', c_uint32),
+        ('reloff', c_uint32),
+        ('nreloc', c_uint32),
+        ('flags', c_uint32),
+        ('reserved1', c_uint32),
+        ('reserved2', c_uint32),
+    ]
+
+
 class MachoSection64Raw(Structure):
     _fields_ = [
         ('sectname', c_char * 16),
         ('segname', c_char * 16),
-        ('addr', c_int64),
-        ('size', c_int64),
-        ('offset', c_int32),
-        ('align', c_int32),
-        ('reloff', c_int32),
-        ('nreloc', c_int32),
-        ('flags', c_int32),
-        ('reserved1', c_int32),
-        ('reserved2', c_int32),
-        ('reserved3', c_int32),
+        ('addr', c_uint64),
+        ('size', c_uint64),
+        ('offset', c_uint32),
+        ('align', c_uint32),
+        ('reloff', c_uint32),
+        ('nreloc', c_uint32),
+        ('flags', c_uint32),
+        ('reserved1', c_uint32),
+        ('reserved2', c_uint32),
+        ('reserved3', c_uint32),
     ]
 
 
@@ -139,6 +183,20 @@ class MachoNlistUn(Union):
     ]
 
 
+class MachoNlist32(Structure):
+    """Python representation of struct nlist
+
+    Definition found in <mach-o/nlist.h>
+    """
+    _fields_ = [
+        ('n_un', MachoNlistUn),
+        ('n_type', c_uint8),
+        ('n_sect', c_uint8),
+        ('n_desc', c_int16),
+        ('n_value', c_uint32),
+    ]
+
+
 class MachoNlist64(Structure):
     """Python representation of struct nlist_64
 
@@ -150,6 +208,20 @@ class MachoNlist64(Structure):
         ('n_sect', c_uint8),
         ('n_desc', c_uint16),
         ('n_value', c_uint64),
+    ]
+
+
+class MachoEncryptionInfo32Command(Structure):
+    """Python representation of a struct encryption_info_command
+
+    Definition found in <mach-o/loader.h>
+    """
+    _fields_ = [
+        ('cmd', c_uint32),
+        ('cmdsize', c_uint32),
+        ('cryptoff', c_uint32),
+        ('cryptsize', c_uint32),
+        ('cryptid', c_uint32),
     ]
 
 

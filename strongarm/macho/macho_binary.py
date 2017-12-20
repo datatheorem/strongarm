@@ -7,65 +7,20 @@ from typing import List, Text, Optional
 
 from strongarm.debug_util import DebugUtil
 
-from strongarm.macho.macho_definitions import \
-    MachoHeader32, \
-    MachoSegmentCommand32, \
-    MachoSection32Raw, \
-    MachoEncryptionInfo32Command, \
-    MachoNlist32
-from strongarm.macho.macho_definitions import MachoSection64Raw, MachArch, CPU_TYPE, MachoHeader64, HEADER_FLAGS
+from strongarm.macho.macho_definitions import MachArch, CPU_TYPE, HEADER_FLAGS
 from strongarm.macho.macho_definitions import MachOLoadCommand, MachoSymtabCommand, MachoDysymtabCommand
-from strongarm.macho.macho_definitions import MachoSegmentCommand64, MachoEncryptionInfo64Command, MachoNlist64
 from strongarm.macho.macho_definitions import DylibCommandStruct, CFStringStruct
 
 from strongarm.macho.macho_load_commands import MachoLoadCommands
+from strongarm.macho.arch_independent_structs import \
+    MachoHeaderStruct, \
+    MachoSegmentCommandStruct, \
+    MachoSectionRawStruct, \
+    MachoEncryptionInfoStruct, \
+    MachoNlistStruct
 
 from ctypes import c_uint32, sizeof
 import io
-
-
-class ArchIndependentStructure(object):
-    _32_BIT_STRUCT = None
-    _64_BIT_STRUCT = None
-
-    def __init__(self, binary, binary_offset):
-        # type: (MachoBinary, int) -> None
-        struct_type = self._64_BIT_STRUCT \
-            if binary.is_64bit \
-            else self._32_BIT_STRUCT
-        struct_bytes = binary.get_bytes(binary_offset, sizeof(struct_type))
-        struct = struct_type.from_buffer(bytearray(struct_bytes))
-
-        for field_name, _ in struct._fields_:
-            # clone fields from struct to this class
-            setattr(self, field_name, getattr(struct, field_name))
-        # record size of underlying struct, for when traversing file by structs
-        self.sizeof = sizeof(struct_type)
-
-
-class MachoHeaderStruct(ArchIndependentStructure):
-    _32_BIT_STRUCT = MachoHeader32
-    _64_BIT_STRUCT = MachoHeader64
-
-
-class MachoSegmentCommandStruct(ArchIndependentStructure):
-    _32_BIT_STRUCT = MachoSegmentCommand32
-    _64_BIT_STRUCT = MachoSegmentCommand64
-
-
-class MachoSectionRawStruct(ArchIndependentStructure):
-    _32_BIT_STRUCT = MachoSection32Raw
-    _64_BIT_STRUCT = MachoSection64Raw
-
-
-class MachoEncryptionInfoStruct(ArchIndependentStructure):
-    _32_BIT_STRUCT = MachoEncryptionInfo32Command
-    _64_BIT_STRUCT = MachoEncryptionInfo64Command
-
-
-class MachoNlistStruct(ArchIndependentStructure):
-    _32_BIT_STRUCT = MachoNlist32
-    _64_BIT_STRUCT = MachoNlist64
 
 
 class MachoSection(object):

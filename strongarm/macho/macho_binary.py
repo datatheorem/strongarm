@@ -286,8 +286,6 @@ class MachoBinary(object):
             # encapsulate header and content into one object, and store that
             section = MachoSection(self, section_command)
             # add to map with the key being the name of the section
-            print('sectname {}'.format(section_command.sectname))
-            print('section type {}'.format(section_type))
             self.sections[section_command.sectname.decode('UTF8')] = section
 
             # go to next section in list

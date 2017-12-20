@@ -14,6 +14,7 @@ from .objc_instruction import ObjcBranchInstruction
 
 class ObjcFunctionAnalyzer(object):
     """Provides utility functions for introspecting on a set of instructions which represent a function body.
+    As Objective-C is a strict superset of C, ObjcFunctionAnalyzer can also be used on pure C functions.
     """
 
     def __init__(self, binary, instructions):

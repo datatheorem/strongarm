@@ -7,12 +7,17 @@ from typing import List, Text, Optional
 
 from strongarm.debug_util import DebugUtil
 
-from strongarm.macho.macho_definitions import MachoSection64Raw, MachArch, CPU_TYPE, MachoHeader64, HEADER_FLAGS
+from strongarm.macho.macho_definitions import MachArch, CPU_TYPE, HEADER_FLAGS
 from strongarm.macho.macho_definitions import MachOLoadCommand, MachoSymtabCommand, MachoDysymtabCommand
-from strongarm.macho.macho_definitions import MachoSegmentCommand64, MachoEncryptionInfo64Command, MachoNlist64
 from strongarm.macho.macho_definitions import DylibCommandStruct, CFStringStruct
 
 from strongarm.macho.macho_load_commands import MachoLoadCommands
+from strongarm.macho.arch_independent_structs import \
+    MachoHeaderStruct, \
+    MachoSegmentCommandStruct, \
+    MachoSectionRawStruct, \
+    MachoEncryptionInfoStruct, \
+    MachoNlistStruct
 
 from ctypes import c_uint32, sizeof
 import io
@@ -20,7 +25,7 @@ import io
 
 class MachoSection(object):
     def __init__(self, binary, section_command):
-        # type: (MachoBinary, MachoSection64Raw) -> None
+        # type: (MachoBinary, MachoSectionRawStruct) -> None
         self.cmd = section_command
         self.content = binary.get_bytes(section_command.offset, section_command.size)
         self.name = section_command.sectname
@@ -34,11 +39,15 @@ class MachoBinary(object):
         MachArch.MH_MAGIC_64,
         MachArch.MH_CIGAM_64
     ]
+    _MAG_32 = [
+        MachArch.MH_MAGIC,
+        MachArch.MH_CIGAM,
+    ]
     _MAG_BIG_ENDIAN = [
         MachArch.MH_CIGAM,
         MachArch.MH_CIGAM_64,
     ]
-    SUPPORTED_MAG = _MAG_64
+    SUPPORTED_MAG = _MAG_64 + _MAG_32
 
     def __init__(self, filename, offset_within_fat=0):
         # type: (Text, int) -> None
@@ -134,8 +143,7 @@ class MachoBinary(object):
         Specifically, this method parses the Mach-O header & header flags, CPU target,
         and all segment and section commands.
         """
-        header_bytes = self.get_bytes(0, sizeof(MachoHeader64))
-        self.header = MachoHeader64.from_buffer(bytearray(header_bytes))
+        self.header = MachoHeaderStruct(self, 0)
 
         if self.header.cputype == MachArch.MH_CPU_TYPE_ARM:
             self.cpu_type = CPU_TYPE.ARMV7
@@ -147,7 +155,7 @@ class MachoBinary(object):
         self._parse_header_flags()
 
         # load commands begin directly after Mach O header, so the offset is the size of the header
-        load_commands_off = sizeof(MachoHeader64)
+        load_commands_off = self.header.sizeof
 
         self._load_commands_end_addr = load_commands_off + self.header.sizeofcmds
         self._parse_segment_commands(load_commands_off, self.header.ncmds)
@@ -181,28 +189,25 @@ class MachoBinary(object):
         for i in range(segment_count):
             load_command_bytes = self.get_bytes(offset, sizeof(MachOLoadCommand))
             load_command = MachOLoadCommand.from_buffer(bytearray(load_command_bytes))
-            # TODO(pt) handle byte swap of load_command
-            if load_command.cmd == MachoLoadCommands.LC_SEGMENT:
-                # 32 bit segments unsupported!
-                DebugUtil.log(self, "skipping 32-bit LC_SEGMENT")
-                continue
+
+            if load_command.cmd in [MachoLoadCommands.LC_SEGMENT,
+                                    MachoLoadCommands.LC_SEGMENT_64]:
+                segment = MachoSegmentCommandStruct(self, offset)
+                # TODO(pt) handle byte swap of segment if necessary
+                self.segment_commands[segment.segname.decode('UTF8')] = segment
+                self._parse_sections_for_segment(segment, offset)
+
             # some commands have their own structure that we interpret separately from a normal load command
             # if we want to interpret more commands in the future, this is the place to do it
-            if load_command.cmd == MachoLoadCommands.LC_SYMTAB:
+            elif load_command.cmd in [MachoLoadCommands.LC_ENCRYPTION_INFO,
+                                      MachoLoadCommands.LC_ENCRYPTION_INFO_64]:
+                self.encryption_info = MachoEncryptionInfoStruct(self, offset)
+            elif load_command.cmd == MachoLoadCommands.LC_SYMTAB:
                 symtab_bytes = self.get_bytes(offset, sizeof(MachoSymtabCommand))
                 self.symtab = MachoSymtabCommand.from_buffer(bytearray(symtab_bytes))
             elif load_command.cmd == MachoLoadCommands.LC_DYSYMTAB:
                 dysymtab_bytes = self.get_bytes(offset, sizeof(MachoDysymtabCommand))
                 self.dysymtab = MachoDysymtabCommand.from_buffer(bytearray(dysymtab_bytes))
-            elif load_command.cmd == MachoLoadCommands.LC_ENCRYPTION_INFO_64:
-                encryption_info_bytes = self.get_bytes(offset, sizeof(MachoEncryptionInfo64Command))
-                self.encryption_info = MachoEncryptionInfo64Command.from_buffer(bytearray(encryption_info_bytes))
-            elif load_command.cmd == MachoLoadCommands.LC_SEGMENT_64:
-                segment_bytes = self.get_bytes(offset, sizeof(MachoSegmentCommand64))
-                segment = MachoSegmentCommand64.from_buffer(bytearray(segment_bytes))
-                # TODO(pt) handle byte swap of segment if necessary
-                self.segment_commands[segment.segname.decode('UTF8')] = segment
-                self._parse_sections(segment, offset)
             elif load_command.cmd in [MachoLoadCommands.LC_LOAD_DYLIB, MachoLoadCommands.LC_LOAD_WEAK_DYLIB]:
                 dylib_load_bytes = self.get_bytes(offset, sizeof(DylibCommandStruct))
                 dylib_load_command = DylibCommandStruct.from_buffer(bytearray(dylib_load_bytes))
@@ -241,35 +246,30 @@ class MachoBinary(object):
         # guess by using the highest-addressed section we've seen
         return max_section
 
-    def _parse_sections(self, segment, segment_offset):
-        # type: (MachoSegmentCommand64, int) -> None
+    def _parse_sections_for_segment(self, segment, segment_offset):
+        # type: (MachoSegmentCommandStruct, int) -> None
         """Parse all sections contained within a Mach-O segment, and add them to our list of sections
 
         Args:
             segment: The segment command whose sections should be read
             segment_offset: The offset within the file that the segment command is located at
-
         """
         if not segment.nsects:
             return
 
         # the first section of this segment begins directly after the segment
-        section_offset = segment_offset + sizeof(MachoSegmentCommand64)
-        section_size = sizeof(MachoSection64Raw)
-
+        section_offset = segment_offset + segment.sizeof
         for i in range(segment.nsects):
             # read section header from file
             # TODO(PT): handle byte swap of segment
-            section_bytes = self.get_bytes(section_offset, sizeof(MachoSection64Raw))
-            section_command = MachoSection64Raw.from_buffer(bytearray(section_bytes))
-
+            section_command = MachoSectionRawStruct(self, section_offset)
             # encapsulate header and content into one object, and store that
             section = MachoSection(self, section_command)
             # add to map with the key being the name of the section
             self.sections[section_command.sectname.decode('UTF8')] = section
 
             # go to next section in list
-            section_offset += section_size
+            section_offset += section_command.sizeof
 
     def get_virtual_base(self):
         # type: () -> int
@@ -340,7 +340,7 @@ class MachoBinary(object):
         return string_table
 
     def _get_symtab_contents(self):
-        # type: () -> List[MachoNlist64]
+        # type: () -> List[MachoNlistStruct]
         """Parse symbol table containing list of Nlist64's
 
         Returns:
@@ -353,11 +353,10 @@ class MachoBinary(object):
         # start reading from symoff and increment by one Nlist64 each iteration
         symoff = self.symtab.symoff
         for i in range(self.symtab.nsyms):
-            nlist_data = self.get_bytes(symoff, sizeof(MachoNlist64))
-            nlist = MachoNlist64.from_buffer(bytearray(nlist_data))
+            nlist = MachoNlistStruct(self, symoff)
             symtab.append(nlist)
             # go to next Nlist in file
-            symoff += sizeof(MachoNlist64)
+            symoff += nlist.sizeof
 
         return symtab
 

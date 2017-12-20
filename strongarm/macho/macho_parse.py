@@ -53,7 +53,7 @@ class MachoParser(object):
         valid Mach-O or FAT archive
         """
         if not self.is_magic_supported():
-            raise ArchitectureNotSupportedError('armv7 is not supported')
+            raise ArchitectureNotSupportedError()
 
         self.is_swapped = self.should_swap_bytes()
 
@@ -77,14 +77,11 @@ class MachoParser(object):
                 hex(int(fileoff))
             ))
 
-        # MachoBinary constructor will throw an exception if the header can't be parsed
-        try:
-            attempt = MachoBinary(self.filename, fileoff)
-            # if the MachoBinary does not have a header, there was a problem parsing it
-            if attempt.header:
-                self.slices.append(attempt)
-        except RuntimeError as e:
-            pass
+        attempt = MachoBinary(self.filename, fileoff)
+        # if the MachoBinary does not have a header, there was a problem parsing it
+        if not attempt.header:
+            raise RuntimeError('parsed MachoBinary missing Mach-O header field')
+        self.slices.append(attempt)
 
     def parse_fat_header(self):
         # type: () -> None

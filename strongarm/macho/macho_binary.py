@@ -20,13 +20,56 @@ from strongarm.macho.macho_definitions import DylibCommandStruct, CFStringStruct
 
 from strongarm.macho.macho_load_commands import MachoLoadCommands
 
-from ctypes import c_uint32, sizeof
+from ctypes import c_uint32, sizeof, Structure
 import io
+
+
+class ArchIndependentStructure(object):
+    _32_BIT_STRUCT = None
+    _64_BIT_STRUCT = None
+
+    def __init__(self, binary, binary_offset):
+        # type: (MachoBinary, int) -> None
+        struct_type = self._64_BIT_STRUCT \
+            if binary.is_64bit \
+            else self._32_BIT_STRUCT
+        struct_bytes = binary.get_bytes(binary_offset, sizeof(struct_type))
+        struct = struct_type.from_buffer(bytearray(struct_bytes))
+
+        for field_name, _ in struct._fields_:
+            # clone fields from struct to this class
+            setattr(self, field_name, getattr(struct, field_name))
+        self.struct_type = struct_type
+
+
+class MachoHeaderStruct(ArchIndependentStructure):
+    _32_BIT_STRUCT = MachoHeader32
+    _64_BIT_STRUCT = MachoHeader64
+
+
+class MachoSegmentCommandStruct(ArchIndependentStructure):
+    _32_BIT_STRUCT = MachoSegmentCommand32
+    _64_BIT_STRUCT = MachoSegmentCommand64
+
+
+class MachoSectionRawStruct(ArchIndependentStructure):
+    _32_BIT_STRUCT = MachoSection32Raw
+    _64_BIT_STRUCT = MachoSection64Raw
+
+
+class MachoEncryptionInfoStruct(ArchIndependentStructure):
+    _32_BIT_STRUCT = MachoEncryptionInfo32Command
+    _64_BIT_STRUCT = MachoEncryptionInfo64Command
+
+
+class MachoNlistStruct(ArchIndependentStructure):
+    _32_BIT_STRUCT = MachoNlist32
+    _64_BIT_STRUCT = MachoNlist64
 
 
 class MachoSection(object):
     def __init__(self, binary, section_command):
-        # type: (MachoBinary, object) -> None
+        # type: (MachoBinary, MachoSectionRawStruct) -> None
         self.cmd = section_command
         self.content = binary.get_bytes(section_command.offset, section_command.size)
         self.name = section_command.sectname
@@ -144,9 +187,7 @@ class MachoBinary(object):
         Specifically, this method parses the Mach-O header & header flags, CPU target,
         and all segment and section commands.
         """
-        header_struct_type = MachoHeader64 if self.is_64bit else MachoHeader32
-        header_bytes = self.get_bytes(0, sizeof(header_struct_type))
-        self.header = header_struct_type.from_buffer(bytearray(header_bytes))
+        self.header = MachoHeaderStruct(self, 0)
 
         if self.header.cputype == MachArch.MH_CPU_TYPE_ARM:
             self.cpu_type = CPU_TYPE.ARMV7
@@ -158,7 +199,7 @@ class MachoBinary(object):
         self._parse_header_flags()
 
         # load commands begin directly after Mach O header, so the offset is the size of the header
-        load_commands_off = sizeof(header_struct_type)
+        load_commands_off = sizeof(self.header.struct_type)
 
         self._load_commands_end_addr = load_commands_off + self.header.sizeofcmds
         self._parse_segment_commands(load_commands_off, self.header.ncmds)
@@ -195,9 +236,7 @@ class MachoBinary(object):
 
             if load_command.cmd in [MachoLoadCommands.LC_SEGMENT,
                                     MachoLoadCommands.LC_SEGMENT_64]:
-                segment_command_type = MachoSegmentCommand64 if self.is_64bit else MachoSegmentCommand32
-                segment_bytes = self.get_bytes(offset, sizeof(segment_command_type))
-                segment = segment_command_type.from_buffer(bytearray(segment_bytes))
+                segment = MachoSegmentCommandStruct(self, offset)
                 # TODO(pt) handle byte swap of segment if necessary
                 self.segment_commands[segment.segname.decode('UTF8')] = segment
                 self._parse_sections_for_segment(segment, offset)
@@ -206,9 +245,7 @@ class MachoBinary(object):
             # if we want to interpret more commands in the future, this is the place to do it
             elif load_command.cmd in [MachoLoadCommands.LC_ENCRYPTION_INFO,
                                       MachoLoadCommands.LC_ENCRYPTION_INFO_64]:
-                encryption_info_type = MachoEncryptionInfo64Command if self.is_64bit else MachoEncryptionInfo32Command
-                encryption_info_bytes = self.get_bytes(offset, sizeof(encryption_info_type))
-                self.encryption_info = encryption_info_type.from_buffer(bytearray(encryption_info_bytes))
+                self.encryption_info = MachoEncryptionInfoStruct(self, offset)
             elif load_command.cmd == MachoLoadCommands.LC_SYMTAB:
                 symtab_bytes = self.get_bytes(offset, sizeof(MachoSymtabCommand))
                 self.symtab = MachoSymtabCommand.from_buffer(bytearray(symtab_bytes))
@@ -261,35 +298,22 @@ class MachoBinary(object):
             segment: The segment command whose sections should be read
             segment_offset: The offset within the file that the segment command is located at
         """
-        if isinstance(segment, MachoSegmentCommand32):
-            segment_type = MachoSegmentCommand32
-            section_type = MachoSection32Raw
-        elif isinstance(segment, MachoSegmentCommand64):
-            segment_type = MachoSegmentCommand64
-            section_type = MachoSection64Raw
-        else:
-            raise RuntimeError('arg to _parse_sections_for_segment wasn\'t a Mach-O segment structure')
-
         if not segment.nsects:
             return
 
         # the first section of this segment begins directly after the segment
-        section_offset = segment_offset + sizeof(segment_type)
-        section_size = sizeof(section_type)
-
+        section_offset = segment_offset + sizeof(segment.struct_type)
         for i in range(segment.nsects):
             # read section header from file
             # TODO(PT): handle byte swap of segment
-            section_bytes = self.get_bytes(section_offset, sizeof(section_type))
-            section_command = section_type.from_buffer(bytearray(section_bytes))
-
+            section_command = MachoSectionRawStruct(self, section_offset)
             # encapsulate header and content into one object, and store that
             section = MachoSection(self, section_command)
             # add to map with the key being the name of the section
             self.sections[section_command.sectname.decode('UTF8')] = section
 
             # go to next section in list
-            section_offset += section_size
+            section_offset += sizeof(section_command.struct_type)
 
     def get_virtual_base(self):
         # type: () -> int
@@ -373,12 +397,10 @@ class MachoBinary(object):
         # start reading from symoff and increment by one Nlist64 each iteration
         symoff = self.symtab.symoff
         for i in range(self.symtab.nsyms):
-            nlist_type = MachoNlist64 if self.is_64bit else MachoNlist32
-            nlist_data = self.get_bytes(symoff, sizeof(nlist_type))
-            nlist = nlist_type.from_buffer(bytearray(nlist_data))
+            nlist = MachoNlistStruct(self, symoff)
             symtab.append(nlist)
             # go to next Nlist in file
-            symoff += sizeof(nlist_type)
+            symoff += sizeof(nlist.struct_type)
 
         return symtab
 

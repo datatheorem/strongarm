@@ -1,3 +1,4 @@
+from ctypes import sizeof
 from strongarm.macho.macho_definitions import \
     MachoHeader32, \
     MachoHeader64, \
@@ -8,21 +9,38 @@ from strongarm.macho.macho_definitions import \
     MachoEncryptionInfo32Command, \
     MachoEncryptionInfo64Command, \
     MachoNlist32, \
-    MachoNlist64
-from ctypes import sizeof
+    MachoNlist64, \
+    ObjcDataRaw32, \
+    ObjcDataRaw64, \
+    ObjcClassRaw32, \
+    ObjcClassRaw64, \
+    ObjcMethod32, \
+    ObjcMethod64, \
+    CFString32, \
+    CFString64
 
 
 class ArchIndependentStructure(object):
     _32_BIT_STRUCT = None
     _64_BIT_STRUCT = None
 
-    def __init__(self, binary, binary_offset):
+    def __init__(self, binary, binary_offset, virtual=False):
         from strongarm.macho.macho_binary import MachoBinary
-        # type: (MachoBinary, int) -> None
+        # type: (MachoBinary, int, bool) -> None
+        """Parse structure from 32bit or 64bit definition, depending on the active binary
+        
+        Args:
+            binary: The Mach-O slice to read the struct from
+            binary_offset: The file offset or virtual address of the struct to read
+            virtual: False if the offset is a file offset, True if it is a virtual address
+        """
         struct_type = self._64_BIT_STRUCT \
             if binary.is_64bit \
             else self._32_BIT_STRUCT
-        struct_bytes = binary.get_bytes(binary_offset, sizeof(struct_type))
+        if virtual:
+            struct_bytes = binary.get_content_from_virtual_address(binary_offset, sizeof(struct_type))
+        else:
+            struct_bytes = binary.get_bytes(binary_offset, sizeof(struct_type))
         struct = struct_type.from_buffer(bytearray(struct_bytes))
 
         for field_name, _ in struct._fields_:

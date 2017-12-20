@@ -247,7 +247,7 @@ class MachoBinary(object):
         return max_section
 
     def _parse_sections_for_segment(self, segment, segment_offset):
-        # type: (object, int) -> None
+        # type: (MachoSegmentCommandStruct, int) -> None
         """Parse all sections contained within a Mach-O segment, and add them to our list of sections
 
         Args:
@@ -340,7 +340,7 @@ class MachoBinary(object):
         return string_table
 
     def _get_symtab_contents(self):
-        # type: () -> List[object]
+        # type: () -> List[MachoNlistStruct]
         """Parse symbol table containing list of Nlist64's
 
         Returns:

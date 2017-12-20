@@ -32,6 +32,5 @@ class TestFatMachO(unittest.TestCase):
     def test_slices(self):
         for slice in self.fat_parser.slices:
             magic = slice.header.magic
-            print('magic: {}'.format(hex(magic)))
             self.assertIn(magic, MachoParser.SUPPORTED_MAG)
             self.assertTrue(self.fat_parser._check_is_macho_header(slice._offset_within_fat))

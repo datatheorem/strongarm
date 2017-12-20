@@ -309,7 +309,17 @@ class HEADER_FLAGS(IntEnum):
     APP_EXTENSION_SAFE = 0x2000000
 
 
-class ObjcClassRaw(Structure):
+class ObjcClassRaw32(Structure):
+    _fields_ = [
+        ('metaclass', c_uint32),
+        ('superclass', c_uint32),
+        ('cache', c_uint32),
+        ('vtable', c_uint32),
+        ('data', c_uint32)
+    ]
+
+
+class ObjcClassRaw64(Structure):
     _fields_ = [
         ('metaclass', c_uint64),
         ('superclass', c_uint64),
@@ -319,7 +329,22 @@ class ObjcClassRaw(Structure):
     ]
 
 
-class ObjcDataRaw(Structure):
+class ObjcDataRaw32(Structure):
+    _fields_ = [
+        ('flags', c_uint32),
+        ('instance_start', c_uint32),
+        ('instance_size', c_uint32),
+        ('ivar_layout', c_uint32),
+        ('name', c_uint32),
+        ('base_methods', c_uint32),
+        ('base_protocols', c_uint32),
+        ('ivars', c_uint32),
+        ('weak_ivar_layout', c_uint32),
+        ('base_properties', c_uint32),
+    ]
+
+
+class ObjcDataRaw64(Structure):
     _fields_ = [
         ('flags', c_uint32),
         ('instance_start', c_uint32),
@@ -342,7 +367,15 @@ class ObjcMethodList(Structure):
     ]
 
 
-class ObjcMethod(Structure):
+class ObjcMethod32(Structure):
+    _fields_ = [
+        ('name', c_uint32),
+        ('signature', c_uint32),
+        ('implementation', c_uint32)
+    ]
+
+
+class ObjcMethod64(Structure):
     _fields_ = [
         ('name', c_uint64),
         ('signature', c_uint64),
@@ -376,7 +409,16 @@ class DylibCommandStruct(Structure):
         self.fileoff = None
 
 
-class CFStringStruct(Structure):
+class CFString32(Structure):
+    _fields_ = [
+        ('base', c_uint32),
+        ('flags', c_uint32),
+        ('literal', c_uint32),
+        ('length', c_uint32)
+    ]
+
+
+class CFString64(Structure):
     _fields_ = [
         ('base', c_uint64),
         ('flags', c_uint64),

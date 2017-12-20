@@ -55,3 +55,23 @@ class MachoEncryptionInfoStruct(ArchIndependentStructure):
 class MachoNlistStruct(ArchIndependentStructure):
     _32_BIT_STRUCT = MachoNlist32
     _64_BIT_STRUCT = MachoNlist64
+
+
+class ObjcDataRawStruct(ArchIndependentStructure):
+    _32_BIT_STRUCT = ObjcDataRaw32
+    _64_BIT_STRUCT = ObjcDataRaw64
+
+
+class ObjcClassRawStruct(ArchIndependentStructure):
+    _32_BIT_STRUCT = ObjcClassRaw32
+    _64_BIT_STRUCT = ObjcClassRaw64
+
+
+class ObjcMethodStruct(ArchIndependentStructure):
+    _32_BIT_STRUCT = ObjcMethod32
+    _64_BIT_STRUCT = ObjcMethod64
+
+
+class CFStringStruct(ArchIndependentStructure):
+    _32_BIT_STRUCT = CFString32
+    _64_BIT_STRUCT = CFString64

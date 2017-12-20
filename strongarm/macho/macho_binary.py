@@ -9,7 +9,7 @@ from strongarm.debug_util import DebugUtil
 
 from strongarm.macho.macho_definitions import MachArch, CPU_TYPE, HEADER_FLAGS
 from strongarm.macho.macho_definitions import MachOLoadCommand, MachoSymtabCommand, MachoDysymtabCommand
-from strongarm.macho.macho_definitions import DylibCommandStruct, CFStringStruct
+from strongarm.macho.macho_definitions import DylibCommandStruct
 
 from strongarm.macho.macho_load_commands import MachoLoadCommands
 from strongarm.macho.arch_independent_structs import \
@@ -17,9 +17,10 @@ from strongarm.macho.arch_independent_structs import \
     MachoSegmentCommandStruct, \
     MachoSectionRawStruct, \
     MachoEncryptionInfoStruct, \
-    MachoNlistStruct
+    MachoNlistStruct, \
+    CFStringStruct
 
-from ctypes import c_uint32, sizeof
+from ctypes import c_uint64, c_uint32, sizeof
 import io
 
 
@@ -81,6 +82,7 @@ class MachoBinary(object):
         if not self.parse():
             raise RuntimeError('Failed to parse Mach-O')
 
+        self.platform_word_type = c_uint64 if self.is_64bit else c_uint32
         self.symtab_contents = self._get_symtab_contents()
         DebugUtil.log(self, "parsed symtab, len = {}".format(len(self.symtab_contents)))
 
@@ -295,8 +297,8 @@ class MachoBinary(object):
 
         """
         if offset > 0x100000000:
-            raise RuntimeError('offset to get_bytes looks like a virtual address. Did you mean to use '
-                               'get_content_from_virtual_address?')
+            raise RuntimeError('get_bytes() offset {} looks like a virtual address. Did you mean to use '
+                               'get_content_from_virtual_address?'.format(hex(offset)))
 
         if (offset, size) in self._cached_binary_contents:
             return self._cached_binary_contents[(offset, size)]
@@ -441,9 +443,8 @@ class MachoBinary(object):
         section_name = self.section_name_for_address(address)
         # special case if this is a __cfstring entry
         if section_name == '__cfstring':
-            # we must parse the CFString
-            cfstring_bytes = self.get_content_from_virtual_address(address, sizeof(CFStringStruct))
-            cfstring_ent = CFStringStruct.from_buffer(bytearray(cfstring_bytes))
+            # read bytes into CFString struct
+            cfstring_ent = CFStringStruct(self, address, virtual=True)
             # patch address to read string from to be the string literal address of this CFString
             address = cfstring_ent.literal
         return self.get_full_string_from_start_address(address)

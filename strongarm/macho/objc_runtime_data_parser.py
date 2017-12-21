@@ -110,9 +110,9 @@ class ObjcDataEntryParser(object):
         if self._objc_data_raw_struct.base_methods == 0:
             return None
 
-        methlist_file_ptr = self._objc_data_raw_struct.base_methods - self._binary.get_virtual_base()
-        raw_struct_data = self._binary.get_bytes(methlist_file_ptr, sizeof(ObjcMethodList))
-        methlist = ObjcMethodList.from_buffer(bytearray(raw_struct_data))
+        methlist_file_ptr = self._binary.file_offset_for_virtual_address(self._objc_data_raw_struct.base_methods)
+        methlist_bytes = self._binary.get_bytes(methlist_file_ptr, sizeof(ObjcMethodList))
+        methlist = ObjcMethodList.from_buffer(bytearray(methlist_bytes))
         return (methlist, methlist_file_ptr)
 
 
@@ -223,39 +223,17 @@ class ObjcRuntimeDataParser(object):
         # type: () -> List[ObjcClass]
         """Read Objective-C class data in __objc_classlist, __objc_data to get classes and selectors in binary
         """
-        DebugUtil.log(self, 'Reading objc_classlist pointers...')
-        objc_classes = []
+        DebugUtil.log(self, 'Cross-referencing objc_classlist, __objc_class, and _objc_data entries...')
+        parsed_objc_classes = []
         classlist_pointers = self._get_classlist_pointers()
-        # if the classlist had no entries, there's no Objective-C data in this binary
-        # in this case, the binary must be implemented purely in C or Swift
-        if not len(classlist_pointers):
-            return objc_classes
-
-        # read actual list of ObjcClassRaw structs from list of pointers
-        DebugUtil.log(self, 'Reading __objc_class structs...')
-        raw_objc_classes = []
-        for class_ptr in classlist_pointers:
-            objc_class = self._get_objc_class_from_classlist_pointer(class_ptr)
+        for ptr in classlist_pointers:
+            objc_class = self._get_objc_class_from_classlist_pointer(ptr)
             if objc_class:
-                raw_objc_classes.append(objc_class)
-
-        # TODO(PT): use ObjcClassRaw objects in objc_classes to create list of classes in binary
-        # we could even make a list of all selectors for a given class
-        # and, when requesting an IMP for a selector, we could request the class too (for SEL collisions)
-
-        # read data for each class
-        DebugUtil.log(self, 'Reading __objc_data structs...')
-        objc_data_entries = []
-        for class_ent in raw_objc_classes:
-            data_entry = self._get_objc_data_from_objc_class(class_ent)
-            if data_entry:
-                objc_data_entries.append(data_entry)
-
-        # read information from each struct __objc_data
-        DebugUtil.log(self, 'Parsing runtime data from __objc_data structs...')
-        for objc_data in objc_data_entries:
-            objc_classes.append(self._parse_objc_data_entry(objc_data))
-        return objc_classes
+                objc_data_struct = self._get_objc_data_from_objc_class(objc_class)
+                if objc_data_struct:
+                    # read information from each struct __objc_data
+                    parsed_objc_classes.append(self._parse_objc_data_entry(objc_data_struct))
+        return parsed_objc_classes
 
     def _parse_objc_data_entry(self, objc_data_raw):
         # type: (ObjcDataRawStruct) -> ObjcClass

@@ -353,23 +353,26 @@ class MachoAnalyzer(object):
         return [self.get_function_address_range(start_address) for start_address in start_addresses]
 
     def get_imps_for_sel(self, selector):
-        # type: (Text) -> List[List[CsInsn]]
+        # type: (Text) -> List[ObjcFunctionAnalyzer]
         """Retrieve a list of the disassembled function data for every implementation of a provided selector
         Args:
             selector: The selector name who's implementations should be found
 
         Returns:
-            A list of lists containing CsInsn objects. Each entry in the outer list represents an implementation of
-            the selector, suitable for being passed to an ObjcFunctionAnalyzer constructor
+            A list of ObjcFunctionAnalyzers corresponding to each found implementation of the provided selector.
         """
-        implementations = []
+        from strongarm.objc import ObjcFunctionAnalyzer
+
+        implementation_analyzers = []
         imp_addresses = self.get_method_address_ranges(selector)
         for imp_start, imp_end in imp_addresses:
             imp_size = imp_end - imp_start
             imp_data = bytes(self.binary.get_content_from_virtual_address(virtual_address=imp_start, size=imp_size))
             imp_instructions = [instr for instr in self.cs.disasm(imp_data, imp_start)]
-            implementations.append(imp_instructions)
-        return implementations
+
+            function_analyzer = ObjcFunctionAnalyzer(self.binary, imp_instructions)
+            implementation_analyzers.append(function_analyzer)
+        return implementation_analyzers
 
     def perform_query(self, predicate_lists):
         # type: (List[List[q.ObjcPredicateQuery]]) -> List[ObjcPredicateResult]

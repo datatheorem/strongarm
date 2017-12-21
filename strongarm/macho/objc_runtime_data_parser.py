@@ -6,8 +6,12 @@ from __future__ import print_function
 from typing import List, Optional, Text, Dict
 from ctypes import sizeof
 
-from strongarm.macho.macho_definitions import ObjcMethodList, DylibCommandStruct
-from strongarm.macho.arch_independent_structs import ObjcClassRawStruct, ObjcDataRawStruct, ObjcMethodStruct
+from strongarm.macho.macho_definitions import DylibCommandStruct
+from strongarm.macho.arch_independent_structs import \
+    ObjcClassRawStruct, \
+    ObjcDataRawStruct, \
+    ObjcMethodStruct, \
+    ObjcMethodListStruct
 from strongarm.debug_util import DebugUtil
 from strongarm.macho.macho_binary import MachoBinary
 
@@ -67,13 +71,13 @@ class ObjcDataEntryParser(object):
         return self._get_selectors_from_methlist(methlist, methlist_file_ptr)
 
     def _get_selectors_from_methlist(self, methlist, methlist_file_ptr):
-        # type: (ObjcMethodList, int) -> List[ObjcSelector]
+        # type: (ObjcMethodListStruct, int) -> List[ObjcSelector]
         """Given a method list, return a List of ObjcSelectors encapsulating each method
         """
         selectors = []
         # parse every entry in method list
-        # the first entry appears directly after the ObjcMethodList structure
-        method_entry_off = methlist_file_ptr + sizeof(ObjcMethodList)
+        # the first entry appears directly after the ObjcMethodListStruct
+        method_entry_off = methlist_file_ptr + methlist.sizeof
         for i in range(methlist.methcount):
             method_ent = ObjcMethodStruct(self._binary, method_entry_off)
             # byte-align IMP
@@ -94,7 +98,7 @@ class ObjcDataEntryParser(object):
         return selectors
 
     def _get_methlist(self):
-        # type: () -> Optional[(ObjcMethodList, int)]
+        # type: () -> Optional[(ObjcMethodListStruct, int)]
         """Return the ObjcMethodList and file offset described by the ObjcDataRawStruct
         Some __objc_data entries will describe classes that have no methods implemented. In this case, the method
         list will not exist, and this method will return None.
@@ -113,8 +117,7 @@ class ObjcDataEntryParser(object):
             return None
 
         methlist_file_ptr = self._binary.file_offset_for_virtual_address(self._objc_data_raw_struct.base_methods)
-        methlist_bytes = self._binary.get_bytes(methlist_file_ptr, sizeof(ObjcMethodList))
-        methlist = ObjcMethodList.from_buffer(bytearray(methlist_bytes))
+        methlist = ObjcMethodListStruct(self._binary, methlist_file_ptr)
         return (methlist, methlist_file_ptr)
 
 

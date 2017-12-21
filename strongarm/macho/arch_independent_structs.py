@@ -17,7 +17,8 @@ from strongarm.macho.macho_definitions import \
     ObjcMethod32, \
     ObjcMethod64, \
     CFString32, \
-    CFString64
+    CFString64, \
+    ObjcMethodList
 
 
 class ArchIndependentStructure(object):
@@ -93,3 +94,9 @@ class ObjcMethodStruct(ArchIndependentStructure):
 class CFStringStruct(ArchIndependentStructure):
     _32_BIT_STRUCT = CFString32
     _64_BIT_STRUCT = CFString64
+
+
+class ObjcMethodListStruct(ArchIndependentStructure):
+    _32_BIT_STRUCT = ObjcMethodList
+    _64_BIT_STRUCT = ObjcMethodList
+

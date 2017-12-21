@@ -178,19 +178,17 @@ class ObjcRuntimeDataParser(object):
             return selrefs
 
         selref_sect = self.binary.sections['__objc_selrefs']
-        binary_word = self.binary.platform_word_type
-        entry_count = selref_sect.cmd.size / sizeof(binary_word)
-        entry_count = int(entry_count)
 
+        binary_word = self.binary.platform_word_type
+        entry_count = int(selref_sect.cmd.size / sizeof(binary_word))
         for i in range(entry_count):
-            content_off = i * sizeof(binary_word)
-            selref_val_data = selref_sect.content[content_off:content_off + sizeof(binary_word)]
-            selref_val = binary_word.from_buffer(bytearray(selref_val_data)).value
-            virt_location = content_off + selref_sect.cmd.addr
+            selref_addr = selref_sect.address + (i * sizeof(binary_word))
+            selref_val_bytes = self.binary.get_content_from_virtual_address(selref_addr, sizeof(binary_word))
+            selref_val = binary_word.from_buffer(selref_val_bytes).value
 
             # read selector string literal from selref pointer
             selref_contents = self.binary.get_full_string_from_start_address(selref_val)
-            selrefs.append(ObjcSelref(virt_location, selref_val, selref_contents))
+            selrefs.append(ObjcSelref(selref_addr, selref_val, selref_contents))
         return selrefs
 
     def selector_for_selref(self, selref_addr):

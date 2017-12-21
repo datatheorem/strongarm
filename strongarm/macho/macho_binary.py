@@ -8,8 +8,6 @@ from typing import List, Text, Optional
 from strongarm.debug_util import DebugUtil
 
 from strongarm.macho.macho_definitions import MachArch, CPU_TYPE, HEADER_FLAGS
-from strongarm.macho.macho_definitions import MachOLoadCommand, MachoSymtabCommand, MachoDysymtabCommand
-
 from strongarm.macho.macho_load_commands import MachoLoadCommands
 from strongarm.macho.arch_independent_structs import \
     MachoHeaderStruct, \
@@ -18,7 +16,10 @@ from strongarm.macho.arch_independent_structs import \
     MachoEncryptionInfoStruct, \
     MachoNlistStruct, \
     CFStringStruct, \
-    DylibCommandStruct
+    DylibCommandStruct, \
+    MachoLoadCommandStruct, \
+    MachoSymtabCommandStruct, \
+    MachoDysymtabCommandStruct
 
 from ctypes import c_uint64, c_uint32, sizeof
 import io
@@ -189,8 +190,7 @@ class MachoBinary(object):
         self.load_dylib_commands = []
 
         for i in range(segment_count):
-            load_command_bytes = self.get_bytes(offset, sizeof(MachOLoadCommand))
-            load_command = MachOLoadCommand.from_buffer(bytearray(load_command_bytes))
+            load_command = MachoLoadCommandStruct(self, offset)
 
             if load_command.cmd in [MachoLoadCommands.LC_SEGMENT,
                                     MachoLoadCommands.LC_SEGMENT_64]:
@@ -205,11 +205,9 @@ class MachoBinary(object):
                                       MachoLoadCommands.LC_ENCRYPTION_INFO_64]:
                 self.encryption_info = MachoEncryptionInfoStruct(self, offset)
             elif load_command.cmd == MachoLoadCommands.LC_SYMTAB:
-                symtab_bytes = self.get_bytes(offset, sizeof(MachoSymtabCommand))
-                self.symtab = MachoSymtabCommand.from_buffer(bytearray(symtab_bytes))
+                self.symtab = MachoSymtabCommandStruct(self, offset)
             elif load_command.cmd == MachoLoadCommands.LC_DYSYMTAB:
-                dysymtab_bytes = self.get_bytes(offset, sizeof(MachoDysymtabCommand))
-                self.dysymtab = MachoDysymtabCommand.from_buffer(bytearray(dysymtab_bytes))
+                self.dysymtab = MachoDysymtabCommandStruct(self, offset)
             elif load_command.cmd in [MachoLoadCommands.LC_LOAD_DYLIB, MachoLoadCommands.LC_LOAD_WEAK_DYLIB]:
                 dylib_load_command = DylibCommandStruct(self, offset)
                 dylib_load_command.fileoff = offset

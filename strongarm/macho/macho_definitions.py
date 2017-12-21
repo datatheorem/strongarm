@@ -89,7 +89,7 @@ class MachoSegmentCommand64(Structure):
     ]
 
 
-class MachOLoadCommand(Structure):
+class MachoLoadCommand(Structure):
     _fields_ = [
         ('cmd', c_uint32),
         ('cmdsize', c_uint32),

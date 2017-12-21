@@ -76,6 +76,8 @@ class ObjcDataEntryParser(object):
         method_entry_off = methlist_file_ptr + sizeof(ObjcMethodList)
         for i in range(methlist.methcount):
             method_ent = ObjcMethodStruct(self._binary, method_entry_off)
+            # byte-align IMP
+            method_ent.implementation &= ~0x3
             symbol_name = self._binary.get_full_string_from_start_address(method_ent.name)
 
             # figure out which selref this corresponds to
@@ -272,12 +274,10 @@ class ObjcRuntimeDataParser(object):
         class_entry = ObjcClassRawStruct(self.binary, entry_location, virtual=True)
 
         # sanitize class_entry
-        # it seems for Swift classes,
-        # the compiler will add 1 to the data field
-        # TODO(pt) detecting this can be a heuristic for finding Swift classes!
-        # mod data field to a byte size
-        overlap = class_entry.data % 0x8
-        class_entry.data -= overlap
+        # the least significant 2 bits are used for flags
+        # flag 0x1 indicates a Swift class
+        # mod data pointer to ignore flags!
+        class_entry.data &= ~0x3
         return class_entry
 
     def _get_objc_data_from_objc_class(self, objc_class):

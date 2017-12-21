@@ -273,7 +273,7 @@ class MachoAnalyzer(object):
             # branch with link inherently modifies the link register,
             # which means the function *must* have stored link register at some point,
             # which means we can later use an ldp ..., x30 as a heuristic for function epilogue
-            elif instr.mnemonic == 'bl':
+            elif instr.mnemonic in ['bl', 'blx']:
                 has_modified_lr = True
             elif instr.mnemonic == 'b':
                 if next_branch_is_return or not has_modified_lr:
@@ -285,12 +285,12 @@ class MachoAnalyzer(object):
         return end_address
 
     def get_function_address_range(self, function_address):
+        # type: (int) -> (int, int)
         """Retrieve the address range of executable function beginning at function_address
 
         The return value will be a tuple containing the start and end addresses of executable code belonging
         to the function starting at address function_address
         """
-
         # get_content_from_virtual_address wants a size for how much data to grab,
         # but we don't actually know how big the function is!
         # start off by grabbing 256 bytes, and keep doubling search area until we encounter the
@@ -301,6 +301,13 @@ class MachoAnalyzer(object):
             end_address = self._find_function_boundary(function_address, search_size)
             # double search space
             search_size *= 2
+
+            # place upper limit on search space
+            # limit to 1mb
+            if search_size >= 0x10000:
+                raise RuntimeError('Could not detect end-of-function for function starting at {}'.format(
+                    hex(function_address)
+                ))
 
         return function_address, end_address
 

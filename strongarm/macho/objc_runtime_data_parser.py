@@ -6,12 +6,12 @@ from __future__ import print_function
 from typing import List, Optional, Text, Dict
 from ctypes import sizeof
 
-from strongarm.macho.macho_definitions import DylibCommandStruct
 from strongarm.macho.arch_independent_structs import \
     ObjcClassRawStruct, \
     ObjcDataRawStruct, \
     ObjcMethodStruct, \
-    ObjcMethodListStruct
+    ObjcMethodListStruct, \
+    DylibCommandStruct
 from strongarm.debug_util import DebugUtil
 from strongarm.macho.macho_binary import MachoBinary
 

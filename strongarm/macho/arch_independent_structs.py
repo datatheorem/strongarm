@@ -18,7 +18,8 @@ from strongarm.macho.macho_definitions import \
     ObjcMethod64, \
     CFString32, \
     CFString64, \
-    ObjcMethodList
+    ObjcMethodList, \
+    DylibCommand
 
 
 class ArchIndependentStructure(object):
@@ -100,3 +101,11 @@ class ObjcMethodListStruct(ArchIndependentStructure):
     _32_BIT_STRUCT = ObjcMethodList
     _64_BIT_STRUCT = ObjcMethodList
 
+
+class DylibCommandStruct(ArchIndependentStructure):
+    _32_BIT_STRUCT = DylibCommand
+    _64_BIT_STRUCT = DylibCommand
+
+    def __init__(self, binary, binary_offset, virtual=False):
+        super(DylibCommandStruct, self).__init__(binary, binary_offset, virtual)
+        self.fileoff = None

@@ -8,7 +8,7 @@ from capstone import CsInsn
 from typing import Text, List, Optional, Dict, Tuple
 
 from strongarm.debug_util import DebugUtil
-from strongarm.macho.macho_binary import MachoBinary
+from strongarm.macho import MachoBinary
 from .objc_instruction import ObjcBranchInstruction
 
 
@@ -19,7 +19,7 @@ class ObjcFunctionAnalyzer(object):
 
     def __init__(self, binary, instructions):
         # type: (MachoBinary, List[CsInsn]) -> None
-        import strongarm.macho.macho_analyzer as analyzer
+        from strongarm.macho import MachoAnalyzer
         try:
             self.start_address = instructions[0].address
             last_instruction = instructions[len(instructions) - 1]
@@ -31,7 +31,7 @@ class ObjcFunctionAnalyzer(object):
             pass
 
         self.binary = binary
-        self.macho_analyzer = analyzer.MachoAnalyzer.get_analyzer(binary)
+        self.macho_analyzer = MachoAnalyzer.get_analyzer(binary)
         self.instructions = instructions
 
         self._call_targets = None

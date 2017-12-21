@@ -9,7 +9,6 @@ from strongarm.debug_util import DebugUtil
 
 from strongarm.macho.macho_definitions import MachArch, CPU_TYPE, HEADER_FLAGS
 from strongarm.macho.macho_definitions import MachOLoadCommand, MachoSymtabCommand, MachoDysymtabCommand
-from strongarm.macho.macho_definitions import DylibCommandStruct
 
 from strongarm.macho.macho_load_commands import MachoLoadCommands
 from strongarm.macho.arch_independent_structs import \
@@ -18,7 +17,8 @@ from strongarm.macho.arch_independent_structs import \
     MachoSectionRawStruct, \
     MachoEncryptionInfoStruct, \
     MachoNlistStruct, \
-    CFStringStruct
+    CFStringStruct, \
+    DylibCommandStruct
 
 from ctypes import c_uint64, c_uint32, sizeof
 import io
@@ -211,8 +211,7 @@ class MachoBinary(object):
                 dysymtab_bytes = self.get_bytes(offset, sizeof(MachoDysymtabCommand))
                 self.dysymtab = MachoDysymtabCommand.from_buffer(bytearray(dysymtab_bytes))
             elif load_command.cmd in [MachoLoadCommands.LC_LOAD_DYLIB, MachoLoadCommands.LC_LOAD_WEAK_DYLIB]:
-                dylib_load_bytes = self.get_bytes(offset, sizeof(DylibCommandStruct))
-                dylib_load_command = DylibCommandStruct.from_buffer(bytearray(dylib_load_bytes))
+                dylib_load_command = DylibCommandStruct(self, offset)
                 dylib_load_command.fileoff = offset
                 self.load_dylib_commands.append(dylib_load_command)
 

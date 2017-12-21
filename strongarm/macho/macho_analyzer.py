@@ -293,21 +293,22 @@ class MachoAnalyzer(object):
         """
         # get_content_from_virtual_address wants a size for how much data to grab,
         # but we don't actually know how big the function is!
-        # start off by grabbing 256 bytes, and keep doubling search area until we encounter the
+        # start off by grabbing 128 bytes, and keep doubling search area until we encounter the
         # function boundary.
         end_address = 0
-        search_size = 0x100
+        search_size = 0x80
         while not end_address:
+            # place upper limit on search space
+            # limit to 4kb of code in a single function
+            if search_size >= 0x1000:
+                raise RuntimeError('Could not detect end-of-function for function starting at {}'.format(
+                    hex(function_address)
+                ))
+
             end_address = self._find_function_boundary(function_address, search_size)
             # double search space
             search_size *= 2
 
-            # place upper limit on search space
-            # limit to 1mb
-            if search_size >= 0x10000:
-                raise RuntimeError('Could not detect end-of-function for function starting at {}'.format(
-                    hex(function_address)
-                ))
 
         return function_address, end_address
 

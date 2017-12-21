@@ -348,30 +348,10 @@ class MachoAnalyzer(object):
         If no implementations exist for the provided selector, an empty list will be returned.
         If implementations exist, the list will contain tuples in the form: (IMP start address, IMP end address)
         """
-        ranges_list = []
         start_addresses = self.get_method_imp_addresses(selector)
-        if not start_addresses:
-            # get_method_imp_address failed, selector might not exist
-            # return empty list
-            return ranges_list
+        return [self.get_function_address_range(start_address) for start_address in start_addresses]
 
-        for idx, start_address in enumerate(start_addresses):
-            end_address = self.get_function_address_range(start_address)
-            # get_content_from_virtual_address wants a size for how much data to grab,
-            # but we don't actually know how big the function is!
-            # start off by grabbing 256 bytes, and keep doubling search area until we encounter the
-            # function boundary.
-            end_address = 0
-            search_size = 0x100
-            while not end_address:
-                end_address = self._find_function_boundary(start_address, search_size)
-                # double search space
-                search_size *= 2
-
-            ranges_list.append((start_address, end_address))
-        return ranges_list
-
-    def get_implementations(self, selector):
+    def get_imps_for_sel(self, selector):
         # type: (Text) -> List[List[CsInsn]]
         """Retrieve a list of the disassembled function data for every implementation of a provided selector
         Args:

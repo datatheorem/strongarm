@@ -5,7 +5,9 @@ from __future__ import print_function
 
 from .objc_analyzer import \
     ObjcFunctionAnalyzer, \
-    ObjcBlockAnalyzer
+    ObjcBlockAnalyzer, \
+    RegisterContentsType, \
+    RegisterContents
 
 from .objc_query import \
     CodeSearch, \

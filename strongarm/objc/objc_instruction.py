@@ -17,6 +17,15 @@ class ObjcInstruction(object):
         self.is_msgSend_call = None
         self.symbol = None
 
+    @classmethod
+    def parse_instruction(cls, function_analyzer, instruction):
+        # type: (strongarm.objc.objc_analyzer.ObjcFunctionAnalyzer, CsInsn) -> ObjcInstruction
+        """Read an instruction and encapsulate it in the appropriate ObjcInstruction subclass
+        """
+        if ObjcBranchInstruction.is_branch_instruction(instruction):
+            return ObjcBranchInstruction.parse_instruction(function_analyzer, instruction)
+        return ObjcInstruction(instruction)
+
 
 class ObjcBranchInstruction(ObjcInstruction):
     def __init__(self, instruction, destination_address):

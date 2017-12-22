@@ -3,19 +3,31 @@ from __future__ import absolute_import
 from __future__ import unicode_literals
 from __future__ import print_function
 
+from typing import Text, List, Optional, Dict, Tuple
+from enum import Enum
+
 from capstone.arm64 import ARM64_OP_REG, ARM64_OP_IMM, ARM64_OP_MEM
 from capstone import CsInsn
-from typing import Text, List, Optional, Dict, Tuple
 
 from strongarm.debug_util import DebugUtil
 from strongarm.macho import MachoBinary
-from .objc_instruction import ObjcBranchInstruction
-
+from .objc_instruction import ObjcInstruction, ObjcBranchInstruction
 from .objc_query import \
     CodeSearch, \
     CodeSearchTermInstructionMnemonic, \
     CodeSearchTermInstructionOperand, \
     CodeSearchTermInstructionIndex
+
+
+class RegisterContentsType(Enum):
+    FUNCTION_ARG = 0
+    IMMEDIATE = 1
+
+
+class RegisterContents(object):
+    def __init__(self, value_type, value):
+        self.type = value_type
+        self.value = value
 
 
 class ObjcFunctionAnalyzer(object):
@@ -140,7 +152,8 @@ class ObjcFunctionAnalyzer(object):
                 if search_term.satisfied(self, instruction):
                     if not code_search.requires_all_terms_matched:
                         # matched a single term which is sufficient for storing a result
-                        result = CodeSearchResult(search_term, self, instruction)
+                        wrapped_instruction = ObjcInstruction.parse_instruction(self, instruction)
+                        result = CodeSearchResult(search_term, self, wrapped_instruction)
                         search_results.append(result)
                 else:
                     has_any_condition_failed = True
@@ -148,7 +161,8 @@ class ObjcFunctionAnalyzer(object):
                         break
             if code_search.requires_all_terms_matched and not has_any_condition_failed:
                 # matched all terms
-                result = CodeSearchResult(code_search.required_matches, self, instruction)
+                wrapped_instruction = ObjcInstruction.parse_instruction(self, instruction)
+                result = CodeSearchResult(code_search.required_matches, self, wrapped_instruction)
                 search_results.append(result)
         return search_results
 
@@ -320,8 +334,12 @@ class ObjcFunctionAnalyzer(object):
             raise ValueError('asked to find selref of non-branch instruction')
 
         msgsend_index = self.instructions.index(msgsend_instr)
+        wrapped_instr = ObjcInstruction.parse_instruction(msgsend_instr)
         # retrieve whatever data is in x1 at the index of this msgSend call
-        return self.determine_register_contents('x1', msgsend_index)[0]
+        contents = self.get_register_contents_at_instruction('x1', wrapped_instr)
+        if contents.type != RegisterContentsType.IMMEDIATE:
+            raise RuntimeError('couldn\'t determine selref ptr, origates in function arg')
+        return contents.value
 
     def _trimmed_reg_name(self, reg_name):
         # type: (Text) -> Text
@@ -342,8 +360,8 @@ class ObjcFunctionAnalyzer(object):
             return reg_name[1::]
         return reg_name
 
-    def determine_register_contents(self, desired_reg, start_index):
-        # type: (Text, int) -> (int, bool)
+    def get_register_contents_at_instruction(self, register, instruction):
+        # type: (Text, ObjcInstruction) -> RegisterContents
         """Analyze instructions backwards from start_index to find data in reg
         This function will read all instructions until it gathers all data and assignments necessary to determine
         value of desired_reg.
@@ -357,17 +375,15 @@ class ObjcFunctionAnalyzer(object):
 
         Args:
             desired_reg: string containing name of register whose data should be determined
-            start_index: the instruction index at which desired_reg's value should be found
+            instruction: the instruction marking the execution point where the register value should be determined
 
         Returns:
-            A tuple of the register value and a bool.
-            If the bool is True, the contents of the requested register value depend on
-            a function argument. The index of this function argument (where 0 is the first argument passed to
-             the function) is stored in the first field of the return.
-            If the bool is False, the first field is the resolved value contained in the requested register at the requested
-            index.
-
+            A RegisterContents instance encapsulating information about the contents of the specified register at the
+            specified point of execution
         """
+        desired_reg = register
+        start_index = self.instructions.index(instruction.raw_instr)
+
         bytes_in_instruction = 4
         target_addr = self.start_address + (start_index * bytes_in_instruction)
         DebugUtil.log(self, 'analyzing data flow to determine data in {} at {}'.format(
@@ -498,11 +514,16 @@ class ObjcFunctionAnalyzer(object):
                 raise RuntimeError('Data-flow loop exited before all unknowns were marked {}'.format(unknown_regs))
 
             arg_index = int(unknown_regs[0])
-            return arg_index, True
+            return RegisterContents(RegisterContentsType.FUNCTION_ARG, arg_index)
 
         # for every register in the waiting list,
         # cross reference all its dependent variables to calculate the final value
-        return self._resolve_register_value_from_data_links(desired_reg, needed_links, determined_values), False
+        final_register_value = self._resolve_register_value_from_data_links(
+            desired_reg,
+            needed_links,
+            determined_values
+        )
+        return RegisterContents(RegisterContentsType.IMMEDIATE, final_register_value)
 
     def _resolve_register_value_from_data_links(self, desired_reg, links, resolved_registers):
         # type: (Text, Dict[Text, Tuple[Text, int]], Dict[Text, int]) -> int

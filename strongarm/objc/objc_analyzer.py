@@ -11,6 +11,12 @@ from strongarm.debug_util import DebugUtil
 from strongarm.macho import MachoBinary
 from .objc_instruction import ObjcBranchInstruction
 
+from .objc_query import \
+    CodeSearch, \
+    CodeSearchTermInstructionMnemonic, \
+    CodeSearchTermInstructionOperand, \
+    CodeSearchTermInstructionIndex
+
 
 class ObjcFunctionAnalyzer(object):
     """Provides utility functions for introspecting on a set of instructions which represent a function body.
@@ -112,6 +118,42 @@ class ObjcFunctionAnalyzer(object):
 
         self._call_targets = targets
         return targets
+
+    def search_code(self, code_search):
+        # type: (CodeSearch) -> List[CodeSearchResult]
+        """Given a CodeSearch object describing rules for matching code, return a List of CodeSearchResult's
+        encapsulating instructions which match the described set of conditions.
+        """
+        from .objc_query import CodeSearch, CodeSearchResult
+        DebugUtil.log(self, 'searching function at {} with search {}'.format(
+            hex(self.start_address),
+            code_search
+        ))
+        minimum_index = 0
+        maximum_index = len(self.instructions)
+        step = 1
+
+        search_results = []
+        for instruction in self.instructions[minimum_index:maximum_index:step]:
+            has_any_condition_failed = False
+            for search_term in code_search.required_matches:
+                if isinstance(search_term, CodeSearchTermInstructionIndex):
+                    # this term is where minimum_index, maximum_index, step, comes from, along w/ search_backwards flag
+                    raise NotImplementedError()
+
+                if search_term.satisfied(self, instruction):
+                    if not code_search.requires_all_terms_matched:
+                        # matched a single term which is sufficient for storing a result
+                        result = CodeSearchResult(search_term, self, instruction)
+                        search_results.append(result)
+                else:
+                    has_any_condition_failed = True
+                    break
+            if code_search.requires_all_terms_matched and not has_any_condition_failed:
+                # matched all terms
+                result = CodeSearchResult(code_search.required_matches, self, instruction)
+                search_results.append(result)
+        return search_results
 
     def perform_query(self, condition_list, start_index=0, search_backwards=False):
         # type: (List[query.ObjcPredicateQuery], int, bool) -> Optional[CsInsn]

@@ -125,10 +125,6 @@ class ObjcFunctionAnalyzer(object):
         encapsulating instructions which match the described set of conditions.
         """
         from .objc_query import CodeSearch, CodeSearchResult
-        DebugUtil.log(self, 'searching function at {} with search {}'.format(
-            hex(self.start_address),
-            code_search
-        ))
         minimum_index = 0
         maximum_index = len(self.instructions)
         step = 1

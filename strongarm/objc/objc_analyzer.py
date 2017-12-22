@@ -144,7 +144,8 @@ class ObjcFunctionAnalyzer(object):
                         search_results.append(result)
                 else:
                     has_any_condition_failed = True
-                    break
+                    if code_search.requires_all_terms_matched:
+                        break
             if code_search.requires_all_terms_matched and not has_any_condition_failed:
                 # matched all terms
                 result = CodeSearchResult(code_search.required_matches, self, instruction)

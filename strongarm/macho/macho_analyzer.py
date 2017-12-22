@@ -12,6 +12,8 @@ from strongarm.macho.macho_binary import MachoBinary
 from strongarm.macho.macho_imp_stubs import MachoImpStubsParser
 from strongarm.macho.macho_string_table_helper import MachoStringTableHelper
 from strongarm.macho.objc_runtime_data_parser import ObjcRuntimeDataParser, ObjcSelector, ObjcClass
+from strongarm import DebugUtil
+
 
 class MachoAnalyzer(object):
     # keep map of active MachoAnalyzer instances
@@ -298,10 +300,16 @@ class MachoAnalyzer(object):
         search_size = 0x80
         while not end_address:
             # place upper limit on search space
-            # limit to 4kb of code in a single function
-            if search_size >= 0x1000:
-                raise RuntimeError('Could not detect end-of-function for function starting at {}'.format(
+            # limit to 16kb of code in a single function
+            if search_size == 0x4000:
+                raise RuntimeError("Couldn't detect end-of-function within {} bytes for function starting at {}".format(
+                    hex(int(search_size/2)),
                     hex(function_address)
+                ))
+            if search_size >= 0x1000:
+                DebugUtil.log(self, 'WARNING: Analyzing large function at {} (search space == {} bytes)'.format(
+                    hex(function_address),
+                    hex(search_size)
                 ))
 
             end_address = self._find_function_boundary(function_address, search_size)
@@ -382,6 +390,11 @@ class MachoAnalyzer(object):
         """
         from strongarm.objc import CodeSearch, CodeSearchResult
         from strongarm.objc import ObjcFunctionAnalyzer
+
+        DebugUtil.log(self, 'Performing code search on binary with search description:\n{}'.format(
+            code_search
+        ))
+
         # TODO(PT): entry_point_list should be stored somewhere instead of recreating on every search
         entry_point_list = []
         for objc_class in self.objc_classes():

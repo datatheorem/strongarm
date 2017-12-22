@@ -155,50 +155,6 @@ class ObjcFunctionAnalyzer(object):
                 search_results.append(result)
         return search_results
 
-    def perform_query(self, condition_list, start_index=0, search_backwards=False):
-        # type: (List[query.ObjcPredicateQuery], int, bool) -> Optional[CsInsn]
-        """Given a List of predicates to satisfy, return the instruction within the function satisfying the conditions.
-        If no satisfying instruction is found in the function, None will be returned.
-
-        Args:
-            condition_list: list of ObjcPredicateQuery, each of which must succeed for the returned instruction
-            start_index: index of first instruction to search
-            search_backwards: if set, iterate instructions backwards
-
-        Returns:
-            The instruction within the search space which passes all provided conditions
-        """
-        import strongarm.objc.objc_query as query
-        DebugUtil.log(self, 'searching for query conditions {} in function {}'.format(
-            condition_list,
-            self.start_address
-        ))
-
-        # if we have an instruction index predicate, we can save work by only iterating instructions which can possibly
-        # be satisfied.
-        minimum_index = start_index
-        maximum_index = len(self.instructions) - 1
-        for c in condition_list:
-            if type(c) is query.ObjcPredicateInstructionIndexQuery:
-                if c.exact_index is not None:
-                    minimum_index = c.exact_index
-                elif c.minimum_index is not None:
-                    minimum_index = c.minimum_index
-                elif c.maximum_index is not None:
-                    maximum_index = c.maximum_index
-        step = 1
-        if search_backwards:
-            step = -1
-        for instruction in self.instructions[minimum_index:maximum_index:step]:
-            did_condition_fail = False
-            for condition in condition_list:
-                if not condition.satisfied(self, instruction):
-                    did_condition_fail = True
-                    break
-            if not did_condition_fail:
-                return instruction
-        return None
-
     def get_local_branches(self):
         # type: () -> List[ObjcBranchInstruction]
         """Return all instructions in the analyzed function representing a branch to a destination within the function
@@ -645,7 +601,9 @@ class ObjcBlockAnalyzer(ObjcFunctionAnalyzer):
             found_branch_instruction = search_result.found_instruction
             instruction_index = self.instructions.index(found_branch_instruction)
             reg, is_func_arg = self.determine_register_contents(self.initial_block_reg, instruction_index)
-            if not is_func_arg or reg != self.initial_block_reg:
+
+            trimmed_block_argument_reg = int(self._trimmed_reg_name(self.initial_block_reg))
+            if not is_func_arg or reg != trimmed_block_argument_reg:
                 # not the instruction we're looking for
                 continue
             return found_branch_instruction, instruction_index

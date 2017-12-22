@@ -13,7 +13,6 @@ from strongarm.macho.macho_imp_stubs import MachoImpStubsParser
 from strongarm.macho.macho_string_table_helper import MachoStringTableHelper
 from strongarm.macho.objc_runtime_data_parser import ObjcRuntimeDataParser, ObjcSelector, ObjcClass
 
-
 class MachoAnalyzer(object):
     # keep map of active MachoAnalyzer instances
     # each MachoAnalyzer operates on a single MachoBinary which will never change in the lifecycle of the analyzer
@@ -374,55 +373,26 @@ class MachoAnalyzer(object):
             implementation_analyzers.append(function_analyzer)
         return implementation_analyzers
 
-    def perform_query(self, predicate_lists):
-        # type: (List[List[q.ObjcPredicateQuery]]) -> List[ObjcPredicateResult]
-        """Run a set of predicates on the analyzed binary, and return a list of code matching criteria
+    def search_code(self, code_search):
+        # type: (CodeSearch) -> List[CodeSearchResult]
+        """Given a CodeSearch object describing rules for matching code, return a List of CodeSearchResult's
+        encapsulating instructions which match the described set of conditions.
 
-        Each list will only be matched if all predicates in the list are matched by an instruction. For example,
-        you can look for two separate conditions by passing [[condition1], [condition2]]. If you want to only
-        match an instruction when two conditions are met, specify them in the same list, such as:
-        [[condition1, condition2]]
-
-        Args:
-            predicate_lists: List of lists of predicates sets to search for.
-
-        Returns:
-            List of search results
+        The search space of this method includes all known functions within the binary.
         """
-        import strongarm.objc.objc_query as q
-        import strongarm.objc.objc_analyzer as objc_analyzer
-        search_results = []
+        from strongarm.objc import CodeSearch, CodeSearchResult
+        from strongarm.objc import ObjcFunctionAnalyzer
+        # TODO(PT): entry_point_list should be stored somewhere instead of recreating on every search
         entry_point_list = []
         for objc_class in self.objc_classes():
             for objc_sel in objc_class.selectors:
                 imp_addr = objc_sel.implementation
                 entry_point_list.append((objc_class, objc_sel, imp_addr))
 
+        search_results = []
         for objc_class, objc_sel, imp in entry_point_list:
-            function_analyzer = objc_analyzer.ObjcFunctionAnalyzer.get_function_analyzer(self.binary, imp)
-            for predicate_list in predicate_lists:
-                # TODO(PT): perform_query() should let us specify OR predicates as well as AND predicates
-                # TODO(PT): perform_query() should return a List of all matching instructions, not just the first
-                search_result_instr = function_analyzer.perform_query(predicate_list)
-                if search_result_instr:
-                    search_result = ObjcPredicateResult(self.binary,
-                                                        predicate_list,
-                                                        objc_class,
-                                                        objc_sel,
-                                                        function_analyzer,
-                                                        search_result_instr)
-                    search_results.append(search_result)
+            function_analyzer = ObjcFunctionAnalyzer.get_function_analyzer(self.binary, imp)
+            # TODO(PT): ObjcFunctionAnalyzer should figure ObjC class/SEL itself, using the same map that
+            # entry_point_list will derive from
+            search_results += function_analyzer.search_code(code_search)
         return search_results
-
-
-class ObjcPredicateResult(object):
-    import strongarm.objc.objc_query as q
-    import strongarm.objc.objc_analyzer as analyzer
-    def __init__(self, binary, predicate_list, objc_class, objc_selector, function_analyzer, instruction):
-        # type: (MachoBinary, List[q.ObjcPredicateQuery], ObjcClass, ObjcSelector, analyzer.ObjcFunctionAnalyzer, CsInsn) -> None
-        self.binary = binary
-        self.predicate_list = predicate_list
-        self.objc_class = objc_class
-        self.objc_selector = objc_selector
-        self.function_analyzer = function_analyzer
-        self.instruction = instruction

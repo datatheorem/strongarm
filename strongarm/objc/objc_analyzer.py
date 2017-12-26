@@ -42,8 +42,8 @@ class ObjcFunctionAnalyzer(object):
     As Objective-C is a strict superset of C, ObjcFunctionAnalyzer can also be used on pure C functions.
     """
 
-    def __init__(self, binary, instructions):
-        # type: (MachoBinary, List[CsInsn]) -> None
+    def __init__(self, binary, instructions, method_info=None):
+        # type: (MachoBinary, List[CsInsn], ObjcMethodInfo) -> None
         from strongarm.macho import MachoAnalyzer
         try:
             self.start_address = instructions[0].address
@@ -58,6 +58,7 @@ class ObjcFunctionAnalyzer(object):
         self.binary = binary
         self.macho_analyzer = MachoAnalyzer.get_analyzer(binary)
         self.instructions = instructions
+        self.method_info = method_info
 
         self._call_targets = None
 
@@ -103,6 +104,24 @@ class ObjcFunctionAnalyzer(object):
         analyzer = MachoAnalyzer.get_analyzer(binary)
         instructions = analyzer.get_function_instructions(start_address)
         return ObjcFunctionAnalyzer(binary, instructions)
+
+    @classmethod
+    def get_function_analyzer_for_method(cls, binary, method_info):
+        # type: (MachoBinary, ObjcMethodInfo) -> ObjcFunctionAnalyzer
+        """Get the shared analyzer describing an Objective-C method within the Mach-O binary
+        This method performs the same caching as get_function_analyzer()
+
+        Args:
+            binary: The MachoBinary containing a function at method_info.imp_addr
+            method_info: The ObjcMethodInfo describing the IMP to be analyzed
+
+        Returns:
+            An ObjcFunctionAnalyzer suitable for introspecting the provided method
+        """
+        from strongarm.macho.macho_analyzer import MachoAnalyzer
+        analyzer = MachoAnalyzer.get_analyzer(binary)
+        instructions = analyzer.get_function_instructions(method_info.imp_addr)
+        return ObjcFunctionAnalyzer(binary, instructions, method_info=method_info)
 
     @property
     def call_targets(self):

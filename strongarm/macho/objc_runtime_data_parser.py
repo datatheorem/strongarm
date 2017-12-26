@@ -6,8 +6,12 @@ from __future__ import print_function
 from typing import List, Optional, Text, Dict
 from ctypes import sizeof
 
-from strongarm.macho.macho_definitions import ObjcMethodList, DylibCommandStruct
-from strongarm.macho.arch_independent_structs import ObjcClassRawStruct, ObjcDataRawStruct, ObjcMethodStruct
+from strongarm.macho.arch_independent_structs import \
+    ObjcClassRawStruct, \
+    ObjcDataRawStruct, \
+    ObjcMethodStruct, \
+    ObjcMethodListStruct, \
+    DylibCommandStruct
 from strongarm.debug_util import DebugUtil
 from strongarm.macho.macho_binary import MachoBinary
 
@@ -67,15 +71,17 @@ class ObjcDataEntryParser(object):
         return self._get_selectors_from_methlist(methlist, methlist_file_ptr)
 
     def _get_selectors_from_methlist(self, methlist, methlist_file_ptr):
-        # type: (ObjcMethodList, int) -> List[ObjcSelector]
+        # type: (ObjcMethodListStruct, int) -> List[ObjcSelector]
         """Given a method list, return a List of ObjcSelectors encapsulating each method
         """
         selectors = []
         # parse every entry in method list
-        # the first entry appears directly after the ObjcMethodList structure
-        method_entry_off = methlist_file_ptr + sizeof(ObjcMethodList)
+        # the first entry appears directly after the ObjcMethodListStruct
+        method_entry_off = methlist_file_ptr + methlist.sizeof
         for i in range(methlist.methcount):
             method_ent = ObjcMethodStruct(self._binary, method_entry_off)
+            # byte-align IMP
+            method_ent.implementation &= ~0x3
             symbol_name = self._binary.get_full_string_from_start_address(method_ent.name)
 
             # figure out which selref this corresponds to
@@ -92,7 +98,7 @@ class ObjcDataEntryParser(object):
         return selectors
 
     def _get_methlist(self):
-        # type: () -> Optional[(ObjcMethodList, int)]
+        # type: () -> Optional[(ObjcMethodListStruct, int)]
         """Return the ObjcMethodList and file offset described by the ObjcDataRawStruct
         Some __objc_data entries will describe classes that have no methods implemented. In this case, the method
         list will not exist, and this method will return None.
@@ -110,9 +116,8 @@ class ObjcDataEntryParser(object):
         if self._objc_data_raw_struct.base_methods == 0:
             return None
 
-        methlist_file_ptr = self._objc_data_raw_struct.base_methods - self._binary.get_virtual_base()
-        raw_struct_data = self._binary.get_bytes(methlist_file_ptr, sizeof(ObjcMethodList))
-        methlist = ObjcMethodList.from_buffer(bytearray(raw_struct_data))
+        methlist_file_ptr = self._binary.file_offset_for_virtual_address(self._objc_data_raw_struct.base_methods)
+        methlist = ObjcMethodListStruct(self._binary, methlist_file_ptr)
         return (methlist, methlist_file_ptr)
 
 
@@ -173,19 +178,17 @@ class ObjcRuntimeDataParser(object):
             return selrefs
 
         selref_sect = self.binary.sections['__objc_selrefs']
-        binary_word = self.binary.platform_word_type
-        entry_count = selref_sect.cmd.size / sizeof(binary_word)
-        entry_count = int(entry_count)
 
+        binary_word = self.binary.platform_word_type
+        entry_count = int(selref_sect.cmd.size / sizeof(binary_word))
         for i in range(entry_count):
-            content_off = i * sizeof(binary_word)
-            selref_val_data = selref_sect.content[content_off:content_off + sizeof(binary_word)]
-            selref_val = binary_word.from_buffer(bytearray(selref_val_data)).value
-            virt_location = content_off + selref_sect.cmd.addr
+            selref_addr = selref_sect.address + (i * sizeof(binary_word))
+            selref_val_bytes = self.binary.get_content_from_virtual_address(selref_addr, sizeof(binary_word))
+            selref_val = binary_word.from_buffer(selref_val_bytes).value
 
             # read selector string literal from selref pointer
             selref_contents = self.binary.get_full_string_from_start_address(selref_val)
-            selrefs.append(ObjcSelref(virt_location, selref_val, selref_contents))
+            selrefs.append(ObjcSelref(selref_addr, selref_val, selref_contents))
         return selrefs
 
     def selector_for_selref(self, selref_addr):
@@ -223,39 +226,17 @@ class ObjcRuntimeDataParser(object):
         # type: () -> List[ObjcClass]
         """Read Objective-C class data in __objc_classlist, __objc_data to get classes and selectors in binary
         """
-        DebugUtil.log(self, 'Reading objc_classlist pointers...')
-        objc_classes = []
+        DebugUtil.log(self, 'Cross-referencing objc_classlist, __objc_class, and _objc_data entries...')
+        parsed_objc_classes = []
         classlist_pointers = self._get_classlist_pointers()
-        # if the classlist had no entries, there's no Objective-C data in this binary
-        # in this case, the binary must be implemented purely in C or Swift
-        if not len(classlist_pointers):
-            return objc_classes
-
-        # read actual list of ObjcClassRaw structs from list of pointers
-        DebugUtil.log(self, 'Reading __objc_class structs...')
-        raw_objc_classes = []
-        for class_ptr in classlist_pointers:
-            objc_class = self._get_objc_class_from_classlist_pointer(class_ptr)
+        for ptr in classlist_pointers:
+            objc_class = self._get_objc_class_from_classlist_pointer(ptr)
             if objc_class:
-                raw_objc_classes.append(objc_class)
-
-        # TODO(PT): use ObjcClassRaw objects in objc_classes to create list of classes in binary
-        # we could even make a list of all selectors for a given class
-        # and, when requesting an IMP for a selector, we could request the class too (for SEL collisions)
-
-        # read data for each class
-        DebugUtil.log(self, 'Reading __objc_data structs...')
-        objc_data_entries = []
-        for class_ent in raw_objc_classes:
-            data_entry = self._get_objc_data_from_objc_class(class_ent)
-            if data_entry:
-                objc_data_entries.append(data_entry)
-
-        # read information from each struct __objc_data
-        DebugUtil.log(self, 'Parsing runtime data from __objc_data structs...')
-        for objc_data in objc_data_entries:
-            objc_classes.append(self._parse_objc_data_entry(objc_data))
-        return objc_classes
+                objc_data_struct = self._get_objc_data_from_objc_class(objc_class)
+                if objc_data_struct:
+                    # read information from each struct __objc_data
+                    parsed_objc_classes.append(self._parse_objc_data_entry(objc_data_struct))
+        return parsed_objc_classes
 
     def _parse_objc_data_entry(self, objc_data_raw):
         # type: (ObjcDataRawStruct) -> ObjcClass
@@ -294,12 +275,10 @@ class ObjcRuntimeDataParser(object):
         class_entry = ObjcClassRawStruct(self.binary, entry_location, virtual=True)
 
         # sanitize class_entry
-        # it seems for Swift classes,
-        # the compiler will add 1 to the data field
-        # TODO(pt) detecting this can be a heuristic for finding Swift classes!
-        # mod data field to a byte size
-        overlap = class_entry.data % 0x8
-        class_entry.data -= overlap
+        # the least significant 2 bits are used for flags
+        # flag 0x1 indicates a Swift class
+        # mod data pointer to ignore flags!
+        class_entry.data &= ~0x3
         return class_entry
 
     def _get_objc_data_from_objc_class(self, objc_class):

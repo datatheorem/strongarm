@@ -19,8 +19,8 @@ class TestBlockAnalyzer(unittest.TestCase):
         self.binary = parser.slices[0]
         self.analyzer = MachoAnalyzer.get_analyzer(self.binary)
 
-        self.implementations = self.analyzer.get_implementations(u'URLSession:didReceiveChallenge:completionHandler:')
-        self.instructions = self.implementations[0]
+        self.implementations = self.analyzer.get_imps_for_sel(u'URLSession:didReceiveChallenge:completionHandler:')
+        self.instructions = self.implementations[0].instructions
         self.imp_addr = self.instructions[0].address
         self.block_analyzer = ObjcBlockAnalyzer(self.binary, self.instructions, u'x4')
 

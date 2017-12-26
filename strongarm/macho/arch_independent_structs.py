@@ -17,7 +17,12 @@ from strongarm.macho.macho_definitions import \
     ObjcMethod32, \
     ObjcMethod64, \
     CFString32, \
-    CFString64
+    CFString64, \
+    ObjcMethodList, \
+    DylibCommand, \
+    MachoLoadCommand, \
+    MachoSymtabCommand, \
+    MachoDysymtabCommand
 
 
 class ArchIndependentStructure(object):
@@ -93,3 +98,32 @@ class ObjcMethodStruct(ArchIndependentStructure):
 class CFStringStruct(ArchIndependentStructure):
     _32_BIT_STRUCT = CFString32
     _64_BIT_STRUCT = CFString64
+
+
+class ObjcMethodListStruct(ArchIndependentStructure):
+    _32_BIT_STRUCT = ObjcMethodList
+    _64_BIT_STRUCT = ObjcMethodList
+
+
+class DylibCommandStruct(ArchIndependentStructure):
+    _32_BIT_STRUCT = DylibCommand
+    _64_BIT_STRUCT = DylibCommand
+
+    def __init__(self, binary, binary_offset, virtual=False):
+        super(DylibCommandStruct, self).__init__(binary, binary_offset, virtual)
+        self.fileoff = None
+
+
+class MachoLoadCommandStruct(ArchIndependentStructure):
+    _32_BIT_STRUCT = MachoLoadCommand
+    _64_BIT_STRUCT = MachoLoadCommand
+
+
+class MachoSymtabCommandStruct(ArchIndependentStructure):
+    _32_BIT_STRUCT = MachoSymtabCommand
+    _64_BIT_STRUCT = MachoSymtabCommand
+
+
+class MachoDysymtabCommandStruct(ArchIndependentStructure):
+    _32_BIT_STRUCT = MachoDysymtabCommand
+    _64_BIT_STRUCT = MachoDysymtabCommand

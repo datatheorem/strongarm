@@ -17,6 +17,15 @@ class ObjcInstruction(object):
         self.is_msgSend_call = None
         self.symbol = None
 
+    @classmethod
+    def parse_instruction(cls, function_analyzer, instruction):
+        # type: (strongarm.objc.objc_analyzer.ObjcFunctionAnalyzer, CsInsn) -> ObjcInstruction
+        """Read an instruction and encapsulate it in the appropriate ObjcInstruction subclass
+        """
+        if ObjcBranchInstruction.is_branch_instruction(instruction):
+            return ObjcBranchInstruction.parse_instruction(function_analyzer, instruction)
+        return ObjcInstruction(instruction)
+
 
 class ObjcBranchInstruction(ObjcInstruction):
     def __init__(self, instruction, destination_address):
@@ -95,7 +104,7 @@ class ObjcUnconditionalBranchInstruction(ObjcBranchInstruction):
         # type: (objc_analyzer.ObjcFunctionAnalyzer) -> None
         # validate instruction
         if not self.is_msgSend_call or \
-           self.raw_instr.mnemonic != 'bl' or \
+           self.raw_instr.mnemonic not in ['bl', 'b'] or \
            self.symbol != '_objc_msgSend':
             print('self.is_msgSend_call {} self.raw_instr.mnemonic {} self.symbol {}'.format(
                 self.is_msgSend_call,
@@ -110,17 +119,28 @@ class ObjcUnconditionalBranchInstruction(ObjcBranchInstruction):
         # knowledge of this is largely useless, and the much more valuable piece of information is
         # which function the selector passed to objc_msgSend corresponds to.
         # therefore, replace the 'real' destination address with the requested IMP
-        selref_ptr = function_analyzer.get_selref_ptr(self.raw_instr)
-        selector = function_analyzer.macho_analyzer.selector_for_selref(selref_ptr)
-        if not selector:
-            raise RuntimeError('Couldnt get sel for selref ptr {}'.format(selref_ptr))
+        try:
+            selref_ptr = function_analyzer.get_selref_ptr(self.raw_instr)
+            selector = function_analyzer.macho_analyzer.selector_for_selref(selref_ptr)
+            if not selector:
+                raise RuntimeError('Couldnt get sel for selref ptr {}'.format(selref_ptr))
+            # if we couldn't find an IMP for this selref,
+            # it is defined in a class outside this binary
+            self.is_external_objc_call = selector.is_external_definition
 
-        # if we couldn't find an IMP for this selref,
-        # it is defined in a class outside this binary
-        self.is_external_objc_call = selector.is_external_definition
-
-        self.destination_address = selector.implementation
-        self.selref = selector.selref
+            self.destination_address = selector.implementation
+            self.selref = selector.selref
+        except RuntimeError as e:
+            # GammaRayTestBad @ 0x10007ed10 causes get_selref_ptr() to fail.
+            # This is because x1 has a data dependency on x20.
+            # At the beginning of the function, there's a basic block to return early if imageView is nil.
+            # This basic block includes a stack unwind, which tricks get_register_contents_at_instruction() into
+            # thinking that there's a data dependency on x0, which there *isn't*
+            # Nonetheless, this causes get_selref_ptr() to fail.
+            # As a workaround, let's assign all the above fields to 'not found' values if this bug is hit
+            self.is_external_objc_call = True
+            self.destination_address = None
+            self.selref = None
 
 
 class ObjcConditionalBranchInstruction(ObjcBranchInstruction):

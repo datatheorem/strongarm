@@ -12,6 +12,7 @@ from strongarm.macho.macho_binary import MachoBinary
 from strongarm.macho.macho_imp_stubs import MachoImpStubsParser
 from strongarm.macho.macho_string_table_helper import MachoStringTableHelper
 from strongarm.macho.objc_runtime_data_parser import ObjcRuntimeDataParser, ObjcSelector, ObjcClass
+from strongarm import DebugUtil
 
 
 class MachoAnalyzer(object):
@@ -39,6 +40,7 @@ class MachoAnalyzer(object):
 
         self.imp_stubs = MachoImpStubsParser(bin, self.cs).imp_stubs
         self._objc_helper = None
+        self._objc_method_list = None
 
         # done setting up, store this analyzer in class cache
         MachoAnalyzer.active_analyzer_map[bin] = self
@@ -273,7 +275,7 @@ class MachoAnalyzer(object):
             # branch with link inherently modifies the link register,
             # which means the function *must* have stored link register at some point,
             # which means we can later use an ldp ..., x30 as a heuristic for function epilogue
-            elif instr.mnemonic == 'bl':
+            elif instr.mnemonic in ['bl', 'blx']:
                 has_modified_lr = True
             elif instr.mnemonic == 'b':
                 if next_branch_is_return or not has_modified_lr:
@@ -285,23 +287,35 @@ class MachoAnalyzer(object):
         return end_address
 
     def get_function_address_range(self, function_address):
+        # type: (int) -> (int, int)
         """Retrieve the address range of executable function beginning at function_address
 
         The return value will be a tuple containing the start and end addresses of executable code belonging
         to the function starting at address function_address
         """
-
         # get_content_from_virtual_address wants a size for how much data to grab,
         # but we don't actually know how big the function is!
-        # start off by grabbing 256 bytes, and keep doubling search area until we encounter the
+        # start off by grabbing 128 bytes, and keep doubling search area until we encounter the
         # function boundary.
         end_address = 0
-        search_size = 0x100
+        search_size = 0x80
         while not end_address:
+            # place upper limit on search space
+            # limit to 16kb of code in a single function
+            if search_size == 0x4000:
+                raise RuntimeError("Couldn't detect end-of-function within {} bytes for function starting at {}".format(
+                    hex(int(search_size/2)),
+                    hex(function_address)
+                ))
+            if search_size >= 0x1000:
+                DebugUtil.log(self, 'WARNING: Analyzing large function at {} (search space == {} bytes)'.format(
+                    hex(function_address),
+                    hex(search_size)
+                ))
+
             end_address = self._find_function_boundary(function_address, search_size)
             # double search space
             search_size *= 2
-
         return function_address, end_address
 
     def get_function_instructions(self, start_address):
@@ -341,97 +355,65 @@ class MachoAnalyzer(object):
         If no implementations exist for the provided selector, an empty list will be returned.
         If implementations exist, the list will contain tuples in the form: (IMP start address, IMP end address)
         """
-        ranges_list = []
         start_addresses = self.get_method_imp_addresses(selector)
-        if not start_addresses:
-            # get_method_imp_address failed, selector might not exist
-            # return empty list
-            return ranges_list
+        return [self.get_function_address_range(start_address) for start_address in start_addresses]
 
-        for idx, start_address in enumerate(start_addresses):
-            end_address = self.get_function_address_range(start_address)
-            # get_content_from_virtual_address wants a size for how much data to grab,
-            # but we don't actually know how big the function is!
-            # start off by grabbing 256 bytes, and keep doubling search area until we encounter the
-            # function boundary.
-            end_address = 0
-            search_size = 0x100
-            while not end_address:
-                end_address = self._find_function_boundary(start_address, search_size)
-                # double search space
-                search_size *= 2
-
-            ranges_list.append((start_address, end_address))
-        return ranges_list
-
-    def get_implementations(self, selector):
-        # type: (Text) -> List[List[CsInsn]]
+    def get_imps_for_sel(self, selector):
+        # type: (Text) -> List[ObjcFunctionAnalyzer]
         """Retrieve a list of the disassembled function data for every implementation of a provided selector
         Args:
             selector: The selector name who's implementations should be found
 
         Returns:
-            A list of lists containing CsInsn objects. Each entry in the outer list represents an implementation of
-            the selector, suitable for being passed to an ObjcFunctionAnalyzer constructor
+            A list of ObjcFunctionAnalyzers corresponding to each found implementation of the provided selector.
         """
-        implementations = []
+        from strongarm.objc import ObjcFunctionAnalyzer
+
+        implementation_analyzers = []
         imp_addresses = self.get_method_address_ranges(selector)
         for imp_start, imp_end in imp_addresses:
             imp_size = imp_end - imp_start
             imp_data = bytes(self.binary.get_content_from_virtual_address(virtual_address=imp_start, size=imp_size))
             imp_instructions = [instr for instr in self.cs.disasm(imp_data, imp_start)]
-            implementations.append(imp_instructions)
-        return implementations
 
-    def perform_query(self, predicate_lists):
-        # type: (List[List[q.ObjcPredicateQuery]]) -> List[ObjcPredicateResult]
-        """Run a set of predicates on the analyzed binary, and return a list of code matching criteria
+            function_analyzer = ObjcFunctionAnalyzer(self.binary, imp_instructions)
+            implementation_analyzers.append(function_analyzer)
+        return implementation_analyzers
 
-        Each list will only be matched if all predicates in the list are matched by an instruction. For example,
-        you can look for two separate conditions by passing [[condition1], [condition2]]. If you want to only
-        match an instruction when two conditions are met, specify them in the same list, such as:
-        [[condition1, condition2]]
-
-        Args:
-            predicate_lists: List of lists of predicates sets to search for.
-
-        Returns:
-            List of search results
+    def get_objc_methods(self):
+        # type: () -> List[ObjcFunctionAnalyzer]
+        """Get a List of ObjcFunctionAnalyzers representing all ObjC methods implemented in the Mach-O.
         """
-        import strongarm.objc.objc_query as q
-        import strongarm.objc.objc_analyzer as objc_analyzer
-        search_results = []
-        entry_point_list = []
+        from strongarm.objc import ObjcFunctionAnalyzer, ObjcMethodInfo
+        if self._objc_method_list:
+            return self._objc_method_list
+        method_list = []
         for objc_class in self.objc_classes():
             for objc_sel in objc_class.selectors:
                 imp_addr = objc_sel.implementation
-                entry_point_list.append((objc_class, objc_sel, imp_addr))
 
-        for objc_class, objc_sel, imp in entry_point_list:
-            function_analyzer = objc_analyzer.ObjcFunctionAnalyzer.get_function_analyzer(self.binary, imp)
-            for predicate_list in predicate_lists:
-                # TODO(PT): perform_query() should let us specify OR predicates as well as AND predicates
-                # TODO(PT): perform_query() should return a List of all matching instructions, not just the first
-                search_result_instr = function_analyzer.perform_query(predicate_list)
-                if search_result_instr:
-                    search_result = ObjcPredicateResult(self.binary,
-                                                        predicate_list,
-                                                        objc_class,
-                                                        objc_sel,
-                                                        function_analyzer,
-                                                        search_result_instr)
-                    search_results.append(search_result)
+                info = ObjcMethodInfo(objc_class, objc_sel, imp_addr)
+                method_list.append(info)
+        self._objc_method_list = method_list
+        return self._objc_method_list
+
+    def search_code(self, code_search):
+        # type: (CodeSearch) -> List[CodeSearchResult]
+        """Given a CodeSearch object describing rules for matching code, return a List of CodeSearchResult's
+        encapsulating instructions which match the described set of conditions.
+
+        The search space of this method includes all known functions within the binary.
+        """
+        from strongarm.objc import CodeSearch, CodeSearchResult
+        from strongarm.objc import ObjcFunctionAnalyzer
+
+        DebugUtil.log(self, 'Performing code search on binary with search description:\n{}'.format(
+            code_search
+        ))
+
+        search_results = []
+        entry_point_list = self.get_objc_methods()
+        for method_info in entry_point_list:
+            function_analyzer = ObjcFunctionAnalyzer.get_function_analyzer_for_method(self.binary, method_info)
+            search_results += function_analyzer.search_code(code_search)
         return search_results
-
-
-class ObjcPredicateResult(object):
-    import strongarm.objc.objc_query as q
-    import strongarm.objc.objc_analyzer as analyzer
-    def __init__(self, binary, predicate_list, objc_class, objc_selector, function_analyzer, instruction):
-        # type: (MachoBinary, List[q.ObjcPredicateQuery], ObjcClass, ObjcSelector, analyzer.ObjcFunctionAnalyzer, CsInsn) -> None
-        self.binary = binary
-        self.predicate_list = predicate_list
-        self.objc_class = objc_class
-        self.objc_selector = objc_selector
-        self.function_analyzer = function_analyzer
-        self.instruction = instruction

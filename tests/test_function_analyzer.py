@@ -24,8 +24,8 @@ class TestFunctionAnalyzer(unittest.TestCase):
         self.binary = parser.slices[0]
         self.analyzer = MachoAnalyzer.get_analyzer(self.binary)
 
-        self.implementations = self.analyzer.get_implementations(u'URLSession:didReceiveChallenge:completionHandler:')
-        self.instructions = self.implementations[0]
+        self.implementations = self.analyzer.get_imps_for_sel(u'URLSession:didReceiveChallenge:completionHandler:')
+        self.instructions = self.implementations[0].instructions
 
         self.imp_addr = self.instructions[0].address
         self.assertEqual(self.imp_addr, TestFunctionAnalyzer.URL_SESSION_DELEGATE_IMP_ADDR)
@@ -61,25 +61,50 @@ class TestFunctionAnalyzer(unittest.TestCase):
                     correct_sym_name = external_targets[target.destination_address]
                     self.assertEqual(target.symbol, correct_sym_name)
 
-    def test_can_execute_call(self):
+    def test_search_call_graph(self):
+        from strongarm.objc import CodeSearch, CodeSearchTermCallDestination
         # external function
-        self.assertTrue(self.function_analyzer.can_execute_call(TestFunctionAnalyzer.SEC_TRUST_EVALUATE_STUB_ADDR))
+        search = CodeSearch(
+            required_matches=[
+                CodeSearchTermCallDestination(
+                    self.binary,
+                    invokes_address=TestFunctionAnalyzer.SEC_TRUST_EVALUATE_STUB_ADDR
+                )
+            ],
+            requires_all_terms_matched=True
+        )
+        results = self.function_analyzer.search_call_graph(search)
+        self.assertEqual(len(results), 1)
+        self.assertEqual(results[0].found_instruction.address, 0x1000064a0)
 
         # local branch
-        local_branch_address = 0x100006518
-        self.assertTrue(self.function_analyzer.can_execute_call(local_branch_address))
+        search = CodeSearch(
+            required_matches=[CodeSearchTermCallDestination(self.binary, invokes_address=0x100006518)],
+            requires_all_terms_matched=True
+        )
+        results = self.function_analyzer.search_call_graph(search)
+        self.assertEqual(len(results), 1)
+        self.assertEqual(results[0].found_instruction.address, 0x100006500)
 
         # fake destination
-        self.assertFalse(self.function_analyzer.can_execute_call(0xdeadbeef))
+        search = CodeSearch(
+            required_matches=[CodeSearchTermCallDestination(self.binary, invokes_address=0xdeadbeef)],
+            requires_all_terms_matched=True
+        )
+        results = self.function_analyzer.search_call_graph(search)
+        self.assertEqual(len(results), 0)
 
-    def test_determine_register_contents(self):
-        func_arg_idx, is_func_arg = self.function_analyzer.determine_register_contents('x4', 0)
-        self.assertEqual(func_arg_idx, 4)
-        self.assertTrue(is_func_arg)
+    def test_get_register_contents_at_instruction(self):
+        from strongarm.objc import RegisterContentsType
+        first_instr = self.function_analyzer.get_instruction_at_index(0)
+        contents = self.function_analyzer.get_register_contents_at_instruction('x4', first_instr)
+        self.assertEqual(contents.type, RegisterContentsType.FUNCTION_ARG)
+        self.assertEqual(contents.value, 4)
 
-        register_val, is_func_arg = self.function_analyzer.determine_register_contents('x1', 16)
-        self.assertEqual(register_val, 0x1000090c0)
-        self.assertFalse(is_func_arg)
+        another_instr = self.function_analyzer.get_instruction_at_index(16)
+        contents = self.function_analyzer.get_register_contents_at_instruction('x1', another_instr)
+        self.assertEqual(contents.type, RegisterContentsType.IMMEDIATE)
+        self.assertEqual(contents.value, 0x1000090c0)
 
     def test_get_selref(self):
         objc_msgSendInstr = self.instructions[16]

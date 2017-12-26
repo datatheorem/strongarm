@@ -411,3 +411,21 @@ def scan_binary(binary):
     # once we exit the above loop, we've iterated every Objc method in the binary, as well as any C functions
     # referenced by any Objc method
 ```
+
+### Resolving register contents which originate from function arguments
+
+`ObjcFunctionAnalyzer.get_register_contents_at_instruction(register, instruction)` returns a `RegisterContents`.
+`RegisterContents`, in turn, contains a `RegisterContentsType type` field, which is an enum of either `FUNCTION_ARG`
+or `IMMEDIATE`. If the `type` is `IMMEDIATE`, we were able to statically determine the value of the register. Otherwise,
+the contents of the register depend on a piece of data which was originally passed in a function argument.
+
+As a way to resolve these function arguments, we could do a single upfront binary search. This search
+would mark every branch in the executable code, and store them in a dictionary. The keys would be
+each branch destination we encounter (corresponding to a function entry point), and the value would
+be a tuple of the source function and the branch instruction.
+
+This way, we'll have a list of all the callers for a given function in constant time by the time we're determining
+a register's contents. We can look at each caller, and determine the contents of the function argument
+(recursively repeating this step if necessary), to get a List of possible values for the contents of the
+initially requested register. We could also return info about which code paths each possible value would have
+originated from.

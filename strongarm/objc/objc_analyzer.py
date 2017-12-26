@@ -3,13 +3,39 @@ from __future__ import absolute_import
 from __future__ import unicode_literals
 from __future__ import print_function
 
+from typing import Text, List, Optional, Dict, Tuple
+from enum import Enum
+
 from capstone.arm64 import ARM64_OP_REG, ARM64_OP_IMM, ARM64_OP_MEM
 from capstone import CsInsn
-from typing import Text, List, Optional, Dict, Tuple
 
 from strongarm.debug_util import DebugUtil
-from strongarm.macho.macho_binary import MachoBinary
-from .objc_instruction import ObjcBranchInstruction
+from strongarm.macho import MachoBinary
+from .objc_instruction import ObjcInstruction, ObjcBranchInstruction
+from .objc_query import \
+    CodeSearch, \
+    CodeSearchResult, \
+    CodeSearchTermInstructionMnemonic, \
+    CodeSearchTermInstructionOperand, \
+    CodeSearchTermInstructionIndex
+
+
+class ObjcMethodInfo(object):
+    def __init__(self, objc_class, objc_sel, imp):
+        self.objc_class = objc_class
+        self.objc_sel = objc_sel
+        self.imp_addr = imp
+
+
+class RegisterContentsType(Enum):
+    FUNCTION_ARG = 0
+    IMMEDIATE = 1
+
+
+class RegisterContents(object):
+    def __init__(self, value_type, value):
+        self.type = value_type
+        self.value = value
 
 
 class ObjcFunctionAnalyzer(object):
@@ -17,9 +43,9 @@ class ObjcFunctionAnalyzer(object):
     As Objective-C is a strict superset of C, ObjcFunctionAnalyzer can also be used on pure C functions.
     """
 
-    def __init__(self, binary, instructions):
-        # type: (MachoBinary, List[CsInsn]) -> None
-        import strongarm.macho.macho_analyzer as analyzer
+    def __init__(self, binary, instructions, method_info=None):
+        # type: (MachoBinary, List[CsInsn], ObjcMethodInfo) -> None
+        from strongarm.macho import MachoAnalyzer
         try:
             self.start_address = instructions[0].address
             last_instruction = instructions[len(instructions) - 1]
@@ -31,10 +57,19 @@ class ObjcFunctionAnalyzer(object):
             pass
 
         self.binary = binary
-        self.macho_analyzer = analyzer.MachoAnalyzer.get_analyzer(binary)
+        self.macho_analyzer = MachoAnalyzer.get_analyzer(binary)
         self.instructions = instructions
+        self.method_info = method_info
 
         self._call_targets = None
+
+    def get_instruction_at_index(self, index):
+        # type: (int) -> ObjcInstruction
+        """Get the instruction at a given index within the function's code, wrapping in ObjcInstruction
+        """
+        raw = self.instructions[index]
+        wrapped = ObjcInstruction.parse_instruction(self, raw)
+        return wrapped
 
     def debug_print(self, idx, output):
         # type: (int, Text) -> None
@@ -79,6 +114,24 @@ class ObjcFunctionAnalyzer(object):
         instructions = analyzer.get_function_instructions(start_address)
         return ObjcFunctionAnalyzer(binary, instructions)
 
+    @classmethod
+    def get_function_analyzer_for_method(cls, binary, method_info):
+        # type: (MachoBinary, ObjcMethodInfo) -> ObjcFunctionAnalyzer
+        """Get the shared analyzer describing an Objective-C method within the Mach-O binary
+        This method performs the same caching as get_function_analyzer()
+
+        Args:
+            binary: The MachoBinary containing a function at method_info.imp_addr
+            method_info: The ObjcMethodInfo describing the IMP to be analyzed
+
+        Returns:
+            An ObjcFunctionAnalyzer suitable for introspecting the provided method
+        """
+        from strongarm.macho.macho_analyzer import MachoAnalyzer
+        analyzer = MachoAnalyzer.get_analyzer(binary)
+        instructions = analyzer.get_function_instructions(method_info.imp_addr)
+        return ObjcFunctionAnalyzer(binary, instructions, method_info=method_info)
+
     @property
     def call_targets(self):
         # type: () -> List[ObjcBranchInstruction]
@@ -113,49 +166,64 @@ class ObjcFunctionAnalyzer(object):
         self._call_targets = targets
         return targets
 
-    def perform_query(self, condition_list, start_index=0, search_backwards=False):
-        # type: (List[query.ObjcPredicateQuery], int, bool) -> Optional[CsInsn]
-        """Given a List of predicates to satisfy, return the instruction within the function satisfying the conditions.
-        If no satisfying instruction is found in the function, None will be returned.
+    @property
+    def function_call_targets(self):
+        # type: () -> List[ObjcFunctionAnalyzer]
+        """Find List of function analyzers representing functions reachable from the source function.
 
-        Args:
-            condition_list: list of ObjcPredicateQuery, each of which must succeed for the returned instruction
-            start_index: index of first instruction to search
-            search_backwards: if set, iterate instructions backwards
-
-        Returns:
-            The instruction within the search space which passes all provided conditions
+        This excludes other branch destinations, such as objc_msgSend calls to methods implemented outside this
+        binary, or local branching within the source function.
         """
-        import strongarm.objc.objc_query as query
-        DebugUtil.log(self, 'searching for query conditions {} in function {}'.format(
-            condition_list,
-            self.start_address
-        ))
+        call_targets = []
+        for target in self.call_targets:
+            # don't try to follow calls to functions defined outside this binary
+            if target.is_external_c_call and not target.is_msgSend_call:
+                continue
+            # don't try to follow path if it's an internal branch (i.e. control flow within this function)
+            # any internal branching will eventually be covered by call_targets,
+            # so there's no need to follow twice
+            if self.is_local_branch(target):
+                continue
+            # might be objc_msgSend to object of class defined outside binary
+            if target.is_external_objc_call:
+                continue
+            call_targets.append(ObjcFunctionAnalyzer.get_function_analyzer(self.binary, target.destination_address))
+        return call_targets
 
-        # if we have an instruction index predicate, we can save work by only iterating instructions which can possibly
-        # be satisfied.
-        minimum_index = start_index
-        maximum_index = len(self.instructions) - 1
-        for c in condition_list:
-            if type(c) is query.ObjcPredicateInstructionIndexQuery:
-                if c.exact_index is not None:
-                    minimum_index = c.exact_index
-                elif c.minimum_index is not None:
-                    minimum_index = c.minimum_index
-                elif c.maximum_index is not None:
-                    maximum_index = c.maximum_index
+    def search_code(self, code_search):
+        # type: (CodeSearch) -> List[CodeSearchResult]
+        """Given a CodeSearch object describing rules for matching code, return a List of CodeSearchResult's
+        encapsulating instructions which match the described set of conditions.
+        """
+        from .objc_query import CodeSearch, CodeSearchResult
+        minimum_index = 0
+        maximum_index = len(self.instructions)
         step = 1
-        if search_backwards:
-            step = -1
+
+        search_results = []
         for instruction in self.instructions[minimum_index:maximum_index:step]:
-            did_condition_fail = False
-            for condition in condition_list:
-                if not condition.satisfied(self, instruction):
-                    did_condition_fail = True
-                    break
-            if not did_condition_fail:
-                return instruction
-        return None
+            has_any_condition_failed = False
+            for search_term in code_search.required_matches:
+                if isinstance(search_term, CodeSearchTermInstructionIndex):
+                    # this term is where minimum_index, maximum_index, step, comes from, along w/ search_backwards flag
+                    raise NotImplementedError()
+
+                if search_term.satisfied(self, instruction):
+                    if not code_search.requires_all_terms_matched:
+                        # matched a single term which is sufficient for storing a result
+                        wrapped_instruction = ObjcInstruction.parse_instruction(self, instruction)
+                        result = CodeSearchResult(search_term, self, wrapped_instruction)
+                        search_results.append(result)
+                else:
+                    has_any_condition_failed = True
+                    if code_search.requires_all_terms_matched:
+                        break
+            if code_search.requires_all_terms_matched and not has_any_condition_failed:
+                # matched all terms
+                wrapped_instruction = ObjcInstruction.parse_instruction(self, instruction)
+                result = CodeSearchResult(code_search.required_matches, self, wrapped_instruction)
+                search_results.append(result)
+        return search_results
 
     def get_local_branches(self):
         # type: () -> List[ObjcBranchInstruction]
@@ -168,73 +236,29 @@ class ObjcFunctionAnalyzer(object):
                 local_branches.append(target)
         return local_branches
 
-    def can_execute_call(self, call_address):
-        # type: (int) -> bool
-        """Determine whether the function starting at call_address is reachable from any code path from source function.
+    def search_call_graph(self, code_search):
+        # type: (CodeSearch) -> List[CodeSearchResult]
+        """Search the entire executable code graph beginning from this function analyzer for a query.
 
-        Args:
-            call_address: address of the entry point of function to search for
+        Given a CodeSearch object describing rules for matching code, return a List of CodeSearchResult's
+        encapsulating instructions which match the described set of conditions.
 
-        Returns:
-            True if any of the code paths originating from the source function invoke the function at call_address.
-            False if no code paths call that function.
+        The search space of this method is all functions which are reachable from any code path from the source function
+        analyzer.
         """
-        self.debug_print(0, 'recursively searching for invocation of {}'.format(hex(int(call_address))))
+        functions_to_search = [self]
+        reachable_functions = self.function_call_targets
+        while len(reachable_functions) > 0:
+            function_analyzer = reachable_functions[0]
+            reachable_functions.remove(function_analyzer)
+            functions_to_search.append(function_analyzer)
+            reachable_functions += function_analyzer.function_call_targets
 
-        for target in self.call_targets:
-            # find the address of this branch instruction within the function
-            instr_idx = self.instructions.index(target.raw_instr)
-
-            # is this a direct call?
-            if target.destination_address == call_address:
-                self.debug_print(instr_idx, 'found call to {} at {}'.format(
-                    hex(int(call_address)),
-                    hex(int(target.address))
-                ))
-                return True
-
-            # don't try to follow this path if it's an external symbol and not an objc_msgSend call
-            if target.is_external_c_call and not target.is_msgSend_call:
-                self.debug_print(instr_idx, '{}(...)'.format(
-                    target.symbol
-                ))
-                continue
-            # don't try to follow path if it's an internal branch (i.e. control flow within this function)
-            # any internal branching will eventually be covered by call_targets,
-            # so there's no need to follow twice
-            if self.is_local_branch(target):
-                self.debug_print(instr_idx, 'local goto -> {}'.format(hex(int(target.destination_address))))
-                continue
-
-            # might be objc_msgSend to object of class defined outside binary
-            if target.is_external_objc_call:
-                if target.selref:
-                    self.debug_print(instr_idx, 'objc_msgSend(...) to external class, selector {}'.format(
-                        target.selref.selector_literal
-                    ))
-                else:
-                    self.debug_print(instr_idx, 'objc_msgSend(...) to external class, unknown selref')
-                continue
-
-            # in debug log, print whether this is a function call or objc_msgSend call
-            call_convention = 'objc_msgSend(id, ' if target.is_msgSend_call else 'func('
-            self.debug_print(instr_idx, '{}{})'.format(
-                call_convention,
-                hex(int(target.destination_address)),
-            ))
-
-            # recursively check if this destination can call target address
-            child_analyzer = ObjcFunctionAnalyzer.get_function_analyzer(self.binary, target.destination_address)
-            if child_analyzer.can_execute_call(call_address):
-                self.debug_print(instr_idx, 'found call to {} in child code path'.format(
-                    hex(int(call_address))
-                ))
-                return True
-        # no code paths reach desired call
-        self.debug_print(len(self.instructions), 'no code paths reach {}'.format(
-            hex(int(call_address))
-        ))
-        return False
+        search_results = []
+        for func in functions_to_search:
+            subsearch = func.search_code(code_search)
+            search_results += subsearch
+        return search_results
 
     @classmethod
     def format_instruction(cls, instr):
@@ -321,16 +345,21 @@ class ObjcFunctionAnalyzer(object):
         """
         # just as a sanity check, ensure the passed instruction is at least a branch
         # TODO(PT): we could also check the branch destination to ensure it's really an objc_msgSend call
-        if msgsend_instr.mnemonic != 'bl':
+        if msgsend_instr.mnemonic not in ['bl', 'b']:
             raise ValueError('asked to find selref of non-branch instruction')
 
-        msgsend_index = self.instructions.index(msgsend_instr)
+        wrapped_instr = ObjcInstruction(msgsend_instr)
         # retrieve whatever data is in x1 at the index of this msgSend call
-        return self.determine_register_contents('x1', msgsend_index)[0]
+        contents = self.get_register_contents_at_instruction('x1', wrapped_instr)
+        if contents.type != RegisterContentsType.IMMEDIATE:
+            raise RuntimeError('couldn\'t determine selref ptr, origates in function arg (type {})'.format(
+                contents.type.name
+            ))
+        return contents.value
 
     def _trimmed_reg_name(self, reg_name):
         # type: (Text) -> Text
-        """Remove 'x' or 'w' from general purpose register name
+        """Remove 'x', 'r', or 'w' from general purpose register name
         This is so the register strings 'x22' and 'w22', which are two slices of the same register,
         map to the same register.
 
@@ -343,12 +372,12 @@ class ObjcFunctionAnalyzer(object):
               Register name with trimmed size prefix, or unmodified name if not a GP register
 
         """
-        if reg_name[0] in ['x', 'w']:
+        if reg_name[0] in ['x', 'w', 'r']:
             return reg_name[1::]
         return reg_name
 
-    def determine_register_contents(self, desired_reg, start_index):
-        # type: (Text, int) -> (int, bool)
+    def get_register_contents_at_instruction(self, register, instruction):
+        # type: (Text, ObjcInstruction) -> RegisterContents
         """Analyze instructions backwards from start_index to find data in reg
         This function will read all instructions until it gathers all data and assignments necessary to determine
         value of desired_reg.
@@ -362,17 +391,15 @@ class ObjcFunctionAnalyzer(object):
 
         Args:
             desired_reg: string containing name of register whose data should be determined
-            start_index: the instruction index at which desired_reg's value should be found
+            instruction: the instruction marking the execution point where the register value should be determined
 
         Returns:
-            A tuple of the register value and a bool.
-            If the bool is True, the contents of the requested register value depend on
-            a function argument. The index of this function argument (where 0 is the first argument passed to
-             the function) is stored in the first field of the return.
-            If the bool is False, the first field is the resolved value contained in the requested register at the requested
-            index.
-
+            A RegisterContents instance encapsulating information about the contents of the specified register at the
+            specified point of execution
         """
+        desired_reg = register
+        start_index = self.instructions.index(instruction.raw_instr)
+
         bytes_in_instruction = 4
         target_addr = self.start_address + (start_index * bytes_in_instruction)
         DebugUtil.log(self, 'analyzing data flow to determine data in {} at {}'.format(
@@ -503,11 +530,16 @@ class ObjcFunctionAnalyzer(object):
                 raise RuntimeError('Data-flow loop exited before all unknowns were marked {}'.format(unknown_regs))
 
             arg_index = int(unknown_regs[0])
-            return arg_index, True
+            return RegisterContents(RegisterContentsType.FUNCTION_ARG, arg_index)
 
         # for every register in the waiting list,
         # cross reference all its dependent variables to calculate the final value
-        return self._resolve_register_value_from_data_links(desired_reg, needed_links, determined_values), False
+        final_register_value = self._resolve_register_value_from_data_links(
+            desired_reg,
+            needed_links,
+            determined_values
+        )
+        return RegisterContents(RegisterContentsType.IMMEDIATE, final_register_value)
 
     def _resolve_register_value_from_data_links(self, desired_reg, links, resolved_registers):
         # type: (Text, Dict[Text, Tuple[Text, int]], Dict[Text, int]) -> int
@@ -584,30 +616,32 @@ class ObjcBlockAnalyzer(ObjcFunctionAnalyzer):
         Returns:
              Tuple of register containing target Block->invoke, and the index this instruction was found at
         """
-        import strongarm.objc.objc_query as query
-        search_index = 0
-        while search_index < len(self.instructions):
-            mnemonic_predicate = query.ObjcPredicateMnemonicQuery(self.binary, allow_mnemonics=['blr'])
-            operand_predicate = query.ObjcPredicateOperandQuery(self.binary,
-                                                          operand_index=0,
-                                                          operand_type=ARM64_OP_REG)
-            index_predicate = query.ObjcPredicateInstructionIndexQuery(self.binary, minimum_index=search_index)
-            found_branch = self.perform_query([mnemonic_predicate, operand_predicate, index_predicate])
-            if found_branch is not None:
-                # in the past, find_block_invoke would find a block load from an instruction like:
-                # ldr x8, [<block containing reg>, 0x10]
-                # then, we look for a block invoke instruction:
-                # blr x8
-                # Now, we just look for a blr to a register that has a dependency on the data originally in the register
-                # containing the block pointer.
-                # this is very likely to work more or less all the time.
-                # TODO(PT): ObjcPredicateDataDependencyQuery?
-                instruction_index = self.instructions.index(found_branch)
-                reg, is_func_arg = self.determine_register_contents(self.initial_block_reg, instruction_index)
-                if not is_func_arg or reg != self.initial_block_reg:
-                    # not the instruction we're looking for, move search_index past this
-                    search_index = instruction_index + 1
-                return found_branch, instruction_index
-            if not found_branch:
-                # no more satisfactory branches!
-                raise RuntimeError('never found block invoke')
+        from .objc_query import CodeSearchTermInstructionMnemonic, CodeSearchTermInstructionOperand
+        block_invoke_search = CodeSearch(
+            required_matches=[
+                CodeSearchTermInstructionMnemonic(self.binary, allow_mnemonics=['blr']),
+                CodeSearchTermInstructionOperand(self.binary, operand_index=0, operand_type=ARM64_OP_REG)
+            ],
+            requires_all_terms_matched=True
+        )
+        for search_result in self.search_code(block_invoke_search):
+            # in the past, find_block_invoke would find a block load from an instruction like:
+            # ldr x8, [<block containing reg>, 0x10]
+            # then, we look for a block invoke instruction:
+            # blr x8
+            # Now, we just look for a blr to a register that has a dependency on the data originally in the register
+            # containing the block pointer.
+            # this is very likely to work more or less all the time.
+            # TODO(PT): CodeSearchTermDataDependency?
+            found_branch_instruction = search_result.found_instruction
+            contents = self.get_register_contents_at_instruction(self.initial_block_reg, found_branch_instruction)
+
+            trimmed_block_argument_reg = int(self._trimmed_reg_name(self.initial_block_reg))
+            if contents.type != RegisterContentsType.FUNCTION_ARG:
+                # not what we're looking for; branch destination didn't come from function arg
+                continue
+            if contents.value != trimmed_block_argument_reg:
+                # not what we're looking for; branch destination is sourced from the wrong register
+                continue
+            return found_branch_instruction.raw_instr, self.instructions.index(found_branch_instruction.raw_instr)
+        raise RuntimeError('never found block invoke')

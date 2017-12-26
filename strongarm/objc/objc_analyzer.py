@@ -235,73 +235,29 @@ class ObjcFunctionAnalyzer(object):
                 local_branches.append(target)
         return local_branches
 
-    def can_execute_call(self, call_address):
-        # type: (int) -> bool
-        """Determine whether the function starting at call_address is reachable from any code path from source function.
+    def search_call_graph(self, code_search):
+        # type: (CodeSearch) -> None
+        """Search the entire executable code graph beginning from this function analyzer for a query.
 
-        Args:
-            call_address: address of the entry point of function to search for
+        Given a CodeSearch object describing rules for matching code, return a List of CodeSearchResult's
+        encapsulating instructions which match the described set of conditions.
 
-        Returns:
-            True if any of the code paths originating from the source function invoke the function at call_address.
-            False if no code paths call that function.
+        The search space of this method is all functions which are reachable from any code path from the source function
+        analyzer.
         """
-        self.debug_print(0, 'recursively searching for invocation of {}'.format(hex(int(call_address))))
+        functions_to_search = [self]
+        reachable_functions = self.function_call_targets
+        while len(reachable_functions) > 0:
+            function_analyzer = reachable_functions[0]
+            reachable_functions.remove(function_analyzer)
+            functions_to_search.append(function_analyzer)
+            reachable_functions += function_analyzer.function_call_targets
 
-        for target in self.call_targets:
-            # find the address of this branch instruction within the function
-            instr_idx = self.instructions.index(target.raw_instr)
-
-            # is this a direct call?
-            if target.destination_address == call_address:
-                self.debug_print(instr_idx, 'found call to {} at {}'.format(
-                    hex(int(call_address)),
-                    hex(int(target.address))
-                ))
-                return True
-
-            # don't try to follow this path if it's an external symbol and not an objc_msgSend call
-            if target.is_external_c_call and not target.is_msgSend_call:
-                self.debug_print(instr_idx, '{}(...)'.format(
-                    target.symbol
-                ))
-                continue
-            # don't try to follow path if it's an internal branch (i.e. control flow within this function)
-            # any internal branching will eventually be covered by call_targets,
-            # so there's no need to follow twice
-            if self.is_local_branch(target):
-                self.debug_print(instr_idx, 'local goto -> {}'.format(hex(int(target.destination_address))))
-                continue
-
-            # might be objc_msgSend to object of class defined outside binary
-            if target.is_external_objc_call:
-                if target.selref:
-                    self.debug_print(instr_idx, 'objc_msgSend(...) to external class, selector {}'.format(
-                        target.selref.selector_literal
-                    ))
-                else:
-                    self.debug_print(instr_idx, 'objc_msgSend(...) to external class, unknown selref')
-                continue
-
-            # in debug log, print whether this is a function call or objc_msgSend call
-            call_convention = 'objc_msgSend(id, ' if target.is_msgSend_call else 'func('
-            self.debug_print(instr_idx, '{}{})'.format(
-                call_convention,
-                hex(int(target.destination_address)),
-            ))
-
-            # recursively check if this destination can call target address
-            child_analyzer = ObjcFunctionAnalyzer.get_function_analyzer(self.binary, target.destination_address)
-            if child_analyzer.can_execute_call(call_address):
-                self.debug_print(instr_idx, 'found call to {} in child code path'.format(
-                    hex(int(call_address))
-                ))
-                return True
-        # no code paths reach desired call
-        self.debug_print(len(self.instructions), 'no code paths reach {}'.format(
-            hex(int(call_address))
-        ))
-        return False
+        search_results = []
+        for func in functions_to_search:
+            subsearch = func.search_code(code_search)
+            search_results += subsearch
+        return search_results
 
     @classmethod
     def format_instruction(cls, instr):
@@ -388,14 +344,16 @@ class ObjcFunctionAnalyzer(object):
         """
         # just as a sanity check, ensure the passed instruction is at least a branch
         # TODO(PT): we could also check the branch destination to ensure it's really an objc_msgSend call
-        if msgsend_instr.mnemonic != 'bl':
+        if msgsend_instr.mnemonic not in ['bl', 'b']:
             raise ValueError('asked to find selref of non-branch instruction')
 
         wrapped_instr = ObjcInstruction(msgsend_instr)
         # retrieve whatever data is in x1 at the index of this msgSend call
         contents = self.get_register_contents_at_instruction('x1', wrapped_instr)
         if contents.type != RegisterContentsType.IMMEDIATE:
-            raise RuntimeError('couldn\'t determine selref ptr, origates in function arg')
+            raise RuntimeError('couldn\'t determine selref ptr, origates in function arg (type {})'.format(
+                contents.type.name
+            ))
         return contents.value
 
     def _trimmed_reg_name(self, reg_name):

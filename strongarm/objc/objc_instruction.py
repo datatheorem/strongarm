@@ -104,7 +104,7 @@ class ObjcUnconditionalBranchInstruction(ObjcBranchInstruction):
         # type: (objc_analyzer.ObjcFunctionAnalyzer) -> None
         # validate instruction
         if not self.is_msgSend_call or \
-           self.raw_instr.mnemonic != 'bl' or \
+           self.raw_instr.mnemonic not in ['bl', 'b'] or \
            self.symbol != '_objc_msgSend':
             print('self.is_msgSend_call {} self.raw_instr.mnemonic {} self.symbol {}'.format(
                 self.is_msgSend_call,
@@ -131,7 +131,13 @@ class ObjcUnconditionalBranchInstruction(ObjcBranchInstruction):
             self.destination_address = selector.implementation
             self.selref = selector.selref
         except RuntimeError as e:
-            # TODO(PT): is this inaccurate?
+            # GammaRayTestBad @ 0x10007ed10 causes get_selref_ptr() to fail.
+            # This is because x1 has a data dependency on x20.
+            # At the beginning of the function, there's a basic block to return early if imageView is nil.
+            # This basic block includes a stack unwind, which tricks get_register_contents_at_instruction() into
+            # thinking that there's a data dependency on x0, which there *isn't*
+            # Nonetheless, this causes get_selref_ptr() to fail.
+            # As a workaround, let's assign all the above fields to 'not found' values if this bug is hit
             self.is_external_objc_call = True
             self.destination_address = None
             self.selref = None

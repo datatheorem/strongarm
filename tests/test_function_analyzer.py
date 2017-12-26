@@ -72,14 +72,17 @@ class TestFunctionAnalyzer(unittest.TestCase):
         # fake destination
         self.assertFalse(self.function_analyzer.can_execute_call(0xdeadbeef))
 
-    def test_determine_register_contents(self):
-        func_arg_idx, is_func_arg = self.function_analyzer.determine_register_contents('x4', 0)
-        self.assertEqual(func_arg_idx, 4)
-        self.assertTrue(is_func_arg)
+    def test_get_register_contents_at_instruction(self):
+        from strongarm.objc import RegisterContentsType, ObjcInstruction
+        first_instr = self.function_analyzer.get_instruction_at_index(0)
+        contents = self.function_analyzer.get_register_contents_at_instruction('x4', first_instr)
+        self.assertEqual(contents.type, RegisterContentsType.FUNCTION_ARG)
+        self.assertEqual(contents.value, 4)
 
-        register_val, is_func_arg = self.function_analyzer.determine_register_contents('x1', 16)
-        self.assertEqual(register_val, 0x1000090c0)
-        self.assertFalse(is_func_arg)
+        another_instr = self.function_analyzer.get_instruction_at_index(16)
+        contents = self.function_analyzer.get_register_contents_at_instruction('x1', another_instr)
+        self.assertEqual(contents.type, RegisterContentsType.IMMEDIATE)
+        self.assertEqual(contents.value, 0x1000090c0)
 
     def test_get_selref(self):
         objc_msgSendInstr = self.instructions[16]

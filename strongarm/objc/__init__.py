@@ -7,7 +7,8 @@ from .objc_analyzer import \
     ObjcFunctionAnalyzer, \
     ObjcBlockAnalyzer, \
     RegisterContentsType, \
-    RegisterContents
+    RegisterContents, \
+    ObjcMethodInfo
 
 from .objc_query import \
     CodeSearch, \

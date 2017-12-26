@@ -19,6 +19,13 @@ from .objc_query import \
     CodeSearchTermInstructionIndex
 
 
+class ObjcMethodInfo(object):
+    def __init__(self, objc_class, objc_sel, imp):
+        self.objc_class = objc_class
+        self.objc_sel = objc_sel
+        self.imp_addr = imp
+
+
 class RegisterContentsType(Enum):
     FUNCTION_ARG = 0
     IMMEDIATE = 1

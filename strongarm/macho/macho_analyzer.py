@@ -301,13 +301,13 @@ class MachoAnalyzer(object):
         search_size = 0x80
         while not end_address:
             # place upper limit on search space
-            # limit to 16kb of code in a single function
-            if search_size == 0x4000:
+            # limit to 32kb of code in a single function
+            if search_size == 0x10000:
                 raise RuntimeError("Couldn't detect end-of-function within {} bytes for function starting at {}".format(
                     hex(int(search_size/2)),
                     hex(function_address)
                 ))
-            if search_size >= 0x1000:
+            if search_size >= 0x2000:
                 DebugUtil.log(self, 'WARNING: Analyzing large function at {} (search space == {} bytes)'.format(
                     hex(function_address),
                     hex(search_size)

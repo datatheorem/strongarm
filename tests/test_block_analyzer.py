@@ -28,7 +28,7 @@ class TestBlockAnalyzer(unittest.TestCase):
         self.assertIsNotNone(self.block_analyzer.invoke_instruction)
 
         correct_invoke_idx = 53
-        invoke_instr_idx = self.instructions.index(self.block_analyzer.invoke_instruction)
+        invoke_instr_idx = self.instructions.index(self.block_analyzer.invoke_instruction.raw_instr)
         self.assertEqual(correct_invoke_idx, invoke_instr_idx)
 
     def test_find_block_invocation_instruction_index(self):

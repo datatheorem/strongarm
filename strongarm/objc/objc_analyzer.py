@@ -610,7 +610,7 @@ class ObjcBlockAnalyzer(ObjcFunctionAnalyzer):
         self.invoke_instruction, self.invocation_instruction_index = self.find_block_invoke()
 
     def find_block_invoke(self):
-        # type: () -> (CsInsn, int)
+        # type: () -> (ObjcBranchInstruction, int)
         """Find instruction where the targeted Block->invoke is loaded into
 
         Returns:
@@ -643,5 +643,5 @@ class ObjcBlockAnalyzer(ObjcFunctionAnalyzer):
             if contents.value != trimmed_block_argument_reg:
                 # not what we're looking for; branch destination is sourced from the wrong register
                 continue
-            return found_branch_instruction.raw_instr, self.instructions.index(found_branch_instruction.raw_instr)
+            return found_branch_instruction, self.instructions.index(found_branch_instruction.raw_instr)
         raise RuntimeError('never found block invoke')

@@ -367,8 +367,7 @@ class ObjcFunctionAnalyzer(object):
         if msgsend_instr.mnemonic != 'bl':
             raise ValueError('asked to find selref of non-branch instruction')
 
-        msgsend_index = self.instructions.index(msgsend_instr)
-        wrapped_instr = ObjcInstruction.parse_instruction(msgsend_instr)
+        wrapped_instr = ObjcInstruction(msgsend_instr)
         # retrieve whatever data is in x1 at the index of this msgSend call
         contents = self.get_register_contents_at_instruction('x1', wrapped_instr)
         if contents.type != RegisterContentsType.IMMEDIATE:
@@ -634,6 +633,7 @@ class ObjcBlockAnalyzer(ObjcFunctionAnalyzer):
         Returns:
              Tuple of register containing target Block->invoke, and the index this instruction was found at
         """
+        from .objc_query import CodeSearchTermInstructionMnemonic, CodeSearchTermInstructionOperand
         block_invoke_search = CodeSearch(
             required_matches=[
                 CodeSearchTermInstructionMnemonic(self.binary, allow_mnemonics=['blr']),
@@ -651,12 +651,14 @@ class ObjcBlockAnalyzer(ObjcFunctionAnalyzer):
             # this is very likely to work more or less all the time.
             # TODO(PT): CodeSearchTermDataDependency?
             found_branch_instruction = search_result.found_instruction
-            instruction_index = self.instructions.index(found_branch_instruction)
-            reg, is_func_arg = self.determine_register_contents(self.initial_block_reg, instruction_index)
+            contents = self.get_register_contents_at_instruction(self.initial_block_reg, found_branch_instruction)
 
             trimmed_block_argument_reg = int(self._trimmed_reg_name(self.initial_block_reg))
-            if not is_func_arg or reg != trimmed_block_argument_reg:
-                # not the instruction we're looking for
+            if contents.type != RegisterContentsType.FUNCTION_ARG:
+                # not what we're looking for; branch destination didn't come from function arg
                 continue
-            return found_branch_instruction, instruction_index
+            if contents.value != trimmed_block_argument_reg:
+                # not what we're looking for; branch destination is sourced from the wrong register
+                continue
+            return found_branch_instruction.raw_instr, self.instructions.index(found_branch_instruction.raw_instr)
         raise RuntimeError('never found block invoke')

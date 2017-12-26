@@ -73,7 +73,7 @@ class TestFunctionAnalyzer(unittest.TestCase):
         self.assertFalse(self.function_analyzer.can_execute_call(0xdeadbeef))
 
     def test_get_register_contents_at_instruction(self):
-        from strongarm.objc import RegisterContentsType, ObjcInstruction
+        from strongarm.objc import RegisterContentsType
         first_instr = self.function_analyzer.get_instruction_at_index(0)
         contents = self.function_analyzer.get_register_contents_at_instruction('x4', first_instr)
         self.assertEqual(contents.type, RegisterContentsType.FUNCTION_ARG)

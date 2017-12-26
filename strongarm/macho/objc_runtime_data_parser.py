@@ -125,9 +125,10 @@ class ObjcRuntimeDataParser(object):
     def __init__(self, binary):
         # type: (MachoBinary) -> None
         self.binary = binary
-        DebugUtil.log(self, 'Parsing selrefs...')
+        DebugUtil.log(self, 'Parsing ObjC runtime info... (this may take a while)')
+        DebugUtil.log(self, 'Step 1: Parsing selrefs...')
         self._selrefs = self._parse_selrefs()
-        DebugUtil.log(self, 'Parsing static ObjC runtime info...')
+        DebugUtil.log(self, 'Step 2: Parsing classes...')
         self.classes = self._parse_static_objc_runtime_info()
 
         DebugUtil.log(self, 'Resolving symbol name to source dylib map...')
@@ -171,6 +172,17 @@ class ObjcRuntimeDataParser(object):
         # type: (int) -> DylibCommandStruct
         return self.binary.load_dylib_commands[ordinal - 1]
 
+    def log_long_parse(self, selref_count):
+        if selref_count < 1000:
+            return
+        # found through observation on Uber.app
+        # Uber.app has 21453 selrefs and __init__ completes in 368 seconds
+        # thus, amortized time/selref == 0.017s
+        seconds_per_selref_estimate = 0.017
+        seconds_estimate = selref_count * seconds_per_selref_estimate
+        minutes_estimate = seconds_estimate / 60.0
+        print('Strongarm warning: Large ObjC info section! Estimate: {} minutes'.format(minutes_estimate))
+
     def _parse_selrefs(self):
         # type: (None) -> List[ObjcSelref]
         selrefs = []
@@ -181,6 +193,7 @@ class ObjcRuntimeDataParser(object):
 
         binary_word = self.binary.platform_word_type
         entry_count = int(selref_sect.cmd.size / sizeof(binary_word))
+        self.log_long_parse(entry_count)
         for i in range(entry_count):
             selref_addr = selref_sect.address + (i * sizeof(binary_word))
             selref_val_bytes = self.binary.get_content_from_virtual_address(selref_addr, sizeof(binary_word))

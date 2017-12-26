@@ -40,6 +40,7 @@ class MachoAnalyzer(object):
 
         self.imp_stubs = MachoImpStubsParser(bin, self.cs).imp_stubs
         self._objc_helper = None
+        self._objc_method_list = None
 
         # done setting up, store this analyzer in class cache
         MachoAnalyzer.active_analyzer_map[bin] = self
@@ -381,6 +382,23 @@ class MachoAnalyzer(object):
             implementation_analyzers.append(function_analyzer)
         return implementation_analyzers
 
+    def get_objc_methods(self):
+        # type: () -> List[ObjcFunctionAnalyzer]
+        """Get a List of ObjcFunctionAnalyzers representing all ObjC methods implemented in the Mach-O.
+        """
+        from strongarm.objc import ObjcFunctionAnalyzer, ObjcMethodInfo
+        if self._objc_method_list:
+            return self._objc_method_list
+        method_list = []
+        for objc_class in self.objc_classes():
+            for objc_sel in objc_class.selectors:
+                imp_addr = objc_sel.implementation
+
+                info = ObjcMethodInfo(objc_class, objc_sel, imp_addr)
+                method_list.append(info)
+        self._objc_method_list = method_list
+        return self._objc_method_list
+
     def search_code(self, code_search):
         # type: (CodeSearch) -> List[CodeSearchResult]
         """Given a CodeSearch object describing rules for matching code, return a List of CodeSearchResult's
@@ -395,17 +413,9 @@ class MachoAnalyzer(object):
             code_search
         ))
 
-        # TODO(PT): entry_point_list should be stored somewhere instead of recreating on every search
-        entry_point_list = []
-        for objc_class in self.objc_classes():
-            for objc_sel in objc_class.selectors:
-                imp_addr = objc_sel.implementation
-                entry_point_list.append((objc_class, objc_sel, imp_addr))
-
         search_results = []
-        for objc_class, objc_sel, imp in entry_point_list:
-            function_analyzer = ObjcFunctionAnalyzer.get_function_analyzer(self.binary, imp)
-            # TODO(PT): ObjcFunctionAnalyzer should figure ObjC class/SEL itself, using the same map that
-            # entry_point_list will derive from
+        entry_point_list = self.get_objc_methods()
+        for method_info in entry_point_list:
+            function_analyzer = ObjcFunctionAnalyzer.get_function_analyzer_for_method(self.binary, method_info)
             search_results += function_analyzer.search_code(code_search)
         return search_results

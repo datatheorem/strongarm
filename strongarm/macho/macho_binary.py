@@ -432,7 +432,7 @@ class MachoBinary(object):
                 symbol_name = bytearray(symbol_name_characters).decode('UTF-8')
                 return symbol_name
 
-    def read_embedded_string(self, address):
+    def read_string_at_address(self, address):
         # type: (int) -> Text
         """Read a string embedded in the binary at address
         This method will automatically parse a CFString and return the string literal if address points to one

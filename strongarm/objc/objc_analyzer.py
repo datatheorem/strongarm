@@ -343,7 +343,7 @@ class ObjcFunctionAnalyzer(object):
 
     def _trimmed_reg_name(self, reg_name):
         # type: (Text) -> Text
-        """Remove 'x' or 'w' from general purpose register name
+        """Remove 'x', 'r', or 'w' from general purpose register name
         This is so the register strings 'x22' and 'w22', which are two slices of the same register,
         map to the same register.
 
@@ -356,7 +356,7 @@ class ObjcFunctionAnalyzer(object):
               Register name with trimmed size prefix, or unmodified name if not a GP register
 
         """
-        if reg_name[0] in ['x', 'w']:
+        if reg_name[0] in ['x', 'w', 'r']:
             return reg_name[1::]
         return reg_name
 

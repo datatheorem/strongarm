@@ -62,6 +62,14 @@ class ObjcFunctionAnalyzer(object):
 
         self._call_targets = None
 
+    def get_instruction_at_index(self, index):
+        # type: (int) -> ObjcInstruction
+        """Get the instruction at a given index within the function's code, wrapping in ObjcInstruction
+        """
+        raw = self.instructions[index]
+        wrapped = ObjcInstruction.parse_instruction(self, raw)
+        return wrapped
+
     def debug_print(self, idx, output):
         # type: (int, Text) -> None
         """Helper function to pretty-print debug logs

@@ -165,6 +165,30 @@ class ObjcFunctionAnalyzer(object):
         self._call_targets = targets
         return targets
 
+    @property
+    def function_call_targets(self):
+        # type: () -> List[ObjcFunctionAnalyzer]
+        """Find List of function analyzers representing functions reachable from the source function.
+
+        This excludes other branch destinations, such as objc_msgSend calls to methods implemented outside this
+        binary, or local branching within the source function.
+        """
+        call_targets = []
+        for target in self.call_targets:
+            # don't try to follow calls to functions defined outside this binary
+            if target.is_external_c_call and not target.is_msgSend_call:
+                continue
+            # don't try to follow path if it's an internal branch (i.e. control flow within this function)
+            # any internal branching will eventually be covered by call_targets,
+            # so there's no need to follow twice
+            if self.is_local_branch(target):
+                continue
+            # might be objc_msgSend to object of class defined outside binary
+            if target.is_external_objc_call:
+                continue
+            call_targets.append(ObjcFunctionAnalyzer.get_function_analyzer(self.binary, target.destination_address))
+        return call_targets
+
     def search_code(self, code_search):
         # type: (CodeSearch) -> List[CodeSearchResult]
         """Given a CodeSearch object describing rules for matching code, return a List of CodeSearchResult's

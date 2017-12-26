@@ -316,8 +316,6 @@ class MachoAnalyzer(object):
             end_address = self._find_function_boundary(function_address, search_size)
             # double search space
             search_size *= 2
-
-
         return function_address, end_address
 
     def get_function_instructions(self, start_address):

@@ -14,6 +14,7 @@ from strongarm.macho import MachoBinary
 from .objc_instruction import ObjcInstruction, ObjcBranchInstruction
 from .objc_query import \
     CodeSearch, \
+    CodeSearchResult, \
     CodeSearchTermInstructionMnemonic, \
     CodeSearchTermInstructionOperand, \
     CodeSearchTermInstructionIndex
@@ -236,7 +237,7 @@ class ObjcFunctionAnalyzer(object):
         return local_branches
 
     def search_call_graph(self, code_search):
-        # type: (CodeSearch) -> None
+        # type: (CodeSearch) -> List[CodeSearchResult]
         """Search the entire executable code graph beginning from this function analyzer for a query.
 
         Given a CodeSearch object describing rules for matching code, return a List of CodeSearchResult's

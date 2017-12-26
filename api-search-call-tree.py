@@ -17,7 +17,7 @@ for imp_function in implementations:
     )
     for search_result in imp_function.search_call_graph(log_search):
         function_containing_log_call = search_result.found_function
-        print('Found a reachable code branch which calls NSLog originating from source method -[{} {}]'.format(
-            function_containing_log_call.objc_class.name,
-            function_containing_log_call.objc_class.selector
+        print('Found a reachable code branch which calls NSLog originating from source function {} at {}'.format(
+            hex(function_containing_log_call.start_address),
+            hex(search_result.found_instruction.address)
         ))

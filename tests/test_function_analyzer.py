@@ -61,16 +61,38 @@ class TestFunctionAnalyzer(unittest.TestCase):
                     correct_sym_name = external_targets[target.destination_address]
                     self.assertEqual(target.symbol, correct_sym_name)
 
-    def test_can_execute_call(self):
+    def test_search_call_graph(self):
+        from strongarm.objc import CodeSearch, CodeSearchTermCallDestination
         # external function
-        self.assertTrue(self.function_analyzer.can_execute_call(TestFunctionAnalyzer.SEC_TRUST_EVALUATE_STUB_ADDR))
+        search = CodeSearch(
+            required_matches=[
+                CodeSearchTermCallDestination(
+                    self.binary,
+                    invokes_address=TestFunctionAnalyzer.SEC_TRUST_EVALUATE_STUB_ADDR
+                )
+            ],
+            requires_all_terms_matched=True
+        )
+        results = self.function_analyzer.search_call_graph(search)
+        self.assertEqual(len(results), 1)
+        self.assertEqual(results[0].found_instruction.address, 0x1000064a0)
 
         # local branch
-        local_branch_address = 0x100006518
-        self.assertTrue(self.function_analyzer.can_execute_call(local_branch_address))
+        search = CodeSearch(
+            required_matches=[CodeSearchTermCallDestination(self.binary, invokes_address=0x100006518)],
+            requires_all_terms_matched=True
+        )
+        results = self.function_analyzer.search_call_graph(search)
+        self.assertEqual(len(results), 1)
+        self.assertEqual(results[0].found_instruction.address, 0x100006500)
 
         # fake destination
-        self.assertFalse(self.function_analyzer.can_execute_call(0xdeadbeef))
+        search = CodeSearch(
+            required_matches=[CodeSearchTermCallDestination(self.binary, invokes_address=0xdeadbeef)],
+            requires_all_terms_matched=True
+        )
+        results = self.function_analyzer.search_call_graph(search)
+        self.assertEqual(len(results), 0)
 
     def test_get_register_contents_at_instruction(self):
         from strongarm.objc import RegisterContentsType

@@ -212,7 +212,7 @@ class ObjcFunctionAnalyzer(object):
                     if not code_search.requires_all_terms_matched:
                         # matched a single term which is sufficient for storing a result
                         wrapped_instruction = ObjcInstruction.parse_instruction(self, instruction)
-                        result = CodeSearchResult(search_term, self, wrapped_instruction)
+                        result = CodeSearchResult([search_term], self, wrapped_instruction)
                         search_results.append(result)
                 else:
                     has_any_condition_failed = True

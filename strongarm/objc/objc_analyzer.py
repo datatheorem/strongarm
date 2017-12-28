@@ -68,7 +68,7 @@ class ObjcFunctionAnalyzer(object):
         # type: (int) -> Optional[ObjcInstruction]
         """Get the instruction at a given index within the function's code, wrapping in ObjcInstruction
         """
-        if 0 >= index > len(self.instructions):
+        if 0 > index >= len(self.instructions):
             return None
         raw = self.instructions[index]
         wrapped = ObjcInstruction.parse_instruction(self, raw)
@@ -538,7 +538,7 @@ class ObjcFunctionAnalyzer(object):
         # if any of the data dependencies for our desired register uses the stack pointer,
         # there's no way we can resolve the value.
         stack_pointer_reg = 'sp'
-        if stack_pointer_reg in needed_links:
+        if stack_pointer_reg in needed_links or stack_pointer_reg in unknown_regs:
             DebugUtil.log(self, '{} contents depends on stack, cannot determine statically'.format(desired_reg))
             return RegisterContents(RegisterContentsType.UNKNOWN, 0)
 

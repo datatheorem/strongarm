@@ -479,7 +479,7 @@ class ObjcFunctionAnalyzer(object):
             if len(instr.operands) > 2:
                 src2 = instr.operands[2]
                 if src.type == ARM64_OP_REG:
-                    src_reg_name = self._trimmed_reg_name(instr.reg_name(instr))
+                    src_reg_name = self._trimmed_reg_name(instr.reg_name(src.value.reg))
                     if src_reg_name == 'zr':
                         src = instr.operands[2]
                     # we might see an instruction like add x0, x0, #0xf60

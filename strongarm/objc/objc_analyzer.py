@@ -64,12 +64,26 @@ class ObjcFunctionAnalyzer(object):
         self._call_targets = None
 
     def get_instruction_at_index(self, index):
-        # type: (int) -> ObjcInstruction
+        # type: (int) -> Optional[ObjcInstruction]
         """Get the instruction at a given index within the function's code, wrapping in ObjcInstruction
         """
+        if 0 >= index > len(self.instructions):
+            return None
         raw = self.instructions[index]
         wrapped = ObjcInstruction.parse_instruction(self, raw)
         return wrapped
+
+    def get_instruction_at_address(self, address):
+        # type: (int) -> Optional[ObjcInstruction]
+        """Get the Instruction within the analyzed function at a provided address.
+        The return will be wrapped in an ObjcInstruction.
+        This method will return None if the address is not contained within the analyzed function.
+        """
+        base_address = self.start_address
+        offset = address - base_address
+        # 4 bytes per instruction
+        index = int(offset / 4)
+        return self.get_instruction_at_index(index)
 
     def debug_print(self, idx, output):
         # type: (int, Text) -> None
@@ -399,9 +413,7 @@ class ObjcFunctionAnalyzer(object):
         """
         desired_reg = register
         start_index = self.instructions.index(instruction.raw_instr)
-
-        bytes_in_instruction = 4
-        target_addr = self.start_address + (start_index * bytes_in_instruction)
+        target_addr = instruction.address
         DebugUtil.log(self, 'analyzing data flow to determine data in {} at {}'.format(
             desired_reg,
             hex(int(target_addr))

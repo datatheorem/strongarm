@@ -5,4 +5,4 @@ from __future__ import print_function
 
 from .debug_util import DebugUtil
 
-__version__ = '0.9.9'
+__version__ = '0.9.10'

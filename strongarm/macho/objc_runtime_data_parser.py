@@ -186,10 +186,8 @@ class ObjcRuntimeDataParser(object):
     def log_long_parse(self, selref_count):
         if selref_count < 1000:
             return
-        # found through observation on Uber.app
-        # Uber.app has 21453 selrefs and __init__ completes in 368 seconds
-        # thus, amortized time/selref == 0.017s
-        seconds_per_selref_estimate = 0.017
+        # found through observation
+        seconds_per_selref_estimate = 0.006
         seconds_estimate = selref_count * seconds_per_selref_estimate
         minutes_estimate = seconds_estimate / 60.0
         print('Strongarm warning: Large ObjC info section! Estimate: {} minutes'.format(minutes_estimate))

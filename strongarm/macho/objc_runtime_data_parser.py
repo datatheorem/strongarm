@@ -58,6 +58,13 @@ class ObjcDataEntryParser(object):
         self._selrefs = selref_list
         self._objc_data_raw_struct = objc_data_raw_struct
 
+        # make map of selref pointers to the ObjcSelref objects
+        # this is so we can find the selref object for a selref pointer in constant time when
+        # parsing objc selectors in _get_selectors_from_methlist()
+        self._selref_pointer_map = {}
+        for selref in self._selrefs:
+            self._selref_pointer_map[selref.destination_address] = selref
+
     def get_selectors(self):
         # type: () -> List[ObjcSelector]
         """Parse every ObjcSelector described by the struct __objc_data
@@ -69,6 +76,15 @@ class ObjcDataEntryParser(object):
         methlist_file_ptr = methlist_info[1]
 
         return self._get_selectors_from_methlist(methlist, methlist_file_ptr)
+
+    def get_selref_for_objc_method(self, objc_method):
+        # type: (ObjcMethodStruct) -> Optional[ObjcSelref]
+        """Retrieve the selref whose destination address points to the name field of the provided ObjcMethodStruct
+        """
+        name_ptr = objc_method.name
+        if name_ptr not in self._selref_pointer_map:
+            return None
+        return self._selref_pointer_map[name_ptr]
 
     def _get_selectors_from_methlist(self, methlist, methlist_file_ptr):
         # type: (ObjcMethodListStruct, int) -> List[ObjcSelector]
@@ -82,14 +98,9 @@ class ObjcDataEntryParser(object):
             method_ent = ObjcMethodStruct(self._binary, method_entry_off)
             # byte-align IMP
             method_ent.implementation &= ~0x3
-            symbol_name = self._binary.get_full_string_from_start_address(method_ent.name)
 
-            # figure out which selref this corresponds to
-            selref = None
-            for s in self._selrefs:
-                if s.destination_address == method_ent.name:
-                    selref = s
-                    break
+            symbol_name = self._binary.get_full_string_from_start_address(method_ent.name)
+            selref = self.get_selref_for_objc_method(method_ent)
 
             selector = ObjcSelector(symbol_name, selref, method_ent.implementation)
             selectors.append(selector)

@@ -30,6 +30,7 @@ class ObjcMethodInfo(object):
 class RegisterContentsType(Enum):
     FUNCTION_ARG = 0
     IMMEDIATE = 1
+    UNKNOWN = 2
 
 
 class RegisterContents(object):
@@ -428,6 +429,10 @@ class ObjcFunctionAnalyzer(object):
         # map of name -> (name, value). key is register needing to be resolved,
         # value is tuple containing (register containing source value, signed offset from source register)
         needed_links = {}
+        # helper to handle instructions that this method doesn't totallly parse
+        # when we detect an instruction like add x0, x0, #0xf60, instead of trying to handle it we just keep track of
+        # the #0xf60 and add it to the final value of x0 at the end of the operation
+        extra_offset = 0
 
         # find data starting backwards from start_index
         # TODO(PT): instead of blindly going through instructions backwards,
@@ -472,9 +477,21 @@ class ObjcFunctionAnalyzer(object):
             # try to detect this pattern
             # zr indicates zero-register
             if len(instr.operands) > 2:
+                src2 = instr.operands[2]
                 if src.type == ARM64_OP_REG:
-                    if self._trimmed_reg_name(instr.reg_name(src.value.reg)) == 'zr':
+                    src_reg_name = self._trimmed_reg_name(instr.reg_name(instr))
+                    if src_reg_name == 'zr':
                         src = instr.operands[2]
+                    # we might see an instruction like add x0, x0, #0xf60
+                    # in this case, x0 is both the source and dest, but for our purposes it's the dest
+                    # TODO(PT): handle instructions with 2 source operands (like add)
+                    elif src2.type == ARM64_OP_IMM:
+                        # ensure we're handling an instruction where the first 2 registers are the same
+                        # we don't know how to handle the case where they're different registers
+                        if dst_reg_name != src_reg_name:
+                            return RegisterContents(RegisterContentsType.UNKNOWN, 0)
+                        extra_offset += src2.value.imm
+                        continue
 
             if src.type == ARM64_OP_IMM:
                 # we now know the immediate value in dst_reg_name
@@ -522,7 +539,8 @@ class ObjcFunctionAnalyzer(object):
         # there's no way we can resolve the value.
         stack_pointer_reg = 'sp'
         if stack_pointer_reg in needed_links:
-            raise RuntimeError('{} contents depends on stack, cannot determine statically'.format(desired_reg))
+            DebugUtil.log(self, '{} contents depends on stack, cannot determine statically'.format(desired_reg))
+            return RegisterContents(RegisterContentsType.UNKNOWN, 0)
 
         # once we've broken out of the above loop, we should have all the values we need to compute the
         # final value of the desired register.
@@ -551,6 +569,8 @@ class ObjcFunctionAnalyzer(object):
             needed_links,
             determined_values
         )
+        # handle residual
+        final_register_value += extra_offset
         return RegisterContents(RegisterContentsType.IMMEDIATE, final_register_value)
 
     def _resolve_register_value_from_data_links(self, desired_reg, links, resolved_registers):

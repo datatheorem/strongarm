@@ -301,7 +301,7 @@ class MachoAnalyzer(object):
         end_address = int(end_address)
         # trim instructions up to the instruction at end_address
         last_instruction_idx = int((end_address - start_address) / 4)
-        instructions = instructions[:last_instruction_idx:]
+        instructions = instructions[:last_instruction_idx+1:]
         return instructions, end_address
 
     def _find_function_code(self, function_address):

@@ -42,13 +42,23 @@ class FunctionBoundaryTests(unittest.TestCase):
         _, guessed_end_address = self.analyzer._find_function_boundary(start_address, actual_size * 2, [])
         self.assertEqual(end_address, guessed_end_address)
 
-    def test_get_method_address_range(self):
+    def test_find_method_code(self):
         sel = 'application:didFinishLaunchingWithOptions:'
         # found in Hopper
         correct_start_address = 0x1000066dc
         correct_end_address = 0x1000066e0
 
-        imp_addresses = self.analyzer.get_method_address_ranges(sel)
-        found_start_address, found_end_address = imp_addresses[0]
-        self.assertEqual(correct_start_address, found_start_address)
-        self.assertEqual(correct_end_address, found_end_address)
+        imp_func = self.analyzer.get_imps_for_sel(sel)[0]
+        self.assertEqual(correct_start_address, imp_func.start_address)
+        self.assertEqual(correct_end_address, imp_func.end_address)
+
+        instructions, start_address, end_address = self.analyzer._find_function_code(correct_start_address)
+        self.assertEqual(correct_start_address, start_address)
+        self.assertEqual(correct_end_address, end_address)
+        self.assertEqual(correct_start_address, instructions[0].address)
+        self.assertEqual(correct_end_address, instructions[-1].address)
+
+        bytes_per_instruction = 4
+        # add 1 to account for the instruction starting at end_address
+        correct_instruction_count = int((correct_end_address - correct_start_address) / bytes_per_instruction) + 1
+        self.assertEqual(correct_instruction_count, len(instructions))

@@ -390,8 +390,9 @@ class MachoBinary(object):
         return self.get_bytes(binary_address, size)
 
     def get_full_string_from_start_address(self, start_address, virtual=True):
-        # type: (int) -> Text
+        # type: (int) -> Optional[Text]
         """Return a string containing the bytes from start_address up to the next NULL character
+        This method will return None if the specified address does not point to a UTF-8 encoded string
         """
         max_len = 16
         symbol_name_characters = []
@@ -417,12 +418,16 @@ class MachoBinary(object):
                 max_len *= 2
             else:
                 # read full string!
-
-                symbol_name = bytearray(symbol_name_characters).decode('UTF-8')
-                return symbol_name
+                try:
+                    symbol_name = bytearray(symbol_name_characters).decode('UTF-8')
+                    return symbol_name
+                except UnicodeDecodeError:
+                    # if decoding the string failed, we may have been passed an address which does not actually
+                    # point to a string
+                    return None
 
     def read_string_at_address(self, address):
-        # type: (int) -> Text
+        # type: (int) -> Optional[Text]
         """Read a string embedded in the binary at address
         This method will automatically parse a CFString and return the string literal if address points to one
         """

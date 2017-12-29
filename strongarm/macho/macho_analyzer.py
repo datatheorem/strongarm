@@ -431,6 +431,9 @@ class MachoAnalyzer(object):
         search_results = []
         entry_point_list = self.get_objc_methods()
         for method_info in entry_point_list:
-            function_analyzer = ObjcFunctionAnalyzer.get_function_analyzer_for_method(self.binary, method_info)
-            search_results += function_analyzer.search_code(code_search)
+            try:
+                function_analyzer = ObjcFunctionAnalyzer.get_function_analyzer_for_method(self.binary, method_info)
+                search_results += function_analyzer.search_code(code_search)
+            except RuntimeError:
+                continue
         return search_results

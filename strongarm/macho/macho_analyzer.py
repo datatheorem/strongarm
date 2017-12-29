@@ -98,14 +98,12 @@ class MachoAnalyzer(object):
         sym_ptr_count = int(lazy_sym_section.cmd.size / sizeof(c_void_p))
 
         # this section's data starts at the file offset field
-        section_data_ptr = lazy_sym_section.cmd.offset
-
-        virt_base = self.binary.get_virtual_base()
+        section_data_ptr = lazy_sym_section.cmd.addr
         # read every pointer in the table
         for i in range(sym_ptr_count):
             # this addr is the address in the file of this data, plus the slide that the file has requested,
             # to result in the final address that would be referenced elsewhere in this Mach-O
-            section_pointers.append(virt_base + section_data_ptr)
+            section_pointers.append(section_data_ptr)
             # go to next pointer in list
             section_data_ptr += sizeof(c_void_p)
 

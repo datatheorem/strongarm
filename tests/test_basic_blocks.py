@@ -25,8 +25,7 @@ class TestBasicBlocks(unittest.TestCase):
         self.analyzer = MachoAnalyzer.get_analyzer(self.binary)
 
     def test_get_basic_block_list(self):
-        target_method_addr, _ = self.analyzer.get_method_address_ranges('switchControlFlow')[0]
-        print('target_method_addr {}'.format(target_method_addr))
+        target_method_addr = self.analyzer.get_imps_for_sel('switchControlFlow')[0].start_address
         instructions = self.analyzer.get_function_instructions(target_method_addr)
         function_analyzer = ObjcFunctionAnalyzer(self.binary, instructions)
 

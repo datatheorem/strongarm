@@ -33,11 +33,11 @@ class TestMachoAnalyzer(unittest.TestCase):
         imp_nonexisting = None
         self.assertIsNone(self.analyzer.imp_for_selref(imp_nonexisting))
 
-    def test_get_function_address_range(self):
+    def test_find_function_boundary(self):
         start_addr = 0x100006420
         correct_end_addr = 0x100006530
 
-        start, end = self.analyzer.get_function_address_range(start_addr)
+        _, end = self.analyzer._find_function_boundary(start_addr, 0x200, [])
         self.assertEqual(end, correct_end_addr)
 
     def test_find_imported_symbols(self):

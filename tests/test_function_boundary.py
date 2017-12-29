@@ -27,7 +27,7 @@ class FunctionBoundaryTests(unittest.TestCase):
         end_address = 0x1000066e0
         actual_size = end_address - start_address
 
-        guessed_end_address = self.analyzer._find_function_boundary(start_address, actual_size * 2)
+        _, guessed_end_address = self.analyzer._find_function_boundary(start_address, actual_size * 2, [])
         self.assertEqual(end_address, guessed_end_address)
 
     def test_function_boundary_bl(self):
@@ -39,7 +39,7 @@ class FunctionBoundaryTests(unittest.TestCase):
 
         actual_size = end_address - start_address
 
-        guessed_end_address = self.analyzer._find_function_boundary(start_address, actual_size * 2)
+        _, guessed_end_address = self.analyzer._find_function_boundary(start_address, actual_size * 2, [])
         self.assertEqual(end_address, guessed_end_address)
 
     def test_get_method_address_range(self):

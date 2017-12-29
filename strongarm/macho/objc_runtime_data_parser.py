@@ -5,6 +5,7 @@ from __future__ import print_function
 
 from typing import List, Optional, Text, Dict
 from ctypes import sizeof
+import logging
 
 from strongarm.macho.arch_independent_structs import \
     ObjcClassRawStruct, \
@@ -187,10 +188,10 @@ class ObjcRuntimeDataParser(object):
         if selref_count < 1000:
             return
         # found through observation
-        seconds_per_selref_estimate = 0.006
+        seconds_per_selref_estimate = 0.01
         seconds_estimate = selref_count * seconds_per_selref_estimate
         minutes_estimate = seconds_estimate / 60.0
-        print('Strongarm warning: Large ObjC info section! Estimate: {} minutes'.format(minutes_estimate))
+        logging.warning('strongarm: Large ObjC info section! Estimate: {} minutes'.format(minutes_estimate))
 
     def _parse_selrefs(self):
         # type: (None) -> List[ObjcSelref]

@@ -78,7 +78,7 @@ class MachoBinary(object):
 
         # cache to save work on calls to get_bytes()
         with open(self.filename, 'rb') as f:
-            self._cached_binary = f.read()
+            self._cached_binary = f.read()[offset_within_fat:]
 
         # kickoff for parsing this slice
         if not self.parse():

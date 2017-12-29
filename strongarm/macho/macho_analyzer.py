@@ -366,16 +366,6 @@ class MachoAnalyzer(object):
         """
         return self.objc_helper.get_method_imp_addresses(selector)
 
-    def get_method_address_ranges(self, selector):
-        # type: (Text) -> List[(int, int)]
-        """Retrieve a list of addresses where the provided SEL is implemented
-
-        If no implementations exist for the provided selector, an empty list will be returned.
-        If implementations exist, the list will contain tuples in the form: (IMP start address, IMP end address)
-        """
-        start_addresses = self.get_method_imp_addresses(selector)
-        return [self.get_function_address_range(start_address) for start_address in start_addresses]
-
     def get_imps_for_sel(self, selector):
         # type: (Text) -> List[ObjcFunctionAnalyzer]
         """Retrieve a list of the disassembled function data for every implementation of a provided selector
@@ -388,12 +378,9 @@ class MachoAnalyzer(object):
         from strongarm.objc import ObjcFunctionAnalyzer
 
         implementation_analyzers = []
-        imp_addresses = self.get_method_address_ranges(selector)
-        for imp_start, imp_end in imp_addresses:
-            imp_size = imp_end - imp_start
-            imp_data = bytes(self.binary.get_content_from_virtual_address(virtual_address=imp_start, size=imp_size))
-            imp_instructions = [instr for instr in self.cs.disasm(imp_data, imp_start)]
-
+        imp_addresses = self.get_method_imp_addresses(selector)
+        for imp_start in imp_addresses:
+            imp_instructions = self.get_function_instructions(imp_start)
             function_analyzer = ObjcFunctionAnalyzer(self.binary, imp_instructions)
             implementation_analyzers.append(function_analyzer)
         return implementation_analyzers

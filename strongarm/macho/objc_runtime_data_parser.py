@@ -188,7 +188,7 @@ class ObjcRuntimeDataParser(object):
         if selref_count < 1000:
             return
         # found through observation
-        seconds_per_selref_estimate = 0.01
+        seconds_per_selref_estimate = 0.0025
         seconds_estimate = selref_count * seconds_per_selref_estimate
         minutes_estimate = seconds_estimate / 60.0
         logging.warning('strongarm: Large ObjC info section! Estimate: {} minutes'.format(minutes_estimate))

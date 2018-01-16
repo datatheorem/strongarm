@@ -463,10 +463,7 @@ class MachoBinary(object):
         # type: (int, int) -> bool
         """Returns whether the provided address range overlaps with the encrypted section of the binary.
         """
-        if not self.encryption_info:
-            return False
-        # if cryptid is 0, binary is not encrypted
-        if not self.encryption_info.cryptid:
+        if not self.is_encrypted():
             return False
 
         # if 2 ranges overlap, the end address of the first range will be greater than the start of the second, and

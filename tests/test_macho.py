@@ -7,11 +7,13 @@ import unittest
 import os
 
 from strongarm.macho.macho_definitions import *
-from strongarm.macho.macho_parse import MachoParser
+from strongarm.macho import MachoParser
+from strongarm.macho import BinaryEncryptedError
 
 
 class TestMachoBinary(unittest.TestCase):
     FAT_PATH = os.path.join(os.path.dirname(__file__), 'bin', 'GoodCertificateValidation')
+    ENCRYPTED_PATH = os.path.join(os.path.dirname(__file__), 'bin', 'RxTest')
 
     def setUp(self):
         self.parser = MachoParser(TestMachoBinary.FAT_PATH)
@@ -85,3 +87,11 @@ class TestMachoBinary(unittest.TestCase):
         from pprint import pprint
         symtabs = self.binary.symtab_contents
         self.assertTrue(len(symtabs) == 31)
+
+    def test_read_encrypted_info(self):
+        encrypted_binary = MachoParser(TestMachoBinary.ENCRYPTED_PATH).get_armv7_slice()
+        with self.assertRaises(BinaryEncryptedError):
+            # encrypted region is 0x4000 to 0x18000
+            encrypted_binary.get_bytes(0x5000, 0x1000)
+        # read from unencrypted section should not raise
+        encrypted_binary.get_bytes(0x3000, 0x500)

@@ -25,6 +25,10 @@ from ctypes import c_uint64, c_uint32, sizeof
 import io
 
 
+class BinaryEncryptedError(Exception):
+    pass
+
+
 class MachoSection(object):
     def __init__(self, binary, section_command):
         # type: (MachoBinary, MachoSectionRawStruct) -> None
@@ -298,6 +302,13 @@ class MachoBinary(object):
             raise RuntimeError('get_bytes() offset {} looks like a virtual address. Did you mean to use '
                                'get_content_from_virtual_address?'.format(hex(offset)))
 
+        # safeguard against reading from an encrypted segment of the binary
+        if self.is_range_encrypted(offset, size):
+            raise BinaryEncryptedError('Cannot read encrypted range [{} to {}]'.format(
+                hex(int(self.encryption_info.cryptoff)),
+                hex(int(self.encryption_info.cryptsize))
+            ))
+
         return bytearray(self._cached_binary[offset:offset+size])
 
     def should_swap_bytes(self):
@@ -447,3 +458,17 @@ class MachoBinary(object):
         if not self.encryption_info:
             return False
         return self.encryption_info.cryptid != 0
+
+    def is_range_encrypted(self, offset, size):
+        # type: (int, int) -> bool
+        """Returns whether the provided address range overlaps with the encrypted section of the binary.
+        """
+        if not self.encryption_info:
+            return False
+
+        # if 2 ranges overlap, the end address of the first range will be greater than the start of the second, and
+        # the end address of the second will be greater than the start of the first
+        range1 = (offset, offset + size)
+        range2 = (self.encryption_info.cryptoff, self.encryption_info.cryptoff + self.encryption_info.cryptsize)
+        return range1[1] >= range2[0] and range2[1] >= range1[0]
+

@@ -94,8 +94,6 @@ class MachoImpStubsParser(object):
         # type: () -> List[MachoImpStub]
         if '__stubs' not in self.binary.sections:
             return []
-        if self.binary.is_encrypted():
-            return []
 
         stubs_section = self.binary.sections['__stubs']
 

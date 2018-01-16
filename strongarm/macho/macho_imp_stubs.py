@@ -70,7 +70,8 @@ class MachoImpStubsParser(object):
         for idx, op in enumerate([instr1, instr2, instr3]):
             # sanity check
             if op.mnemonic != expected_ops[idx]:
-                raise RuntimeError('Expected instruction {} to be {} while parsing stub, was instead {}'.format(
+                raise RuntimeError('Expected instr {} (idx {}) to be {} while parsing stub, was instead {}'.format(
+                    hex(op.address),
                     idx,
                     expected_ops[idx],
                     op.mnemonic
@@ -92,6 +93,8 @@ class MachoImpStubsParser(object):
     def _parse_all_stubs(self):
         # type: () -> List[MachoImpStub]
         if '__stubs' not in self.binary.sections:
+            return []
+        if self.binary.is_encrypted():
             return []
 
         stubs_section = self.binary.sections['__stubs']

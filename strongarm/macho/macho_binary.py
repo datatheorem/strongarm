@@ -440,3 +440,10 @@ class MachoBinary(object):
             address = cfstring_ent.literal
         return self.get_full_string_from_start_address(address)
 
+    def is_encrypted(self):
+        # type: () -> bool
+        """Returns True if the binary has an encrypted segment, False otherwise
+        """
+        if not self.encryption_info:
+            return False
+        return self.encryption_info.cryptid != 0

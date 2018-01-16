@@ -465,6 +465,9 @@ class MachoBinary(object):
         """
         if not self.encryption_info:
             return False
+        # if cryptid is 0, binary is not encrypted
+        if not self.encryption_info.cryptid:
+            return False
 
         # if 2 ranges overlap, the end address of the first range will be greater than the start of the second, and
         # the end address of the second will be greater than the start of the first

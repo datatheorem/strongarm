@@ -4,19 +4,24 @@ from __future__ import unicode_literals
 from __future__ import print_function
 
 from typing import List, Text
+from typing import TYPE_CHECKING
 
 from .objc_analyzer import ObjcFunctionAnalyzer
 from strongarm.debug_util import DebugUtil
 
 
+if TYPE_CHECKING:
+    from capstone import CsInsn
+
+
 class ObjcBasicBlock(object):
     def __init__(self, function_analyzer, start_index):
-        # type: (ObjcFunctionAnalyzer) -> None
+        # type: (ObjcFunctionAnalyzer, int) -> None
         self._function_analyzer = function_analyzer
 
     @classmethod
     def get_basic_blocks(cls, function_analyzer):
-        # type: (ObjcFunctionAnalyzer) -> List[ObjcBasicBlock]
+        # type: (ObjcFunctionAnalyzer) -> List[List[CsInsn]]
         local_branch_instructions = function_analyzer.get_local_branches()
 
         # TODO(PT): make it more efficient to get the start indexes of local branches

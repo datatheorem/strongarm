@@ -9,6 +9,8 @@ from enum import IntEnum
 
 
 def swap32(i):
+    # type: (int) -> int
+    """Reverse the bytes of a little-endian integer representation ie (3) -> 50331648"""
     return struct.unpack("<I", struct.pack(">I", i))[0]
 
 

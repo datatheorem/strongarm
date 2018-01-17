@@ -3,7 +3,7 @@ from __future__ import absolute_import
 from __future__ import unicode_literals
 from __future__ import print_function
 
-from typing import Optional, Dict
+from typing import Optional, Dict, Text
 
 from strongarm.macho.macho_binary import MachoBinary
 from strongarm.macho.macho_definitions import NLIST_NTYPE, NTYPE_VALUES
@@ -14,6 +14,7 @@ class MachoStringTableEntry(object):
     """
 
     def __init__(self, start_idx, length, content):
+        # type: (int, int, Text) -> None
         self.start_idx = start_idx
         self.length = length
         self.full_string = content

@@ -3,7 +3,7 @@ from __future__ import absolute_import
 from __future__ import unicode_literals
 from __future__ import print_function
 
-from typing import List, Optional, Text, Dict
+from typing import List, Optional, Text, Dict, Tuple
 from ctypes import sizeof
 import logging
 
@@ -34,6 +34,7 @@ class ObjcSelector(object):
         self.is_external_definition = (not self.implementation)
 
     def __str__(self):
+        # type: () -> Text
         imp_addr = 'NaN'
         if self.implementation:
             imp_addr = hex(int(self.implementation))
@@ -62,7 +63,7 @@ class ObjcDataEntryParser(object):
         # make map of selref pointers to the ObjcSelref objects
         # this is so we can find the selref object for a selref pointer in constant time when
         # parsing objc selectors in _get_selectors_from_methlist()
-        self._selref_pointer_map = {}
+        self._selref_pointer_map = {}   # type: Dict[int, ObjcSelref]
         for selref in self._selrefs:
             self._selref_pointer_map[selref.destination_address] = selref
 
@@ -110,7 +111,7 @@ class ObjcDataEntryParser(object):
         return selectors
 
     def _get_methlist(self):
-        # type: () -> Optional[(ObjcMethodListStruct, int)]
+        # type: () -> Optional[Tuple[ObjcMethodListStruct, int]]
         """Return the ObjcMethodList and file offset described by the ObjcDataRawStruct
         Some __objc_data entries will describe classes that have no methods implemented. In this case, the method
         list will not exist, and this method will return None.
@@ -185,6 +186,7 @@ class ObjcRuntimeDataParser(object):
         return self.binary.load_dylib_commands[ordinal - 1]
 
     def log_long_parse(self, selref_count):
+        # type: (int) -> None
         if selref_count < 1000:
             return
         # found through observation
@@ -194,8 +196,8 @@ class ObjcRuntimeDataParser(object):
         logging.warning('strongarm: Large ObjC info section! Estimate: {} minutes'.format(minutes_estimate))
 
     def _parse_selrefs(self):
-        # type: (None) -> List[ObjcSelref]
-        selrefs = []
+        # type: () -> List[ObjcSelref]
+        selrefs = []    # type: List[ObjcSelref]
         if '__objc_selrefs' not in self.binary.sections:
             return selrefs
 
@@ -227,11 +229,11 @@ class ObjcRuntimeDataParser(object):
         selref = [x for x in self._selrefs if x.source_address == selref_addr]
         if not len(selref):
             return None
-        selref = selref[0]
+        _selref = selref[0]
 
-        # therefore, the selref must refer to a selector which is defined outside this binary
+        # therefore, the _selref must refer to a selector which is defined outside this binary
         # this is fine, just construct an ObjcSelector with what we know
-        sel = ObjcSelector(selref.selector_literal, selref, None)
+        sel = ObjcSelector(_selref.selector_literal, _selref, None)
         return sel
 
     def get_method_imp_addresses(self, selector):
@@ -274,7 +276,7 @@ class ObjcRuntimeDataParser(object):
         # type: () -> List[int]
         """Read pointers in __objc_classlist into list
         """
-        classlist_entries = []
+        classlist_entries = []  # type: List[int]
         if '__objc_classlist' not in self.binary.sections:
             return classlist_entries
 

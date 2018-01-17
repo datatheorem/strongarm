@@ -6,7 +6,8 @@ from __future__ import print_function
 from ctypes import sizeof, c_void_p
 
 from capstone import Cs, CsInsn, CS_ARCH_ARM64, CS_MODE_ARM
-from typing import Text, List, Dict, Optional
+from typing import Text, List, Dict, Optional, Tuple
+from typing import TYPE_CHECKING
 
 from strongarm.macho.macho_binary import MachoBinary
 from strongarm.macho.macho_imp_stubs import MachoImpStubsParser
@@ -20,7 +21,7 @@ class MachoAnalyzer(object):
     # each MachoAnalyzer operates on a single MachoBinary which will never change in the lifecycle of the analyzer
     # also, some MachoAnalyzer operations are expensive, but they only have to be done once per instance
     # so, we only keep one analyzer for each MachoBinary
-    active_analyzer_map = {}
+    active_analyzer_map = {}    # type: Dict[MachoBinary, MachoAnalyzer]
 
     def __init__(self, bin):
         # type: (MachoBinary) -> None
@@ -42,7 +43,7 @@ class MachoAnalyzer(object):
         self._objc_helper = None
         self._objc_method_list = None
 
-        self._cached_function_instructions = {}
+        self._cached_function_instructions = {} # type: Dict[int, List[CsInsn]]
 
         # done setting up, store this analyzer in class cache
         MachoAnalyzer.active_analyzer_map[bin] = self
@@ -88,7 +89,7 @@ class MachoAnalyzer(object):
         if self._lazy_symbol_entry_pointers:
             return self._lazy_symbol_entry_pointers
 
-        section_pointers = []
+        section_pointers = []   # type: List[int]
         if '__la_symbol_ptr' not in self.binary.sections:
             return section_pointers
 
@@ -128,7 +129,7 @@ class MachoAnalyzer(object):
         if self._imported_symbol_map:
             return self._imported_symbol_map
 
-        imported_symbol_map = {}
+        imported_symbol_map = {}    # type: Dict[int, Text]
         if '__la_symbol_ptr' not in self.binary.sections:
             return imported_symbol_map
 
@@ -215,7 +216,7 @@ class MachoAnalyzer(object):
         ))
 
     def _find_function_boundary(self, start_address, size, instructions):
-        # type: (int, int) -> (List[CsInsn], int)
+        # type: (int, int, List[CsInsn]) -> Tuple[List[CsInsn], int]
         """Helper function to search for a function boundary within a given block of executable code
 
         This function searches from start_address up to start_address + size looking for a set of
@@ -305,7 +306,7 @@ class MachoAnalyzer(object):
         return instructions, end_address
 
     def _find_function_code(self, function_address):
-        # type: (int) -> (List[CsInsn], int, int)
+        # type: (int) -> Tuple[List[CsInsn], int, int]
         """Determine the boundary of a function with a known start address, and disassemble the code
 
         The return value will be a tuple of a List of instructions in the function, the start address, and the end
@@ -316,7 +317,7 @@ class MachoAnalyzer(object):
         # start off by grabbing a small amount of bytes, and keep doubling search area until function boundary is hit
         end_address = 0
         search_size = 0x80
-        instructions = []
+        instructions = []   # type: List[CsInsn]
         while not end_address:
             # place upper limit on search space
             # limit to 32kb of code in a single function
@@ -365,6 +366,11 @@ class MachoAnalyzer(object):
         """Given a selector, return a list of virtual addresses corresponding to the start of each IMP for that SEL
         """
         return self.objc_helper.get_method_imp_addresses(selector)
+
+
+    if TYPE_CHECKING:   # noqa
+        from strongarm.objc import ObjcFunctionAnalyzer
+        from strongarm.objc import CodeSearch, CodeSearchResult
 
     def get_imps_for_sel(self, selector):
         # type: (Text) -> List[ObjcFunctionAnalyzer]
@@ -416,7 +422,7 @@ class MachoAnalyzer(object):
             code_search
         ))
 
-        search_results = []
+        search_results = [] # type: List[CodeSearchResult]
         entry_point_list = self.get_objc_methods()
         for method_info in entry_point_list:
             try:

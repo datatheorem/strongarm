@@ -1,4 +1,8 @@
 from ctypes import sizeof
+
+from typing import Union, Type, Any, Text
+from typing import TYPE_CHECKING
+
 from strongarm.macho.macho_definitions import \
     MachoHeader32, \
     MachoHeader64, \
@@ -24,14 +28,28 @@ from strongarm.macho.macho_definitions import \
     MachoSymtabCommand, \
     MachoDysymtabCommand
 
+# create type alias for the following classes that inherit from ArchIndependentStructure
+if TYPE_CHECKING:
+    from strongarm.macho.macho_binary import MachoBinary
+    _32_BIT_STRUCT_ALIAS = Union[Type[MachoHeader32], Type[MachoSegmentCommand32], Type[MachoSection32Raw],
+                                 Type[MachoEncryptionInfo32Command], Type[MachoNlist32], Type[MachoLoadCommand],
+                                 Type[ObjcDataRaw32], Type[ObjcClassRaw32], Type[ObjcMethod32], Type[ObjcMethodList],
+                                 Type[DylibCommand], Type[CFString32], Type[MachoSymtabCommand],
+                                 Type[MachoDysymtabCommand] ]
+
+    _64_BIT_STRUCT_ALIAS = Union[Type[MachoHeader64], Type[MachoSegmentCommand64], Type[MachoSection64Raw],
+                                 Type[MachoEncryptionInfo64Command], Type[MachoNlist64], Type[MachoLoadCommand],
+                                 Type[ObjcDataRaw64], Type[ObjcClassRaw64], Type[ObjcMethod64], Type[ObjcMethodList],
+                                 Type[DylibCommand], Type[CFString64], Type[MachoSymtabCommand],
+                                 Type[MachoDysymtabCommand] ]
+
 
 class ArchIndependentStructure(object):
-    _32_BIT_STRUCT = None
-    _64_BIT_STRUCT = None
+    _32_BIT_STRUCT = None   # type: _32_BIT_STRUCT_ALIAS
+    _64_BIT_STRUCT = None   # type: _64_BIT_STRUCT_ALIAS
 
     def __init__(self, binary, binary_offset, virtual=False):
-        from strongarm.macho.macho_binary import MachoBinary
-        # type: (MachoBinary, int, bool) -> None
+        # type: ('MachoBinary', int, bool) -> None
         """Parse structure from 32bit or 64bit definition, depending on the active binary
         
         Args:
@@ -53,6 +71,12 @@ class ArchIndependentStructure(object):
             setattr(self, field_name, getattr(struct, field_name))
         # record size of underlying struct, for when traversing file by structs
         self.sizeof = sizeof(struct_type)
+
+    if TYPE_CHECKING:
+        # GVR suggested to use this pattern to ignore dynamic attribute assignment errors
+        def __getattr__(self, key):
+            # type: (Text) -> Any
+            pass
 
 
 class MachoHeaderStruct(ArchIndependentStructure):
@@ -110,6 +134,7 @@ class DylibCommandStruct(ArchIndependentStructure):
     _64_BIT_STRUCT = DylibCommand
 
     def __init__(self, binary, binary_offset, virtual=False):
+        # type: (Any, int, bool) -> None
         super(DylibCommandStruct, self).__init__(binary, binary_offset, virtual)
         self.fileoff = None
 

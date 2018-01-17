@@ -33,6 +33,7 @@ class MachoImpStub(object):
     as well as the __la_symbol_ptr entry which is targeted by the stub.
     """
     def __init__(self, address, destination):
+        # type: (int, int) -> None
         self.address = address
         self.destination = destination
 

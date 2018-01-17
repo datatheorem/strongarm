@@ -4,8 +4,13 @@ from __future__ import unicode_literals
 from __future__ import print_function
 
 from capstone import CsInsn
+from typing import TYPE_CHECKING
+from typing import Union
 
 import strongarm.macho.macho_analyzer
+
+if TYPE_CHECKING:
+    from strongarm.objc import objc_analyzer
 
 
 class ObjcInstruction(object):
@@ -19,7 +24,7 @@ class ObjcInstruction(object):
 
     @classmethod
     def parse_instruction(cls, function_analyzer, instruction):
-        # type: (strongarm.objc.objc_analyzer.ObjcFunctionAnalyzer, CsInsn) -> ObjcInstruction
+        # type: (objc_analyzer.ObjcFunctionAnalyzer, CsInsn) -> ObjcInstruction
         """Read an instruction and encapsulate it in the appropriate ObjcInstruction subclass
         """
         if ObjcBranchInstruction.is_branch_instruction(instruction):
@@ -46,6 +51,7 @@ class ObjcBranchInstruction(ObjcInstruction):
         """Read a branch instruction and encapsulate it in the appropriate ObjcBranchInstruction subclass
         """
         # use appropriate subclass
+        instr = None    # type: Union[ObjcUnconditionalBranchInstruction, ObjcConditionalBranchInstruction]
         if instruction.mnemonic in ObjcUnconditionalBranchInstruction.UNCONDITIONAL_BRANCH_MNEMONICS:
             instr = ObjcUnconditionalBranchInstruction(function_analyzer, instruction)
         elif instruction.mnemonic in ObjcConditionalBranchInstruction.CONDITIONAL_BRANCH_MNEMONICS:

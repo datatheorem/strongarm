@@ -3,7 +3,7 @@ from __future__ import absolute_import
 from __future__ import unicode_literals
 from __future__ import print_function
 
-from typing import List, Optional, Text, Dict, Tuple
+from typing import List, Optional, Text, Dict, Tuple, AnyStr
 from ctypes import sizeof
 import logging
 
@@ -33,8 +33,7 @@ class ObjcSelector(object):
 
         self.is_external_definition = (not self.implementation)
 
-    def __str__(self):
-        # type: () -> Text
+    def __str__(self):  # type: ignore
         imp_addr = 'NaN'
         if self.implementation:
             imp_addr = hex(int(self.implementation))

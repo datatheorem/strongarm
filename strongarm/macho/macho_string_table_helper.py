@@ -3,7 +3,7 @@ from __future__ import absolute_import
 from __future__ import unicode_literals
 from __future__ import print_function
 
-from typing import Optional, Dict, Text
+from typing import Optional, Dict, Text, List
 
 from strongarm.macho.macho_binary import MachoBinary
 from strongarm.macho.macho_definitions import NLIST_NTYPE, NTYPE_VALUES
@@ -30,8 +30,8 @@ class MachoStringTableHelper(object):
         # type: (MachoBinary) -> None
         self.binary = binary
         self.string_table_entries = self._process_string_table_entries()
-        self.imported_symbols = None
-        self.exported_symbols = None
+        self.imported_symbols = None    # type: List[Text]
+        self.exported_symbols = None    # type: List[Text]
         self.parse_sym_lists()
 
     def _process_string_table_entries(self):

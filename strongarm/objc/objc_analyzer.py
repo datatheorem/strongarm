@@ -66,7 +66,7 @@ class ObjcFunctionAnalyzer(object):
         self.instructions = instructions
         self.method_info = method_info
 
-        self._call_targets = None
+        self._call_targets = None   # type: List[ObjcBranchInstruction]
 
     def get_instruction_at_index(self, index):
         # type: (int) -> Optional[ObjcInstruction]

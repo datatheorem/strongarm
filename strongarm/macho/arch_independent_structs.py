@@ -78,6 +78,9 @@ class ArchIndependentStructure(object):
             # type: (Text) -> Any
             pass
 
+        implementation = None   # type: Any
+        data = None # type: Any
+
 
 class MachoHeaderStruct(ArchIndependentStructure):
     _32_BIT_STRUCT = MachoHeader32
@@ -136,7 +139,7 @@ class DylibCommandStruct(ArchIndependentStructure):
     def __init__(self, binary, binary_offset, virtual=False):
         # type: (Any, int, bool) -> None
         super(DylibCommandStruct, self).__init__(binary, binary_offset, virtual)
-        self.fileoff = None
+        self.fileoff = None # type: int
 
 
 class MachoLoadCommandStruct(ArchIndependentStructure):

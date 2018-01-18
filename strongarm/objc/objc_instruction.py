@@ -5,12 +5,13 @@ from __future__ import print_function
 
 from capstone import CsInsn
 from typing import TYPE_CHECKING
-from typing import Union
+from typing import Union, Text
 
 import strongarm.macho.macho_analyzer
 
 if TYPE_CHECKING:
     from strongarm.objc import objc_analyzer
+    from strongarm.macho.objc_runtime_data_parser import ObjcSelref
 
 
 class ObjcInstruction(object):
@@ -19,7 +20,7 @@ class ObjcInstruction(object):
         self.raw_instr = instruction
         self.address = self.raw_instr.address
 
-        self.is_msgSend_call = None
+        self.is_msgSend_call = None # type: bool
         self.symbol = None
 
     @classmethod
@@ -39,11 +40,13 @@ class ObjcBranchInstruction(ObjcInstruction):
 
         self.destination_address = destination_address
 
-        self.symbol = None
-        self.selref = None
+        self.symbol = None  # type: Text
+        self.selref = None  # type: ObjcSelref
 
-        self.is_external_c_call = None
-        self.is_external_objc_call = None
+        self.is_external_c_call = None  # type: bool
+        self.is_external_objc_call = None   # type: bool
+
+        self.is_local_branch = None # type: bool
 
     @classmethod
     def parse_instruction(cls, function_analyzer, instruction):
@@ -97,7 +100,7 @@ class ObjcUnconditionalBranchInstruction(ObjcBranchInstruction):
         macho_analyzer = strongarm.macho.macho_analyzer.MachoAnalyzer.get_analyzer(function_analyzer.binary)
         external_c_sym_map = macho_analyzer.external_branch_destinations_to_symbol_names
         if self.destination_address in external_c_sym_map:
-            self.symbol = external_c_sym_map[self.destination_address]
+            self.symbol = external_c_sym_map[self.destination_address]  # type: ignore
             if self.symbol == '_objc_msgSend':
                 self.is_msgSend_call = True
                 self._patch_msgSend_destination(function_analyzer)

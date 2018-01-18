@@ -76,9 +76,9 @@ class MachoBinary(object):
         self.segment_commands = None    # type: Dict[Text, MachoSegmentCommandStruct]
         self.sections = None    # type: Dict[Text, MachoSection]
         # also store specific interesting sections which are useful to us
-        self.dysymtab = None
-        self.symtab = None
-        self.encryption_info = None
+        self.dysymtab = None    # type: MachoDysymtabCommandStruct
+        self.symtab = None  # type: MachoSymtabCommandStruct
+        self.encryption_info = None # type: MachoEncryptionInfoStruct
         self.load_dylib_commands = None # type: List[DylibCommandStruct]
 
         # cache to save work on calls to get_bytes()

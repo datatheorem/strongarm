@@ -41,7 +41,7 @@ class MachoParser(object):
         self.filename = filename.encode('utf-8')
 
         self.header = None
-        self.is_swapped = None
+        self.is_swapped = None  # type: bool
         self.slices = []    # type: List[MachoBinary]
 
         self.parse()
@@ -118,9 +118,9 @@ class MachoParser(object):
 
         # remember to swap fields if file contains non-native byte order
         if self.is_swapped:
-            self.header.nfat_arch = swap32(self.header.nfat_arch)
+            self.header.nfat_arch = swap32(self.header.nfat_arch)   # type: ignore
 
-        for i in range(self.header.nfat_arch):
+        for i in range(self.header.nfat_arch):  # type: ignore
             arch_bytes = self.get_bytes(read_off, sizeof(MachoFatArch))
             fat_arch = MachoFatArch.from_buffer(bytearray(arch_bytes))
 

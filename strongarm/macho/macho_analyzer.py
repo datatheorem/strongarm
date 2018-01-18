@@ -16,6 +16,10 @@ from strongarm.macho.objc_runtime_data_parser import ObjcRuntimeDataParser, Objc
 from strongarm import DebugUtil
 
 
+if TYPE_CHECKING:
+    from strongarm.objc import ObjcFunctionAnalyzer, ObjcMethodInfo # type: ignore
+
+
 class MachoAnalyzer(object):
     # keep map of active MachoAnalyzer instances
     # each MachoAnalyzer operates on a single MachoBinary which will never change in the lifecycle of the analyzer
@@ -30,18 +34,18 @@ class MachoAnalyzer(object):
         self.cs.detail = True
 
         # data cached by various methods
-        self._lazy_symbol_entry_pointers = None
-        self._imported_symbol_map = None
-        self._external_branch_destinations_to_symbol_names = None
-        self._external_symbol_names_to_branch_destinations = None
+        self._lazy_symbol_entry_pointers = None # type: List[int]
+        self._imported_symbol_map = None    # type: Dict[int, Text]
+        self._external_branch_destinations_to_symbol_names = None   # type: Dict[int, Text]
+        self._external_symbol_names_to_branch_destinations = None   # type: Dict[Text, int]
 
         self.crossref_helper = MachoStringTableHelper(bin)
         self.imported_symbols = self.crossref_helper.imported_symbols
         self.exported_symbols = self.crossref_helper.exported_symbols
 
         self.imp_stubs = MachoImpStubsParser(bin, self.cs).imp_stubs
-        self._objc_helper = None
-        self._objc_method_list = None
+        self._objc_helper = None    # type: ObjcRuntimeDataParser
+        self._objc_method_list = None   # type: List[ObjcMethodInfo]
 
         self._cached_function_instructions = {} # type: Dict[int, List[CsInsn]]
 
@@ -369,8 +373,8 @@ class MachoAnalyzer(object):
 
 
     if TYPE_CHECKING:   # noqa
-        from strongarm.objc import ObjcFunctionAnalyzer
-        from strongarm.objc import CodeSearch, CodeSearchResult
+        from strongarm.objc import ObjcFunctionAnalyzer # type: ignore
+        from strongarm.objc import CodeSearch, CodeSearchResult # type: ignore
 
     def get_imps_for_sel(self, selector):
         # type: (Text) -> List[ObjcFunctionAnalyzer]
@@ -381,7 +385,7 @@ class MachoAnalyzer(object):
         Returns:
             A list of ObjcFunctionAnalyzers corresponding to each found implementation of the provided selector.
         """
-        from strongarm.objc import ObjcFunctionAnalyzer
+        from strongarm.objc import ObjcFunctionAnalyzer # type: ignore
 
         implementation_analyzers = []
         imp_addresses = self.get_method_imp_addresses(selector)
@@ -395,7 +399,7 @@ class MachoAnalyzer(object):
         # type: () -> List[ObjcFunctionAnalyzer]
         """Get a List of ObjcFunctionAnalyzers representing all ObjC methods implemented in the Mach-O.
         """
-        from strongarm.objc import ObjcFunctionAnalyzer, ObjcMethodInfo
+        from strongarm.objc import ObjcFunctionAnalyzer, ObjcMethodInfo # type: ignore
         if self._objc_method_list:
             return self._objc_method_list
         method_list = []
@@ -415,8 +419,8 @@ class MachoAnalyzer(object):
 
         The search space of this method includes all known functions within the binary.
         """
-        from strongarm.objc import CodeSearch, CodeSearchResult
-        from strongarm.objc import ObjcFunctionAnalyzer
+        from strongarm.objc import CodeSearch, CodeSearchResult # type: ignore
+        from strongarm.objc import ObjcFunctionAnalyzer # type: ignore
 
         DebugUtil.log(self, 'Performing code search on binary with search description:\n{}'.format(
             code_search

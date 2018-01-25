@@ -8,7 +8,7 @@ from strongarm.macho.macho_definitions import MachArch, MachoFatHeader, MachoFat
 
 from ctypes import sizeof, c_uint32
 import io
-from typing import Text, Optional
+from typing import Text, Optional, List
 
 
 class ArchitectureNotSupportedError(Exception):
@@ -37,12 +37,12 @@ class MachoParser(object):
     SUPPORTED_MAG = _FAT_MAGIC + _SUPPORTED_SLICE_MAG
 
     def __init__(self, filename):
-        # type: (Text) -> MachoParser
+        # type: (Text) -> None
         self.filename = filename.encode('utf-8')
 
         self.header = None
-        self.is_swapped = None
-        self.slices = []
+        self.is_swapped = None  # type: bool
+        self.slices = []    # type: List[MachoBinary]
 
         self.parse()
 
@@ -118,9 +118,9 @@ class MachoParser(object):
 
         # remember to swap fields if file contains non-native byte order
         if self.is_swapped:
-            self.header.nfat_arch = swap32(self.header.nfat_arch)
+            self.header.nfat_arch = swap32(self.header.nfat_arch)   # type: ignore
 
-        for i in range(self.header.nfat_arch):
+        for i in range(self.header.nfat_arch):  # type: ignore
             arch_bytes = self.get_bytes(read_off, sizeof(MachoFatArch))
             fat_arch = MachoFatArch.from_buffer(bytearray(arch_bytes))
 
@@ -154,7 +154,7 @@ class MachoParser(object):
         return magic in MachoParser._MACHO_MAGIC
 
     def is_magic_supported(self):
-        # type: (int) -> bool
+        # type: () -> bool
         """Check whether a magic number represents a file format which this class is capable of parsing
 
         Args:
@@ -197,7 +197,7 @@ class MachoParser(object):
         return self.file_magic in MachoParser._BIG_ENDIAN_MAG
 
     def get_bytes(self, offset, size):
-        # type: (int, int) -> Text
+        # type: (int, int) -> bytes
         """Read a byte list from binary file of a given size, starting from a given offset
 
         Args:

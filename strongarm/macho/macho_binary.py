@@ -3,7 +3,7 @@ from __future__ import absolute_import
 from __future__ import unicode_literals
 from __future__ import print_function
 
-from typing import List, Text, Optional
+from typing import List, Text, Optional, Dict
 
 from strongarm.debug_util import DebugUtil
 
@@ -33,11 +33,12 @@ class MachoSection(object):
     def __init__(self, binary, section_command):
         # type: (MachoBinary, MachoSectionRawStruct) -> None
         self.cmd = section_command
-        self.content = binary.get_bytes(section_command.offset, section_command.size)
-        self.name = section_command.sectname
-        self.address = section_command.addr
-        self.offset = section_command.offset
-        self.end_address = self.address + section_command.size
+        # ignore these types due to dynamic attributes of associated types
+        self.content = binary.get_bytes(section_command.offset, section_command.size)   # type: ignore
+        self.name = section_command.sectname    # type: ignore
+        self.address = section_command.addr     # type: ignore
+        self.offset = section_command.offset    # type: ignore
+        self.end_address = self.address + section_command.size  # type: ignore
 
 
 class MachoBinary(object):
@@ -56,29 +57,29 @@ class MachoBinary(object):
     SUPPORTED_MAG = _MAG_64 + _MAG_32
 
     def __init__(self, filename, offset_within_fat=0):
-        # type: (Text, int) -> None
+        # type: (bytes, int) -> None
         # info about this Mach-O's file representation
         self.filename = filename
         self._offset_within_fat = offset_within_fat
 
         # generic Mach-O header info
-        self.is_64bit = None
-        self.is_swap = None
-        self.cpu_type = None
+        self.is_64bit = None    # type: bool
+        self.is_swap = None     # type: bool
+        self.cpu_type = None    # type: CPU_TYPE
         self._load_commands_end_addr = None
 
         # Mach-O header data
-        self.header = None
-        self.header_flags = None
+        self.header = None  # type: MachoHeaderStruct
+        self.header_flags = None    # type: List[int]
 
         # segment and section commands from Mach-O header
-        self.segment_commands = None
-        self.sections = None
+        self.segment_commands = None    # type: Dict[Text, MachoSegmentCommandStruct]
+        self.sections = None    # type: Dict[Text, MachoSection]
         # also store specific interesting sections which are useful to us
-        self.dysymtab = None
-        self.symtab = None
-        self.encryption_info = None
-        self.load_dylib_commands = None
+        self.dysymtab = None    # type: MachoDysymtabCommandStruct
+        self.symtab = None  # type: MachoSymtabCommandStruct
+        self.encryption_info = None # type: MachoEncryptionInfoStruct
+        self.load_dylib_commands = None # type: List[DylibCommandStruct]
 
         # cache to save work on calls to get_bytes()
         with open(self.filename, 'rb') as f:
@@ -153,9 +154,9 @@ class MachoBinary(object):
         """
         self.header = MachoHeaderStruct(self, 0)
 
-        if self.header.cputype == MachArch.MH_CPU_TYPE_ARM:
+        if self.header.cputype == MachArch.MH_CPU_TYPE_ARM: # type: ignore
             self.cpu_type = CPU_TYPE.ARMV7
-        elif self.header.cputype == MachArch.MH_CPU_TYPE_ARM64:
+        elif self.header.cputype == MachArch.MH_CPU_TYPE_ARM64: # type: ignore
             self.cpu_type = CPU_TYPE.ARM64
         else:
             self.cpu_type = CPU_TYPE.UNKNOWN
@@ -165,8 +166,8 @@ class MachoBinary(object):
         # load commands begin directly after Mach O header, so the offset is the size of the header
         load_commands_off = self.header.sizeof
 
-        self._load_commands_end_addr = load_commands_off + self.header.sizeofcmds
-        self._parse_segment_commands(load_commands_off, self.header.ncmds)
+        self._load_commands_end_addr = load_commands_off + self.header.sizeofcmds   # type: ignore
+        self._parse_segment_commands(load_commands_off, self.header.ncmds)  # type: ignore
 
     def _parse_header_flags(self):
         # type: () -> None
@@ -182,7 +183,7 @@ class MachoBinary(object):
                 self.header_flags.append(mask)
 
     def _parse_segment_commands(self, offset, segment_count):
-        # type: (int) -> None
+        # type: (int, int) -> None
         """Parse Mach-O segment commands beginning at a given slice offset
 
         Args:
@@ -401,7 +402,7 @@ class MachoBinary(object):
         return self.get_bytes(binary_address, size)
 
     def get_full_string_from_start_address(self, start_address, virtual=True):
-        # type: (int) -> Optional[Text]
+        # type: (int, bool) -> Optional[Text]
         """Return a string containing the bytes from start_address up to the next NULL character
         This method will return None if the specified address does not point to a UTF-8 encoded string
         """
@@ -436,6 +437,7 @@ class MachoBinary(object):
                     # if decoding the string failed, we may have been passed an address which does not actually
                     # point to a string
                     return None
+        return None
 
     def read_string_at_address(self, address):
         # type: (int) -> Optional[Text]

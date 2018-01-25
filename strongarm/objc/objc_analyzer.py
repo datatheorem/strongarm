@@ -21,7 +21,9 @@ from .objc_query import \
 
 
 class ObjcMethodInfo(object):
+
     def __init__(self, objc_class, objc_sel, imp):
+        # type: (Text, Text, int) -> None
         self.objc_class = objc_class
         self.objc_sel = objc_sel
         self.imp_addr = imp
@@ -34,7 +36,9 @@ class RegisterContentsType(Enum):
 
 
 class RegisterContents(object):
+
     def __init__(self, value_type, value):
+        # type: (RegisterContentsType, int) -> None
         self.type = value_type
         self.value = value
 
@@ -62,7 +66,7 @@ class ObjcFunctionAnalyzer(object):
         self.instructions = instructions
         self.method_info = method_info
 
-        self._call_targets = None
+        self._call_targets = None   # type: List[ObjcBranchInstruction]
 
     def get_instruction_at_index(self, index):
         # type: (int) -> Optional[ObjcInstruction]
@@ -269,7 +273,7 @@ class ObjcFunctionAnalyzer(object):
             functions_to_search.append(function_analyzer)
             reachable_functions += function_analyzer.function_call_targets
 
-        search_results = []
+        search_results = [] # type: List[CodeSearchResult]
         for func in functions_to_search:
             subsearch = func.search_code(code_search)
             search_results += subsearch
@@ -342,6 +346,7 @@ class ObjcFunctionAnalyzer(object):
         return None
 
     def is_local_branch(self, branch_instruction):
+        # type: (ObjcBranchInstruction) -> bool
         # if there's no destination address, the destination is outside the binary, and it couldn't possible be local
         if not branch_instruction.destination_address:
             return False
@@ -634,7 +639,9 @@ class ObjcFunctionAnalyzer(object):
 
 
 class ObjcBlockAnalyzer(ObjcFunctionAnalyzer):
+
     def __init__(self, binary, instructions, initial_block_reg):
+        # type: (MachoBinary, List[CsInsn], Text) -> None
         ObjcFunctionAnalyzer.__init__(self, binary, instructions)
 
         self.initial_block_reg = initial_block_reg
@@ -642,7 +649,7 @@ class ObjcBlockAnalyzer(ObjcFunctionAnalyzer):
         self.invoke_instruction, self.invocation_instruction_index = self.find_block_invoke()
 
     def find_block_invoke(self):
-        # type: () -> (ObjcBranchInstruction, int)
+        # type: () -> Tuple[ObjcInstruction, int]
         """Find instruction where the targeted Block->invoke is loaded into
 
         Returns:

@@ -4,8 +4,14 @@ from __future__ import unicode_literals
 from __future__ import print_function
 
 from capstone import CsInsn
+from typing import TYPE_CHECKING
+from typing import Union, Text
 
 import strongarm.macho.macho_analyzer
+
+if TYPE_CHECKING:
+    from strongarm.objc import objc_analyzer
+    from strongarm.macho.objc_runtime_data_parser import ObjcSelref
 
 
 class ObjcInstruction(object):
@@ -14,12 +20,12 @@ class ObjcInstruction(object):
         self.raw_instr = instruction
         self.address = self.raw_instr.address
 
-        self.is_msgSend_call = None
+        self.is_msgSend_call = None # type: bool
         self.symbol = None
 
     @classmethod
     def parse_instruction(cls, function_analyzer, instruction):
-        # type: (strongarm.objc.objc_analyzer.ObjcFunctionAnalyzer, CsInsn) -> ObjcInstruction
+        # type: (objc_analyzer.ObjcFunctionAnalyzer, CsInsn) -> ObjcInstruction
         """Read an instruction and encapsulate it in the appropriate ObjcInstruction subclass
         """
         if ObjcBranchInstruction.is_branch_instruction(instruction):
@@ -34,11 +40,13 @@ class ObjcBranchInstruction(ObjcInstruction):
 
         self.destination_address = destination_address
 
-        self.symbol = None
-        self.selref = None
+        self.symbol = None  # type: Text
+        self.selref = None  # type: ObjcSelref
 
-        self.is_external_c_call = None
-        self.is_external_objc_call = None
+        self.is_external_c_call = None  # type: bool
+        self.is_external_objc_call = None   # type: bool
+
+        self.is_local_branch = None # type: bool
 
     @classmethod
     def parse_instruction(cls, function_analyzer, instruction):
@@ -46,6 +54,7 @@ class ObjcBranchInstruction(ObjcInstruction):
         """Read a branch instruction and encapsulate it in the appropriate ObjcBranchInstruction subclass
         """
         # use appropriate subclass
+        instr = None    # type: Union[ObjcUnconditionalBranchInstruction, ObjcConditionalBranchInstruction]
         if instruction.mnemonic in ObjcUnconditionalBranchInstruction.UNCONDITIONAL_BRANCH_MNEMONICS:
             instr = ObjcUnconditionalBranchInstruction(function_analyzer, instruction)
         elif instruction.mnemonic in ObjcConditionalBranchInstruction.CONDITIONAL_BRANCH_MNEMONICS:
@@ -91,7 +100,7 @@ class ObjcUnconditionalBranchInstruction(ObjcBranchInstruction):
         macho_analyzer = strongarm.macho.macho_analyzer.MachoAnalyzer.get_analyzer(function_analyzer.binary)
         external_c_sym_map = macho_analyzer.external_branch_destinations_to_symbol_names
         if self.destination_address in external_c_sym_map:
-            self.symbol = external_c_sym_map[self.destination_address]
+            self.symbol = external_c_sym_map[self.destination_address]  # type: ignore
             if self.symbol == '_objc_msgSend':
                 self.is_msgSend_call = True
                 self._patch_msgSend_destination(function_analyzer)

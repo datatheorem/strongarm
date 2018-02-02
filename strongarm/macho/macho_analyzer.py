@@ -186,9 +186,18 @@ class MachoAnalyzer(object):
         stubs = self.imp_stubs
         la_sym_ptr_name_map = self._la_symbol_ptr_to_symbol_name_map
 
+        unnamed_stub_count = 0
         for stub in stubs:
-            symbol_name = la_sym_ptr_name_map[stub.destination]
-            symbol_name_map[stub.address] = symbol_name
+            if stub.destination in la_sym_ptr_name_map:
+                symbol_name = la_sym_ptr_name_map[stub.destination]
+                symbol_name_map[stub.address] = symbol_name
+            else:
+                # add in stub which is not backed by a named symbol
+                # a stub contained in the __stubs section that was not backed by a named symbol was first
+                # encountered in com.intuit.mobilebanking01132.app/PlugIns/CMA Balance Widget.appex/CMA Balance Widget
+                name = 'unnamed_stub_{}'.format(unnamed_stub_count)
+                unnamed_stub_count += 1
+                symbol_name_map[stub.destination] = name
 
         self._external_branch_destinations_to_symbol_names = symbol_name_map
         return symbol_name_map

@@ -398,9 +398,9 @@ class ObjcFunctionAnalyzer(object):
 
     def get_register_contents_at_instruction(self, register, instruction):
         # type: (Text, ObjcInstruction) -> RegisterContents
-        """Analyze instructions backwards from start_index to find data in reg
+        """Analyze instructions backwards from `instruction` to find the data in `register`
         This function will read all instructions until it gathers all data and assignments necessary to determine
-        value of desired_reg.
+        value of the desired register.
 
         For example, if we have a function like the following:
         15  | adrp x8, #0x1011bc000

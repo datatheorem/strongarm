@@ -143,7 +143,7 @@ class ObjcRuntimeDataParser(object):
         DebugUtil.log(self, 'Step 2: Parsing classes...')
         self.classes = self._parse_static_objc_runtime_info()
 
-        DebugUtil.log(self, 'Resolving symbol name to source dylib map...')
+        DebugUtil.log(self, 'Step 3: Resolving symbol name to source dylib map...')
         self._sym_to_dylib_path = self._parse_linked_dylib_symbols()
 
     def _parse_linked_dylib_symbols(self):
@@ -189,9 +189,11 @@ class ObjcRuntimeDataParser(object):
         if selref_count < 1000:
             return
         # found through observation
-        seconds_per_selref_estimate = 0.0025
+        seconds_per_selref_estimate = 0.0015
         seconds_estimate = selref_count * seconds_per_selref_estimate
         minutes_estimate = seconds_estimate / 60.0
+        if minutes_estimate < 0.5:
+            return
         logging.warning('strongarm: Large ObjC info section! Estimate: {} minutes'.format(minutes_estimate))
 
     def _parse_selrefs(self):
@@ -267,7 +269,6 @@ class ObjcRuntimeDataParser(object):
         data_parser = ObjcDataEntryParser(self.binary, self._selrefs, objc_data_raw)
 
         name = self.binary.get_full_string_from_start_address(objc_data_raw.name)
-        DebugUtil.log(self, 'Parsing selectors for class {}...'.format(name))
         selectors = data_parser.get_selectors()
         return ObjcClass(name, selectors)
 

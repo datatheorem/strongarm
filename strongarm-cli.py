@@ -99,3 +99,11 @@ for cmd in load_commands:
     print('\t{} v.{}'.format(dylib_load_string, hex(dylib_version)))
 
 print('\nSegments:')
+segment_names = [segment for segment in binary.segment_commands.keys()]
+print('\t{}'.format(', '.join(segment_names)))
+
+print('\nSections:')
+print('\tContains encrypted section? {}'.format(binary.is_encrypted()))
+section_names = [section for section in binary.sections.keys()]
+print('\t{}'.format(', '.join(section_names)))
+

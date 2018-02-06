@@ -515,6 +515,11 @@ class ObjcFunctionAnalyzer(object):
                     # value of dst will just be whatever src contains
                     dst_value = determined_values[src_reg_name]
                     determined_values[dst_reg_name] = dst_value
+                # is the source the zero register?
+                elif src_reg_name == 'zr':
+                    # value of dst will be 0
+                    dst_value = 0
+                    determined_values[dst_reg_name] = 0
                 else:
                     # we'll need to resolve src before we can know dst,
                     # add dst -> src to links list

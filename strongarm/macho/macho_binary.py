@@ -445,6 +445,9 @@ class MachoBinary(object):
         This method will automatically parse a CFString and return the string literal if address points to one
         """
         section_name = self.section_name_for_address(address)
+        # no section found?
+        if not section_name:
+            return None
         # special case if this is a __cfstring entry
         if section_name == '__cfstring':
             # read bytes into CFString struct

@@ -84,6 +84,7 @@ print('Reading {} slice'.format(binary.cpu_type.name))
 endianness = 'Big' if binary.is_swap else 'Little'
 endianness = '{} endian'.format(endianness)
 print(endianness)
+print('Virtual base: {}'.format(hex(binary.get_virtual_base())))
 
 print('\nLoad commands:')
 load_commands = binary.load_dylib_commands
@@ -118,8 +119,14 @@ for ent in strings:
 
 print('\nSymbols:')
 print('\tImported symbols:')
+stub_map = analyzer.external_symbol_names_to_branch_destinations
 for imported_sym in analyzer.imported_symbols:
     print('\t\t{}'.format(imported_sym))
+    # attempt to find the call stub for this symbol
+    if imported_sym in stub_map:
+        print('\t\t\tCallable dyld stub @ {}'.format(hex(stub_map[imported_sym])))
+
 print('\tExported symbols:')
 for exported_sym in analyzer.exported_symbols:
     print('\t\t{}'.format(exported_sym))
+

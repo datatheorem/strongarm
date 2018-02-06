@@ -267,7 +267,7 @@ class ObjcRuntimeDataParser(object):
         data_parser = ObjcDataEntryParser(self.binary, self._selrefs, objc_data_raw)
 
         name = self.binary.get_full_string_from_start_address(objc_data_raw.name)
-        DebugUtil.log(self, 'Parsing selectors for class class {}...'.format(name))
+        DebugUtil.log(self, 'Parsing selectors for class {}...'.format(name))
         selectors = data_parser.get_selectors()
         return ObjcClass(name, selectors)
 

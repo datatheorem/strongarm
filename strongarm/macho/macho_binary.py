@@ -226,7 +226,10 @@ class MachoBinary(object):
         # type: (int) -> Optional[Text]
         """Given an address in the virtual address space, return the name of the section which contains it.
         """
-        return self.section_for_address(virt_addr).name.decode('UTF8')
+        section = self.section_for_address(virt_addr)
+        if not section:
+            return None
+        return section.name.decode('UTF8')
 
     def section_for_address(self, virt_addr):
         # type: (int) -> Optional[MachoSection]

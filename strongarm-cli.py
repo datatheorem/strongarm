@@ -5,9 +5,10 @@ from __future__ import print_function
 
 import sys
 import argparse
+from ctypes import sizeof
 
 from strongarm.macho import MachoParser, MachoBinary, MachoAnalyzer
-from strongarm.macho import CPU_TYPE
+from strongarm.macho import CPU_TYPE, DylibCommand
 from strongarm.debug_util import DebugUtil
 from strongarm.objc import CodeSearch, CodeSearchTermCallDestination, RegisterContentsType, ObjcFunctionAnalyzer
 
@@ -76,4 +77,25 @@ for macho_slice in parser.slices:
     print('\t{} Mach-O slice @ {}'.format(macho_slice.cpu_type.name, hex(macho_slice._offset_within_fat)))
 
 binary = pick_macho_slice(parser)
+analyzer = MachoAnalyzer.get_analyzer(binary)
+
 print('Reading {} slice'.format(binary.cpu_type.name))
+
+endianness = 'Big' if binary.is_swap else 'Little'
+endianness = '{} endian'.format(endianness)
+print(endianness)
+
+print('\nLoad commands:')
+load_commands = binary.load_dylib_commands
+for cmd in load_commands:
+    dylib_load_string_fileoff = cmd.fileoff + cmd.dylib.name.offset
+    dylib_load_string_len = cmd.cmdsize - cmd.dylib.name.offset
+    dylib_load_string_bytes = binary.get_bytes(dylib_load_string_fileoff, dylib_load_string_len)
+    # trim anything after NUL character
+    dylib_load_string_bytes = dylib_load_string_bytes.split(b'\0')[0]
+    dylib_load_string = dylib_load_string_bytes.decode('utf-8')
+
+    dylib_version = cmd.dylib.current_version
+    print('\t{} v.{}'.format(dylib_load_string, hex(dylib_version)))
+
+print('\nSegments:')

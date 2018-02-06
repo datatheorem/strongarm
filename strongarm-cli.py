@@ -116,3 +116,10 @@ for ent in strings:
         ent = '<whitespace>'
     print('\t\t{}'.format(ent))
 
+print('\nSymbols:')
+print('\tImported symbols:')
+for imported_sym in analyzer.imported_symbols:
+    print('\t\t{}'.format(imported_sym))
+print('\tExported symbols:')
+for exported_sym in analyzer.exported_symbols:
+    print('\t\t{}'.format(exported_sym))

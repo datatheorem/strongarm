@@ -100,13 +100,13 @@ for cmd in load_commands:
     print('\t{} v.{}'.format(dylib_load_string, hex(dylib_version)))
 
 print('\nSegments:')
-segment_names = [segment for segment in binary.segment_commands.keys()]
-print('\t{}'.format(', '.join(segment_names)))
+for segment, cmd in binary.segment_commands.items():
+    print('\t{} @ [{} - {}]'.format(segment, hex(cmd.vmaddr), hex(cmd.vmaddr + cmd.vmsize)))
 
 print('\nSections:')
 print('\tContains encrypted section? {}'.format(binary.is_encrypted()))
-section_names = [section for section in binary.sections.keys()]
-print('\t{}'.format(', '.join(section_names)))
+for section, cmd in binary.sections.items():
+    print('\t{} @ [{} - {}]'.format(section, hex(cmd.address), hex(cmd.end_address)))
 
 print('\nString table:')
 strings = [ent.full_string for ent in analyzer.crossref_helper.string_table_entries.values()]

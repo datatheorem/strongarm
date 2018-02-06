@@ -107,3 +107,12 @@ print('\tContains encrypted section? {}'.format(binary.is_encrypted()))
 section_names = [section for section in binary.sections.keys()]
 print('\t{}'.format(', '.join(section_names)))
 
+print('\nString table:')
+strings = [ent.full_string for ent in analyzer.crossref_helper.string_table_entries.values()]
+print('\tEntry count: {}'.format(len(strings)))
+print('\tEntries:')
+for ent in strings:
+    if not len(ent.strip()):
+        ent = '<whitespace>'
+    print('\t\t{}'.format(ent))
+

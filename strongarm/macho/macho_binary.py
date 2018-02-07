@@ -22,7 +22,6 @@ from strongarm.macho.arch_independent_structs import \
     MachoDysymtabCommandStruct
 
 from ctypes import c_uint64, c_uint32, sizeof
-import io
 
 
 class BinaryEncryptedError(Exception):

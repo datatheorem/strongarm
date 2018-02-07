@@ -163,8 +163,17 @@ class ObjcRuntimeDataParser(object):
 
             library_ordinal = self._library_ordinal_from_n_desc(sym.n_desc)
             source_dylib = self._dylib_from_library_ordinal(library_ordinal)
-            source_name_addr = source_dylib.fileoff + source_dylib.dylib.name.offset + self.binary.get_virtual_base()
-            source_name = self.binary.get_full_string_from_start_address(source_name_addr)
+            if source_dylib:
+                source_name_addr = source_dylib.fileoff + \
+                                   source_dylib.dylib.name.offset + \
+                                   self.binary.get_virtual_base()
+                source_name = self.binary.get_full_string_from_start_address(source_name_addr)
+            else:
+                # we have encountered binaries where the n_desc indicates a nonexistent library ordinal
+                # Netflix.app/frameworks/widevine_cdm_sdk_oemcrypto_release.framework/widevine_cdm_sdk_oemcrypto_release
+                # indicates an ordinal 254, when the binary only actually has 8 LC_LOAD_DYLIB commands.
+                # if we encounter a buggy binary like this, just use a placeholder name
+                source_name = '<unknown dylib>'
 
             syms_to_dylib_path[symbol_name] = source_name
         return syms_to_dylib_path
@@ -181,8 +190,12 @@ class ObjcRuntimeDataParser(object):
         return (n_desc >> 8) & 0xff
 
     def _dylib_from_library_ordinal(self, ordinal):
-        # type: (int) -> DylibCommandStruct
-        return self.binary.load_dylib_commands[ordinal - 1]
+        # type: (int) -> Optional[DylibCommandStruct]
+        # ordinals start from 1, so translate to an array index
+        ordinal_idx = ordinal - 1
+        if ordinal_idx >= len(self.binary.load_dylib_commands):
+            return None
+        return self.binary.load_dylib_commands[ordinal_idx]
 
     def log_long_parse(self, selref_count):
         # type: (int) -> None

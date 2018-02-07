@@ -121,3 +121,8 @@ print('\tExported symbols:')
 for exported_sym in analyzer.exported_symbols:
     print('\t\t{}'.format(exported_sym))
 
+print('\nObjective-C Methods:')
+methods = analyzer.get_objc_methods()
+for method_info in methods:
+    print('\t-[{} {}]'.format(method_info.objc_class.name, method_info.objc_sel.name))
+    print('\t\tDefined at {}'.format(hex(method_info.objc_sel.implementation)))

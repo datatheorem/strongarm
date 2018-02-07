@@ -108,15 +108,6 @@ print('\tContains encrypted section? {}'.format(binary.is_encrypted()))
 for section, cmd in binary.sections.items():
     print('\t{} @ [{} - {}]'.format(section, hex(cmd.address), hex(cmd.end_address)))
 
-print('\nString table:')
-strings = [ent.full_string for ent in analyzer.crossref_helper.string_table_entries.values()]
-print('\tEntry count: {}'.format(len(strings)))
-print('\tEntries:')
-for ent in strings:
-    if not len(ent.strip()):
-        ent = '<whitespace>'
-    print('\t\t{}'.format(ent))
-
 print('\nSymbols:')
 print('\tImported symbols:')
 stub_map = analyzer.external_symbol_names_to_branch_destinations

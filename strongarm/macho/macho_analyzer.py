@@ -380,7 +380,6 @@ class MachoAnalyzer(object):
         """
         return self.objc_helper.get_method_imp_addresses(selector)
 
-
     if TYPE_CHECKING:   # noqa
         from strongarm.objc import ObjcFunctionAnalyzer # type: ignore
         from strongarm.objc import CodeSearch, CodeSearchResult # type: ignore
@@ -405,8 +404,8 @@ class MachoAnalyzer(object):
         return implementation_analyzers
 
     def get_objc_methods(self):
-        # type: () -> List[ObjcFunctionAnalyzer]
-        """Get a List of ObjcFunctionAnalyzers representing all ObjC methods implemented in the Mach-O.
+        # type: () -> List[ObjcMethodInfo]
+        """Get a List of ObjcMethodInfo's representing all ObjC methods implemented in the Mach-O.
         """
         from strongarm.objc import ObjcFunctionAnalyzer, ObjcMethodInfo # type: ignore
         if self._objc_method_list:

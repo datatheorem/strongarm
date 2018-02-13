@@ -289,6 +289,8 @@ class MachoAnalyzer(object):
             # or else the program would jump to an unreasonable place after the branch.
             # The sole exception to this rule is if a function never modifies the link
             # register in the first place, which is tracked by has_modified_lr.
+            # (branching to another function would entail modifying the link register, so this is another way of
+            # saying the function is entirely local)
             # we could possibly strengthen the has_modified_lr check by also checking for this pattern:
             # in the prologue, stp ..., x30, [sp, #0x...]
             # then a corresponding ldp ..., x30, [sp, #0x...]
@@ -306,6 +308,9 @@ class MachoAnalyzer(object):
             # which means we can later use an ldp ..., x30 as a heuristic for function epilogue
             elif mnemonic in ['bl', 'blx']:
                 has_modified_lr = True
+            # unconditional branch instruction
+            # this could be a local branch, or it could be the last statement in the function
+            # we detect which based on the flags set previously while iterating the code
             elif mnemonic == 'b':
                 if next_branch_is_return or not has_modified_lr:
                     end_address = instr.address

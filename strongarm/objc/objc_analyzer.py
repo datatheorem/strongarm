@@ -22,6 +22,7 @@ from .objc_query import \
 
 class ObjcMethodInfo(object):
     from strongarm.macho import ObjcClass, ObjcSelector
+    __slots__ = ['objc_class', 'objc_sel', 'imp_addr']
 
     def __init__(self, objc_class, objc_sel, imp):
         # type: (ObjcClass, ObjcSelector, int) -> None

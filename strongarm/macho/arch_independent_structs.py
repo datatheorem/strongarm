@@ -57,18 +57,20 @@ class ArchIndependentStructure(object):
             binary_offset: The file offset or virtual address of the struct to read
             virtual: False if the offset is a file offset, True if it is a virtual address
         """
-        struct_type = self._64_BIT_STRUCT \
-            if binary.is_64bit \
-            else self._32_BIT_STRUCT
+        if binary.is_64bit:
+            struct_type = self._64_BIT_STRUCT
+        else:
+            struct_type = self._32_BIT_STRUCT
         if virtual:
             struct_bytes = binary.get_content_from_virtual_address(binary_offset, sizeof(struct_type))
         else:
             struct_bytes = binary.get_bytes(binary_offset, sizeof(struct_type))
-        struct = struct_type.from_buffer(bytearray(struct_bytes))
 
+        struct = struct_type.from_buffer(bytearray(struct_bytes))
         for field_name, _ in struct._fields_:
             # clone fields from struct to this class
             setattr(self, field_name, getattr(struct, field_name))
+
         # record size of underlying struct, for when traversing file by structs
         self.sizeof = sizeof(struct_type)
 

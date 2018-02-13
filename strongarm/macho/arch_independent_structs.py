@@ -103,6 +103,7 @@ class MachoEncryptionInfoStruct(ArchIndependentStructure):
 
 
 class MachoNlistStruct(ArchIndependentStructure):
+    __slots__ = ['n_un', 'n_type', 'n_sect', 'n_desc', 'n_value']
     _32_BIT_STRUCT = MachoNlist32
     _64_BIT_STRUCT = MachoNlist64
 

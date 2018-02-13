@@ -18,6 +18,8 @@ from strongarm.macho.macho_binary import MachoBinary
 
 
 class ObjcClass(object):
+    __slots__ = ['name', 'selectors']
+
     def __init__(self, name, selectors):
         # type: (Text, List[ObjcSelector]) -> None
         self.name = name
@@ -25,6 +27,8 @@ class ObjcClass(object):
 
 
 class ObjcSelector(object):
+    __slots__ = ['name', 'selref', 'implementation', 'is_external_definition']
+
     def __init__(self, name, selref, implementation):
         # type: (Text, ObjcSelref, Optional[int]) -> None
         self.name = name
@@ -42,6 +46,8 @@ class ObjcSelector(object):
 
 
 class ObjcSelref(object):
+    __slots__ = ['source_address', 'destination_address', 'selector_literal']
+
     def __init__(self, source_address, destination_address, selector_literal):
         # type: (int, int, Text) -> None
         self.source_address = source_address

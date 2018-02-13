@@ -12,6 +12,7 @@ from strongarm.macho.macho_definitions import NLIST_NTYPE, NTYPE_VALUES
 class MachoStringTableEntry(object):
     """Class encapsulating an entry into the Mach-O string table
     """
+    __slots__ = ['start_idx', 'length', 'full_string']
 
     def __init__(self, start_idx, length, content):
         # type: (int, int, Text) -> None

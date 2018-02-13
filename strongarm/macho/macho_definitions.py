@@ -180,6 +180,7 @@ class MachoNlistUn(Union):
 
     Definition found in <mach-o/nlist.h>
     """
+    __slots__ = ['n_strx']
     _fields_ = [
         ('n_strx', c_uint32),
     ]
@@ -190,6 +191,7 @@ class MachoNlist32(Structure):
 
     Definition found in <mach-o/nlist.h>
     """
+    __slots__ = ['n_un', 'n_type', 'n_sect', 'n_desc', 'n_value']
     _fields_ = [
         ('n_un', MachoNlistUn),
         ('n_type', c_uint8),
@@ -204,6 +206,7 @@ class MachoNlist64(Structure):
 
     Definition found in <mach-o/nlist.h>
     """
+    __slots__ = ['n_un', 'n_type', 'n_sect', 'n_desc', 'n_value']
     _fields_ = [
         ('n_un', MachoNlistUn),
         ('n_type', c_uint8),

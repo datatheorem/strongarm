@@ -47,8 +47,6 @@ class MachoAnalyzer(object):
         self._objc_helper = None    # type: ObjcRuntimeDataParser
         self._objc_method_list = None   # type: List[ObjcMethodInfo]
 
-        self._cached_function_instructions = {} # type: Dict[int, List[CsInsn]]
-
         # done setting up, store this analyzer in class cache
         MachoAnalyzer.active_analyzer_map[bin] = self
 
@@ -359,13 +357,9 @@ class MachoAnalyzer(object):
         # type: (int) -> List[CsInsn]
         """Get a list of disassembled instructions for the function beginning at start_address
         """
-        if start_address in self._cached_function_instructions:
-            return self._cached_function_instructions[start_address]
-
         instructions, _, end_address = self._find_function_code(start_address)
         if not end_address:
             raise RuntimeError('Couldn\'t parse function @ {}'.format(start_address))
-        self._cached_function_instructions[start_address] = instructions
         return instructions
 
     def imp_for_selref(self, selref_ptr):

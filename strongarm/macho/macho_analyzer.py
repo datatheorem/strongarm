@@ -21,6 +21,8 @@ if TYPE_CHECKING:
 
 
 class MachoAnalyzer(object):
+    _BYTES_IN_INSTRUCTION = 4
+
     # keep map of active MachoAnalyzer instances
     # each MachoAnalyzer operates on a single MachoBinary which will never change in the lifecycle of the analyzer
     # also, some MachoAnalyzer operations are expensive, but they only have to be done once per instance
@@ -46,6 +48,8 @@ class MachoAnalyzer(object):
         self.imp_stubs = MachoImpStubsParser(bin, self.cs).imp_stubs
         self._objc_helper = None    # type: ObjcRuntimeDataParser
         self._objc_method_list = None   # type: List[ObjcMethodInfo]
+
+        self._cached_function_boundaries = {}   # type: Dict[int, int]
 
         # done setting up, store this analyzer in class cache
         MachoAnalyzer.active_analyzer_map[bin] = self
@@ -117,7 +121,7 @@ class MachoAnalyzer(object):
     def _la_symbol_ptr_to_symbol_name_map(self):
         # type: () -> Dict[int, Text]
         """Cross-reference Mach-O sections to produce __la_symbol_ptr pointers -> external symbol name map.
-        
+
         This map will only contain entries for symbols that are defined outside the main binary.
         This method cross references data in __la_symbol_ptr, the indirect symbol table
 
@@ -226,6 +230,14 @@ class MachoAnalyzer(object):
             hex(branch_address)
         ))
 
+    def _disassemble_region(self, start_address, size):
+        # type: (int, int) -> List[CsInsn]
+        """Disassemble the executable code in a given region into a list of CsInsn objects
+        """
+        func_str = bytes(self.binary.get_content_from_virtual_address(virtual_address=start_address, size=size))
+        instructions = [instr for instr in self.cs.disasm(func_str, start_address)]
+        return instructions
+
     def _find_function_boundary(self, start_address, size, instructions):
         # type: (int, int, List[CsInsn]) -> Tuple[List[CsInsn], int]
         """Helper function to search for a function boundary within a given block of executable code
@@ -233,27 +245,41 @@ class MachoAnalyzer(object):
         This function searches from start_address up to start_address + size looking for a set of
         instructions resembling a function boundary. If a function boundary is identified its address will be returned,
         or else 0 will be returned if no boundary was found.
+
+        Args:
+            start_address: The entry point of the function to be analyzed
+            size: The maximum size (in bytes) that this function will search for a function exit
+            instructions: An empty list, or a list of instructions within the analyzed function that have already
+                been disassembled, and will not be disassembled again. Also, this function will only start searching
+                from after the last instruction in this list.
+
+        Returns:
+            A tuple of a list of disassembled instructions, and an int. If the end-of-function was not found
+            within the specified search space, the list will contain all the diassembled instructions from
+            [start_address to start_address + size], and the int will be 0 to indicate failure. Otherwise,
+            the end-of-function was successfully found, and the list will contain all the instructions within the
+            function, and the int will be the end address of the function.
         """
 
-        # transform func_str into list of CsInstr
+        # we need to keep track of the first instruction we should analyze, so this function doesn't have to keep
+        # analyzing the same instructions over and over when the search space increases.
+        # if the passed instructions are the empty list (meaning this is the first attempt at finding this function
+        # boundary), then we start searching at the first instruction
         if not len(instructions):
             # get executable code in requested region
-            func_str = bytes(self.binary.get_content_from_virtual_address(virtual_address=start_address, size=size))
-            instructions = [instr for instr in self.cs.disasm(func_str, start_address)]
+            next_instr_addr = start_address
+            instructions = self._disassemble_region(start_address, size)
         else:
             # append to instructions
             # figure out the last disasm'd instruction
             last_disassembled_instruction_addr = instructions[-1].address
             disassembled_range = last_disassembled_instruction_addr - instructions[0].address
 
+            # we should start searching at the instruction after the last one we previously looked at
+            next_instr_addr = last_disassembled_instruction_addr + self._BYTES_IN_INSTRUCTION
             # get executable code of remainder
-            next_instr_addr = last_disassembled_instruction_addr + 4
             remainder_bytes = size - disassembled_range
-            func_str = bytes(self.binary.get_content_from_virtual_address(
-                virtual_address=next_instr_addr,
-                size=remainder_bytes
-            ))
-            instructions += [instr for instr in self.cs.disasm(func_str, next_instr_addr)]
+            instructions += self._disassemble_region(next_instr_addr, remainder_bytes)
 
         # this will be set to an address if we find one,
         # or will stay 0. If it remains 0 we know we didn't find the end of the function
@@ -273,8 +299,13 @@ class MachoAnalyzer(object):
         # ldp ..., x30, ...
         has_modified_lr = False
 
+        # convert next_instr_addr to an index within instructions array
+        # this is the difference between next_instr_addr and the address of the entry point, divided by the
+        # byte count in an instruction
+        first_instr_to_analyze_idx = (next_instr_addr - start_address) / self._BYTES_IN_INSTRUCTION
+        first_instr_to_analyze_idx = int(first_instr_to_analyze_idx)
         # traverse instructions, looking for signs of end-of-function
-        for instr in instructions:
+        for instr in instructions[first_instr_to_analyze_idx:]:
             mnemonic = instr.mnemonic
             # ret mnemonic is sure sign we've found end of the function!
             if mnemonic == 'ret':
@@ -316,9 +347,15 @@ class MachoAnalyzer(object):
 
         # long to int
         end_address = int(end_address)
-        # trim instructions up to the instruction at end_address
-        last_instruction_idx = int((end_address - start_address) / 4)
-        instructions = instructions[:last_instruction_idx+1:]
+
+        # if we found the end address of the function, trim the instructions list up to the last instruction in the
+        # function
+        # otherwise, the instructions list will remain the full list of instructions from the start of the function
+        # up to the requested search size
+        if end_address:
+            # trim instructions up to the instruction at end_address
+            last_instruction_idx = int((end_address - start_address) / 4)
+            instructions = instructions[:last_instruction_idx+1:]
         return instructions, end_address
 
     def _find_function_code(self, function_address):
@@ -357,7 +394,13 @@ class MachoAnalyzer(object):
         # type: (int) -> List[CsInsn]
         """Get a list of disassembled instructions for the function beginning at start_address
         """
-        instructions, _, end_address = self._find_function_code(start_address)
+        if start_address in self._cached_function_boundaries:
+            end_address = self._cached_function_boundaries[start_address]
+            instructions = self._disassemble_region(start_address, end_address - start_address)
+        else:
+            # not in cache. calculate function boundary, then cache it
+            instructions, _, end_address = self._find_function_code(start_address)
+            self._cached_function_boundaries[start_address] = end_address
         if not end_address:
             raise RuntimeError('Couldn\'t parse function @ {}'.format(start_address))
         return instructions

@@ -49,7 +49,7 @@ class MachoAnalyzer(object):
         self._objc_helper = None    # type: ObjcRuntimeDataParser
         self._objc_method_list = None   # type: List[ObjcMethodInfo]
 
-        self._cached_function_boundaries = []
+        self._cached_function_boundaries = {}   # type: Dict[int, int]
 
         # done setting up, store this analyzer in class cache
         MachoAnalyzer.active_analyzer_map[bin] = self
@@ -303,6 +303,7 @@ class MachoAnalyzer(object):
         # this is the difference between next_instr_addr and the address of the entry point, divided by the
         # byte count in an instruction
         first_instr_to_analyze_idx = (next_instr_addr - start_address) / self._BYTES_IN_INSTRUCTION
+        first_instr_to_analyze_idx = int(first_instr_to_analyze_idx)
         # traverse instructions, looking for signs of end-of-function
         for instr in instructions[first_instr_to_analyze_idx:]:
             mnemonic = instr.mnemonic

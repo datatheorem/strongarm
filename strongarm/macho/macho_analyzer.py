@@ -226,6 +226,14 @@ class MachoAnalyzer(object):
             hex(branch_address)
         ))
 
+    def _disassemble_region(self, start_address, size):
+        # type: (int, int) -> List[CsInsn]
+        """Disassemble the executable code in a given region into a list of CsInsn objects
+        """
+        func_str = bytes(self.binary.get_content_from_virtual_address(virtual_address=start_address, size=size))
+        instructions = [instr for instr in self.cs.disasm(func_str, start_address)]
+        return instructions
+
     def _find_function_boundary(self, start_address, size, instructions):
         # type: (int, int, List[CsInsn]) -> Tuple[List[CsInsn], int]
         """Helper function to search for a function boundary within a given block of executable code
@@ -238,8 +246,7 @@ class MachoAnalyzer(object):
         # transform func_str into list of CsInstr
         if not len(instructions):
             # get executable code in requested region
-            func_str = bytes(self.binary.get_content_from_virtual_address(virtual_address=start_address, size=size))
-            instructions = [instr for instr in self.cs.disasm(func_str, start_address)]
+            instructions = self._disassemble_region(start_address, size)
         else:
             # append to instructions
             # figure out the last disasm'd instruction
@@ -249,11 +256,7 @@ class MachoAnalyzer(object):
             # get executable code of remainder
             next_instr_addr = last_disassembled_instruction_addr + 4
             remainder_bytes = size - disassembled_range
-            func_str = bytes(self.binary.get_content_from_virtual_address(
-                virtual_address=next_instr_addr,
-                size=remainder_bytes
-            ))
-            instructions += [instr for instr in self.cs.disasm(func_str, next_instr_addr)]
+            instructions += self._disassemble_region(next_instr_addr, remainder_bytes)
 
         # this will be set to an address if we find one,
         # or will stay 0. If it remains 0 we know we didn't find the end of the function

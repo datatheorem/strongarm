@@ -243,9 +243,22 @@ class MachoAnalyzer(object):
         This function searches from start_address up to start_address + size looking for a set of
         instructions resembling a function boundary. If a function boundary is identified its address will be returned,
         or else 0 will be returned if no boundary was found.
+
+        Args:
+            start_address: The entry point of the function to be analyzed
+            size: The maximum size (in bytes) that this function will search for a function exit
+            instructions: An empty list, or a list of instructions within the analyzed function that have already
+                been disassembled, and will not be disassembled again. Also, this function will only start searching
+                from after the last instruction in this list.
+
+        Returns:
+            A tuple of a list of disassembled instructions, and an int. If the end-of-function was not found
+            within the specified search space, the list will contain all the diassembled instructions from
+            [start_address to start_address + size], and the int will be 0 to indicate failure. Otherwise,
+            the end-of-function was successfully found, and the list will contain all the instructions within the
+            function, and the int will be the end address of the function.
         """
 
-        # transform func_str into list of CsInstr
         if not len(instructions):
             # get executable code in requested region
             instructions = self._disassemble_region(start_address, size)

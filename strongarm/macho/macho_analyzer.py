@@ -265,9 +265,9 @@ class MachoAnalyzer(object):
         # analyzing the same instructions over and over when the search space increases.
         # if the passed instructions are the empty list (meaning this is the first attempt at finding this function
         # boundary), then we start searching at the first instruction
-        next_instr_addr = start_address
         if not len(instructions):
             # get executable code in requested region
+            next_instr_addr = start_address
             instructions = self._disassemble_region(start_address, size)
         else:
             # append to instructions
@@ -347,9 +347,15 @@ class MachoAnalyzer(object):
 
         # long to int
         end_address = int(end_address)
-        # trim instructions up to the instruction at end_address
-        last_instruction_idx = int((end_address - start_address) / 4)
-        instructions = instructions[:last_instruction_idx+1:]
+
+        # if we found the end address of the function, trim the instructions list up to the last instruction in the
+        # function
+        # otherwise, the instructions list will remain the full list of instructions from the start of the function
+        # up to the requested search size
+        if end_address:
+            # trim instructions up to the instruction at end_address
+            last_instruction_idx = int((end_address - start_address) / 4)
+            instructions = instructions[:last_instruction_idx+1:]
         return instructions, end_address
 
     def _find_function_code(self, function_address):

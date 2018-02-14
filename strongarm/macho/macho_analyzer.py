@@ -47,6 +47,8 @@ class MachoAnalyzer(object):
         self._objc_helper = None    # type: ObjcRuntimeDataParser
         self._objc_method_list = None   # type: List[ObjcMethodInfo]
 
+        self._cached_function_boundaries = []
+
         # done setting up, store this analyzer in class cache
         MachoAnalyzer.active_analyzer_map[bin] = self
 
@@ -117,7 +119,7 @@ class MachoAnalyzer(object):
     def _la_symbol_ptr_to_symbol_name_map(self):
         # type: () -> Dict[int, Text]
         """Cross-reference Mach-O sections to produce __la_symbol_ptr pointers -> external symbol name map.
-        
+
         This map will only contain entries for symbols that are defined outside the main binary.
         This method cross references data in __la_symbol_ptr, the indirect symbol table
 
@@ -360,7 +362,13 @@ class MachoAnalyzer(object):
         # type: (int) -> List[CsInsn]
         """Get a list of disassembled instructions for the function beginning at start_address
         """
-        instructions, _, end_address = self._find_function_code(start_address)
+        if start_address in self._cached_function_boundaries:
+            end_address = self._cached_function_boundaries[start_address]
+            instructions = self._disassemble_region(start_address, end_address - start_address)
+        else:
+            # not in cache. calculate function boundary, then cache it
+            instructions, _, end_address = self._find_function_code(start_address)
+            self._cached_function_boundaries[start_address] = end_address
         if not end_address:
             raise RuntimeError('Couldn\'t parse function @ {}'.format(start_address))
         return instructions

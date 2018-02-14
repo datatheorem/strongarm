@@ -21,6 +21,8 @@ if TYPE_CHECKING:
 
 
 class MachoAnalyzer(object):
+    _BYTES_IN_INSTRUCTION = 4
+
     # keep map of active MachoAnalyzer instances
     # each MachoAnalyzer operates on a single MachoBinary which will never change in the lifecycle of the analyzer
     # also, some MachoAnalyzer operations are expensive, but they only have to be done once per instance
@@ -259,6 +261,11 @@ class MachoAnalyzer(object):
             function, and the int will be the end address of the function.
         """
 
+        # we need to keep track of the first instruction we should analyze, so this function doesn't have to keep
+        # analyzing the same instructions over and over when the search space increases.
+        # if the passed instructions are the empty list (meaning this is the first attempt at finding this function
+        # boundary), then we start searching at the first instruction
+        next_instr_addr = start_address
         if not len(instructions):
             # get executable code in requested region
             instructions = self._disassemble_region(start_address, size)
@@ -268,8 +275,9 @@ class MachoAnalyzer(object):
             last_disassembled_instruction_addr = instructions[-1].address
             disassembled_range = last_disassembled_instruction_addr - instructions[0].address
 
+            # we should start searching at the instruction after the last one we previously looked at
+            next_instr_addr = last_disassembled_instruction_addr + self._BYTES_IN_INSTRUCTION
             # get executable code of remainder
-            next_instr_addr = last_disassembled_instruction_addr + 4
             remainder_bytes = size - disassembled_range
             instructions += self._disassemble_region(next_instr_addr, remainder_bytes)
 
@@ -291,8 +299,12 @@ class MachoAnalyzer(object):
         # ldp ..., x30, ...
         has_modified_lr = False
 
+        # convert next_instr_addr to an index within instructions array
+        # this is the difference between next_instr_addr and the address of the entry point, divided by the
+        # byte count in an instruction
+        first_instr_to_analyze_idx = (next_instr_addr - start_address) / self._BYTES_IN_INSTRUCTION
         # traverse instructions, looking for signs of end-of-function
-        for instr in instructions:
+        for instr in instructions[first_instr_to_analyze_idx:]:
             mnemonic = instr.mnemonic
             # ret mnemonic is sure sign we've found end of the function!
             if mnemonic == 'ret':

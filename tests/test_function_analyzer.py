@@ -94,6 +94,23 @@ class TestFunctionAnalyzer(unittest.TestCase):
         results = self.function_analyzer.search_call_graph(search)
         self.assertEqual(len(results), 0)
 
+    def test_search_selector(self):
+        from strongarm.objc import CodeSearch, CodeSearchTermCallDestination
+        query = CodeSearch(
+            required_matches=[CodeSearchTermCallDestination(self.binary, invokes_selector='initWithFrame:')],
+            requires_all_terms_matched=True
+        )
+        results = self.analyzer.search_code(query)
+        self.assertEqual(len(results), 1)
+        result = results[0]
+        self.assertEqual(result.found_instruction.address, 0x100006254)
+        self.assertEqual(result.found_instruction.symbol, '_objc_msgSendSuper2')
+        self.assertEqual(result.found_instruction.selector.name, 'initWithFrame:')
+        self.assertEqual(result.found_instruction.selref.selector_literal, 'initWithFrame:')
+        self.assertEqual(result.found_instruction.selref.source_address, 0x100009070)
+
+        self.assertEqual(result.found_function.start_address, 0x100006228)
+
     def test_get_register_contents_at_instruction(self):
         from strongarm.objc import RegisterContentsType
         first_instr = self.function_analyzer.get_instruction_at_index(0)

@@ -42,6 +42,7 @@ class ObjcBranchInstruction(ObjcInstruction):
 
         self.symbol = None  # type: Text
         self.selref = None  # type: ObjcSelref
+        self.selector = None # type: Text
 
         self.is_external_c_call = None  # type: bool
         self.is_external_objc_call = None   # type: bool
@@ -86,6 +87,7 @@ class ObjcUnconditionalBranchInstruction(ObjcBranchInstruction):
                                       'b.lt',
                                       'b.gt'
                                       ]
+    _OBJC_MSGSEND_FUNCTIONS = ['_objc_msgSend', '_objc_msgSendSuper2']
 
     def __init__(self, function_analyzer, instruction):
         # type: (objc_analyzer.ObjcFunctionAnalyzer, CsInsn) -> None
@@ -101,7 +103,7 @@ class ObjcUnconditionalBranchInstruction(ObjcBranchInstruction):
         external_c_sym_map = macho_analyzer.external_branch_destinations_to_symbol_names
         if self.destination_address in external_c_sym_map:
             self.symbol = external_c_sym_map[self.destination_address]  # type: ignore
-            if self.symbol == '_objc_msgSend':
+            if self.symbol in self._OBJC_MSGSEND_FUNCTIONS:
                 self.is_msgSend_call = True
                 self._patch_msgSend_destination(function_analyzer)
             else:
@@ -114,7 +116,7 @@ class ObjcUnconditionalBranchInstruction(ObjcBranchInstruction):
         # validate instruction
         if not self.is_msgSend_call or \
            self.raw_instr.mnemonic not in ['bl', 'b'] or \
-           self.symbol != '_objc_msgSend':
+           self.symbol not in self._OBJC_MSGSEND_FUNCTIONS:
             print('self.is_msgSend_call {} self.raw_instr.mnemonic {} self.symbol {}'.format(
                 self.is_msgSend_call,
                 self.raw_instr.mnemonic,
@@ -139,6 +141,7 @@ class ObjcUnconditionalBranchInstruction(ObjcBranchInstruction):
 
             self.destination_address = selector.implementation
             self.selref = selector.selref
+            self.selector = selector
         except RuntimeError as e:
             # GammaRayTestBad @ 0x10007ed10 causes get_selref_ptr() to fail.
             # This is because x1 has a data dependency on x20.
@@ -150,6 +153,7 @@ class ObjcUnconditionalBranchInstruction(ObjcBranchInstruction):
             self.is_external_objc_call = True
             self.destination_address = None
             self.selref = None
+            self.selector = None
 
 
 class ObjcConditionalBranchInstruction(ObjcBranchInstruction):

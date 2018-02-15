@@ -42,6 +42,7 @@ class ObjcBranchInstruction(ObjcInstruction):
 
         self.symbol = None  # type: Text
         self.selref = None  # type: ObjcSelref
+        self.selector = None # type: Text
 
         self.is_external_c_call = None  # type: bool
         self.is_external_objc_call = None   # type: bool
@@ -140,6 +141,7 @@ class ObjcUnconditionalBranchInstruction(ObjcBranchInstruction):
 
             self.destination_address = selector.implementation
             self.selref = selector.selref
+            self.selector = selector
         except RuntimeError as e:
             # GammaRayTestBad @ 0x10007ed10 causes get_selref_ptr() to fail.
             # This is because x1 has a data dependency on x20.
@@ -151,6 +153,7 @@ class ObjcUnconditionalBranchInstruction(ObjcBranchInstruction):
             self.is_external_objc_call = True
             self.destination_address = None
             self.selref = None
+            self.selector = None
 
 
 class ObjcConditionalBranchInstruction(ObjcBranchInstruction):

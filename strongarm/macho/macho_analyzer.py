@@ -369,7 +369,7 @@ class MachoAnalyzer(object):
         # but we don't actually know how big the function is!
         # start off by grabbing a small amount of bytes, and keep doubling search area until function boundary is hit
         end_address = 0
-        search_size = 0x80
+        search_size = 0x200
         instructions = []   # type: List[CsInsn]
         while not end_address:
             # place upper limit on search space

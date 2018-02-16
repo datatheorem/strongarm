@@ -314,6 +314,12 @@ class ObjcRuntimeDataParser(object):
             pointer_off += sizeof(binary_word)
         return entries
 
+    def _get_catlist_pointers(self):
+        # type: () -> List[int]
+        """Read pointers in __objc_catlist into list
+        """
+        return self._read_pointer_section('__objc_catlist')
+
     def _get_classlist_pointers(self):
         # type: () -> List[int]
         """Read pointers in __objc_classlist into list

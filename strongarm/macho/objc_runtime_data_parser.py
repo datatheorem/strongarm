@@ -291,25 +291,34 @@ class ObjcRuntimeDataParser(object):
         selectors = data_parser.get_selectors()
         return ObjcClass(name, selectors)
 
+    def _read_pointer_section(self, section_name):
+        # type: (Text) -> List[int]
+        """Read all the pointers in a section
+
+        It is the caller's responsibility to only call this with a `section_name` which indicates a section which should
+        only contain a pointer list.
+        """
+        entries = []  # type: List[int]
+        if section_name not in self.binary.sections:
+            return entries
+
+        section_data = self.binary.sections[section_name].content
+        binary_word = self.binary.platform_word_type
+        pointer_count = int(len(section_data) / sizeof(binary_word))
+
+        pointer_off = 0
+        for i in range(pointer_count):
+            data_end = pointer_off + sizeof(binary_word)
+            val = binary_word.from_buffer(bytearray(section_data[pointer_off:data_end])).value
+            entries.append(val)
+            pointer_off += sizeof(binary_word)
+        return entries
+
     def _get_classlist_pointers(self):
         # type: () -> List[int]
         """Read pointers in __objc_classlist into list
         """
-        classlist_entries = []  # type: List[int]
-        if '__objc_classlist' not in self.binary.sections:
-            return classlist_entries
-
-        classlist_data = self.binary.sections['__objc_classlist'].content
-        binary_word = self.binary.platform_word_type
-        classlist_size = int(len(classlist_data) / sizeof(binary_word))
-
-        classlist_off = 0
-        for i in range(classlist_size):
-            data_end = classlist_off + sizeof(binary_word)
-            val = binary_word.from_buffer(bytearray(classlist_data[classlist_off:data_end])).value
-            classlist_entries.append(val)
-            classlist_off += sizeof(binary_word)
-        return classlist_entries
+        return self._read_pointer_section('__objc_classlist')
 
     def _get_objc_class_from_classlist_pointer(self, entry_location):
         # type: (int) -> ObjcClassRawStruct

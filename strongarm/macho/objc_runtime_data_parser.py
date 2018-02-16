@@ -26,6 +26,15 @@ class ObjcClass(object):
         self.selectors = selectors
 
 
+class ObjcCategory(ObjcClass):
+    __slots__ = ['name', 'base_class', 'selectors']
+
+    def __init__(self, base_class, name, selectors):
+        # type: (Text, Text, List[ObjcSelector]) -> None
+        super(ObjcCategory, self).__init__(name, selectors)
+        self.base_class = base_class
+
+
 class ObjcSelector(object):
     __slots__ = ['name', 'selref', 'implementation', 'is_external_definition']
 
@@ -286,7 +295,19 @@ class ObjcRuntimeDataParser(object):
     def _parse_objc_categories(self):
         # type: () -> List[ObjcCategory]
         DebugUtil.log(self, 'Cross referencing objc_catlist, __objc_category, and __objc_data entries...')
-        pass
+        parsed_categories = []
+        category_pointers = self._get_catlist_pointers()
+        for ptr in category_pointers:
+            objc_category = self._get_objc_category_from_catlist_pointer(ptr)
+            if objc_category:
+                print('got a category!')
+                #objc_data_struct = self._get_objc_data_from_objc_class(objc_class)
+                #if objc_data_struct:
+                    # read information from each struct __objc_data
+                #    parsed_objc_classes.append(self._parse_objc_data_entry(objc_data_struct))
+        return []
+
+
     def _parse_static_objc_runtime_info(self):
         # type: () -> List[ObjcClass]
         """Parse classes referenced by __objc_classlist and categories referenced by __objc_catlist
@@ -339,12 +360,16 @@ class ObjcRuntimeDataParser(object):
         """
         return self._read_pointer_section('__objc_classlist')
 
-    def _get_objc_class_from_classlist_pointer(self, entry_location):
-        # type: (int) -> ObjcClassRawStruct
-        """Read a struct __objc_class from the virtual address of the pointer
-        Typically, this pointer will come from an entry in __objc_classlist
+    def _get_objc_category_from_catlist_pointer(self, category_struct_pointer):
+        """Read a struct __objc_category from the location indicated by the provided __objc_catlist pointer
         """
-        class_entry = ObjcClassRawStruct(self.binary, entry_location, virtual=True)
+        pass
+
+    def _get_objc_class_from_classlist_pointer(self, class_struct_pointer):
+        # type: (int) -> ObjcClassRawStruct
+        """Read a struct __objc_class from the location indicated by the __objc_classlist pointer
+        """
+        class_entry = ObjcClassRawStruct(self.binary, class_struct_pointer, virtual=True)
 
         # sanitize class_entry
         # the least significant 2 bits are used for flags

@@ -267,11 +267,11 @@ class ObjcRuntimeDataParser(object):
                     imp_addresses.append(objc_sel.implementation)
         return imp_addresses
 
-    def _parse_static_objc_runtime_info(self):
+    def _parse_objc_classes(self):
         # type: () -> List[ObjcClass]
         """Read Objective-C class data in __objc_classlist, __objc_data to get classes and selectors in binary
         """
-        DebugUtil.log(self, 'Cross-referencing objc_classlist, __objc_class, and _objc_data entries...')
+        DebugUtil.log(self, 'Cross-referencing __objc_classlist, __objc_class, and __objc_data entries...')
         parsed_objc_classes = []
         classlist_pointers = self._get_classlist_pointers()
         for ptr in classlist_pointers:
@@ -282,6 +282,19 @@ class ObjcRuntimeDataParser(object):
                     # read information from each struct __objc_data
                     parsed_objc_classes.append(self._parse_objc_data_entry(objc_data_struct))
         return parsed_objc_classes
+
+    def _parse_objc_categories(self):
+        # type: () -> List[ObjcCategory]
+        DebugUtil.log(self, 'Cross referencing objc_catlist, __objc_category, and __objc_data entries...')
+        pass
+    def _parse_static_objc_runtime_info(self):
+        # type: () -> List[ObjcClass]
+        """Parse classes referenced by __objc_classlist and categories referenced by __objc_catlist
+        """
+        classes = []
+        classes += self._parse_objc_classes()
+        classes += self._parse_objc_categories()
+        return classes
 
     def _parse_objc_data_entry(self, objc_data_raw):
         # type: (ObjcDataRawStruct) -> ObjcClass

@@ -12,7 +12,8 @@ from strongarm.macho.arch_independent_structs import \
     ObjcDataRawStruct, \
     ObjcMethodStruct, \
     ObjcMethodListStruct, \
-    DylibCommandStruct
+    DylibCommandStruct, \
+    ObjcCategoryRawStruct
 from strongarm.debug_util import DebugUtil
 from strongarm.macho.macho_binary import MachoBinary
 
@@ -289,7 +290,8 @@ class ObjcRuntimeDataParser(object):
                 objc_data_struct = self._get_objc_data_from_objc_class(objc_class)
                 if objc_data_struct:
                     # read information from each struct __objc_data
-                    parsed_objc_classes.append(self._parse_objc_data_entry(objc_data_struct))
+                    parsed_class = self._parse_objc_data_entry(objc_data_struct)
+                    parsed_objc_classes.append(parsed_class)
         return parsed_objc_classes
 
     def _parse_objc_categories(self):
@@ -298,15 +300,12 @@ class ObjcRuntimeDataParser(object):
         parsed_categories = []
         category_pointers = self._get_catlist_pointers()
         for ptr in category_pointers:
-            objc_category = self._get_objc_category_from_catlist_pointer(ptr)
-            if objc_category:
-                print('got a category!')
-                #objc_data_struct = self._get_objc_data_from_objc_class(objc_class)
-                #if objc_data_struct:
-                    # read information from each struct __objc_data
-                #    parsed_objc_classes.append(self._parse_objc_data_entry(objc_data_struct))
-        return []
-
+            objc_category_struct = self._get_objc_category_from_catlist_pointer(ptr)
+            if objc_category_struct:
+                print('got a category! {}'.format(objc_category_struct))
+                parsed_category = self._parse_objc_category_entry(objc_category_struct)
+                parsed_categories.append(parsed_category)
+        return parsed_categories
 
     def _parse_static_objc_runtime_info(self):
         # type: () -> List[ObjcClass]
@@ -316,6 +315,19 @@ class ObjcRuntimeDataParser(object):
         classes += self._parse_objc_classes()
         classes += self._parse_objc_categories()
         return classes
+
+    def _parse_objc_category_entry(self, objc_category_raw):
+        # type: (ObjcCategoryRawStruct) -> ObjcCategory
+        # TODO(PT): stop making lots of ObjcDataEntryParser instances, just make+use utility functions
+        name = self.binary.get_full_string_from_start_address(objc_category_raw.name)
+
+        # TODO(PT): if we want to parse the name of the base class, grab the destination pointer from entries in
+        # __objc_classrefs; this will be the same as the address in .base_class, and by cross-reffing we can get the
+        # name of the class symbol (like _OBJC_CLASS_$_NSURLRequest)
+        base_class = '(unknown_base_class)'
+
+        print('PARSED {} ({})'.format(base_class, name))
+        return ObjcCategory(base_class, name, [])
 
     def _parse_objc_data_entry(self, objc_data_raw):
         # type: (ObjcDataRawStruct) -> ObjcClass
@@ -361,9 +373,11 @@ class ObjcRuntimeDataParser(object):
         return self._read_pointer_section('__objc_classlist')
 
     def _get_objc_category_from_catlist_pointer(self, category_struct_pointer):
+        # type: (int) -> ObjcCategoryRawStruct
         """Read a struct __objc_category from the location indicated by the provided __objc_catlist pointer
         """
-        pass
+        category_entry = ObjcCategoryRawStruct(self.binary, category_struct_pointer, virtual=True)
+        return category_entry
 
     def _get_objc_class_from_classlist_pointer(self, class_struct_pointer):
         # type: (int) -> ObjcClassRawStruct

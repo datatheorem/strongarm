@@ -314,6 +314,28 @@ class HEADER_FLAGS(IntEnum):
     APP_EXTENSION_SAFE = 0x2000000
 
 
+class ObjcCategoryRaw32(Structure):
+    _fields_ = [
+        ('name', c_uint32),
+        ('base_class', c_uint32),
+        ('instance_methods', c_uint32),
+        ('class_methods', c_uint32),
+        ('protocols', c_uint32),
+        ('instance_properties', c_uint32)
+    ]
+
+
+class ObjcCategoryRaw64(Structure):
+    _fields_ = [
+        ('name', c_uint64),
+        ('base_class', c_uint64),
+        ('instance_methods', c_uint64),
+        ('class_methods', c_uint64),
+        ('protocols', c_uint64),
+        ('instance_properties', c_uint64)
+    ]
+
+
 class ObjcClassRaw32(Structure):
     _fields_ = [
         ('metaclass', c_uint32),

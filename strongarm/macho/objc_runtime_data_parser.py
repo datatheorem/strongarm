@@ -204,7 +204,7 @@ class ObjcRuntimeDataParser(object):
 
     def _parse_objc_categories(self):
         # type: () -> List[ObjcCategory]
-        DebugUtil.log(self, 'Cross referencing objc_catlist, __objc_category, and __objc_data entries...')
+        DebugUtil.log(self, 'Cross referencing __objc_catlist, __objc_category, and __objc_data entries...')
         parsed_categories = []
         category_pointers = self._get_catlist_pointers()
         for ptr in category_pointers:
@@ -296,23 +296,24 @@ class ObjcRuntimeDataParser(object):
         locations = []  # type: List[int]
         entries = []  # type: List[int]
         if section_name not in self.binary.sections:
-            return entries
+            return locations, entries
 
-        section_data = self.binary.sections[section_name].content
+        section = self.binary.sections[section_name]
+        section_base = section.address
+        section_data = section.content
+
         binary_word = self.binary.platform_word_type
         pointer_count = int(len(section_data) / sizeof(binary_word))
-
-        # convert file offset pointers to virtual address pointers, for the caller's convenience
-        virtual_base = self.binary.get_virtual_base()
         pointer_off = 0
 
         for i in range(pointer_count):
-            # convert file offset of entry to virtual address
-            locations.append(pointer_off + virtual_base)
+            # convert section offset of entry to absolute virtual address
+            locations.append(section_base + pointer_off)
 
             data_end = pointer_off + sizeof(binary_word)
             val = binary_word.from_buffer(bytearray(section_data[pointer_off:data_end])).value
             entries.append(val)
+
             pointer_off += sizeof(binary_word)
 
         return locations, entries

@@ -143,25 +143,27 @@ class ObjcRuntimeDataParser(object):
         logging.warning('strongarm: Large ObjC info section! Estimate: {} minutes'.format(minutes_estimate))
 
     def _parse_selrefs(self):
-        # type: () -> List[ObjcSelref]
-        selrefs = []    # type: List[ObjcSelref]
-        if '__objc_selrefs' not in self.binary.sections:
-            return selrefs
+        # type: () -> Dict[int, ObjcSelref]
+        """Parse the binary's list of selrefs, and create a Dict where a selref (pointer) maps to a wrapped ObjcSelref
+        """
+        selector_literal_ptr_to_selrefs = {}  # type: Dict[int, ObjcSelref]
 
-        selref_sect = self.binary.sections['__objc_selrefs']
+        selref_pointers, selector_literal_pointers = self._read_pointer_section('__objc_selrefs')
+        # sanity check
+        if len(selref_pointers) != len(selector_literal_pointers):
+            raise RuntimeError('read invalid data from __objc_selrefs')
 
-        binary_word = self.binary.platform_word_type
-        entry_count = int(selref_sect.cmd.size / sizeof(binary_word))
-        self.log_long_parse(entry_count)
-        for i in range(entry_count):
-            selref_addr = selref_sect.address + (i * sizeof(binary_word))
-            selref_val_bytes = self.binary.get_content_from_virtual_address(selref_addr, sizeof(binary_word))
-            selref_val = binary_word.from_buffer(selref_val_bytes).value
+        for i in range(len(selref_pointers)):
+            selref_ptr = selref_pointers[i]
+            selector_literal_ptr = selector_literal_pointers[i]
 
             # read selector string literal from selref pointer
-            selref_contents = self.binary.get_full_string_from_start_address(selref_val)
-            selrefs.append(ObjcSelref(selref_addr, selref_val, selref_contents))
-        return selrefs
+            selector_string = self.binary.get_full_string_from_start_address(selector_literal_ptr)
+            wrapped_selref = ObjcSelref(selref_ptr, selector_literal_ptr, selector_string)
+
+            # map the selector string pointer to the ObjcSelref
+            selector_literal_ptr_to_selrefs[selector_literal_ptr] = wrapped_selref
+        return selector_literal_ptr_to_selrefs
 
     def selector_for_selref(self, selref_addr):
         # type: (int) -> Optional[ObjcSelector]
@@ -173,7 +175,7 @@ class ObjcRuntimeDataParser(object):
                     return sel
         # selref wasn't referenced in classes implemented within the binary
         # make sure it's a valid selref
-        selref = [x for x in self._selrefs if x.source_address == selref_addr]
+        selref = [x for x in self._selector_literal_ptr_to_selref_map.values() if x.source_address == selref_addr]
         if not len(selref):
             return None
         _selref = selref[0]
@@ -219,7 +221,6 @@ class ObjcRuntimeDataParser(object):
         for ptr in category_pointers:
             objc_category_struct = self._get_objc_category_from_catlist_pointer(ptr)
             if objc_category_struct:
-                print('got a category! {}'.format(objc_category_struct))
                 parsed_category = self._parse_objc_category_entry(objc_category_struct)
                 parsed_categories.append(parsed_category)
         return parsed_categories

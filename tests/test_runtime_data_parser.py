@@ -6,21 +6,18 @@ from __future__ import print_function
 import os
 import unittest
 
-from strongarm.macho.macho_analyzer import MachoAnalyzer
-from strongarm.macho.macho_parse import MachoParser
-from strongarm.macho.macho_binary import MachoBinary
-from strongarm.macho.objc_runtime_data_parser import ObjcRuntimeDataParser
+from strongarm.macho import MachoParser, ObjcRuntimeDataParser, ObjcCategory
 
 
 class TestObjcRuntimeDataParser(unittest.TestCase):
     FAT_PATH = os.path.join(os.path.dirname(__file__), 'bin', 'StrongarmTarget')
-
-    def setUp(self):
-        parser = MachoParser(TestObjcRuntimeDataParser.FAT_PATH)
-        self.binary = parser.slices[0]
-        self.objc_parser = ObjcRuntimeDataParser(self.binary)
+    CATEGORY_PATH = os.path.join(os.path.dirname(__file__), 'bin', 'DigitalAdvisorySolutions')
 
     def test_path_for_external_symbol(self):
+        parser = MachoParser(TestObjcRuntimeDataParser.FAT_PATH)
+        binary = parser.slices[0]
+        objc_parser = ObjcRuntimeDataParser(binary)
+
         correct_map = {
             '_NSLog': '/System/Library/Frameworks/Foundation.framework/Foundation',
             '_NSStringFromCGRect': '/System/Library/Frameworks/UIKit.framework/UIKit',
@@ -50,5 +47,22 @@ class TestObjcRuntimeDataParser(unittest.TestCase):
             'dyld_stub_binder': '/usr/lib/libSystem.B.dylib',
         }
         for symbol in correct_map:
-            self.assertEqual(correct_map[symbol], self.objc_parser.path_for_external_symbol(symbol))
-        self.assertIsNone(self.objc_parser.path_for_external_symbol('XXX_fake_symbol_XXX'))
+            self.assertEqual(correct_map[symbol], objc_parser.path_for_external_symbol(symbol))
+        self.assertIsNone(objc_parser.path_for_external_symbol('XXX_fake_symbol_XXX'))
+
+    def test_find_categories(self):
+        parser = MachoParser(TestObjcRuntimeDataParser.CATEGORY_PATH)
+        binary = parser.slices[0]
+        objc_parser = ObjcRuntimeDataParser(binary)
+
+        # extract category list
+        category_classes = [x for x in objc_parser.classes if isinstance(x, ObjcCategory)]
+        self.assertEqual(len(category_classes), 9)
+
+        # look at one category
+        category = [x for x in category_classes if x.name == 'DataController'][0]
+        self.assertEqual(len(category.selectors), 1)
+        selector = category.selectors[0]
+        self.assertEqual(selector.name, 'allowsAnyHTTPSCertificateForHost:')
+        self.assertEqual(selector.implementation, 0x100005028)
+

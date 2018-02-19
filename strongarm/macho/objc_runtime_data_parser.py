@@ -12,7 +12,8 @@ from strongarm.macho.arch_independent_structs import \
     ObjcDataRawStruct, \
     ObjcMethodStruct, \
     ObjcMethodListStruct, \
-    DylibCommandStruct
+    DylibCommandStruct, \
+    ObjcCategoryRawStruct
 from strongarm.debug_util import DebugUtil
 from strongarm.macho.macho_binary import MachoBinary
 
@@ -24,6 +25,15 @@ class ObjcClass(object):
         # type: (Text, List[ObjcSelector]) -> None
         self.name = name
         self.selectors = selectors
+
+
+class ObjcCategory(ObjcClass):
+    __slots__ = ['name', 'base_class', 'selectors']
+
+    def __init__(self, base_class, name, selectors):
+        # type: (Text, Text, List[ObjcSelector]) -> None
+        super(ObjcCategory, self).__init__(name, selectors)
+        self.base_class = base_class
 
 
 class ObjcSelector(object):
@@ -55,98 +65,16 @@ class ObjcSelref(object):
         self.selector_literal = selector_literal
 
 
-class ObjcDataEntryParser(object):
-    """Class encapsulating logic to retrieve a list of selectors from a struct __objc_data
-    """
-
-    def __init__(self, binary, selref_list, objc_data_raw_struct):
-        # type: (MachoBinary, List[ObjcSelref], ObjcDataRawStruct) -> None
-        self._binary = binary
-        self._selrefs = selref_list
-        self._objc_data_raw_struct = objc_data_raw_struct
-
-        # make map of selref pointers to the ObjcSelref objects
-        # this is so we can find the selref object for a selref pointer in constant time when
-        # parsing objc selectors in _get_selectors_from_methlist()
-        self._selref_pointer_map = {}   # type: Dict[int, ObjcSelref]
-        for selref in self._selrefs:
-            self._selref_pointer_map[selref.destination_address] = selref
-
-    def get_selectors(self):
-        # type: () -> List[ObjcSelector]
-        """Parse every ObjcSelector described by the struct __objc_data
-        """
-        methlist_info = self._get_methlist()
-        if not methlist_info:
-            return []
-        methlist = methlist_info[0]
-        methlist_file_ptr = methlist_info[1]
-
-        return self._get_selectors_from_methlist(methlist, methlist_file_ptr)
-
-    def get_selref_for_objc_method(self, objc_method):
-        # type: (ObjcMethodStruct) -> Optional[ObjcSelref]
-        """Retrieve the selref whose destination address points to the name field of the provided ObjcMethodStruct
-        """
-        name_ptr = objc_method.name
-        if name_ptr not in self._selref_pointer_map:
-            return None
-        return self._selref_pointer_map[name_ptr]
-
-    def _get_selectors_from_methlist(self, methlist, methlist_file_ptr):
-        # type: (ObjcMethodListStruct, int) -> List[ObjcSelector]
-        """Given a method list, return a List of ObjcSelectors encapsulating each method
-        """
-        selectors = []
-        # parse every entry in method list
-        # the first entry appears directly after the ObjcMethodListStruct
-        method_entry_off = methlist_file_ptr + methlist.sizeof
-        for i in range(methlist.methcount):
-            method_ent = ObjcMethodStruct(self._binary, method_entry_off)
-            # byte-align IMP
-            method_ent.implementation &= ~0x3
-
-            symbol_name = self._binary.get_full_string_from_start_address(method_ent.name)
-            selref = self.get_selref_for_objc_method(method_ent)
-
-            selector = ObjcSelector(symbol_name, selref, method_ent.implementation)
-            selectors.append(selector)
-
-            method_entry_off += method_ent.sizeof
-        return selectors
-
-    def _get_methlist(self):
-        # type: () -> Optional[Tuple[ObjcMethodListStruct, int]]
-        """Return the ObjcMethodList and file offset described by the ObjcDataRawStruct
-        Some __objc_data entries will describe classes that have no methods implemented. In this case, the method
-        list will not exist, and this method will return None.
-        If the method list does exist, a tuple of the ObjcMethodList and the file offset where the entry is located
-        will be returned
-
-        Args:
-            data_struct: The struct __objc_data whose method list entry should be read
-
-        Returns:
-            A tuple of the data's ObjcMethodList and the file pointer to this method list structure.
-            If the data has no methods, None will be returned.
-        """
-        # does the data entry describe any methods?
-        if self._objc_data_raw_struct.base_methods == 0:
-            return None
-
-        methlist_file_ptr = self._binary.file_offset_for_virtual_address(self._objc_data_raw_struct.base_methods)
-        methlist = ObjcMethodListStruct(self._binary, methlist_file_ptr)
-        return (methlist, methlist_file_ptr)
-
-
 class ObjcRuntimeDataParser(object):
     def __init__(self, binary):
         # type: (MachoBinary) -> None
         self.binary = binary
         DebugUtil.log(self, 'Parsing ObjC runtime info... (this may take a while)')
+
         DebugUtil.log(self, 'Step 1: Parsing selrefs...')
-        self._selrefs = self._parse_selrefs()
-        DebugUtil.log(self, 'Step 2: Parsing classes...')
+        self._selector_literal_ptr_to_selref_map = self._parse_selrefs()
+
+        DebugUtil.log(self, 'Step 2: Parsing classes and categories...')
         self.classes = self._parse_static_objc_runtime_info()
 
         DebugUtil.log(self, 'Step 3: Resolving symbol name to source dylib map...')
@@ -203,38 +131,28 @@ class ObjcRuntimeDataParser(object):
             return None
         return self.binary.load_dylib_commands[ordinal_idx]
 
-    def log_long_parse(self, selref_count):
-        # type: (int) -> None
-        if selref_count < 1000:
-            return
-        # found through observation
-        seconds_per_selref_estimate = 0.0015
-        seconds_estimate = selref_count * seconds_per_selref_estimate
-        minutes_estimate = seconds_estimate / 60.0
-        if minutes_estimate < 0.5:
-            return
-        logging.warning('strongarm: Large ObjC info section! Estimate: {} minutes'.format(minutes_estimate))
-
     def _parse_selrefs(self):
-        # type: () -> List[ObjcSelref]
-        selrefs = []    # type: List[ObjcSelref]
-        if '__objc_selrefs' not in self.binary.sections:
-            return selrefs
+        # type: () -> Dict[int, ObjcSelref]
+        """Parse the binary's list of selrefs, and create a Dict where a selref (pointer) maps to a wrapped ObjcSelref
+        """
+        selector_literal_ptr_to_selrefs = {}  # type: Dict[int, ObjcSelref]
 
-        selref_sect = self.binary.sections['__objc_selrefs']
+        selref_pointers, selector_literal_pointers = self._read_pointer_section('__objc_selrefs')
+        # sanity check
+        if len(selref_pointers) != len(selector_literal_pointers):
+            raise RuntimeError('read invalid data from __objc_selrefs')
 
-        binary_word = self.binary.platform_word_type
-        entry_count = int(selref_sect.cmd.size / sizeof(binary_word))
-        self.log_long_parse(entry_count)
-        for i in range(entry_count):
-            selref_addr = selref_sect.address + (i * sizeof(binary_word))
-            selref_val_bytes = self.binary.get_content_from_virtual_address(selref_addr, sizeof(binary_word))
-            selref_val = binary_word.from_buffer(selref_val_bytes).value
+        for i in range(len(selref_pointers)):
+            selref_ptr = selref_pointers[i]
+            selector_literal_ptr = selector_literal_pointers[i]
 
             # read selector string literal from selref pointer
-            selref_contents = self.binary.get_full_string_from_start_address(selref_val)
-            selrefs.append(ObjcSelref(selref_addr, selref_val, selref_contents))
-        return selrefs
+            selector_string = self.binary.get_full_string_from_start_address(selector_literal_ptr)
+            wrapped_selref = ObjcSelref(selref_ptr, selector_literal_ptr, selector_string)
+
+            # map the selector string pointer to the ObjcSelref
+            selector_literal_ptr_to_selrefs[selector_literal_ptr] = wrapped_selref
+        return selector_literal_ptr_to_selrefs
 
     def selector_for_selref(self, selref_addr):
         # type: (int) -> Optional[ObjcSelector]
@@ -246,7 +164,7 @@ class ObjcRuntimeDataParser(object):
                     return sel
         # selref wasn't referenced in classes implemented within the binary
         # make sure it's a valid selref
-        selref = [x for x in self._selrefs if x.source_address == selref_addr]
+        selref = [x for x in self._selector_literal_ptr_to_selref_map.values() if x.source_address == selref_addr]
         if not len(selref):
             return None
         _selref = selref[0]
@@ -267,11 +185,11 @@ class ObjcRuntimeDataParser(object):
                     imp_addresses.append(objc_sel.implementation)
         return imp_addresses
 
-    def _parse_static_objc_runtime_info(self):
+    def _parse_objc_classes(self):
         # type: () -> List[ObjcClass]
         """Read Objective-C class data in __objc_classlist, __objc_data to get classes and selectors in binary
         """
-        DebugUtil.log(self, 'Cross-referencing objc_classlist, __objc_class, and _objc_data entries...')
+        DebugUtil.log(self, 'Cross-referencing __objc_classlist, __objc_class, and __objc_data entries...')
         parsed_objc_classes = []
         classlist_pointers = self._get_classlist_pointers()
         for ptr in classlist_pointers:
@@ -280,43 +198,152 @@ class ObjcRuntimeDataParser(object):
                 objc_data_struct = self._get_objc_data_from_objc_class(objc_class)
                 if objc_data_struct:
                     # read information from each struct __objc_data
-                    parsed_objc_classes.append(self._parse_objc_data_entry(objc_data_struct))
+                    parsed_class = self._parse_objc_data_entry(objc_data_struct)
+                    parsed_objc_classes.append(parsed_class)
         return parsed_objc_classes
 
-    def _parse_objc_data_entry(self, objc_data_raw):
-        # type: (ObjcDataRawStruct) -> ObjcClass
-        data_parser = ObjcDataEntryParser(self.binary, self._selrefs, objc_data_raw)
+    def _parse_objc_categories(self):
+        # type: () -> List[ObjcCategory]
+        DebugUtil.log(self, 'Cross referencing __objc_catlist, __objc_category, and __objc_data entries...')
+        parsed_categories = []
+        category_pointers = self._get_catlist_pointers()
+        for ptr in category_pointers:
+            objc_category_struct = self._get_objc_category_from_catlist_pointer(ptr)
+            if objc_category_struct:
+                parsed_category = self._parse_objc_category_entry(objc_category_struct)
+                parsed_categories.append(parsed_category)
+        return parsed_categories
 
-        name = self.binary.get_full_string_from_start_address(objc_data_raw.name)
-        selectors = data_parser.get_selectors()
+    def _parse_static_objc_runtime_info(self):
+        # type: () -> List[ObjcClass]
+        """Parse classes referenced by __objc_classlist and categories referenced by __objc_catlist
+        """
+        classes = []
+        classes += self._parse_objc_classes()
+        classes += self._parse_objc_categories()
+        return classes
+
+    def read_selectors_from_methlist_ptr(self, methlist_ptr):
+        # type: (int) -> List[ObjcSelector]
+        """Given the virtual address of a method list, return a List of ObjcSelectors encapsulating each method
+        """
+        methlist = ObjcMethodListStruct(self.binary, methlist_ptr, virtual=True)
+        selectors = []
+        # parse every entry in method list
+        # the first entry appears directly after the ObjcMethodListStruct
+        method_entry_off = methlist_ptr + methlist.sizeof
+        for i in range(methlist.methcount):
+            method_ent = ObjcMethodStruct(self.binary, method_entry_off, virtual=True)
+            # byte-align IMP
+            method_ent.implementation &= ~0x3
+
+            symbol_name = self.binary.get_full_string_from_start_address(method_ent.name)
+            # attempt to find corresponding selref
+            if method_ent.name in self._selector_literal_ptr_to_selref_map:
+                selref = self._selector_literal_ptr_to_selref_map[method_ent.name]
+            else:
+                selref = None
+
+            selector = ObjcSelector(symbol_name, selref, method_ent.implementation)
+            selectors.append(selector)
+
+            method_entry_off += method_ent.sizeof
+        return selectors
+
+    def _parse_objc_category_entry(self, objc_category_struct):
+        # type: (ObjcCategoryRawStruct) -> ObjcCategory
+        # TODO(PT): stop making lots of ObjcDataEntryParser instances, just make+use utility functions
+        selectors = []
+        name = self.binary.get_full_string_from_start_address(objc_category_struct.name)
+
+        # TODO(PT): if we want to parse the name of the base class, grab the destination pointer from entries in
+        # __objc_classrefs; this will be the same as the address in .base_class, and by cross-reffing we can get the
+        # name of the class symbol (like _OBJC_CLASS_$_NSURLRequest)
+        base_class = '$_Unknown_Class'
+
+        # if the class implements no methods, the pointer to method list will be the null pointer
+        # TODO(PT): we could add some flag to keep track of whether a given sel is an instance or class method
+        if objc_category_struct.instance_methods:
+            selectors += self.read_selectors_from_methlist_ptr(objc_category_struct.instance_methods)
+        if objc_category_struct.class_methods:
+            selectors += self.read_selectors_from_methlist_ptr(objc_category_struct.class_methods)
+
+        return ObjcCategory(base_class, name, selectors)
+
+    def _parse_objc_data_entry(self, objc_data_struct):
+        # type: (ObjcDataRawStruct) -> ObjcClass
+        name = self.binary.get_full_string_from_start_address(objc_data_struct.name)
+        selectors = []
+        # if the class implements no methods, base_methods will be the null pointer
+        if objc_data_struct.base_methods:
+            selectors += self.read_selectors_from_methlist_ptr(objc_data_struct.base_methods)
         return ObjcClass(name, selectors)
+
+    def _read_pointer_section(self, section_name):
+        # type: (Text) -> (List[int], List[int])
+        """Read all the pointers in a section
+
+        It is the caller's responsibility to only call this with a `section_name` which indicates a section which should
+        only contain a pointer list.
+
+        The return value is two lists of pointers.
+        The first List contains the virtual addresses of each entry in the section.
+        The second List contains the pointer values contained at each of these addresses.
+
+        The indexes of these two lists are matched up; that is, list1[0] is the virtual address of the first pointer
+        in the requested section, and list2[0] is the pointer value contained at that address.
+        """
+        locations = []  # type: List[int]
+        entries = []  # type: List[int]
+        if section_name not in self.binary.sections:
+            return locations, entries
+
+        section = self.binary.sections[section_name]
+        section_base = section.address
+        section_data = section.content
+
+        binary_word = self.binary.platform_word_type
+        pointer_count = int(len(section_data) / sizeof(binary_word))
+        pointer_off = 0
+
+        for i in range(pointer_count):
+            # convert section offset of entry to absolute virtual address
+            locations.append(section_base + pointer_off)
+
+            data_end = pointer_off + sizeof(binary_word)
+            val = binary_word.from_buffer(bytearray(section_data[pointer_off:data_end])).value
+            entries.append(val)
+
+            pointer_off += sizeof(binary_word)
+
+        return locations, entries
+
+    def _get_catlist_pointers(self):
+        # type: () -> List[int]
+        """Read pointers in __objc_catlist into list
+        """
+        _, catlist_pointers = self._read_pointer_section('__objc_catlist')
+        return catlist_pointers
 
     def _get_classlist_pointers(self):
         # type: () -> List[int]
         """Read pointers in __objc_classlist into list
         """
-        classlist_entries = []  # type: List[int]
-        if '__objc_classlist' not in self.binary.sections:
-            return classlist_entries
+        _, classlist_pointers = self._read_pointer_section('__objc_classlist')
+        return classlist_pointers
 
-        classlist_data = self.binary.sections['__objc_classlist'].content
-        binary_word = self.binary.platform_word_type
-        classlist_size = int(len(classlist_data) / sizeof(binary_word))
-
-        classlist_off = 0
-        for i in range(classlist_size):
-            data_end = classlist_off + sizeof(binary_word)
-            val = binary_word.from_buffer(bytearray(classlist_data[classlist_off:data_end])).value
-            classlist_entries.append(val)
-            classlist_off += sizeof(binary_word)
-        return classlist_entries
-
-    def _get_objc_class_from_classlist_pointer(self, entry_location):
-        # type: (int) -> ObjcClassRawStruct
-        """Read a struct __objc_class from the virtual address of the pointer
-        Typically, this pointer will come from an entry in __objc_classlist
+    def _get_objc_category_from_catlist_pointer(self, category_struct_pointer):
+        # type: (int) -> ObjcCategoryRawStruct
+        """Read a struct __objc_category from the location indicated by the provided __objc_catlist pointer
         """
-        class_entry = ObjcClassRawStruct(self.binary, entry_location, virtual=True)
+        category_entry = ObjcCategoryRawStruct(self.binary, category_struct_pointer, virtual=True)
+        return category_entry
+
+    def _get_objc_class_from_classlist_pointer(self, class_struct_pointer):
+        # type: (int) -> ObjcClassRawStruct
+        """Read a struct __objc_class from the location indicated by the __objc_classlist pointer
+        """
+        class_entry = ObjcClassRawStruct(self.binary, class_struct_pointer, virtual=True)
 
         # sanitize class_entry
         # the least significant 2 bits are used for flags

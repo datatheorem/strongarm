@@ -72,8 +72,9 @@ class ObjcRuntimeDataParser(object):
         DebugUtil.log(self, 'Parsing ObjC runtime info... (this may take a while)')
 
         DebugUtil.log(self, 'Step 1: Parsing selrefs...')
-        self._selrefs = self._parse_selrefs()
-        DebugUtil.log(self, 'Step 2: Parsing classes...')
+        self._selector_literal_ptr_to_selref_map = self._parse_selrefs()
+
+        DebugUtil.log(self, 'Step 2: Parsing classes and categories...')
         self.classes = self._parse_static_objc_runtime_info()
 
         DebugUtil.log(self, 'Step 3: Resolving symbol name to source dylib map...')
@@ -129,18 +130,6 @@ class ObjcRuntimeDataParser(object):
         if ordinal_idx >= len(self.binary.load_dylib_commands):
             return None
         return self.binary.load_dylib_commands[ordinal_idx]
-
-    def log_long_parse(self, selref_count):
-        # type: (int) -> None
-        if selref_count < 1000:
-            return
-        # found through observation
-        seconds_per_selref_estimate = 0.0015
-        seconds_estimate = selref_count * seconds_per_selref_estimate
-        minutes_estimate = seconds_estimate / 60.0
-        if minutes_estimate < 0.5:
-            return
-        logging.warning('strongarm: Large ObjC info section! Estimate: {} minutes'.format(minutes_estimate))
 
     def _parse_selrefs(self):
         # type: () -> Dict[int, ObjcSelref]
@@ -256,12 +245,20 @@ class ObjcRuntimeDataParser(object):
         return ObjcClass(name, selectors)
 
     def _read_pointer_section(self, section_name):
-        # type: (Text) -> List[int]
+        # type: (Text) -> (List[int], List[int])
         """Read all the pointers in a section
 
         It is the caller's responsibility to only call this with a `section_name` which indicates a section which should
         only contain a pointer list.
+
+        The return value is two lists of pointers.
+        The first List contains the virtual addresses of each entry in the section.
+        The second List contains the pointer values contained at each of these addresses.
+
+        The indexes of these two lists are matched up; that is, list1[0] is the virtual address of the first pointer
+        in the requested section, and list2[0] is the pointer value contained at that address.
         """
+        locations = []  # type: List[int]
         entries = []  # type: List[int]
         if section_name not in self.binary.sections:
             return entries
@@ -270,25 +267,34 @@ class ObjcRuntimeDataParser(object):
         binary_word = self.binary.platform_word_type
         pointer_count = int(len(section_data) / sizeof(binary_word))
 
+        # convert file offset pointers to virtual address pointers, for the caller's convenience
+        virtual_base = self.binary.get_virtual_base()
         pointer_off = 0
+
         for i in range(pointer_count):
+            # convert file offset of entry to virtual address
+            locations.append(pointer_off + virtual_base)
+
             data_end = pointer_off + sizeof(binary_word)
             val = binary_word.from_buffer(bytearray(section_data[pointer_off:data_end])).value
             entries.append(val)
             pointer_off += sizeof(binary_word)
-        return entries
+
+        return locations, entries
 
     def _get_catlist_pointers(self):
         # type: () -> List[int]
         """Read pointers in __objc_catlist into list
         """
-        return self._read_pointer_section('__objc_catlist')
+        _, catlist_pointers = self._read_pointer_section('__objc_catlist')
+        return catlist_pointers
 
     def _get_classlist_pointers(self):
         # type: () -> List[int]
         """Read pointers in __objc_classlist into list
         """
-        return self._read_pointer_section('__objc_classlist')
+        _, classlist_pointers = self._read_pointer_section('__objc_classlist')
+        return classlist_pointers
 
     def _get_objc_category_from_catlist_pointer(self, category_struct_pointer):
         # type: (int) -> ObjcCategoryRawStruct

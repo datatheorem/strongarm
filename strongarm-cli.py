@@ -7,7 +7,7 @@ import sys
 import argparse
 from ctypes import sizeof
 
-from strongarm.macho import MachoParser, MachoBinary, MachoAnalyzer
+from strongarm.macho import MachoParser, MachoBinary, MachoAnalyzer, ObjcCategory, ObjcClass
 from strongarm.macho import CPU_TYPE, DylibCommand
 from strongarm.debug_util import DebugUtil
 from strongarm.objc import CodeSearch, CodeSearchTermCallDestination, RegisterContentsType, ObjcFunctionAnalyzer
@@ -124,5 +124,13 @@ for exported_sym in analyzer.exported_symbols:
 print('\nObjective-C Methods:')
 methods = analyzer.get_objc_methods()
 for method_info in methods:
-    print('\t-[{} {}]'.format(method_info.objc_class.name, method_info.objc_sel.name))
-    print('\t\tDefined at {}'.format(hex(method_info.objc_sel.implementation)))
+    # belongs to a class or category?
+    if isinstance(method_info.objc_class, ObjcCategory):
+        category = method_info.objc_class   # type: ObjcCategory
+        class_name = '{} ({})'.format(category.base_class, category.name)
+    else:
+        class_name = method_info.objc_class.name
+
+    print('\t-[{} {}] defined at {}'.format(class_name,
+                                            method_info.objc_sel.name,
+                                            hex(method_info.objc_sel.implementation)))

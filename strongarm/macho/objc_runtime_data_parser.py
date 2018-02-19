@@ -223,25 +223,60 @@ class ObjcRuntimeDataParser(object):
         classes += self._parse_objc_categories()
         return classes
 
-    def _parse_objc_category_entry(self, objc_category_raw):
+    def read_selectors_from_methlist_ptr(self, methlist_ptr: int) -> List[ObjcSelector]:
+        # type: (int) -> List[ObjcSelector]
+        """Given the virtual address of a method list, return a List of ObjcSelectors encapsulating each method
+        """
+        methlist = ObjcMethodListStruct(self.binary, methlist_ptr, virtual=True)
+        selectors = []
+        # parse every entry in method list
+        # the first entry appears directly after the ObjcMethodListStruct
+        method_entry_off = methlist_ptr + methlist.sizeof
+        for i in range(methlist.methcount):
+            method_ent = ObjcMethodStruct(self.binary, method_entry_off, virtual=True)
+            # byte-align IMP
+            method_ent.implementation &= ~0x3
+
+            symbol_name = self.binary.get_full_string_from_start_address(method_ent.name)
+            # attempt to find corresponding selref
+            if method_ent.name in self._selector_literal_ptr_to_selref_map:
+                selref = self._selector_literal_ptr_to_selref_map[method_ent.name]
+            else:
+                selref = None
+
+            selector = ObjcSelector(symbol_name, selref, method_ent.implementation)
+            selectors.append(selector)
+
+            method_entry_off += method_ent.sizeof
+        return selectors
+
+    def _parse_objc_category_entry(self, objc_category_struct):
         # type: (ObjcCategoryRawStruct) -> ObjcCategory
         # TODO(PT): stop making lots of ObjcDataEntryParser instances, just make+use utility functions
-        name = self.binary.get_full_string_from_start_address(objc_category_raw.name)
+        selectors = []
+        name = self.binary.get_full_string_from_start_address(objc_category_struct.name)
 
         # TODO(PT): if we want to parse the name of the base class, grab the destination pointer from entries in
         # __objc_classrefs; this will be the same as the address in .base_class, and by cross-reffing we can get the
         # name of the class symbol (like _OBJC_CLASS_$_NSURLRequest)
-        base_class = '(unknown_base_class)'
+        base_class = '$_Unknown_Class'
 
-        print('PARSED {} ({})'.format(base_class, name))
-        return ObjcCategory(base_class, name, [])
+        # if the class implements no methods, the pointer to method list will be the null pointer
+        # TODO(PT): we could add some flag to keep track of whether a given sel is an instance or class method
+        if objc_category_struct.instance_methods:
+            selectors += self.read_selectors_from_methlist_ptr(objc_category_struct.instance_methods)
+        if objc_category_struct.class_methods:
+            selectors += self.read_selectors_from_methlist_ptr(objc_category_struct.class_methods)
 
-    def _parse_objc_data_entry(self, objc_data_raw):
+        return ObjcCategory(base_class, name, selectors)
+
+    def _parse_objc_data_entry(self, objc_data_struct):
         # type: (ObjcDataRawStruct) -> ObjcClass
-        data_parser = ObjcDataEntryParser(self.binary, self._selrefs, objc_data_raw)
-
-        name = self.binary.get_full_string_from_start_address(objc_data_raw.name)
-        selectors = data_parser.get_selectors()
+        name = self.binary.get_full_string_from_start_address(objc_data_struct.name)
+        selectors = []
+        # if the class implements no methods, base_methods will be the null pointer
+        if objc_data_struct.base_methods:
+            selectors += self.read_selectors_from_methlist_ptr(objc_data_struct.base_methods)
         return ObjcClass(name, selectors)
 
     def _read_pointer_section(self, section_name):

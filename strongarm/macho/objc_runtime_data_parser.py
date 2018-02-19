@@ -223,7 +223,7 @@ class ObjcRuntimeDataParser(object):
         classes += self._parse_objc_categories()
         return classes
 
-    def read_selectors_from_methlist_ptr(self, methlist_ptr: int) -> List[ObjcSelector]:
+    def read_selectors_from_methlist_ptr(self, methlist_ptr):
         # type: (int) -> List[ObjcSelector]
         """Given the virtual address of a method list, return a List of ObjcSelectors encapsulating each method
         """

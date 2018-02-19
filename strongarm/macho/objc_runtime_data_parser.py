@@ -65,95 +65,12 @@ class ObjcSelref(object):
         self.selector_literal = selector_literal
 
 
-class ObjcDataEntryParser(object):
-    """Class encapsulating logic to retrieve a list of selectors from a struct __objc_data
-    """
-
-    def __init__(self, binary, selref_list, objc_data_raw_struct):
-        # type: (MachoBinary, List[ObjcSelref], ObjcDataRawStruct) -> None
-        self._binary = binary
-        self._selrefs = selref_list
-        self._objc_data_raw_struct = objc_data_raw_struct
-
-        # make map of selref pointers to the ObjcSelref objects
-        # this is so we can find the selref object for a selref pointer in constant time when
-        # parsing objc selectors in _get_selectors_from_methlist()
-        self._selref_pointer_map = {}   # type: Dict[int, ObjcSelref]
-        for selref in self._selrefs:
-            self._selref_pointer_map[selref.destination_address] = selref
-
-    def get_selectors(self):
-        # type: () -> List[ObjcSelector]
-        """Parse every ObjcSelector described by the struct __objc_data
-        """
-        methlist_info = self._get_methlist()
-        if not methlist_info:
-            return []
-        methlist = methlist_info[0]
-        methlist_file_ptr = methlist_info[1]
-
-        return self._get_selectors_from_methlist(methlist, methlist_file_ptr)
-
-    def get_selref_for_objc_method(self, objc_method):
-        # type: (ObjcMethodStruct) -> Optional[ObjcSelref]
-        """Retrieve the selref whose destination address points to the name field of the provided ObjcMethodStruct
-        """
-        name_ptr = objc_method.name
-        if name_ptr not in self._selref_pointer_map:
-            return None
-        return self._selref_pointer_map[name_ptr]
-
-    def _get_selectors_from_methlist(self, methlist, methlist_file_ptr):
-        # type: (ObjcMethodListStruct, int) -> List[ObjcSelector]
-        """Given a method list, return a List of ObjcSelectors encapsulating each method
-        """
-        selectors = []
-        # parse every entry in method list
-        # the first entry appears directly after the ObjcMethodListStruct
-        method_entry_off = methlist_file_ptr + methlist.sizeof
-        for i in range(methlist.methcount):
-            method_ent = ObjcMethodStruct(self._binary, method_entry_off)
-            # byte-align IMP
-            method_ent.implementation &= ~0x3
-
-            symbol_name = self._binary.get_full_string_from_start_address(method_ent.name)
-            selref = self.get_selref_for_objc_method(method_ent)
-
-            selector = ObjcSelector(symbol_name, selref, method_ent.implementation)
-            selectors.append(selector)
-
-            method_entry_off += method_ent.sizeof
-        return selectors
-
-    def _get_methlist(self):
-        # type: () -> Optional[Tuple[ObjcMethodListStruct, int]]
-        """Return the ObjcMethodList and file offset described by the ObjcDataRawStruct
-        Some __objc_data entries will describe classes that have no methods implemented. In this case, the method
-        list will not exist, and this method will return None.
-        If the method list does exist, a tuple of the ObjcMethodList and the file offset where the entry is located
-        will be returned
-
-        Args:
-            data_struct: The struct __objc_data whose method list entry should be read
-
-        Returns:
-            A tuple of the data's ObjcMethodList and the file pointer to this method list structure.
-            If the data has no methods, None will be returned.
-        """
-        # does the data entry describe any methods?
-        if self._objc_data_raw_struct.base_methods == 0:
-            return None
-
-        methlist_file_ptr = self._binary.file_offset_for_virtual_address(self._objc_data_raw_struct.base_methods)
-        methlist = ObjcMethodListStruct(self._binary, methlist_file_ptr)
-        return (methlist, methlist_file_ptr)
-
-
 class ObjcRuntimeDataParser(object):
     def __init__(self, binary):
         # type: (MachoBinary) -> None
         self.binary = binary
         DebugUtil.log(self, 'Parsing ObjC runtime info... (this may take a while)')
+
         DebugUtil.log(self, 'Step 1: Parsing selrefs...')
         self._selrefs = self._parse_selrefs()
         DebugUtil.log(self, 'Step 2: Parsing classes...')

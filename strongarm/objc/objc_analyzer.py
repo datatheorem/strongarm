@@ -11,7 +11,7 @@ from capstone import CsInsn
 
 from strongarm.debug_util import DebugUtil
 from strongarm.macho import MachoBinary
-from .objc_instruction import ObjcInstruction, ObjcBranchInstruction
+from .objc_instruction import ObjcInstruction, ObjcBranchInstruction, ObjcUnconditionalBranchInstruction
 from .objc_query import \
     CodeSearch, \
     CodeSearchResult, \
@@ -21,11 +21,11 @@ from .objc_query import \
 
 
 class ObjcMethodInfo(object):
-    from strongarm.macho import ObjcClass, ObjcSelector
     __slots__ = ['objc_class', 'objc_sel', 'imp_addr']
 
     def __init__(self, objc_class, objc_sel, imp):
         # type: (ObjcClass, ObjcSelector, int) -> None
+        from strongarm.macho import ObjcClass, ObjcSelector
         self.objc_class = objc_class
         self.objc_sel = objc_sel
         self.imp_addr = imp
@@ -355,7 +355,7 @@ class ObjcFunctionAnalyzer(object):
         return self.start_address <= branch_instruction.destination_address <= self.end_address
 
     def get_selref_ptr(self, msgsend_instr):
-        # type: (CsInsn) -> int
+        # type: (ObjcUnconditionalBranchInstruction) -> int
         """Retrieve contents of x1 register when control is at provided instruction
 
         Args:
@@ -365,14 +365,8 @@ class ObjcFunctionAnalyzer(object):
               Data stored in x1 at execution of msgsend_instr
 
         """
-        # just as a sanity check, ensure the passed instruction is at least a branch
-        # TODO(PT): we could also check the branch destination to ensure it's really an objc_msgSend call
-        if msgsend_instr.mnemonic not in ['bl', 'b']:
-            raise ValueError('asked to find selref of non-branch instruction')
-
-        wrapped_instr = ObjcInstruction(msgsend_instr)
-        # retrieve whatever data is in x1 at the index of this msgSend call
-        contents = self.get_register_contents_at_instruction('x1', wrapped_instr)
+        # retrieve whatever data is in x1 at this msgSend call
+        contents = self.get_register_contents_at_instruction('x1', msgsend_instr)
         if contents.type != RegisterContentsType.IMMEDIATE:
             raise RuntimeError('couldn\'t determine selref ptr, origates in function arg (type {})'.format(
                 contents.type.name

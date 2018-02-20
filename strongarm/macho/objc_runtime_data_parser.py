@@ -72,6 +72,7 @@ class ObjcRuntimeDataParser(object):
         DebugUtil.log(self, 'Parsing ObjC runtime info... (this may take a while)')
 
         DebugUtil.log(self, 'Step 1: Parsing selrefs...')
+        self._selref_ptr_to_selector_map = {}   # type: Dict[int, ObjcSelector]
         self._selector_literal_ptr_to_selref_map = self._parse_selrefs()
 
         DebugUtil.log(self, 'Step 2: Parsing classes and categories...')
@@ -156,12 +157,9 @@ class ObjcRuntimeDataParser(object):
 
     def selector_for_selref(self, selref_addr):
         # type: (int) -> Optional[ObjcSelector]
-        for objc_class in self.classes:
-            for sel in objc_class.selectors:
-                if not sel.selref:
-                    continue
-                if sel.selref.source_address == selref_addr:
-                    return sel
+        if selref_addr in self._selref_ptr_to_selector_map:
+            return self._selref_ptr_to_selector_map[selref_addr]
+
         # selref wasn't referenced in classes implemented within the binary
         # make sure it's a valid selref
         selref = [x for x in self._selector_literal_ptr_to_selref_map.values() if x.source_address == selref_addr]
@@ -246,6 +244,10 @@ class ObjcRuntimeDataParser(object):
 
             selector = ObjcSelector(symbol_name, selref, method_ent.implementation)
             selectors.append(selector)
+
+            # save this selector in the selref pointer -> selector map
+            if selref:
+                self._selref_ptr_to_selector_map[selref.source_address] = selector
 
             method_entry_off += method_ent.sizeof
         return selectors

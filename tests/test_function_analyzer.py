@@ -6,9 +6,8 @@ from __future__ import print_function
 import os
 import unittest
 
-from strongarm.macho.macho_analyzer import MachoAnalyzer
-from strongarm.macho.macho_parse import MachoParser
-from strongarm.objc.objc_analyzer import ObjcFunctionAnalyzer
+from strongarm.macho import MachoAnalyzer, MachoParser
+from strongarm.objc import ObjcFunctionAnalyzer, ObjcInstruction
 
 
 class TestFunctionAnalyzer(unittest.TestCase):
@@ -124,7 +123,7 @@ class TestFunctionAnalyzer(unittest.TestCase):
         self.assertEqual(contents.value, 0x1000090c0)
 
     def test_get_selref(self):
-        objc_msgSendInstr = self.instructions[16]
+        objc_msgSendInstr = ObjcInstruction.parse_instruction(self.function_analyzer, self.instructions[16])
         selref = self.function_analyzer.get_selref_ptr(objc_msgSendInstr)
         self.assertEqual(selref, 0x1000090c0)
 

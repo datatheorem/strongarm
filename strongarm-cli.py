@@ -194,11 +194,22 @@ while True:
             if isinstance(wrapped_instr, ObjcBranchInstruction):
                 # TODO(PT): count args by counting colons in selector name
                 if wrapped_instr.selector:
-                    instruction_string += '(id, @selector({}));'.format(wrapped_instr.selector.name)
+                    instruction_string += '(id, @selector({})'.format(wrapped_instr.selector.name)
 
-                for i in range(2, 4):
-                    register = 'x{}'.format(i)
-                    method_arg = function_analyzer.get_register_contents_at_instruction(register, wrapped_instr)
-                    instruction_string += hex(method_arg)
+                    for i in range(2, 4):
+                        register = 'x{}'.format(i)
+                        method_arg = function_analyzer.get_register_contents_at_instruction(register, wrapped_instr)
+
+                        method_arg_string = ', '
+                        if method_arg.type == RegisterContentsType.UNKNOWN:
+                            method_arg_string += '<?>'
+                        elif method_arg.type == RegisterContentsType.FUNCTION_ARG:
+                            method_arg_string += '<arg{} to {}>'.format(method_arg.value - 2, desired_sel)
+                        elif method_arg.type == RegisterContentsType.IMMEDIATE:
+                            method_arg_string += hex(method_arg.value)
+
+                        instruction_string += method_arg_string
+                    instruction_string += ');'
 
         print(instruction_string)
+    sys.exit(0)

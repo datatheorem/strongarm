@@ -11,7 +11,7 @@ from strongarm.macho import MachoParser, MachoBinary, MachoAnalyzer, ObjcCategor
 from strongarm.macho import CPU_TYPE, DylibCommand
 from strongarm.debug_util import DebugUtil
 from strongarm.objc import CodeSearch, CodeSearchTermCallDestination, RegisterContentsType, ObjcFunctionAnalyzer, \
-    ObjcBranchInstruction
+    ObjcBranchInstruction, ObjcBasicBlock
 
 
 def pick_macho_slice(parser: MachoParser) -> MachoBinary:
@@ -164,9 +164,22 @@ while True:
 
     print('-[{} {}]'.format(desired_imp.objc_class.name, desired_imp.objc_sel.name))
     function_analyzer = ObjcFunctionAnalyzer.get_function_analyzer(binary, desired_imp.imp_addr)
+    basic_blocks = ObjcBasicBlock.get_basic_blocks(function_analyzer)
+    # transform basic blocks into tuples of (basic block start addr, basic block end addr)
+    basic_block_boundaries = [[block[0].address, block[-1].address] for block in basic_blocks]
+    # flatten basic_block_boundaries into one-dimensional list
+    basic_block_boundaries = [x for boundaries in basic_block_boundaries for x in boundaries]
+    # remove duplicate boundaries
+    basic_block_boundaries = set(basic_block_boundaries)
 
     for instr in function_analyzer.instructions:
-        instruction_string = '\t{}\t\t{}'.format(hex(instr.address), instr.mnemonic)
+        instruction_string = ''
+        # add visual indicator if this is a basic block boundary
+        if instr.address in basic_block_boundaries:
+            instruction_string += '----------------------------------------------- #\tbasic block boundary\n'
+
+        instruction_string += '\t\t{}\t\t{}'.format(hex(instr.address), instr.mnemonic)
+
         # add each arg to the string
         for arg in instr.operands:
             instruction_string += ' ' + format_instruction_arg(instr, arg)

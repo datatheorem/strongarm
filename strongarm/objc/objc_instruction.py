@@ -87,7 +87,7 @@ class ObjcUnconditionalBranchInstruction(ObjcBranchInstruction):
                                       'b.lt',
                                       'b.gt'
                                       ]
-    _OBJC_MSGSEND_FUNCTIONS = ['_objc_msgSend', '_objc_msgSendSuper2']
+    OBJC_MSGSEND_FUNCTIONS = ['_objc_msgSend', '_objc_msgSendSuper2']
 
     def __init__(self, function_analyzer, instruction):
         # type: (objc_analyzer.ObjcFunctionAnalyzer, CsInsn) -> None
@@ -103,7 +103,7 @@ class ObjcUnconditionalBranchInstruction(ObjcBranchInstruction):
         external_c_sym_map = macho_analyzer.external_branch_destinations_to_symbol_names
         if self.destination_address in external_c_sym_map:
             self.symbol = external_c_sym_map[self.destination_address]  # type: ignore
-            if self.symbol in self._OBJC_MSGSEND_FUNCTIONS:
+            if self.symbol in self.OBJC_MSGSEND_FUNCTIONS:
                 self.is_msgSend_call = True
                 self._patch_msgSend_destination(function_analyzer)
             else:
@@ -116,7 +116,7 @@ class ObjcUnconditionalBranchInstruction(ObjcBranchInstruction):
         # validate instruction
         if not self.is_msgSend_call or \
            self.raw_instr.mnemonic not in ['bl', 'b'] or \
-           self.symbol not in self._OBJC_MSGSEND_FUNCTIONS:
+           self.symbol not in self.OBJC_MSGSEND_FUNCTIONS:
             print('self.is_msgSend_call {} self.raw_instr.mnemonic {} self.symbol {}'.format(
                 self.is_msgSend_call,
                 self.raw_instr.mnemonic,

@@ -10,7 +10,8 @@ from ctypes import sizeof
 from strongarm.macho import MachoParser, MachoBinary, MachoAnalyzer, ObjcCategory, ObjcClass
 from strongarm.macho import CPU_TYPE, DylibCommand
 from strongarm.debug_util import DebugUtil
-from strongarm.objc import CodeSearch, CodeSearchTermCallDestination, RegisterContentsType, ObjcFunctionAnalyzer
+from strongarm.objc import CodeSearch, CodeSearchTermCallDestination, RegisterContentsType, ObjcFunctionAnalyzer, \
+    ObjcBranchInstruction
 
 
 def pick_macho_slice(parser: MachoParser) -> MachoBinary:
@@ -134,3 +135,57 @@ for method_info in methods:
     print('\t-[{} {}] defined at {}'.format(class_name,
                                             method_info.objc_sel.name,
                                             hex(method_info.objc_sel.implementation)))
+
+
+from capstone import CsInsn
+from capstone.arm64 import Arm64Op, ARM64_OP_REG, ARM64_OP_IMM, ARM64_OP_MEM
+
+from typing import Text
+
+
+def format_instruction_arg(instruction: CsInsn, arg: Arm64Op) -> Text:
+    if arg.type == ARM64_OP_REG:
+        return instruction.reg_name(arg.value.reg)
+    elif arg.type == ARM64_OP_IMM:
+        return hex(arg.value.imm)
+    elif arg.type == ARM64_OP_MEM:
+        return '[{} #{}]'.format(instruction.reg_name(arg.mem.base), hex(arg.mem.disp))
+    raise RuntimeError('unknown arg type {}'.format(arg.type))
+
+
+while True:
+    print('Enter a SEL to disassemble:')
+    desired_sel = input()
+    try:
+        desired_imp = [x for x in methods if x.objc_sel.name == desired_sel][0]
+    except IndexError:
+        print('Unknown SEL {}'.format(desired_sel))
+        continue
+
+    print('-[{} {}]'.format(desired_imp.objc_class.name, desired_imp.objc_sel.name))
+    function_analyzer = ObjcFunctionAnalyzer.get_function_analyzer(binary, desired_imp.imp_addr)
+
+    for instr in function_analyzer.instructions:
+        instruction_string = '\t{}\t\t{}'.format(hex(instr.address), instr.mnemonic)
+        # add each arg to the string
+        for arg in instr.operands:
+            instruction_string += ' ' + format_instruction_arg(instr, arg)
+
+        instruction_string += '\t\t\t'
+        # parse as an ObjcInstruction
+        wrapped_instr = function_analyzer.get_instruction_at_address(instr.address)
+        if wrapped_instr.symbol:
+            instruction_string += '#\t'
+            instruction_string += wrapped_instr.symbol
+
+            if isinstance(wrapped_instr, ObjcBranchInstruction):
+                # TODO(PT): count args by counting colons in selector name
+                if wrapped_instr.selector:
+                    instruction_string += '(id, @selector({}));'.format(wrapped_instr.selector.name)
+
+                for i in range(2, 4):
+                    register = 'x{}'.format(i)
+                    method_arg = function_analyzer.get_register_contents_at_instruction(register, wrapped_instr)
+                    instruction_string += hex(method_arg)
+
+        print(instruction_string)

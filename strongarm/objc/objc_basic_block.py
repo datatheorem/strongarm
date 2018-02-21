@@ -15,7 +15,7 @@ if TYPE_CHECKING:
 
 
 class ObjcBasicBlock(object):
-    def __init__(self, function_analyzer, start_index):
+    def __init__(self, function_analyzer):
         # type: (ObjcFunctionAnalyzer, int) -> None
         self._function_analyzer = function_analyzer
 

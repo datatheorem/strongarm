@@ -4,6 +4,7 @@ from __future__ import unicode_literals
 from __future__ import print_function
 
 import sys
+import re
 import argparse
 from ctypes import sizeof
 
@@ -154,7 +155,7 @@ def format_instruction_arg(instruction: CsInsn, arg: Arm64Op) -> Text:
 
 
 while True:
-    print('Enter a SEL to disassemble:')
+    print('\n\nEnter a SEL to disassemble:')
     desired_sel = input()
     try:
         desired_imp = [x for x in methods if x.objc_sel.name == desired_sel][0]
@@ -162,8 +163,30 @@ while True:
         print('Unknown SEL {}'.format(desired_sel))
         continue
 
-    print('-[{} {}]'.format(desired_imp.objc_class.name, desired_imp.objc_sel.name))
+    # figure out the arguments based on the sel name
+    sel_components = desired_imp.objc_sel.name.split(':')
+    sel_args = ['self', '@selector({})'.format(desired_imp.objc_sel.name)]
+    for component in sel_components:
+        if not len(component):
+            continue
+        # extract the last capitalized word
+        split = re.findall('[A-Z][^A-Z]*', component)
+        # if no capitalized word, use the full component
+        if not len(split):
+            split.append(component)
+        # lowercase it
+        sel_args.append(split[-1].lower())
+
+    signature = '\n\n-[{} {}] ('.format(desired_imp.objc_class.name, desired_imp.objc_sel.name)
+    for i, arg in enumerate(sel_args):
+        signature += arg
+        if i != len(sel_args) - 1:
+            signature += ', '
+    signature += ');'
+    print(signature)
+
     function_analyzer = ObjcFunctionAnalyzer.get_function_analyzer(binary, desired_imp.imp_addr)
+
     basic_blocks = ObjcBasicBlock.get_basic_blocks(function_analyzer)
     # transform basic blocks into tuples of (basic block start addr, basic block end addr)
     basic_block_boundaries = [[block[0].address, block[-1].address] for block in basic_blocks]

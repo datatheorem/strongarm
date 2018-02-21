@@ -204,8 +204,10 @@ while True:
         instruction_string += '\t\t{}\t\t{}'.format(hex(instr.address), instr.mnemonic)
 
         # add each arg to the string
-        for arg in instr.operands:
+        for i, arg in enumerate(instr.operands):
             instruction_string += ' ' + format_instruction_arg(instr, arg)
+            if i != len(instr.operands) - 1:
+                instruction_string += ','
 
         instruction_string += '\t\t\t'
         # parse as an ObjcInstruction
@@ -219,15 +221,18 @@ while True:
                 if wrapped_instr.selector:
                     instruction_string += '(id, @selector({})'.format(wrapped_instr.selector.name)
 
-                    for i in range(2, 4):
-                        register = 'x{}'.format(i)
+                    # figure out argument count passed to selector
+                    arg_count = wrapped_instr.selector.name.count(':')
+                    for i in range(arg_count):
+                        # x0 is self, x1 is the SEL, real args start at x2
+                        register = 'x{}'.format(i + 2)
                         method_arg = function_analyzer.get_register_contents_at_instruction(register, wrapped_instr)
 
                         method_arg_string = ', '
                         if method_arg.type == RegisterContentsType.UNKNOWN:
                             method_arg_string += '<?>'
                         elif method_arg.type == RegisterContentsType.FUNCTION_ARG:
-                            method_arg_string += '<arg{} to {}>'.format(method_arg.value - 2, desired_sel)
+                            method_arg_string += sel_args[method_arg.value]
                         elif method_arg.type == RegisterContentsType.IMMEDIATE:
                             method_arg_string += hex(method_arg.value)
 
@@ -235,4 +240,3 @@ while True:
                     instruction_string += ');'
 
         print(instruction_string)
-    sys.exit(0)

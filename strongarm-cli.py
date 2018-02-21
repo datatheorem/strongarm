@@ -177,7 +177,7 @@ while True:
         # lowercase it
         sel_args.append(split[-1].lower())
 
-    signature = '\n\n-[{} {}] ('.format(desired_imp.objc_class.name, desired_imp.objc_sel.name)
+    signature = '\n\n-[{} {}]('.format(desired_imp.objc_class.name, desired_imp.objc_sel.name)
     for i, arg in enumerate(sel_args):
         signature += arg
         if i != len(sel_args) - 1:
@@ -201,7 +201,7 @@ while True:
         if instr.address in basic_block_boundaries:
             instruction_string += '----------------------------------------------- #\tbasic block boundary\n'
 
-        instruction_string += '\t\t{}\t\t{}'.format(hex(instr.address), instr.mnemonic)
+        instruction_string += '\t{}\t\t{}'.format(hex(instr.address), instr.mnemonic)
 
         # add each arg to the string
         for i, arg in enumerate(instr.operands):

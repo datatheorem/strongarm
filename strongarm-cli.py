@@ -235,5 +235,11 @@ while True:
 
                         instruction_string += method_arg_string
                     instruction_string += ');'
+        else:
+            if len(instr.operands) == 2 and instr.operands[1].type == ARM64_OP_IMM:
+                # try reading a string
+                binary_str = binary.read_string_at_address(instr.operands[1].value.imm)
+                if binary_str:
+                    instruction_string += '#\t"{}"'.format(binary_str)
 
         print(instruction_string)

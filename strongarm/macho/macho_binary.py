@@ -7,7 +7,7 @@ from typing import List, Text, Optional, Dict
 
 from strongarm.debug_util import DebugUtil
 
-from strongarm.macho.macho_definitions import MachArch, CPU_TYPE, HEADER_FLAGS
+from strongarm.macho.macho_definitions import MachArch, MachoFileType, CPU_TYPE, HEADER_FLAGS
 from strongarm.macho.macho_load_commands import MachoLoadCommands
 from strongarm.macho.arch_independent_structs import \
     MachoHeaderStruct, \
@@ -70,6 +70,7 @@ class MachoBinary(object):
         # Mach-O header data
         self.header = None  # type: MachoHeaderStruct
         self.header_flags = None    # type: List[int]
+        self.file_type = None   # type: MachoFileType
 
         # segment and section commands from Mach-O header
         self.segment_commands = None    # type: Dict[Text, MachoSegmentCommandStruct]
@@ -161,6 +162,7 @@ class MachoBinary(object):
             self.cpu_type = CPU_TYPE.UNKNOWN
 
         self._parse_header_flags()
+        self.file_type = MachoFileType(self.header.filetype)
 
         # load commands begin directly after Mach O header, so the offset is the size of the header
         load_commands_off = self.header.sizeof

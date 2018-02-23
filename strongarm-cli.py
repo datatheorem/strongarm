@@ -79,7 +79,6 @@ for macho_slice in parser.slices:
     print('\t{} Mach-O slice @ {}'.format(macho_slice.cpu_type.name, hex(macho_slice._offset_within_fat)))
 
 binary = pick_macho_slice(parser)
-analyzer = MachoAnalyzer.get_analyzer(binary)
 
 print('Reading {} slice'.format(binary.cpu_type.name))
 
@@ -110,6 +109,9 @@ print('\tContains encrypted section? {}'.format(binary.is_encrypted()))
 for section, cmd in binary.sections.items():
     print('\t{} @ [{} - {}]'.format(section, hex(cmd.address), hex(cmd.end_address)))
 
+# we defer initializing the analyzer until as late as possible
+# this is so we can still print out preliminary info about the binary, even if it's encrypted
+analyzer = MachoAnalyzer.get_analyzer(binary)
 print('\nSymbols:')
 print('\tImported symbols:')
 stub_map = analyzer.external_symbol_names_to_branch_destinations

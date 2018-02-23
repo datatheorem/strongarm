@@ -90,15 +90,10 @@ print('Virtual base: {}'.format(hex(binary.get_virtual_base())))
 print('\nLoad commands:')
 load_commands = binary.load_dylib_commands
 for cmd in load_commands:
-    dylib_load_string_fileoff = cmd.fileoff + cmd.dylib.name.offset
-    dylib_load_string_len = cmd.cmdsize - cmd.dylib.name.offset
-    dylib_load_string_bytes = binary.get_bytes(dylib_load_string_fileoff, dylib_load_string_len)
-    # trim anything after NUL character
-    dylib_load_string_bytes = dylib_load_string_bytes.split(b'\0')[0]
-    dylib_load_string = dylib_load_string_bytes.decode('utf-8')
-
+    dylib_name_addr = binary.get_virtual_base() + cmd.fileoff + cmd.dylib.name.offset
+    dylib_name = binary.read_string_at_address(dylib_name_addr)
     dylib_version = cmd.dylib.current_version
-    print('\t{} v.{}'.format(dylib_load_string, hex(dylib_version)))
+    print('\t{} v.{}'.format(dylib_name, hex(dylib_version)))
 
 print('\nSegments:')
 for segment, cmd in binary.segment_commands.items():

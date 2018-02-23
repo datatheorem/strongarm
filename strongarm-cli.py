@@ -81,10 +81,12 @@ for macho_slice in parser.slices:
 binary = pick_macho_slice(parser)
 
 print('Reading {} slice'.format(binary.cpu_type.name))
+print('Mach-O type: {}'.format(binary.file_type.name))
 
 endianness = 'Big' if binary.is_swap else 'Little'
 endianness = '{} endian'.format(endianness)
 print(endianness)
+
 print('Virtual base: {}'.format(hex(binary.get_virtual_base())))
 
 print('\nLoad commands:')

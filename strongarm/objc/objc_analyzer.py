@@ -425,7 +425,7 @@ class ObjcFunctionAnalyzer(object):
               Register name with trimmed size prefix, or unmodified name if not a GP register
 
         """
-        if reg_name[0] in ['x', 'w', 'r', 's', 'd', 'q'] and reg_name:
+        if reg_name[0] in ['x', 'w', 'r', 's', 'd', 'q'] and reg_name != 'sp':
             return reg_name[1::]
         return reg_name
 

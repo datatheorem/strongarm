@@ -57,7 +57,7 @@ class ObjcFunctionAnalyzer(object):
             self.start_address = instructions[0].address
             last_instruction = instructions[len(instructions) - 1]
             self.end_address = last_instruction.address
-        except IndexError as e:
+        except IndexError:
             # this method must have just been a stub with no real instructions!
             self.start_address = 0
             self.end_address = 0
@@ -70,26 +70,33 @@ class ObjcFunctionAnalyzer(object):
 
         self._call_targets = None   # type: List[ObjcBranchInstruction]
 
-    def get_instruction_at_index(self, index):
-        # type: (int) -> Optional[ObjcInstruction]
-        """Get the instruction at a given index within the function's code, wrapping in ObjcInstruction
-        """
-        if 0 > index >= len(self.instructions):
-            return None
-        raw = self.instructions[index]
-        wrapped = ObjcInstruction.parse_instruction(self, raw)
-        return wrapped
-
-    def get_instruction_at_address(self, address):
-        # type: (int) -> Optional[ObjcInstruction]
-        """Get the Instruction within the analyzed function at a provided address.
-        The return will be wrapped in an ObjcInstruction.
-        This method will return None if the address is not contained within the analyzed function.
+    def _get_instruction_index_of_address(self, address):
+        # type: (int) -> Optional[int]
+        """Return the index of an instruction with a provided address within the internal list of instructions
         """
         base_address = self.start_address
         offset = address - base_address
         # 4 bytes per instruction
         index = int(offset / 4)
+        if 0 <= index < len(self.instructions):
+            return index
+        return None
+
+    def get_instruction_at_index(self, index):
+        # type: (int) -> Optional[CsInsn]
+        """Get the instruction at a given index within the function's code, wrapping in ObjcInstruction
+        """
+        if 0 <= index < len(self.instructions):
+            return self.instructions[index]
+        return None
+
+    def get_instruction_at_address(self, address):
+        # type: (int) -> Optional[CsInsn]
+        """Get the Instruction within the analyzed function at a provided address.
+        The return will be wrapped in an ObjcInstruction.
+        This method will return None if the address is not contained within the analyzed function.
+        """
+        index = self._get_instruction_index_of_address(address)
         return self.get_instruction_at_index(index)
 
     def debug_print(self, idx, output):
@@ -430,8 +437,8 @@ class ObjcFunctionAnalyzer(object):
             specified point of execution
         """
         desired_reg = register
-        start_index = self.instructions.index(instruction.raw_instr)
         target_addr = instruction.address
+        start_index = self._get_instruction_index_of_address(target_addr)
         DebugUtil.log(self, 'analyzing data flow to determine data in {} at {}'.format(
             desired_reg,
             hex(int(target_addr))
@@ -616,11 +623,9 @@ class ObjcFunctionAnalyzer(object):
         desired_reg = self._trimmed_reg_name(desired_reg)
         if desired_reg not in links and desired_reg not in resolved_registers:
             raise RuntimeError('invalid data set? desired_reg {} can\'t be determined from '
-                               'links {}, resolved_registers {}'.format(
-                desired_reg,
-                links,
-                resolved_registers,
-            ))
+                               'links {}, resolved_registers {}'.format(desired_reg,
+                                                                        links,
+                                                                        resolved_registers))
 
         # do we know the value of this register?
         if desired_reg in resolved_registers:

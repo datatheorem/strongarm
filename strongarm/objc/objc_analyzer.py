@@ -372,6 +372,11 @@ class ObjcFunctionAnalyzer(object):
               Data stored in x1 at execution of msgsend_instr
 
         """
+        if msgsend_instr.raw_instr.mnemonic not in ObjcUnconditionalBranchInstruction.UNCONDITIONAL_BRANCH_MNEMONICS:
+            raise ValueError('get_selref_ptr() called on non-branch instruction')
+        if not isinstance(msgsend_instr, ObjcInstruction):
+            raise ValueError('wrong type passed to get_selref_ptr()')
+
         # try fast path to identify selref
         msgsend_idx = self._get_instruction_index_of_address(msgsend_instr.address)
         search_space_start_idx = msgsend_idx - 3

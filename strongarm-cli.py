@@ -12,7 +12,7 @@ from strongarm.macho import MachoParser, MachoBinary, MachoAnalyzer, ObjcCategor
 from strongarm.macho import CPU_TYPE, DylibCommand
 from strongarm.debug_util import DebugUtil
 from strongarm.objc import CodeSearch, CodeSearchTermCallDestination, RegisterContentsType, ObjcFunctionAnalyzer, \
-    ObjcBranchInstruction, ObjcBasicBlock
+    ObjcBranchInstruction, ObjcBasicBlock, ObjcInstruction
 
 
 def pick_macho_slice(parser: MachoParser) -> MachoBinary:
@@ -210,14 +210,19 @@ while True:
 
         instruction_string += '\t\t\t'
         # parse as an ObjcInstruction
-        wrapped_instr = function_analyzer.get_instruction_at_address(instr.address)
-        if wrapped_instr.symbol:
-            instruction_string += '#\t'
-            instruction_string += wrapped_instr.symbol
+        wrapped_instr = ObjcInstruction.parse_instruction(function_analyzer,
+                                                          function_analyzer.get_instruction_at_address(instr.address))
 
-            if isinstance(wrapped_instr, ObjcBranchInstruction):
-                # TODO(PT): count args by counting colons in selector name
-                if wrapped_instr.selector:
+        if isinstance(wrapped_instr, ObjcBranchInstruction):
+            instruction_string += '#\t'
+            if function_analyzer.is_local_branch(wrapped_instr):
+                instruction_string += 'local branch'
+            elif wrapped_instr.symbol:
+                instruction_string += wrapped_instr.symbol
+
+                if not wrapped_instr.selector:
+                    instruction_string += '();'
+                else:
                     instruction_string += '(id, @selector({})'.format(wrapped_instr.selector.name)
 
                     # figure out argument count passed to selector

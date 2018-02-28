@@ -407,13 +407,16 @@ class ObjcFunctionAnalyzer(object):
             ))
         return contents.value
 
-    def _trimmed_reg_name(self, reg_name):
+    @staticmethod
+    def _trimmed_reg_name(reg_name):
         # type: (Text) -> Text
-        """Remove 'x', 'r', or 'w' from general purpose register name
+        """Remove 'x', 'r', 'w', 'd', 's', or 'q' from general purpose register name
         This is so the register strings 'x22' and 'w22', which are two slices of the same register,
         map to the same register.
 
         Will return non-GP registers, such as 'sp', as-is.
+
+        Also strips NEON registers; 's' 32b registers, 'd' 64b registers, and 'q' 128b registers
 
         Args:
               reg_name: Full register name to trim
@@ -422,7 +425,7 @@ class ObjcFunctionAnalyzer(object):
               Register name with trimmed size prefix, or unmodified name if not a GP register
 
         """
-        if reg_name[0] in ['x', 'w', 'r']:
+        if reg_name[0] in ['x', 'w', 'r', 's', 'd', 'q'] and reg_name:
             return reg_name[1::]
         return reg_name
 

@@ -365,6 +365,22 @@ class ObjcFunctionAnalyzer(object):
               Data stored in x1 at execution of msgsend_instr
 
         """
+        # try fast path to identify selref
+        msgsend_idx = self._get_instruction_index_of_address(msgsend_instr.address)
+        # look at the instruction above this one
+        sel_load_instr_idx = msgsend_idx - 1
+        sel_load_instr = self.instructions[sel_load_instr_idx]
+        if sel_load_instr.mnemonic == 'ldr':
+            dst = sel_load_instr.operands[0]
+            if dst.type == ARM64_OP_REG:
+                if self._trimmed_reg_name(sel_load_instr.reg_name(dst.value.reg)) == '1':
+                    src = sel_load_instr.operands[1]
+                    if src.type == ARM64_OP_IMM:
+                        self.i += 1
+                        print('took get_selref_ptr() fast path {} times'.format(self.i))
+                        selref_ptr = src.value
+                        return selref_ptr
+
         # retrieve whatever data is in x1 at this msgSend call
         contents = self.get_register_contents_at_instruction('x1', msgsend_instr)
         if contents.type != RegisterContentsType.IMMEDIATE:

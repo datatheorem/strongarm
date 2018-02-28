@@ -374,7 +374,7 @@ class ObjcFunctionAnalyzer(object):
         """
         # try fast path to identify selref
         msgsend_idx = self._get_instruction_index_of_address(msgsend_instr.address)
-        search_space_start_idx = msgsend_idx - 4
+        search_space_start_idx = msgsend_idx - 3
         search_space_start_idx = max(0, search_space_start_idx)
         adrp_ptr = None
         ldr_val = None
@@ -382,8 +382,14 @@ class ObjcFunctionAnalyzer(object):
             if instr.mnemonic == 'adrp':
                 adrp_ptr = instr.operands[1].value.imm
             elif instr.mnemonic == 'ldr':
-                ldr_val = instr.operands[1].value.mem.disp
-                break
+                src = instr.operands[1]
+                if src.type == ARM64_OP_IMM:
+                    ldr_val = src.value.imm
+                    break
+                elif src.type == ARM64_OP_MEM:
+                    ldr_val = src.value.mem.disp
+                    break
+
         if adrp_ptr and ldr_val:
             selref_ptr = adrp_ptr + ldr_val
             return selref_ptr
@@ -453,7 +459,7 @@ class ObjcFunctionAnalyzer(object):
         # map of name -> (name, value). key is register needing to be resolved,
         # value is tuple containing (register containing source value, signed offset from source register)
         needed_links = {}
-        # helper to handle instructions that this method doesn't totallly parse
+        # helper to handle instructions that this method doesn't totally parse
         # when we detect an instruction like add x0, x0, #0xf60, instead of trying to handle it we just keep track of
         # the #0xf60 and add it to the final value of x0 at the end of the operation
         extra_offset = 0
@@ -467,10 +473,6 @@ class ObjcFunctionAnalyzer(object):
                 # found everything we need
                 break
 
-            # we only care about instructions that could be moving data between registers
-            # therefore, the minimum number of operands an instruction we're interested in could have is 2
-            if len(instr.operands) < 2:
-                continue
             # some instructions will have the same format as register transformations,
             # but are actually unrelated to what we're looking for
             # for example, str x1, [sp, #0x38] would be identified by this function as moving something from sp into
@@ -480,11 +482,19 @@ class ObjcFunctionAnalyzer(object):
             excluded_instructions = [
                 'str',
             ]
+            # let's also skip any branch instruction, because they won't be necessary for determining a register value
+            excluded_instructions += ObjcUnconditionalBranchInstruction.UNCONDITIONAL_BRANCH_MNEMONICS
             if instr.mnemonic in excluded_instructions:
                 continue
 
-            dst = instr.operands[0]
-            src = instr.operands[1]
+            # we only care about instructions that could be moving data between registers
+            # therefore, the minimum number of operands an instruction we're interested in could have is 2
+            operands = instr.operands
+            if len(operands) < 2:
+                continue
+
+            dst = operands[0]
+            src = operands[1]
 
             # we're only interested in instructions whose destination is a register
             if dst.type != ARM64_OP_REG:
@@ -500,12 +510,13 @@ class ObjcFunctionAnalyzer(object):
             # here, wzr is used as a 'trick' and the real source is the third operand
             # try to detect this pattern
             # zr indicates zero-register
-            if len(instr.operands) > 2:
-                src2 = instr.operands[2]
+            if len(operands) > 2:
+                src2 = operands[2]
                 if src.type == ARM64_OP_REG:
                     src_reg_name = self._trimmed_reg_name(instr.reg_name(src.value.reg))
                     if src_reg_name == 'zr':
-                        src = instr.operands[2]
+                        # skip over zero register and set source to third operand
+                        src = operands[2]
                     # we might see an instruction like add x0, x0, #0xf60
                     # in this case, x0 is both the source and dest, but for our purposes it's the dest
                     # TODO(PT): handle instructions with 2 source operands (like add)
@@ -538,7 +549,7 @@ class ObjcFunctionAnalyzer(object):
                 elif src_reg_name == 'zr':
                     # value of dst will be 0
                     dst_value = 0
-                    determined_values[dst_reg_name] = 0
+                    determined_values[dst_reg_name] = dst_value
                 else:
                     # we'll need to resolve src before we can know dst,
                     # add dst -> src to links list

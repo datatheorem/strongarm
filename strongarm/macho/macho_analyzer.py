@@ -54,6 +54,13 @@ class MachoAnalyzer(object):
         # done setting up, store this analyzer in class cache
         MachoAnalyzer.active_analyzer_map[bin] = self
 
+    @classmethod
+    def clear_cache(cls):
+        """Delete cached MachoAnalyzer's
+        This can be used when you are finished analyzing a binary set and don't want to retain the cached data in memory
+        """
+        cls.active_analyzer_map = {}
+
     @property
     def objc_helper(self):
         # type: () -> ObjcRuntimeDataParser

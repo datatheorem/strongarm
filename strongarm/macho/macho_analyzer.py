@@ -12,7 +12,12 @@ from typing import TYPE_CHECKING
 from strongarm.macho.macho_binary import MachoBinary
 from strongarm.macho.macho_imp_stubs import MachoImpStubsParser
 from strongarm.macho.macho_string_table_helper import MachoStringTableHelper
-from strongarm.macho.objc_runtime_data_parser import ObjcRuntimeDataParser, ObjcSelector, ObjcClass
+from strongarm.macho.objc_runtime_data_parser import \
+    ObjcRuntimeDataParser, \
+    ObjcSelector, \
+    ObjcClass, \
+    ObjcCategory, \
+    ObjcProtocol
 from strongarm import DebugUtil
 
 
@@ -79,8 +84,23 @@ class MachoAnalyzer(object):
         return MachoAnalyzer(bin)
 
     def objc_classes(self):
+        """Return the List of classes and categories implemented within the binary
+        """
         # type: () -> List[ObjcClass]
         return self.objc_helper.classes
+
+    def objc_categories(self):
+        """Return the List of categories implemented within the app
+        """
+        all_classes = self.objc_classes()
+        categories = [c for c in all_classes if type(c) == ObjcCategory]
+        return categories
+
+    def get_conformed_protocols(self):
+        """Return the List of protocols to which code within the binary conforms
+        """
+        # type: () -> List[ObjcProtocol]
+        return self.objc_helper.protocols
 
     def _parse_la_symbol_ptr_list(self):
         # type: () -> List[int]

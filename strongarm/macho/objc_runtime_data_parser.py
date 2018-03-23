@@ -13,7 +13,8 @@ from strongarm.macho.arch_independent_structs import \
     ObjcMethodStruct, \
     ObjcMethodListStruct, \
     DylibCommandStruct, \
-    ObjcCategoryRawStruct
+    ObjcCategoryRawStruct, \
+    ObjcProtocolRawStruct
 from strongarm.debug_util import DebugUtil
 from strongarm.macho.macho_binary import MachoBinary
 
@@ -34,6 +35,10 @@ class ObjcCategory(ObjcClass):
         # type: (Text, Text, List[ObjcSelector]) -> None
         super(ObjcCategory, self).__init__(name, selectors)
         self.base_class = base_class
+
+
+class ObjcProtocol(ObjcClass):
+    pass
 
 
 class ObjcSelector(object):
@@ -75,8 +80,9 @@ class ObjcRuntimeDataParser(object):
         self._selref_ptr_to_selector_map = {}   # type: Dict[int, ObjcSelector]
         self._selector_literal_ptr_to_selref_map = self._parse_selrefs()
 
-        DebugUtil.log(self, 'Step 2: Parsing classes and categories...')
-        self.classes = self._parse_static_objc_runtime_info()
+        DebugUtil.log(self, 'Step 2: Parsing classes, categories, and protocols...')
+        self.classes = self._parse_class_and_category_info()
+        self.protocols = self._parse_protocol_info()
 
         DebugUtil.log(self, 'Step 3: Resolving symbol name to source dylib map...')
         self._sym_to_dylib_path = self._parse_linked_dylib_symbols()
@@ -212,14 +218,28 @@ class ObjcRuntimeDataParser(object):
                 parsed_categories.append(parsed_category)
         return parsed_categories
 
-    def _parse_static_objc_runtime_info(self):
+    def _parse_class_and_category_info(self):
         # type: () -> List[ObjcClass]
-        """Parse classes referenced by __objc_classlist and categories referenced by __objc_catlist
+        """Parse classes and categories referenced by __objc_classlist and __objc_catlist
         """
         classes = []
         classes += self._parse_objc_classes()
         classes += self._parse_objc_categories()
         return classes
+
+    def _parse_protocol_info(self):
+        # type: () -> List[ObjcProtocol]
+        """Parse protocols which code in the app conforms to, referenced by __objc_protolist
+        """
+        DebugUtil.log(self, 'Cross referencing __objc_protolist, __objc_protocol, and __objc_data entries...')
+        parsed_protocols = []
+        protocol_pointers = self._get_protolist_pointers()
+        for ptr in protocol_pointers:
+            objc_protocol_struct = self._get_objc_protocol_from_protolist_pointer(ptr)
+            if objc_protocol_struct:
+                parsed_protocol = self._parse_objc_protocol_entry(objc_protocol_struct)
+                parsed_protocols.append(parsed_protocol)
+        return parsed_protocols
 
     def read_selectors_from_methlist_ptr(self, methlist_ptr):
         # type: (int) -> List[ObjcSelector]
@@ -252,9 +272,23 @@ class ObjcRuntimeDataParser(object):
             method_entry_off += method_ent.sizeof
         return selectors
 
+    def _parse_objc_protocol_entry(self, objc_protocol_struct):
+        # type: (ObjcProtocolRawStruct) -> ObjcProtocol
+        name = self.binary.get_full_string_from_start_address(objc_protocol_struct.name)
+        selectors = []
+        if objc_protocol_struct.required_instance_methods:
+            selectors += self.read_selectors_from_methlist_ptr(objc_protocol_struct.required_instance_methods)
+        if objc_protocol_struct.required_class_methods:
+            selectors += self.read_selectors_from_methlist_ptr(objc_protocol_struct.required_class_methods)
+        if objc_protocol_struct.optional_instance_methods:
+            selectors += self.read_selectors_from_methlist_ptr(objc_protocol_struct.optional_instance_methods)
+        if objc_protocol_struct.optional_class_methods:
+            selectors += self.read_selectors_from_methlist_ptr(objc_protocol_struct.optional_class_methods)
+
+        return ObjcProtocol(name, selectors)
+
     def _parse_objc_category_entry(self, objc_category_struct):
         # type: (ObjcCategoryRawStruct) -> ObjcCategory
-        # TODO(PT): stop making lots of ObjcDataEntryParser instances, just make+use utility functions
         selectors = []
         name = self.binary.get_full_string_from_start_address(objc_category_struct.name)
 
@@ -327,6 +361,13 @@ class ObjcRuntimeDataParser(object):
         _, catlist_pointers = self._read_pointer_section('__objc_catlist')
         return catlist_pointers
 
+    def _get_protolist_pointers(self):
+        # type: () -> List[int]
+        """Read pointers in __objc_protolist into list
+        """
+        _, protolist_pointers = self._read_pointer_section('__objc_protolist')
+        return protolist_pointers
+
     def _get_classlist_pointers(self):
         # type: () -> List[int]
         """Read pointers in __objc_classlist into list
@@ -340,6 +381,13 @@ class ObjcRuntimeDataParser(object):
         """
         category_entry = ObjcCategoryRawStruct(self.binary, category_struct_pointer, virtual=True)
         return category_entry
+
+    def _get_objc_protocol_from_protolist_pointer(self, protocol_struct_pointer):
+        # type: (int) -> ObjcProtocolRawStruct
+        """Read a struct __objc_protocol from the location indicated by the provided __objc_protolist pointer
+        """
+        protocol_entry = ObjcProtocolRawStruct(self.binary, protocol_struct_pointer, virtual=True)
+        return protocol_entry
 
     def _get_objc_class_from_classlist_pointer(self, class_struct_pointer):
         # type: (int) -> ObjcClassRawStruct

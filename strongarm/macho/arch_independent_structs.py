@@ -117,6 +117,11 @@ class ObjcDataRawStruct(ArchIndependentStructure):
     _64_BIT_STRUCT = ObjcDataRaw64
 
 
+class ObjcProtocolRawStruct(ArchIndependentStructure):
+    _32_BIT_STRUCT = ObjcProtocolRaw32
+    _64_BIT_STRUCT = ObjcProtocolRaw64
+
+
 class ObjcCategoryRawStruct(ArchIndependentStructure):
     _32_BIT_STRUCT = ObjcCategoryRaw32
     _64_BIT_STRUCT = ObjcCategoryRaw64

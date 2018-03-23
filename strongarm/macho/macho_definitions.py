@@ -327,6 +327,41 @@ class HEADER_FLAGS(IntEnum):
     NO_HEAP_EXECUTION = 0x1000000
     APP_EXTENSION_SAFE = 0x2000000
 
+# Some of these can be found at
+# https://opensource.apple.com/source/objc4/objc4-723/runtime/objc-runtime-new.h.auto.html
+
+
+class ObjcProtocolRaw32(Structure):
+    _fields_ = [
+        ('isa', c_uint32),
+        ('name', c_uint32),
+        ('protocols', c_uint32),
+        ('required_instance_methods', c_uint32),
+        ('required_class_methods', c_uint32),
+        ('optional_instance_methods', c_uint32),
+        ('optional_class_methods', c_uint32),
+        ('instance_properties', c_uint32),
+        ('instance_properties', c_uint32),
+        ('size', c_uint32),
+        ('flags', c_uint32),
+    ]
+
+
+class ObjcProtocolRaw64(Structure):
+    _fields_ = [
+        ('isa', c_uint64),
+        ('name', c_uint64),
+        ('protocols', c_uint64),
+        ('required_instance_methods', c_uint64),
+        ('required_class_methods', c_uint64),
+        ('optional_instance_methods', c_uint64),
+        ('optional_class_methods', c_uint64),
+        ('instance_properties', c_uint64),
+        ('instance_properties', c_uint64),
+        ('size', c_uint32),
+        ('flags', c_uint32),
+    ]
+
 
 class ObjcCategoryRaw32(Structure):
     _fields_ = [

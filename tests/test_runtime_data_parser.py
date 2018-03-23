@@ -66,3 +66,23 @@ class TestObjcRuntimeDataParser(unittest.TestCase):
         self.assertEqual(selector.name, 'allowsAnyHTTPSCertificateForHost:')
         self.assertEqual(selector.implementation, 0x100005028)
 
+    def test_find_protocols(self):
+        parser = MachoParser(TestObjcRuntimeDataParser.FAT_PATH)
+        binary = parser.get_arm64_slice()
+        objc_parser = ObjcRuntimeDataParser(binary)
+
+        protocols = objc_parser.protocols
+        self.assertEqual(len(protocols), 3)
+
+        correct_protocols = ['NSObject', 'NSURLSessionDelegate', 'UIApplicationDelegate']
+        for p in correct_protocols:
+            self.assertTrue(p in [a.name for a in protocols])
+
+        # look at one protocol
+        session_protocol = [p for p in protocols if p.name == 'NSURLSessionDelegate'][0]
+        self.assertEqual(len(session_protocol.selectors), 3)
+        correct_selectors = ['URLSession:didBecomeInvalidWithError:',
+                             'URLSession:didReceiveChallenge:completionHandler:',
+                             'URLSessionDidFinishEventsForBackgroundURLSession:']
+        for s in correct_selectors:
+            self.assertTrue(s in [sel.name for sel in session_protocol.selectors])

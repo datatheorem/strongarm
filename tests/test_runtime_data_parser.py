@@ -78,6 +78,12 @@ class TestObjcRuntimeDataParser(unittest.TestCase):
         for p in correct_protocols:
             self.assertTrue(p in [a.name for a in protocols])
 
+    def test_parse_protocol(self):
+        parser = MachoParser(TestObjcRuntimeDataParser.FAT_PATH)
+        binary = parser.get_arm64_slice()
+        objc_parser = ObjcRuntimeDataParser(binary)
+
+        protocols = objc_parser.protocols
         # look at one protocol
         session_protocol = [p for p in protocols if p.name == 'NSURLSessionDelegate'][0]
         self.assertEqual(len(session_protocol.selectors), 3)

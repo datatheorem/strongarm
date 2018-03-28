@@ -12,11 +12,13 @@ from capstone.arm64 import \
 
 from strongarm.objc import ObjcMethodInfo
 from strongarm.macho import \
+    CPU_TYPE, \
     MachoParser, \
     MachoAnalyzer, \
     MachoBinary, \
     ObjcCategory, \
-    CPU_TYPE
+    ObjcClass, \
+    ObjcSelector
 from strongarm.objc import \
     RegisterContentsType, \
     ObjcFunctionAnalyzer, \
@@ -189,10 +191,12 @@ def print_analyzer_imported_symbols(analyzer: MachoAnalyzer) -> None:
     print('\tImported symbols:')
     stub_map = analyzer.external_symbol_names_to_branch_destinations
     for imported_sym in analyzer.imported_symbols:
-        print('\t\t{}'.format(imported_sym))
+        print('\t\t{}: '.format(imported_sym), end='')
         # attempt to find the call stub for this symbol
+        stub_location = ''
         if imported_sym in stub_map:
-            print('\t\t\tCallable dyld stub @ {}'.format(hex(stub_map[imported_sym])))
+            stub_location = f'dyld stub at {hex(stub_map[imported_sym])}'
+        print(stub_location)
 
 
 def print_analyzer_exported_symbols(analyzer: MachoAnalyzer) -> None:
@@ -201,20 +205,23 @@ def print_analyzer_exported_symbols(analyzer: MachoAnalyzer) -> None:
         print('\t\t{}'.format(exported_sym))
 
 
+def print_selector(objc_class: ObjcClass, selector: ObjcSelector):
+    # belongs to a class or category?
+    if isinstance(objc_class, ObjcCategory):
+        category = objc_class   # type: ObjcCategory
+        class_name = '{} ({})'.format(category.base_class, category.name)
+    else:
+        class_name = objc_class.name
+    print('\t-[{} {}] defined at {}'.format(class_name,
+                                            selector.name,
+                                            hex(selector.implementation)))
+
+
 def print_analyzer_methods(analyzer: MachoAnalyzer) -> None:
     print('\nObjective-C Methods:')
     methods = analyzer.get_objc_methods()
     for method_info in methods:
-        # belongs to a class or category?
-        if isinstance(method_info.objc_class, ObjcCategory):
-            category = method_info.objc_class   # type: ObjcCategory
-            class_name = '{} ({})'.format(category.base_class, category.name)
-        else:
-            class_name = method_info.objc_class.name
-
-        print('\t-[{} {}] defined at {}'.format(class_name,
-                                                method_info.objc_sel.name,
-                                                hex(method_info.objc_sel.implementation)))
+        print_selector(method_info.objc_class, method_info.objc_sel)
 
 
 def print_analyzer_classes(analyzer: MachoAnalyzer):

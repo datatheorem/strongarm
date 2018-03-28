@@ -48,12 +48,16 @@ class InfoCommand:
         self.analyzer = analyzer
 
         self.commands = {
+            'all': (self.run_all_commands, None),
+            'metadata': (print_binary_info, self.binary),
             'segments': (print_binary_segments, self.binary),
             'sections': (print_binary_sections, self.binary),
             'loads': (print_binary_load_commands, self.binary),
             'classes': (print_analyzer_classes, self.analyzer),
             'protocols': (print_analyzer_protocols, self.analyzer),
             'methods': (print_analyzer_methods, self.analyzer),
+            'imports': (print_analyzer_imported_symbols, self.analyzer),
+            'exports': (print_analyzer_exported_symbols, self.analyzer),
         }
 
     def description(self):
@@ -101,8 +105,7 @@ class StrongarmShell:
         print('Quitting...')
         self.active = False
 
-    def process_command(self):
-        user_input = input('strongarm$ ')
+    def run_command(self, user_input: Text):
         components = user_input.split(' ')
         cmd_name = components[0]
         cmd_args = components[1:]

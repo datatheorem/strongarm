@@ -26,6 +26,52 @@ def print_header(args) -> None:
         print(line)
 
 
+class StrongarmShell:
+    def __init__(self, binary: MachoBinary, analyzer: MachoAnalyzer):
+        self.binary = binary
+        self.analyzer = analyzer
+
+        self.commands = {
+            'help': ('Display available commands', self.help),
+            'exit': ('Exit interactive shell', self.exit),
+            'info': (InfoCommand(self.binary, self.analyzer).description(), self.info)
+        }
+        print('strongarm interactive shell\nType \'help\' for available commands.')
+        self.active = True
+
+    def help(self, args):
+        print('Commands\n'
+              '----------------')
+        for name, (description, funcptr) in self.commands.items():
+            print(f'{name}: {description}')
+
+    def info(self, args):
+        info_cmd = InfoCommand(self.binary, self.analyzer)
+        if not len(args):
+            print('No option provided')
+            print(info_cmd.description())
+        for option in args:
+            info_cmd.run_command(option)
+
+    def exit(self, args):
+        print('Quitting...')
+        self.active = False
+
+    def process_command(self):
+        user_input = input('strongarm$ ')
+        components = user_input.split(' ')
+        cmd_name = components[0]
+        cmd_args = components[1:]
+
+        if cmd_name not in self.commands:
+            print(f'Unknown command: \'{cmd_name}\'. Type \'help\' for available commands.')
+            return self.active
+
+        func = self.commands[cmd_name][1]
+        func(cmd_args)
+        return self.active
+
+
 def main():
     parser = argparse.ArgumentParser(description='Mach-O Analyzer')
     parser.add_argument(

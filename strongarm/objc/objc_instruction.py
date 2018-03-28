@@ -11,7 +11,7 @@ import strongarm.macho.macho_analyzer
 
 if TYPE_CHECKING:
     from strongarm.objc import objc_analyzer
-    from strongarm.macho.objc_runtime_data_parser import ObjcSelref
+    from strongarm.macho.objc_runtime_data_parser import ObjcSelref, ObjcSelector
 
 
 class ObjcInstruction(object):
@@ -42,7 +42,7 @@ class ObjcBranchInstruction(ObjcInstruction):
 
         self.symbol = None  # type: Text
         self.selref = None  # type: ObjcSelref
-        self.selector = None # type: Text
+        self.selector = None # type: ObjcSelector
 
         self.is_external_c_call = None  # type: bool
         self.is_external_objc_call = None   # type: bool

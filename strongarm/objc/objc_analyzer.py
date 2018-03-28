@@ -1,22 +1,20 @@
 # -*- coding: utf-8 -*-
-from __future__ import absolute_import
-from __future__ import unicode_literals
-from __future__ import print_function
 
-from typing import Text, List, Optional, Dict, Tuple
 from enum import Enum
+from typing import Text, List, Optional, Dict, Tuple
 
 from capstone.arm64 import ARM64_OP_REG, ARM64_OP_IMM, ARM64_OP_MEM
 from capstone import CsInsn
 
 from strongarm.debug_util import DebugUtil
 from strongarm.macho import MachoBinary
-from .objc_instruction import ObjcInstruction, ObjcBranchInstruction, ObjcUnconditionalBranchInstruction
+from .objc_instruction import \
+    ObjcInstruction, \
+    ObjcBranchInstruction, \
+    ObjcUnconditionalBranchInstruction
 from .objc_query import \
     CodeSearch, \
     CodeSearchResult, \
-    CodeSearchTermInstructionMnemonic, \
-    CodeSearchTermInstructionOperand, \
     CodeSearchTermInstructionIndex
 
 

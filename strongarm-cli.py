@@ -82,10 +82,41 @@ class StrongarmShell:
         self.commands = {
             'help': ('Display available commands', self.help),
             'exit': ('Exit interactive shell', self.exit),
-            'info': (InfoCommand(self.binary, self.analyzer).description(), self.info)
+            'info': (InfoCommand(self.binary, self.analyzer).description(), self.info),
+            'sels': ('List selectors implemented by a class. sels [class]', self.selectors),
+            'disasm': ('Decompile a given selector. disasm [sel]', self.disasm),
         }
         print('strongarm interactive shell\nType \'help\' for available commands.')
         self.active = True
+
+    def selectors(self, args):
+        if not len(args):
+            print('Usage: sels [class]')
+            return
+
+        class_name = args[0]
+        objc_classes = [x for x in self.analyzer.objc_classes() if x.name == class_name]
+        if not len(objc_classes):
+            print(f"Unknown class '{class_name}'. Run 'info classes' for a list of implemented classes.")
+            return
+
+        objc_class = objc_classes[0]
+        for sel in objc_class.selectors:
+            print_selector(objc_class, sel)
+
+    def disasm(self, args):
+        if not len(args):
+            print('Usage: disasm [sel]')
+            return
+
+        sel_name = args[0]
+        matching_sels = [x for x in self.analyzer.get_objc_methods() if x.objc_sel.name == sel_name]
+        if not len(matching_sels):
+            print(f"Unknown selector '{sel_name}'. Run 'info methods' for a list of selectors.")
+            return
+
+        disassembled_str = disassemble_method(self.binary, matching_sels[0])
+        print(disassembled_str)
 
     def help(self, args):
         print('Commands\n'

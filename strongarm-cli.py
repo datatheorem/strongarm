@@ -2,10 +2,21 @@
 
 import argparse
 
-
-from strongarm.cli.utils import pick_macho_slice, disassemble_method
-from strongarm.macho import MachoParser, MachoAnalyzer, ObjcCategory
 from strongarm.debug_util import DebugUtil
+from strongarm.macho import \
+    MachoParser, \
+    MachoBinary, \
+    MachoAnalyzer
+from strongarm.cli.utils import \
+    pick_macho_slice, \
+    disassemble_method, \
+    print_binary_info, \
+    print_binary_load_commands, \
+    print_binary_segments, \
+    print_binary_sections, \
+    print_analyzer_imported_symbols, \
+    print_analyzer_exported_symbols, \
+    print_analyzer_methods
 
 
 def print_header(args) -> None:
@@ -128,63 +139,29 @@ def main():
         print('\t{} Mach-O slice @ {}'.format(macho_slice.cpu_type.name, hex(macho_slice._offset_within_fat)))
 
     binary = pick_macho_slice(parser)
-
     print('Reading {} slice'.format(binary.cpu_type.name))
-    print('Mach-O type: {}'.format(binary.file_type.name))
 
-    endianness = 'Big' if binary.is_swap else 'Little'
-    endianness = '{} endian'.format(endianness)
-    print(endianness)
-
-    print('Virtual base: {}'.format(hex(binary.get_virtual_base())))
-
-    print('\nLoad commands:')
-    load_commands = binary.load_dylib_commands
-    for cmd in load_commands:
-        dylib_name_addr = binary.get_virtual_base() + cmd.fileoff + cmd.dylib.name.offset
-        dylib_name = binary.read_string_at_address(dylib_name_addr)
-        dylib_version = cmd.dylib.current_version
-        print('\t{} v.{}'.format(dylib_name, hex(dylib_version)))
-
-    print('\nSegments:')
-    for segment, cmd in binary.segment_commands.items():
-        print('\t{} @ [{} - {}]'.format(segment, hex(cmd.vmaddr), hex(cmd.vmaddr + cmd.vmsize)))
-
-    print('\nSections:')
-    print('\tContains encrypted section? {}'.format(binary.is_encrypted()))
-    for section, cmd in binary.sections.items():
-        print('\t{} @ [{} - {}]'.format(section, hex(cmd.address), hex(cmd.end_address)))
+    # print_binary_info(binary)
+    # print_binary_load_commands(binary)
+    # print_binary_segments(binary)
+    # print_binary_sections(binary)
 
     # we defer initializing the analyzer until as late as possible
     # this is so we can still print out preliminary info about the binary, even if it's encrypted
     analyzer = MachoAnalyzer.get_analyzer(binary)
-    print('\nSymbols:')
-    print('\tImported symbols:')
-    stub_map = analyzer.external_symbol_names_to_branch_destinations
-    for imported_sym in analyzer.imported_symbols:
-        print('\t\t{}'.format(imported_sym))
-        # attempt to find the call stub for this symbol
-        if imported_sym in stub_map:
-            print('\t\t\tCallable dyld stub @ {}'.format(hex(stub_map[imported_sym])))
+    # print_analyzer_imported_symbols(analyzer)
+    # print_analyzer_exported_symbols(analyzer)
 
-    print('\tExported symbols:')
-    for exported_sym in analyzer.exported_symbols:
-        print('\t\t{}'.format(exported_sym))
+    # print_analyzer_methods(analyzer)
 
-    print('\nObjective-C Methods:')
+    shell = StrongarmShell(binary, analyzer)
+    while shell.process_command():
+        pass
+    print('May your arms be beefy and your binaries unencrypted')
+    import sys
+    sys.exit(0)
+
     methods = analyzer.get_objc_methods()
-    for method_info in methods:
-        # belongs to a class or category?
-        if isinstance(method_info.objc_class, ObjcCategory):
-            category = method_info.objc_class   # type: ObjcCategory
-            class_name = '{} ({})'.format(category.base_class, category.name)
-        else:
-            class_name = method_info.objc_class.name
-
-        print('\t-[{} {}] defined at {}'.format(class_name,
-                                                method_info.objc_sel.name,
-                                                hex(method_info.objc_sel.implementation)))
-
     while True:
         print('\n\nEnter a SEL to disassemble:')
         desired_sel = input()

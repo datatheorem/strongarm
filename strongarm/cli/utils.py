@@ -13,7 +13,9 @@ from capstone.arm64 import \
 from strongarm.objc import ObjcMethodInfo
 from strongarm.macho import \
     MachoParser, \
+    MachoAnalyzer, \
     MachoBinary, \
+    ObjcCategory, \
     CPU_TYPE
 from strongarm.objc import \
     RegisterContentsType, \
@@ -151,3 +153,74 @@ def disassemble_method(binary: MachoBinary, method: ObjcMethodInfo) -> Text:
         disassembled_text.append(instruction_string)
 
     return '\n'.join(disassembled_text)
+
+
+def print_binary_info(binary: MachoBinary) -> None:
+    print(f'Mach-O type: {binary.file_type.name}')
+    print(f"{'Big' if binary.is_swap else 'Little'} endian")
+    print(f'Virtual base: {hex(binary.get_virtual_base())}')
+    print(f'Contains encrypted section? {binary.is_encrypted()}')
+
+
+def print_binary_load_commands(binary: MachoBinary) -> None:
+    print('\nLoad commands:')
+    load_commands = binary.load_dylib_commands
+    for cmd in load_commands:
+        dylib_name_addr = binary.get_virtual_base() + cmd.fileoff + cmd.dylib.name.offset
+        dylib_name = binary.read_string_at_address(dylib_name_addr)
+        dylib_version = cmd.dylib.current_version
+        print('\t{} v.{}'.format(dylib_name, hex(dylib_version)))
+
+
+def print_binary_segments(binary: MachoBinary) -> None:
+    print('\nSegments:')
+    for segment, cmd in binary.segment_commands.items():
+        print(f"\t[{format(cmd.vmaddr, '#011x')} - {format(cmd.vmaddr + cmd.vmsize, '#011x')}] {segment}")
+
+
+def print_binary_sections(binary: MachoBinary) -> None:
+    print('\nSections:')
+    for section, cmd in binary.sections.items():
+        print(f'\t[{hex(cmd.address)} - {hex(cmd.end_address)}] {section}')
+
+
+def print_analyzer_imported_symbols(analyzer: MachoAnalyzer) -> None:
+    print('\nSymbols:')
+    print('\tImported symbols:')
+    stub_map = analyzer.external_symbol_names_to_branch_destinations
+    for imported_sym in analyzer.imported_symbols:
+        print('\t\t{}'.format(imported_sym))
+        # attempt to find the call stub for this symbol
+        if imported_sym in stub_map:
+            print('\t\t\tCallable dyld stub @ {}'.format(hex(stub_map[imported_sym])))
+
+
+def print_analyzer_exported_symbols(analyzer: MachoAnalyzer) -> None:
+    print('\tExported symbols:')
+    for exported_sym in analyzer.exported_symbols:
+        print('\t\t{}'.format(exported_sym))
+
+
+def print_analyzer_methods(analyzer: MachoAnalyzer) -> None:
+    print('\nObjective-C Methods:')
+    methods = analyzer.get_objc_methods()
+    for method_info in methods:
+        # belongs to a class or category?
+        if isinstance(method_info.objc_class, ObjcCategory):
+            category = method_info.objc_class   # type: ObjcCategory
+            class_name = '{} ({})'.format(category.base_class, category.name)
+        else:
+            class_name = method_info.objc_class.name
+
+        print('\t-[{} {}] defined at {}'.format(class_name,
+                                                method_info.objc_sel.name,
+                                                hex(method_info.objc_sel.implementation)))
+
+def print_analyzer_classes():
+    print('\nObjective-C Classes:')
+
+
+def print_analyzer_protocols():
+    pass
+
+

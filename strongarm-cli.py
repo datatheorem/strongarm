@@ -18,7 +18,8 @@ from strongarm.cli.utils import \
     print_analyzer_exported_symbols, \
     print_analyzer_methods, \
     print_analyzer_classes, \
-    print_analyzer_protocols
+    print_analyzer_protocols, \
+    print_selector
 
 
 def print_header(args) -> None:
@@ -66,7 +67,17 @@ class InfoCommand:
             rep += f'[{cmd}] '
         return rep
 
+    def run_all_commands(self):
+        for cmd in self.commands.keys():
+            if cmd == 'all':
+                continue
+            self.run_command(cmd)
+
     def run_command(self, cmd: Text):
+        if cmd == 'all':
+            self.run_all_commands()
+            return
+
         if cmd not in self.commands:
             print(f'Unknown argument supplied to info: {cmd}')
             return
@@ -149,6 +160,10 @@ class StrongarmShell:
         func(cmd_args)
         return self.active
 
+    def process_command(self):
+        user_input = input('strongarm$ ')
+        return self.run_command(user_input)
+
 
 def main():
     parser = argparse.ArgumentParser(description='Mach-O Analyzer')
@@ -177,37 +192,17 @@ def main():
     binary = pick_macho_slice(parser)
     print('Reading {} slice'.format(binary.cpu_type.name))
 
-    # print_binary_info(binary)
-    # print_binary_load_commands(binary)
-    # print_binary_segments(binary)
-    # print_binary_sections(binary)
-
-    # we defer initializing the analyzer until as late as possible
-    # this is so we can still print out preliminary info about the binary, even if it's encrypted
     analyzer = MachoAnalyzer.get_analyzer(binary)
-    # print_analyzer_imported_symbols(analyzer)
-    # print_analyzer_exported_symbols(analyzer)
-
-    # print_analyzer_methods(analyzer)
-
     shell = StrongarmShell(binary, analyzer)
+
+    autorun_cmd = 'info metadata segments sections loads'
+    print(f'Auto-running \'{autorun_cmd}\'')
+    shell.run_command(autorun_cmd)
+
+    # this will return False once the shell exists
     while shell.process_command():
         pass
     print('May your arms be beefy and your binaries unencrypted')
-    import sys
-    sys.exit(0)
-
-    methods = analyzer.get_objc_methods()
-    while True:
-        print('\n\nEnter a SEL to disassemble:')
-        desired_sel = input()
-        try:
-            desired_method = [x for x in methods if x.objc_sel.name == desired_sel][0]
-            disassembled_str = disassemble_method(binary, desired_method)
-            print(disassembled_str)
-        except IndexError:
-            print('Unknown SEL {}'.format(desired_sel))
-            continue
 
 
 if __name__ == '__main__':

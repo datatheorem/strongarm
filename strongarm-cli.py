@@ -26,6 +26,37 @@ def print_header(args) -> None:
         print(line)
 
 
+from typing import Text
+
+
+class InfoCommand:
+    def __init__(self, binary: MachoBinary, analyzer: MachoAnalyzer):
+        self.binary = binary
+        self.analyzer = analyzer
+
+        self.commands = {
+            'segments': (print_binary_segments, self.binary),
+            'sections': (print_binary_sections, self.binary),
+            'loads': (print_binary_load_commands, self.binary),
+            'classes': (print_analyzer_classes, self.analyzer),
+            'protocols': (print_analyzer_protocols, self.analyzer),
+            'methods': (print_analyzer_methods, self.analyzer),
+        }
+
+    def description(self):
+        rep = 'Read binary information. info '
+        for cmd in self.commands.keys():
+            rep += f'[{cmd}] '
+        return rep
+
+    def run_command(self, cmd: Text):
+        if cmd not in self.commands:
+            print(f'Unknown argument supplied to info: {cmd}')
+            return
+        func, arg = self.commands[cmd]
+        func(arg)
+
+
 class StrongarmShell:
     def __init__(self, binary: MachoBinary, analyzer: MachoAnalyzer):
         self.binary = binary

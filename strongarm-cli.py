@@ -16,7 +16,9 @@ from strongarm.cli.utils import \
     print_binary_sections, \
     print_analyzer_imported_symbols, \
     print_analyzer_exported_symbols, \
-    print_analyzer_methods
+    print_analyzer_methods, \
+    print_analyzer_classes, \
+    print_analyzer_protocols
 
 
 def print_header(args) -> None:

@@ -216,11 +216,22 @@ def print_analyzer_methods(analyzer: MachoAnalyzer) -> None:
                                                 method_info.objc_sel.name,
                                                 hex(method_info.objc_sel.implementation)))
 
-def print_analyzer_classes():
+
+def print_analyzer_classes(analyzer: MachoAnalyzer):
     print('\nObjective-C Classes:')
+    classes = analyzer.objc_classes()
+    for objc_class in classes:
+        # belongs to a class or category?
+        if isinstance(objc_class, ObjcCategory):
+            category = objc_class   # type: ObjcCategory
+            class_name = '{} ({})'.format(category.base_class, category.name)
+        else:
+            class_name = objc_class.name
+        print(f'\t{class_name}: {len(objc_class.selectors)} selectors')
 
 
-def print_analyzer_protocols():
-    pass
-
-
+def print_analyzer_protocols(analyzer: MachoAnalyzer):
+    print('\nProtocols conformed to within the binary:')
+    protocols = analyzer.get_conformed_protocols()
+    for protocol in protocols:
+        print(f'\t{protocol.name}: {len(protocol.selectors)} selectors')

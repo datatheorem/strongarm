@@ -190,13 +190,13 @@ def main():
         print('\t{} Mach-O slice @ {}'.format(macho_slice.cpu_type.name, hex(macho_slice._offset_within_fat)))
 
     binary = pick_macho_slice(parser)
-    print('Reading {} slice'.format(binary.cpu_type.name))
+    print('Reading {} slice\n\n'.format(binary.cpu_type.name))
 
     analyzer = MachoAnalyzer.get_analyzer(binary)
     shell = StrongarmShell(binary, analyzer)
 
     autorun_cmd = 'info metadata segments sections loads'
-    print(f'Auto-running \'{autorun_cmd}\'')
+    print(f'Auto-running \'{autorun_cmd}\'\n\n')
     shell.run_command(autorun_cmd)
 
     # this will return False once the shell exists

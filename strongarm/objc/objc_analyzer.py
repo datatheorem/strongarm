@@ -74,8 +74,7 @@ class ObjcFunctionAnalyzer(object):
         """
         base_address = self.start_address
         offset = address - base_address
-        # 4 bytes per instruction
-        index = int(offset / 4)
+        index = int(offset / MachoBinary.BYTES_PER_INSTRUCTION)
         if 0 <= index < len(self.instructions):
             return index
         return None
@@ -111,9 +110,7 @@ class ObjcFunctionAnalyzer(object):
             ))
         else:
             func_base = self.start_address
-            # each instruction is 4 bytes
-            instruction_size = 4
-            instruction_address = func_base + (idx * instruction_size)
+            instruction_address = func_base + (idx * MachoBinary.BYTES_PER_INSTRUCTION)
             DebugUtil.log(self, 'func({}) {}'.format(
                 hex(int(instruction_address)),
                 output

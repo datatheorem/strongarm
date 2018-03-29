@@ -1,22 +1,20 @@
 # -*- coding: utf-8 -*-
-from __future__ import absolute_import
-from __future__ import unicode_literals
-from __future__ import print_function
 
-from typing import Text, List, Optional, Dict, Tuple
 from enum import Enum
+from typing import Text, List, Optional, Dict, Tuple
 
 from capstone.arm64 import ARM64_OP_REG, ARM64_OP_IMM, ARM64_OP_MEM
 from capstone import CsInsn
 
 from strongarm.debug_util import DebugUtil
 from strongarm.macho import MachoBinary
-from .objc_instruction import ObjcInstruction, ObjcBranchInstruction, ObjcUnconditionalBranchInstruction
+from .objc_instruction import \
+    ObjcInstruction, \
+    ObjcBranchInstruction, \
+    ObjcUnconditionalBranchInstruction
 from .objc_query import \
     CodeSearch, \
     CodeSearchResult, \
-    CodeSearchTermInstructionMnemonic, \
-    CodeSearchTermInstructionOperand, \
     CodeSearchTermInstructionIndex
 
 
@@ -76,8 +74,7 @@ class ObjcFunctionAnalyzer(object):
         """
         base_address = self.start_address
         offset = address - base_address
-        # 4 bytes per instruction
-        index = int(offset / 4)
+        index = int(offset / MachoBinary.BYTES_PER_INSTRUCTION)
         if 0 <= index < len(self.instructions):
             return index
         return None
@@ -113,9 +110,7 @@ class ObjcFunctionAnalyzer(object):
             ))
         else:
             func_base = self.start_address
-            # each instruction is 4 bytes
-            instruction_size = 4
-            instruction_address = func_base + (idx * instruction_size)
+            instruction_address = func_base + (idx * MachoBinary.BYTES_PER_INSTRUCTION)
             DebugUtil.log(self, 'func({}) {}'.format(
                 hex(int(instruction_address)),
                 output

@@ -22,7 +22,7 @@ from strongarm import DebugUtil
 
 
 if TYPE_CHECKING:
-    from strongarm.objc import ObjcFunctionAnalyzer, ObjcMethodInfo # type: ignore
+    from strongarm.objc import ObjcFunctionAnalyzer, ObjcMethodInfo  # type: ignore
 
 
 class MachoAnalyzer(object):
@@ -476,7 +476,7 @@ class MachoAnalyzer(object):
         # type: () -> List[ObjcMethodInfo]
         """Get a List of ObjcMethodInfo's representing all ObjC methods implemented in the Mach-O.
         """
-        from strongarm.objc import ObjcFunctionAnalyzer, ObjcMethodInfo # type: ignore
+        from strongarm.objc import ObjcMethodInfo   # type: ignore
         if self._objc_method_list:
             return self._objc_method_list
         method_list = []

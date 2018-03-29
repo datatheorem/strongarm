@@ -1,40 +1,25 @@
 # -*- coding: utf-8 -*-
-from __future__ import absolute_import
-from __future__ import unicode_literals
-from __future__ import print_function
 
-import sys
-import re
 import argparse
-from ctypes import sizeof
 
-from strongarm.macho import MachoParser, MachoBinary, MachoAnalyzer, ObjcCategory, ObjcClass
-from strongarm.macho import CPU_TYPE, DylibCommand
 from strongarm.debug_util import DebugUtil
-from strongarm.objc import CodeSearch, CodeSearchTermCallDestination, RegisterContentsType, ObjcFunctionAnalyzer, \
-    ObjcBranchInstruction, ObjcBasicBlock, ObjcInstruction
-
-
-def pick_macho_slice(parser: MachoParser) -> MachoBinary:
-    """Retrieve a MachoBinary slice from a MachoParser, with a preference for an arm64 slice
-    """
-    binary_slices = parser.slices
-
-    # Sanity checks
-    if not parser or len(binary_slices) == 0:
-        raise ValueError('Could not parse {} as a Mach-O or FAT'.format(parser.filename))
-
-    parsed_binary = None
-    if len(binary_slices) == 1:
-        # only one slice - return that
-        parsed_binary = binary_slices[0]
-    else:
-        # multiple slices - return 64 bit slice if there is one
-        for slice in binary_slices:
-            parsed_binary = slice
-            if parsed_binary.cpu_type == CPU_TYPE.ARM64:
-                break
-    return parsed_binary
+from strongarm.macho import \
+    MachoParser, \
+    MachoBinary, \
+    MachoAnalyzer
+from strongarm.cli.utils import \
+    pick_macho_slice, \
+    disassemble_method, \
+    print_binary_info, \
+    print_binary_load_commands, \
+    print_binary_segments, \
+    print_binary_sections, \
+    print_analyzer_imported_symbols, \
+    print_analyzer_exported_symbols, \
+    print_analyzer_methods, \
+    print_analyzer_classes, \
+    print_analyzer_protocols, \
+    print_selector
 
 
 def print_header(args) -> None:
@@ -55,198 +40,170 @@ def print_header(args) -> None:
         print(line)
 
 
-parser = argparse.ArgumentParser(description='Mach-O Analyzer')
-parser.add_argument(
-    '--verbose', action='store_true', help=
-    'Output extra info while analyzing'
-)
-parser.add_argument(
-    'binary_path', metavar='binary_path', type=str, help=
-    'Path to binary to analyze'
-)
-args = parser.parse_args()
-
-if args.verbose:
-    DebugUtil.debug = True
-
-print_header(args)
-
-parser = MachoParser(args.binary_path)
-
-# print slice info
-print('Slices:')
-for macho_slice in parser.slices:
-    print('\t{} Mach-O slice @ {}'.format(macho_slice.cpu_type.name, hex(macho_slice._offset_within_fat)))
-
-binary = pick_macho_slice(parser)
-
-print('Reading {} slice'.format(binary.cpu_type.name))
-print('Mach-O type: {}'.format(binary.file_type.name))
-
-endianness = 'Big' if binary.is_swap else 'Little'
-endianness = '{} endian'.format(endianness)
-print(endianness)
-
-print('Virtual base: {}'.format(hex(binary.get_virtual_base())))
-
-print('\nLoad commands:')
-load_commands = binary.load_dylib_commands
-for cmd in load_commands:
-    dylib_name_addr = binary.get_virtual_base() + cmd.fileoff + cmd.dylib.name.offset
-    dylib_name = binary.read_string_at_address(dylib_name_addr)
-    dylib_version = cmd.dylib.current_version
-    print('\t{} v.{}'.format(dylib_name, hex(dylib_version)))
-
-print('\nSegments:')
-for segment, cmd in binary.segment_commands.items():
-    print('\t{} @ [{} - {}]'.format(segment, hex(cmd.vmaddr), hex(cmd.vmaddr + cmd.vmsize)))
-
-print('\nSections:')
-print('\tContains encrypted section? {}'.format(binary.is_encrypted()))
-for section, cmd in binary.sections.items():
-    print('\t{} @ [{} - {}]'.format(section, hex(cmd.address), hex(cmd.end_address)))
-
-# we defer initializing the analyzer until as late as possible
-# this is so we can still print out preliminary info about the binary, even if it's encrypted
-analyzer = MachoAnalyzer.get_analyzer(binary)
-print('\nSymbols:')
-print('\tImported symbols:')
-stub_map = analyzer.external_symbol_names_to_branch_destinations
-for imported_sym in analyzer.imported_symbols:
-    print('\t\t{}'.format(imported_sym))
-    # attempt to find the call stub for this symbol
-    if imported_sym in stub_map:
-        print('\t\t\tCallable dyld stub @ {}'.format(hex(stub_map[imported_sym])))
-
-print('\tExported symbols:')
-for exported_sym in analyzer.exported_symbols:
-    print('\t\t{}'.format(exported_sym))
-
-print('\nObjective-C Methods:')
-methods = analyzer.get_objc_methods()
-for method_info in methods:
-    # belongs to a class or category?
-    if isinstance(method_info.objc_class, ObjcCategory):
-        category = method_info.objc_class   # type: ObjcCategory
-        class_name = '{} ({})'.format(category.base_class, category.name)
-    else:
-        class_name = method_info.objc_class.name
-
-    print('\t-[{} {}] defined at {}'.format(class_name,
-                                            method_info.objc_sel.name,
-                                            hex(method_info.objc_sel.implementation)))
-
-
-from capstone import CsInsn
-from capstone.arm64 import Arm64Op, ARM64_OP_REG, ARM64_OP_IMM, ARM64_OP_MEM
-
 from typing import Text
 
 
-def format_instruction_arg(instruction: CsInsn, arg: Arm64Op) -> Text:
-    if arg.type == ARM64_OP_REG:
-        return instruction.reg_name(arg.value.reg)
-    elif arg.type == ARM64_OP_IMM:
-        return hex(arg.value.imm)
-    elif arg.type == ARM64_OP_MEM:
-        return '[{} #{}]'.format(instruction.reg_name(arg.mem.base), hex(arg.mem.disp))
-    raise RuntimeError('unknown arg type {}'.format(arg.type))
+class InfoCommand:
+    def __init__(self, binary: MachoBinary, analyzer: MachoAnalyzer):
+        self.binary = binary
+        self.analyzer = analyzer
+
+        self.commands = {
+            'all': (self.run_all_commands, None),
+            'metadata': (print_binary_info, self.binary),
+            'segments': (print_binary_segments, self.binary),
+            'sections': (print_binary_sections, self.binary),
+            'loads': (print_binary_load_commands, self.binary),
+            'classes': (print_analyzer_classes, self.analyzer),
+            'protocols': (print_analyzer_protocols, self.analyzer),
+            'methods': (print_analyzer_methods, self.analyzer),
+            'imports': (print_analyzer_imported_symbols, self.analyzer),
+            'exports': (print_analyzer_exported_symbols, self.analyzer),
+        }
+
+    def description(self):
+        rep = 'Read binary information. info '
+        for cmd in self.commands.keys():
+            rep += f'[{cmd}] '
+        return rep
+
+    def run_all_commands(self):
+        for cmd in self.commands.keys():
+            if cmd == 'all':
+                continue
+            self.run_command(cmd)
+
+    def run_command(self, cmd: Text):
+        if cmd == 'all':
+            self.run_all_commands()
+            return
+
+        if cmd not in self.commands:
+            print(f'Unknown argument supplied to info: {cmd}')
+            return
+        func, arg = self.commands[cmd]
+        func(arg)
 
 
-while True:
-    print('\n\nEnter a SEL to disassemble:')
-    desired_sel = input()
-    try:
-        desired_imp = [x for x in methods if x.objc_sel.name == desired_sel][0]
-    except IndexError:
-        print('Unknown SEL {}'.format(desired_sel))
-        continue
+class StrongarmShell:
+    def __init__(self, binary: MachoBinary, analyzer: MachoAnalyzer):
+        self.binary = binary
+        self.analyzer = analyzer
 
-    # figure out the arguments based on the sel name
-    sel_components = desired_imp.objc_sel.name.split(':')
-    sel_args = ['self', '@selector({})'.format(desired_imp.objc_sel.name)]
-    for component in sel_components:
-        if not len(component):
-            continue
-        # extract the last capitalized word
-        split = re.findall('[A-Z][^A-Z]*', component)
-        # if no capitalized word, use the full component
-        if not len(split):
-            split.append(component)
-        # lowercase it
-        sel_args.append(split[-1].lower())
+        self.commands = {
+            'help': ('Display available commands', self.help),
+            'exit': ('Exit interactive shell', self.exit),
+            'info': (InfoCommand(self.binary, self.analyzer).description(), self.info),
+            'sels': ('List selectors implemented by a class. sels [class]', self.selectors),
+            'disasm': ('Decompile a given selector. disasm [sel]', self.disasm),
+        }
+        print('strongarm interactive shell\nType \'help\' for available commands.')
+        self.active = True
 
-    signature = '\n\n-[{} {}]('.format(desired_imp.objc_class.name, desired_imp.objc_sel.name)
-    for i, arg in enumerate(sel_args):
-        signature += arg
-        if i != len(sel_args) - 1:
-            signature += ', '
-    signature += ');'
-    print(signature)
+    def selectors(self, args):
+        if not len(args):
+            print('Usage: sels [class]')
+            return
 
-    function_analyzer = ObjcFunctionAnalyzer.get_function_analyzer(binary, desired_imp.imp_addr)
+        class_name = args[0]
+        objc_classes = [x for x in self.analyzer.objc_classes() if x.name == class_name]
+        if not len(objc_classes):
+            print(f"Unknown class '{class_name}'. Run 'info classes' for a list of implemented classes.")
+            return
 
-    basic_blocks = ObjcBasicBlock.get_basic_blocks(function_analyzer)
-    # transform basic blocks into tuples of (basic block start addr, basic block end addr)
-    basic_block_boundaries = [[block[0].address, block[-1].address] for block in basic_blocks]
-    # flatten basic_block_boundaries into one-dimensional list
-    basic_block_boundaries = [x for boundaries in basic_block_boundaries for x in boundaries]
-    # remove duplicate boundaries
-    basic_block_boundaries = set(basic_block_boundaries)
+        objc_class = objc_classes[0]
+        for sel in objc_class.selectors:
+            print_selector(objc_class, sel)
 
-    for instr in function_analyzer.instructions:
-        instruction_string = ''
-        # add visual indicator if this is a basic block boundary
-        if instr.address in basic_block_boundaries:
-            instruction_string += '----------------------------------------------- #\tbasic block boundary\n'
+    def disasm(self, args):
+        if not len(args):
+            print('Usage: disasm [sel]')
+            return
 
-        instruction_string += '\t{}\t\t{}'.format(hex(instr.address), instr.mnemonic)
+        sel_name = args[0]
+        matching_sels = [x for x in self.analyzer.get_objc_methods() if x.objc_sel.name == sel_name]
+        if not len(matching_sels):
+            print(f"Unknown selector '{sel_name}'. Run 'info methods' for a list of selectors.")
+            return
 
-        # add each arg to the string
-        for i, arg in enumerate(instr.operands):
-            instruction_string += ' ' + format_instruction_arg(instr, arg)
-            if i != len(instr.operands) - 1:
-                instruction_string += ','
+        disassembled_str = disassemble_method(self.binary, matching_sels[0])
+        print(disassembled_str)
 
-        instruction_string += '\t\t\t'
-        # parse as an ObjcInstruction
-        wrapped_instr = ObjcInstruction.parse_instruction(function_analyzer,
-                                                          function_analyzer.get_instruction_at_address(instr.address))
+    def help(self, args):
+        print('Commands\n'
+              '----------------')
+        for name, (description, funcptr) in self.commands.items():
+            print(f'{name}: {description}')
 
-        if isinstance(wrapped_instr, ObjcBranchInstruction):
-            instruction_string += '#\t'
-            if function_analyzer.is_local_branch(wrapped_instr):
-                instruction_string += 'local branch'
-            elif wrapped_instr.symbol:
-                instruction_string += wrapped_instr.symbol
+    def info(self, args):
+        info_cmd = InfoCommand(self.binary, self.analyzer)
+        if not len(args):
+            print('No option provided')
+            print(info_cmd.description())
+        for option in args:
+            info_cmd.run_command(option)
 
-                if not wrapped_instr.selector:
-                    instruction_string += '();'
-                else:
-                    instruction_string += '(id, @selector({})'.format(wrapped_instr.selector.name)
+    def exit(self, args):
+        print('Quitting...')
+        self.active = False
 
-                    # figure out argument count passed to selector
-                    arg_count = wrapped_instr.selector.name.count(':')
-                    for i in range(arg_count):
-                        # x0 is self, x1 is the SEL, real args start at x2
-                        register = 'x{}'.format(i + 2)
-                        method_arg = function_analyzer.get_register_contents_at_instruction(register, wrapped_instr)
+    def run_command(self, user_input: Text):
+        components = user_input.split(' ')
+        cmd_name = components[0]
+        cmd_args = components[1:]
 
-                        method_arg_string = ', '
-                        if method_arg.type == RegisterContentsType.UNKNOWN:
-                            method_arg_string += '<?>'
-                        elif method_arg.type == RegisterContentsType.FUNCTION_ARG:
-                            method_arg_string += sel_args[method_arg.value]
-                        elif method_arg.type == RegisterContentsType.IMMEDIATE:
-                            method_arg_string += hex(method_arg.value)
+        if cmd_name not in self.commands:
+            print(f'Unknown command: \'{cmd_name}\'. Type \'help\' for available commands.')
+            return self.active
 
-                        instruction_string += method_arg_string
-                    instruction_string += ');'
-        else:
-            if len(instr.operands) == 2 and instr.operands[1].type == ARM64_OP_IMM:
-                # try reading a string
-                binary_str = binary.read_string_at_address(instr.operands[1].value.imm)
-                if binary_str:
-                    instruction_string += '#\t"{}"'.format(binary_str)
+        func = self.commands[cmd_name][1]
+        func(cmd_args)
+        return self.active
 
-        print(instruction_string)
+    def process_command(self):
+        user_input = input('strongarm$ ')
+        return self.run_command(user_input)
+
+
+def main():
+    parser = argparse.ArgumentParser(description='Mach-O Analyzer')
+    parser.add_argument(
+        '--verbose', action='store_true', help=
+        'Output extra info while analyzing'
+    )
+    parser.add_argument(
+        'binary_path', metavar='binary_path', type=str, help=
+        'Path to binary to analyze'
+    )
+    args = parser.parse_args()
+
+    if args.verbose:
+        DebugUtil.debug = True
+
+    print_header(args)
+
+    parser = MachoParser(args.binary_path)
+
+    # print slice info
+    print('Slices:')
+    for macho_slice in parser.slices:
+        print('\t{} Mach-O slice @ {}'.format(macho_slice.cpu_type.name, hex(macho_slice._offset_within_fat)))
+
+    binary = pick_macho_slice(parser)
+    print('Reading {} slice\n\n'.format(binary.cpu_type.name))
+
+    analyzer = MachoAnalyzer.get_analyzer(binary)
+    shell = StrongarmShell(binary, analyzer)
+
+    autorun_cmd = 'info metadata segments sections loads'
+    print(f'Auto-running \'{autorun_cmd}\'\n\n')
+    shell.run_command(autorun_cmd)
+
+    # this will return False once the shell exists
+    while shell.process_command():
+        pass
+    print('May your arms be beefy and your binaries unencrypted')
+
+
+if __name__ == '__main__':
+    main()

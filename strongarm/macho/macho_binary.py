@@ -54,6 +54,7 @@ class MachoBinary(object):
         MachArch.MH_CIGAM_64,
     ]
     SUPPORTED_MAG = _MAG_64 + _MAG_32
+    BYTES_PER_INSTRUCTION = 4
 
     def __init__(self, filename, offset_within_fat=0):
         # type: (bytes, int) -> None

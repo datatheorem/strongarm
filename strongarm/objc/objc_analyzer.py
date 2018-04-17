@@ -438,7 +438,7 @@ class ObjcFunctionAnalyzer(object):
         131 | bl objc_msgSend <-- ObjcFunctionAnalyzer.get_register_contents_at_instruction('x1', 131) = 0x1011bc378
 
         Args:
-            desired_reg: string containing name of register whose data should be determined
+            register: string containing name of register whose data should be determined
             instruction: the instruction marking the execution point where the register value should be determined
 
         Returns:
@@ -448,10 +448,6 @@ class ObjcFunctionAnalyzer(object):
         desired_reg = register
         target_addr = instruction.address
         start_index = self._get_instruction_index_of_address(target_addr)
-        DebugUtil.log(self, 'analyzing data flow to determine data in {} at {}'.format(
-            desired_reg,
-            hex(int(target_addr))
-        ))
 
         # TODO(PT): write CsInsn instructions by hand to make this function easy to test w/ different scenarios
         # List of registers whose values we need to find
@@ -582,7 +578,7 @@ class ObjcFunctionAnalyzer(object):
         # there's no way we can resolve the value.
         stack_pointer_reg = 'sp'
         if stack_pointer_reg in needed_links or stack_pointer_reg in unknown_regs:
-            DebugUtil.log(self, '{} contents depends on stack, cannot determine statically'.format(desired_reg))
+            DebugUtil.log(self, f'{hex(int(target_addr))}: {desired_reg} = stack dependent')
             return RegisterContents(RegisterContentsType.UNKNOWN, 0)
 
         # once we've broken out of the above loop, we should have all the values we need to compute the
@@ -603,6 +599,8 @@ class ObjcFunctionAnalyzer(object):
                 raise RuntimeError('Data-flow loop exited before all unknowns were marked {}'.format(unknown_regs))
 
             arg_index = int(unknown_regs[0])
+
+            DebugUtil.log(self, f'{hex(int(target_addr))}: {desired_reg} = function arg #{arg_index}')
             return RegisterContents(RegisterContentsType.FUNCTION_ARG, arg_index)
 
         # for every register in the waiting list,
@@ -614,6 +612,8 @@ class ObjcFunctionAnalyzer(object):
         )
         # handle residual
         final_register_value += extra_offset
+
+        DebugUtil.log(self, f'{hex(int(target_addr))}: {desired_reg} = {hex(final_register_value)}')
         return RegisterContents(RegisterContentsType.IMMEDIATE, final_register_value)
 
     def _resolve_register_value_from_data_links(self, desired_reg, links, resolved_registers):
@@ -643,20 +643,13 @@ class ObjcFunctionAnalyzer(object):
 
         # do we know the value of this register?
         if desired_reg in resolved_registers:
-            DebugUtil.log(self, 'x{} is a known immediate: {}'.format(
-                desired_reg,
-                hex(int(resolved_registers[desired_reg]))
-            ))
+            # desired_reg is a known immediate
             return resolved_registers[desired_reg]
 
+        # 'desired_reg' is the value of 'source_reg', plus 'offset'
         # to determine value in desired_reg,
-        # we must find the value of source_reg, and then apply any offset
+        # we must find the value of source_reg, and then apply the offset
         source_reg, offset = links[desired_reg]
-        DebugUtil.log(self, 'x{} has data dependency: [x{}, #{}]'.format(
-            desired_reg,
-            source_reg,
-            hex(int(offset))
-        ))
 
         # resolve source reg value, then add offset
         source_reg_val = self._resolve_register_value_from_data_links(source_reg, links, resolved_registers)
@@ -667,10 +660,7 @@ class ObjcFunctionAnalyzer(object):
         # add to list of known values
         resolved_registers[desired_reg] = desired_reg_val
 
-        DebugUtil.log(self, 'x{} resolved to {}'.format(
-            desired_reg,
-            hex(int(desired_reg_val))
-        ))
+        # successfully resolved the value!
         return desired_reg_val
 
 

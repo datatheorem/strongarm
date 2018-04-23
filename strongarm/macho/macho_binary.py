@@ -546,3 +546,43 @@ class MachoBinary(object):
             # if we encounter a buggy binary like this, just use a placeholder name
             source_name = '<unknown dylib>'
         return source_name
+
+    def read_pointer_section(self, section_name):
+        # type: (Text) -> (List[int], List[int])
+        """Read all the pointers in a section
+
+        It is the caller's responsibility to only call this with a `section_name` which indicates a section which should
+        only contain a pointer list.
+
+        The return value is two lists of pointers.
+        The first List contains the virtual addresses of each entry in the section.
+        The second List contains the pointer values contained at each of these addresses.
+
+        The indexes of these two lists are matched up; that is, list1[0] is the virtual address of the first pointer
+        in the requested section, and list2[0] is the pointer value contained at that address.
+        """
+        locations = []  # type: List[int]
+        entries = []  # type: List[int]
+        if section_name not in self.sections:
+            return locations, entries
+
+        section = self.sections[section_name]
+        section_base = section.address
+        section_data = section.content
+
+        binary_word = self.platform_word_type
+        pointer_count = int(len(section_data) / sizeof(binary_word))
+        pointer_off = 0
+
+        for i in range(pointer_count):
+            # convert section offset of entry to absolute virtual address
+            locations.append(section_base + pointer_off)
+
+            data_end = pointer_off + sizeof(binary_word)
+            val = binary_word.from_buffer(bytearray(section_data[pointer_off:data_end])).value
+            entries.append(val)
+
+            pointer_off += sizeof(binary_word)
+
+        return locations, entries
+

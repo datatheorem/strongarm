@@ -189,6 +189,29 @@ class MachoSymtabCommand(Structure):
     ]
 
 
+class MachoDyldInfoCommand(Structure):
+    """Python representation of struct dyld_info_command
+
+    Definition found in <mach-o/loader.h>
+    """
+    _fields_ = [
+        ('cmd', c_uint32),
+        ('cmdsize', c_uint32),
+        ('rebase_off', c_uint32),
+        ('rebase_size', c_uint32),
+        ('bind_off', c_uint32),
+        ('bind_size', c_uint32),
+        ('weak_bind_off', c_uint32),
+        ('weak_bind_size', c_uint32),
+        ('lazy_bind_off', c_uint32),
+        ('lazy_bind_size', c_uint32),
+        ('export_off', c_uint32),
+        ('export_size', c_uint32),
+        ('weak_bind_size', c_uint32),
+        ('weak_bind_size', c_uint32),
+    ]
+
+
 class MachoNlistUn(Union):
     """Python representation of union n_un
 

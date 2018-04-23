@@ -1,6 +1,9 @@
 # -*- coding: utf-8 -*-
 
+import sys
+import logging
 import argparse
+from typing import Text
 
 from strongarm.debug_util import DebugUtil
 from strongarm.macho import \
@@ -40,7 +43,6 @@ def print_header(args) -> None:
         print(line)
 
 
-from typing import Text
 
 
 class InfoCommand:
@@ -165,6 +167,11 @@ class StrongarmShell:
         return self.run_command(user_input)
 
 
+def strongarm_script(binary: MachoBinary, analyzer: MachoAnalyzer):
+    """If you want to run a script instead of using the CLI, write it here and change `script` to `True` in main()
+    """
+
+
 def main():
     parser = argparse.ArgumentParser(description='Mach-O Analyzer')
     parser.add_argument(
@@ -176,6 +183,17 @@ def main():
         'Path to binary to analyze'
     )
     args = parser.parse_args()
+
+    def configure_logger():
+        root = logging.getLogger()
+        root.setLevel(logging.DEBUG)
+
+        ch = logging.StreamHandler(sys.stdout)
+        ch.setLevel(logging.INFO)
+        formatter = logging.Formatter('%(asctime)s - %(name)s - %(levelname)s - %(message)s')
+        ch.setFormatter(formatter)
+        root.addHandler(ch)
+    configure_logger()
 
     if args.verbose:
         DebugUtil.debug = True
@@ -195,13 +213,18 @@ def main():
     analyzer = MachoAnalyzer.get_analyzer(binary)
     shell = StrongarmShell(binary, analyzer)
 
-    autorun_cmd = 'info metadata segments sections loads'
-    print(f'Auto-running \'{autorun_cmd}\'\n\n')
-    shell.run_command(autorun_cmd)
+    # XXX(PT): Change this if you want to run a quick script! Write it in strongarm_script()
+    script = True
+    if script:
+        strongarm_script(binary, analyzer)
+    else:
+        autorun_cmd = 'info metadata segments sections loads'
+        print(f'Auto-running \'{autorun_cmd}\'\n\n')
+        shell.run_command(autorun_cmd)
 
-    # this will return False once the shell exists
-    while shell.process_command():
-        pass
+        # this will return False once the shell exists
+        while shell.process_command():
+            pass
     print('May your arms be beefy and your binaries unencrypted')
 
 

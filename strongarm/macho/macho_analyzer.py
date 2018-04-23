@@ -1,10 +1,4 @@
 # -*- coding: utf-8 -*-
-from __future__ import absolute_import
-from __future__ import unicode_literals
-from __future__ import print_function
-
-from ctypes import sizeof, c_void_p
-
 from capstone import Cs, CsInsn, CS_ARCH_ARM64, CS_MODE_ARM
 from typing import Text, List, Dict, Optional, Tuple
 from typing import TYPE_CHECKING
@@ -18,7 +12,7 @@ from strongarm.macho.objc_runtime_data_parser import \
     ObjcClass, \
     ObjcCategory, \
     ObjcProtocol
-from strongarm.macho.dyld_info_parser import DyldInfoParser
+from strongarm.macho.dyld_info_parser import DyldInfoParser, DyldBoundSymbol
 from strongarm import DebugUtil
 
 
@@ -41,11 +35,11 @@ class MachoAnalyzer(object):
         self.cs = Cs(CS_ARCH_ARM64, CS_MODE_ARM)
         self.cs.detail = True
 
-        # data cached by various methods
-        self._lazy_symbol_entry_pointers = None # type: List[int]
-        self._imported_symbol_map = None    # type: Dict[int, Text]
-        self._external_branch_destinations_to_symbol_names = None   # type: Dict[int, Text]
-        self._external_symbol_names_to_branch_destinations = None   # type: Dict[Text, int]
+        # Map of each dyld stub address to the DyldBoundSymbol it represents
+        self._dyld_bound_symbols: Dict[int, DyldBoundSymbol] = None
+        # Each __stubs function calls a single dyld stub address, which has a corresponding DyldBoundSymbol.
+        # Map of each __stub function to the associated name of the DyldBoundSymbol
+        self._imported_symbol_addresses_to_names: Dict[int, str] = None
 
         self.crossref_helper = MachoStringTableHelper(bin)
         self.imported_symbols = self.crossref_helper.imported_symbols
@@ -103,33 +97,32 @@ class MachoAnalyzer(object):
         # type: () -> List[ObjcProtocol]
         return self.objc_helper.protocols
 
-    def dyld_bound_symbols(self) -> Dict[int, Text]:
-        if self._imported_symbol_map:
-            return self._imported_symbol_map
-        parser = DyldInfoParser(self.binary)
-        stubs = parser.dyld_stubs_to_symbols
+    @property
+    def dyld_bound_symbols(self) -> Dict[int, DyldBoundSymbol]:
+        """Return a Dict of each imported dyld stub to the corresponding symbol to be bound at runtime.
+        """
+        if self._dyld_bound_symbols:
+            return self._dyld_bound_symbols
 
-        self._imported_symbol_map = {}
-        for pointer, symbol_info in stubs.items():
-            self._imported_symbol_map[pointer] = symbol_info.name
-        return self._imported_symbol_map
+        self._dyld_bound_symbols = DyldInfoParser(self.binary).dyld_stubs_to_symbols
+        return self._dyld_bound_symbols
 
     @property
-    def external_branch_destinations_to_symbol_names(self):
+    def imp_stubs_to_symbol_names(self):
         # type: () -> Dict[int, Text]
-        """Return a Dict of addresses to the external symbols they correspond to
+        """Return a Dict of callable implementation stubs to the names of the imported symbols they correspond to.
         """
-        if self._external_branch_destinations_to_symbol_names:
-            return self._external_branch_destinations_to_symbol_names
+        if self._imported_symbol_addresses_to_names:
+            return self._imported_symbol_addresses_to_names
 
         symbol_name_map = {}
         stubs = self.imp_stubs
-        la_sym_ptr_name_map = self.dyld_bound_symbols()
+        stub_map = self.dyld_bound_symbols
 
         unnamed_stub_count = 0
         for stub in stubs:
-            if stub.destination in la_sym_ptr_name_map:
-                symbol_name = la_sym_ptr_name_map[stub.destination]
+            if stub.destination in stub_map:
+                symbol_name = stub_map[stub.destination].name
                 symbol_name_map[stub.address] = symbol_name
             else:
                 # add in stub which is not backed by a named symbol
@@ -139,31 +132,15 @@ class MachoAnalyzer(object):
                 unnamed_stub_count += 1
                 symbol_name_map[stub.destination] = name
 
-        self._external_branch_destinations_to_symbol_names = symbol_name_map
+        self._imported_symbol_addresses_to_names = symbol_name_map
         return symbol_name_map
-
-    @property
-    def external_symbol_names_to_branch_destinations(self):
-        # type: () -> Dict[Text, int]
-        """Return a Dict of external symbol names to the addresses they'll be called at
-        """
-        if self._external_symbol_names_to_branch_destinations:
-            return self._external_symbol_names_to_branch_destinations
-
-        call_address_map = {}
-        for key in self.external_branch_destinations_to_symbol_names:
-            value = self.external_branch_destinations_to_symbol_names[key]
-            call_address_map[value] = key
-
-        self._external_symbol_names_to_branch_destinations = call_address_map
-        return call_address_map
 
     def symbol_name_for_branch_destination(self, branch_address):
         # type: (int) -> Text
         """Get the associated symbol name for a given branch destination
         """
-        if branch_address in self.external_branch_destinations_to_symbol_names:
-            return self.external_branch_destinations_to_symbol_names[branch_address]
+        if branch_address in self.imp_stubs_to_symbol_names:
+            return self.imp_stubs_to_symbol_names[branch_address]
         raise RuntimeError('Unknown branch destination {}. Is this a local branch?'.format(
             hex(branch_address)
         ))

@@ -19,7 +19,8 @@ from strongarm.macho.arch_independent_structs import \
     DylibCommandStruct, \
     MachoLoadCommandStruct, \
     MachoSymtabCommandStruct, \
-    MachoDysymtabCommandStruct
+    MachoDysymtabCommandStruct, \
+    MachoDyldInfoCommandStruct
 
 from ctypes import c_uint64, c_uint32, sizeof
 
@@ -80,6 +81,7 @@ class MachoBinary(object):
         self.dysymtab = None    # type: MachoDysymtabCommandStruct
         self.symtab = None  # type: MachoSymtabCommandStruct
         self.encryption_info = None # type: MachoEncryptionInfoStruct
+        self.dyld_info = None   # type: MachoDyldInfoCommandStruct
         self.load_dylib_commands = None # type: List[DylibCommandStruct]
 
         # cache to save work on calls to get_bytes()
@@ -122,7 +124,7 @@ class MachoBinary(object):
 
     @property
     def slice_magic(self):
-        # type: () -> None
+        # type: () -> c_uint32
         """Read magic number identifier from this Mach-O slice
         """
         return c_uint32.from_buffer(bytearray(self.get_bytes(0, sizeof(c_uint32)))).value
@@ -212,10 +214,16 @@ class MachoBinary(object):
             elif load_command.cmd in [MachoLoadCommands.LC_ENCRYPTION_INFO,
                                       MachoLoadCommands.LC_ENCRYPTION_INFO_64]:
                 self.encryption_info = MachoEncryptionInfoStruct(self, offset)
+
             elif load_command.cmd == MachoLoadCommands.LC_SYMTAB:
                 self.symtab = MachoSymtabCommandStruct(self, offset)
+
             elif load_command.cmd == MachoLoadCommands.LC_DYSYMTAB:
                 self.dysymtab = MachoDysymtabCommandStruct(self, offset)
+
+            elif load_command.cmd in [MachoLoadCommands.LC_DYLD_INFO, MachoLoadCommands.LC_DYLD_INFO_ONLY]:
+                self.dyld_info = MachoDyldInfoCommandStruct(self, offset)
+
             elif load_command.cmd in [MachoLoadCommands.LC_LOAD_DYLIB, MachoLoadCommands.LC_LOAD_WEAK_DYLIB]:
                 dylib_load_command = DylibCommandStruct(self, offset)
                 dylib_load_command.fileoff = offset

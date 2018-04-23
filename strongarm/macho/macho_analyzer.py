@@ -1,10 +1,4 @@
 # -*- coding: utf-8 -*-
-from __future__ import absolute_import
-from __future__ import unicode_literals
-from __future__ import print_function
-
-from ctypes import sizeof, c_void_p
-
 from capstone import Cs, CsInsn, CS_ARCH_ARM64, CS_MODE_ARM
 from typing import Text, List, Dict, Optional, Tuple
 from typing import TYPE_CHECKING
@@ -18,7 +12,7 @@ from strongarm.macho.objc_runtime_data_parser import \
     ObjcClass, \
     ObjcCategory, \
     ObjcProtocol
-from strongarm.macho.dyld_info_parser import DyldInfoParser
+from strongarm.macho.dyld_info_parser import DyldInfoParser, DyldBoundSymbol
 from strongarm import DebugUtil
 
 
@@ -41,11 +35,7 @@ class MachoAnalyzer(object):
         self.cs = Cs(CS_ARCH_ARM64, CS_MODE_ARM)
         self.cs.detail = True
 
-        # data cached by various methods
-        self._lazy_symbol_entry_pointers = None # type: List[int]
-        self._imported_symbol_map = None    # type: Dict[int, Text]
-        self._external_branch_destinations_to_symbol_names = None   # type: Dict[int, Text]
-        self._external_symbol_names_to_branch_destinations = None   # type: Dict[Text, int]
+        self._dyld_bound_symbols = None     # type: Dict[int, DyldBoundSymbol]
 
         self.crossref_helper = MachoStringTableHelper(bin)
         self.imported_symbols = self.crossref_helper.imported_symbols
@@ -103,67 +93,25 @@ class MachoAnalyzer(object):
         # type: () -> List[ObjcProtocol]
         return self.objc_helper.protocols
 
-    def dyld_bound_symbols(self) -> Dict[int, Text]:
-        if self._imported_symbol_map:
-            return self._imported_symbol_map
+    @property
+    def dyld_bound_symbols(self) -> Dict[int, DyldBoundSymbol]:
+        """Return the symbols which are bound at runtime by dyld.
+        This includes lazy and bound symbols.
+        This method will return a Dict where each pointer
+        """
+
+        if self._dyld_bound_symbols:
+            return self._dyld_bound_symbols
         parser = DyldInfoParser(self.binary)
-        stubs = parser.dyld_stubs_to_symbols
-
-        self._imported_symbol_map = {}
-        for pointer, symbol_info in stubs.items():
-            self._imported_symbol_map[pointer] = symbol_info.name
-        return self._imported_symbol_map
-
-    @property
-    def external_branch_destinations_to_symbol_names(self):
-        # type: () -> Dict[int, Text]
-        """Return a Dict of addresses to the external symbols they correspond to
-        """
-        if self._external_branch_destinations_to_symbol_names:
-            return self._external_branch_destinations_to_symbol_names
-
-        symbol_name_map = {}
-        stubs = self.imp_stubs
-        la_sym_ptr_name_map = self.dyld_bound_symbols()
-
-        unnamed_stub_count = 0
-        for stub in stubs:
-            if stub.destination in la_sym_ptr_name_map:
-                symbol_name = la_sym_ptr_name_map[stub.destination]
-                symbol_name_map[stub.address] = symbol_name
-            else:
-                # add in stub which is not backed by a named symbol
-                # a stub contained in the __stubs section that was not backed by a named symbol was first
-                # encountered in com.intuit.mobilebanking01132.app/PlugIns/CMA Balance Widget.appex/CMA Balance Widget
-                name = 'unnamed_stub_{}'.format(unnamed_stub_count)
-                unnamed_stub_count += 1
-                symbol_name_map[stub.destination] = name
-
-        self._external_branch_destinations_to_symbol_names = symbol_name_map
-        return symbol_name_map
-
-    @property
-    def external_symbol_names_to_branch_destinations(self):
-        # type: () -> Dict[Text, int]
-        """Return a Dict of external symbol names to the addresses they'll be called at
-        """
-        if self._external_symbol_names_to_branch_destinations:
-            return self._external_symbol_names_to_branch_destinations
-
-        call_address_map = {}
-        for key in self.external_branch_destinations_to_symbol_names:
-            value = self.external_branch_destinations_to_symbol_names[key]
-            call_address_map[value] = key
-
-        self._external_symbol_names_to_branch_destinations = call_address_map
-        return call_address_map
+        self._dyld_bound_symbols = parser.dyld_stubs_to_symbols
+        return self._dyld_bound_symbols
 
     def symbol_name_for_branch_destination(self, branch_address):
         # type: (int) -> Text
         """Get the associated symbol name for a given branch destination
         """
-        if branch_address in self.external_branch_destinations_to_symbol_names:
-            return self.external_branch_destinations_to_symbol_names[branch_address]
+        if branch_address in self.dyld_bound_symbols:
+            return self.dyld_bound_symbols[branch_address].name
         raise RuntimeError('Unknown branch destination {}. Is this a local branch?'.format(
             hex(branch_address)
         ))

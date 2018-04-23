@@ -36,7 +36,7 @@ class DyldBoundSymbol:
         self.dylib = self.binary.dylib_for_library_ordinal(library_ordinal)
 
         dylib_description = self.binary.dylib_name_for_library_ordinal(library_ordinal)
-        logging.info(f'Dyld stub @ {hex(self.address)}: {self.name} from {self.library_ordinal} {dylib_description}')
+        logging.debug(f'Dyld stub @ {hex(self.address)}: {self.name} from {self.library_ordinal} {dylib_description}')
 
 
 class DyldInfoParser:

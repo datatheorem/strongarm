@@ -264,6 +264,33 @@ class MachoBinary(object):
         # guess by using the highest-addressed section we've seen
         return max_section
 
+    def segment_for_index(self, segment_index: int) -> Optional[MachoSegmentCommandStruct]:
+        if segment_index < 0 or segment_index >= len(self.segment_commands):
+            return None
+        # TODO(PT): store segment order in some way that doesn't rely on dicts being sorted by insertion order
+        return [x for x in self.segment_commands.values()][segment_index]
+
+    def segment_for_address(self, virt_addr: int) -> Optional[MachoSegmentCommandStruct]:
+        # invalid address?
+        if virt_addr < self.get_virtual_base():
+            return None
+
+        # if the address given is past the last declared section, translate based on the last section
+        # so, we need to keep track of the last seen section
+        max_segment = self.segment_commands[0]
+
+        for segment_name in self.segment_commands:
+            cmd = self.segment_commands[segment_name]
+            # update highest section
+            if cmd.vmaddr > max_segment.vmaddr:
+                max_segment = cmd
+
+            if cmd.vmaddr <= virt_addr < cmd.vmaddr + cmd.vmsize:
+                return cmd
+        # we looked through all sections and didn't find one explicitly containing this address
+        # guess by using the highest-addressed section we've seen
+        return max_segment
+
     def _parse_sections_for_segment(self, segment, segment_offset):
         # type: (MachoSegmentCommandStruct, int) -> None
         """Parse all sections contained within a Mach-O segment, and add them to our list of sections

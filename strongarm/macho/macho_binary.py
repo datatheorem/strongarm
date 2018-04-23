@@ -517,3 +517,32 @@ class MachoBinary(object):
         range2 = (self.encryption_info.cryptoff, self.encryption_info.cryptoff + self.encryption_info.cryptsize)
         return range1[1] >= range2[0] and range2[1] >= range1[0]
 
+    def dylib_for_library_ordinal(self, library_ordinal: int) -> Optional[DylibCommandStruct]:
+        """Retrieve the library information for the 'library ordinal' value, or None if no entry exists there.
+        Library ordinals are 1-indexed.
+
+        https://opensource.apple.com/source/cctools/cctools-795/include/mach-o/loader.h
+        """
+        idx = library_ordinal - 1
+        # library ordinals are 1-indexed
+        # if the input is invalid, return None
+        if library_ordinal < 1 or idx >= len(self.load_dylib_commands):
+            return None
+        return self.load_dylib_commands[idx]
+
+    def dylib_name_for_library_ordinal(self, library_ordinal: int) -> str:
+        """Read the name of the dynamic library by its library ordinal
+        """
+        source_dylib = self.dylib_for_library_ordinal(library_ordinal)
+        if source_dylib:
+            source_name_addr = source_dylib.fileoff + \
+                               source_dylib.dylib.name.offset + \
+                               self.get_virtual_base()
+            source_name = self.get_full_string_from_start_address(source_name_addr)
+        else:
+            # we have encountered binaries where the n_desc indicates a nonexistent library ordinal
+            # Netflix.app/frameworks/widevine_cdm_sdk_oemcrypto_release.framework/widevine_cdm_sdk_oemcrypto_release
+            # indicates an ordinal 254, when the binary only actually has 8 LC_LOAD_DYLIB commands.
+            # if we encounter a buggy binary like this, just use a placeholder name
+            source_name = '<unknown dylib>'
+        return source_name

@@ -4,5 +4,6 @@ pipelines:
   default:
     - step:
         script:
-          - pip install -U tox
-          - tox
+          - pip install -U -r requirements.txt
+          - python setup.py install
+          - python run_tests.py

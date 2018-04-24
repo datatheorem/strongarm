@@ -102,20 +102,10 @@ class ObjcRuntimeDataParser(object):
             symbol_name = self.binary.get_full_string_from_start_address(string_file_address, virtual=False)
 
             library_ordinal = self._library_ordinal_from_n_desc(sym.n_desc)
-            source_dylib = self._dylib_from_library_ordinal(library_ordinal)
-            if source_dylib:
-                source_name_addr = source_dylib.fileoff + \
-                                   source_dylib.dylib.name.offset + \
-                                   self.binary.get_virtual_base()
-                source_name = self.binary.get_full_string_from_start_address(source_name_addr)
-            else:
-                # we have encountered binaries where the n_desc indicates a nonexistent library ordinal
-                # Netflix.app/frameworks/widevine_cdm_sdk_oemcrypto_release.framework/widevine_cdm_sdk_oemcrypto_release
-                # indicates an ordinal 254, when the binary only actually has 8 LC_LOAD_DYLIB commands.
-                # if we encounter a buggy binary like this, just use a placeholder name
-                source_name = '<unknown dylib>'
+            source_name = self.binary.dylib_name_for_library_ordinal(library_ordinal)
 
             syms_to_dylib_path[symbol_name] = source_name
+            print(f'{hex(sym.n_type)} {symbol_name} -> {source_name}')
         return syms_to_dylib_path
 
     def path_for_external_symbol(self, symbol):
@@ -129,21 +119,13 @@ class ObjcRuntimeDataParser(object):
         # type: (int) -> int
         return (n_desc >> 8) & 0xff
 
-    def _dylib_from_library_ordinal(self, ordinal):
-        # type: (int) -> Optional[DylibCommandStruct]
-        # ordinals start from 1, so translate to an array index
-        ordinal_idx = ordinal - 1
-        if ordinal_idx >= len(self.binary.load_dylib_commands):
-            return None
-        return self.binary.load_dylib_commands[ordinal_idx]
-
     def _parse_selrefs(self):
         # type: () -> Dict[int, ObjcSelref]
         """Parse the binary's list of selrefs, and create a Dict where a selref (pointer) maps to a wrapped ObjcSelref
         """
         selector_literal_ptr_to_selrefs = {}  # type: Dict[int, ObjcSelref]
 
-        selref_pointers, selector_literal_pointers = self._read_pointer_section('__objc_selrefs')
+        selref_pointers, selector_literal_pointers = self.binary.read_pointer_section('__objc_selrefs')
         # sanity check
         if len(selref_pointers) != len(selector_literal_pointers):
             raise RuntimeError('read invalid data from __objc_selrefs')
@@ -314,64 +296,25 @@ class ObjcRuntimeDataParser(object):
             selectors += self.read_selectors_from_methlist_ptr(objc_data_struct.base_methods)
         return ObjcClass(name, selectors)
 
-    def _read_pointer_section(self, section_name):
-        # type: (Text) -> (List[int], List[int])
-        """Read all the pointers in a section
-
-        It is the caller's responsibility to only call this with a `section_name` which indicates a section which should
-        only contain a pointer list.
-
-        The return value is two lists of pointers.
-        The first List contains the virtual addresses of each entry in the section.
-        The second List contains the pointer values contained at each of these addresses.
-
-        The indexes of these two lists are matched up; that is, list1[0] is the virtual address of the first pointer
-        in the requested section, and list2[0] is the pointer value contained at that address.
-        """
-        locations = []  # type: List[int]
-        entries = []  # type: List[int]
-        if section_name not in self.binary.sections:
-            return locations, entries
-
-        section = self.binary.sections[section_name]
-        section_base = section.address
-        section_data = section.content
-
-        binary_word = self.binary.platform_word_type
-        pointer_count = int(len(section_data) / sizeof(binary_word))
-        pointer_off = 0
-
-        for i in range(pointer_count):
-            # convert section offset of entry to absolute virtual address
-            locations.append(section_base + pointer_off)
-
-            data_end = pointer_off + sizeof(binary_word)
-            val = binary_word.from_buffer(bytearray(section_data[pointer_off:data_end])).value
-            entries.append(val)
-
-            pointer_off += sizeof(binary_word)
-
-        return locations, entries
-
     def _get_catlist_pointers(self):
         # type: () -> List[int]
         """Read pointers in __objc_catlist into list
         """
-        _, catlist_pointers = self._read_pointer_section('__objc_catlist')
+        _, catlist_pointers = self.binary.read_pointer_section('__objc_catlist')
         return catlist_pointers
 
     def _get_protolist_pointers(self):
         # type: () -> List[int]
         """Read pointers in __objc_protolist into list
         """
-        _, protolist_pointers = self._read_pointer_section('__objc_protolist')
+        _, protolist_pointers = self.binary.read_pointer_section('__objc_protolist')
         return protolist_pointers
 
     def _get_classlist_pointers(self):
         # type: () -> List[int]
         """Read pointers in __objc_classlist into list
         """
-        _, classlist_pointers = self._read_pointer_section('__objc_classlist')
+        _, classlist_pointers = self.binary.read_pointer_section('__objc_classlist')
         return classlist_pointers
 
     def _get_objc_category_from_catlist_pointer(self, category_struct_pointer):

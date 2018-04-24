@@ -12,3 +12,4 @@ from .macho_imp_stubs import *
 from .macho_load_commands import *
 from .macho_string_table_helper import *
 from .objc_runtime_data_parser import *
+from .dyld_info_parser import *

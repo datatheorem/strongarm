@@ -100,7 +100,7 @@ class ObjcUnconditionalBranchInstruction(ObjcBranchInstruction):
         ObjcBranchInstruction.__init__(self, instruction, instruction.operands[0].value.imm)
 
         macho_analyzer = strongarm.macho.macho_analyzer.MachoAnalyzer.get_analyzer(function_analyzer.binary)
-        external_c_sym_map = macho_analyzer.external_branch_destinations_to_symbol_names
+        external_c_sym_map = macho_analyzer.imp_stubs_to_symbol_names
         if self.destination_address in external_c_sym_map:
             self.symbol = external_c_sym_map[self.destination_address]  # type: ignore
             if self.symbol in self.OBJC_MSGSEND_FUNCTIONS:

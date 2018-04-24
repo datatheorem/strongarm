@@ -95,48 +95,71 @@ class TestMachoAnalyzer(unittest.TestCase):
         self.assertEqual(analyzer1, analyzer2)
 
     def test_external_symbol_addr_map(self):
-        sym_map = self.analyzer._la_symbol_ptr_to_symbol_name_map
+        sym_map = self.analyzer.dyld_bound_symbols
         imported_syms = self.analyzer.imported_symbols
         # make sure all the symbols listed in imported_symbols are present here
         for sym in sym_map.values():
-            self.assertTrue(sym in imported_syms)
+            name = sym.name
+            self.assertTrue(name in imported_syms)
 
         # make sure all addresses from stubs have been mapped to real destination addresses
         stubs_map = self.analyzer.imp_stubs
-        call_destinations_map = [d.destination for d in stubs_map]
-        self.assertEqual(sorted(sym_map.keys()), sorted(call_destinations_map))
+        call_destinations = [d.destination for d in stubs_map]
+        for call_destination in call_destinations:
+            self.assertTrue(call_destination in sym_map.keys())
 
-    def test_symbols_to_destination_address_resolving(self):
-        address_to_symbol_map = self.analyzer.external_branch_destinations_to_symbol_names
-        symbol_to_address_map = self.analyzer.external_symbol_names_to_branch_destinations
-
-        # verify both contain the same data
-        for k,v in address_to_symbol_map.items():
-            self.assertEqual(symbol_to_address_map[v], k)
-        for k,v in symbol_to_address_map.items():
-            self.assertEqual(address_to_symbol_map[v], k)
-
-        # ensure they contain the correct data
-        correct_destination_symbol_map = {
-            0x100006730: '_NSClassFromString',
-            0x100006790: '_objc_autoreleasePoolPush',
-            0x10000676c: '_UIApplicationMain',
-            0x100006754: '_NSStringFromClass',
-            0x100006784: '_objc_autoreleasePoolPop',
-            0x100006760: '_SecTrustEvaluate',
-            0x10000673c: '_NSLog',
-            0x1000067b4: '_objc_msgSendSuper2',
-            0x100006748: '_NSStringFromCGRect',
-            0x1000067a8: '_objc_msgSend',
-            0x1000067cc: '_objc_retain',
-            0x1000067c0: '_objc_release',
-            0x1000067e4: '_objc_storeStrong',
-            0x1000067f0: '_rand',
-            0x1000067d8: '_objc_retainAutoreleasedReturnValue',
-            0x100006778: '_dlopen',
-            0x10000679c: '_objc_getClass',
+    def test_find_dyld_bound_symbols(self):
+        bound_symbols = self.analyzer.dyld_bound_symbols
+        correct_bound_symbols = {
+            0x1000090f8: '_OBJC_CLASS_$_NSURLCredential',
+            0x1000091f0: '_OBJC_CLASS_$_NSObject',
+            0x100009148: '_OBJC_METACLASS_$_NSObject',
+            0x100009198: '_OBJC_METACLASS_$_NSObject',
+            0x1000091c0: '_OBJC_METACLASS_$_NSObject',
+            0x1000091c8: '_OBJC_METACLASS_$_NSObject',
+            0x100009210: '_OBJC_METACLASS_$_NSObject',
+            0x100009130: '__objc_empty_cache',
+            0x100009158: '__objc_empty_cache',
+            0x100009180: '__objc_empty_cache',
+            0x1000091a8: '__objc_empty_cache',
+            0x1000091d0: '__objc_empty_cache',
+            0x1000091f8: '__objc_empty_cache',
+            0x100009220: '__objc_empty_cache',
+            0x100009248: '__objc_empty_cache',
+            0x100008000: 'dyld_stub_binder',
+            0x100008098: '___CFConstantStringClassReference',
+            0x1000080b8: '___CFConstantStringClassReference',
+            0x1000080d8: '___CFConstantStringClassReference',
+            0x1000080f8: '___CFConstantStringClassReference',
+            0x100008118: '___CFConstantStringClassReference',
+            0x100008138: '___CFConstantStringClassReference',
+            0x100008158: '___CFConstantStringClassReference',
+            0x1000090f0: '_OBJC_CLASS_$_UIFont',
+            0x100009128: '_OBJC_CLASS_$_UILabel',
+            0x100009240: '_OBJC_CLASS_$_UIResponder',
+            0x100009178: '_OBJC_CLASS_$_UIViewController',
+            0x100009150: '_OBJC_METACLASS_$_UILabel',
+            0x100009218: '_OBJC_METACLASS_$_UIResponder',
+            0x1000091a0: '_OBJC_METACLASS_$_UIViewController',
+            0x100008010: '_NSClassFromString',
+            0x100008018: '_NSLog',
+            0x100008020: '_NSStringFromCGRect',
+            0x100008028: '_NSStringFromClass',
+            0x100008030: '_SecTrustEvaluate',
+            0x100008038: '_UIApplicationMain',
+            0x100008040: '_dlopen',
+            0x100008048: '_objc_autoreleasePoolPop',
+            0x100008050: '_objc_autoreleasePoolPush',
+            0x100008058: '_objc_getClass',
+            0x100008060: '_objc_msgSend',
+            0x100008068: '_objc_msgSendSuper2',
+            0x100008070: '_objc_release',
+            0x100008078: '_objc_retain',
+            0x100008080: '_objc_retainAutoreleasedReturnValue',
+            0x100008088: '_objc_storeStrong',
+            0x100008090: '_rand',
         }
-        self.assertEqual(sorted(correct_destination_symbol_map), sorted(address_to_symbol_map))
+        self.assertEqual(sorted(bound_symbols), sorted(correct_bound_symbols))
 
     def test_symbol_name_for_branch_destination(self):
         # bogus destination

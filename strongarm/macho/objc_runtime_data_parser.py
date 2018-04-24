@@ -296,7 +296,6 @@ class ObjcRuntimeDataParser(object):
             selectors += self.read_selectors_from_methlist_ptr(objc_data_struct.base_methods)
         return ObjcClass(name, selectors)
 
-
     def _get_catlist_pointers(self):
         # type: () -> List[int]
         """Read pointers in __objc_catlist into list

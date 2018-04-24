@@ -12,7 +12,7 @@ from strongarm.macho import BinaryEncryptedError
 
 
 class TestMachoBinary(unittest.TestCase):
-    FAT_PATH = os.path.join(os.path.dirname(__file__), 'bin', 'GoodCertificateValidation')
+    FAT_PATH = os.path.join(os.path.dirname(__file__), 'bin', 'StrongarmTarget')
     ENCRYPTED_PATH = os.path.join(os.path.dirname(__file__), 'bin', 'RxTest')
 
     def setUp(self):
@@ -25,8 +25,8 @@ class TestMachoBinary(unittest.TestCase):
 
     def test_translate_virtual_address(self):
         # ensure virtual addresses are correctly translated to file offsets
-        virt = 0x100006dd0
-        correct_bytes = b'application:didRegisterUserNotificationSettings:\x00'
+        virt = 0x100006db8
+        correct_bytes = b'application:openURL:sourceApplication:annotation:\x00'
         found_bytes = self.binary.get_content_from_virtual_address(virtual_address=virt, size=len(correct_bytes))
         self.assertEqual(found_bytes, correct_bytes)
 
@@ -86,7 +86,7 @@ class TestMachoBinary(unittest.TestCase):
     def test_get_symtab_contents(self):
         from pprint import pprint
         symtabs = self.binary.symtab_contents
-        self.assertTrue(len(symtabs) == 31)
+        self.assertTrue(len(symtabs) == 32)
 
     def test_read_encrypted_info(self):
         encrypted_binary = MachoParser(TestMachoBinary.ENCRYPTED_PATH).get_armv7_slice()

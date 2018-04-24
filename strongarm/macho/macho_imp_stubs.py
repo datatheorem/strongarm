@@ -58,7 +58,6 @@ class MachoImpStubsParser(object):
             ['adrp', 'ldr', 'br'],
         ]
         # differentiate between patterns by looking at the opcode of the first instruction
-        pattern_idx = 0
         if instr1.mnemonic == patterns[0][0]:
             pattern_idx = 0
         elif instr1.mnemonic == patterns[1][0]:

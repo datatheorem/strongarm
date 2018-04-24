@@ -19,7 +19,8 @@ from strongarm.macho.arch_independent_structs import \
     DylibCommandStruct, \
     MachoLoadCommandStruct, \
     MachoSymtabCommandStruct, \
-    MachoDysymtabCommandStruct
+    MachoDysymtabCommandStruct, \
+    MachoDyldInfoCommandStruct
 
 from ctypes import c_uint64, c_uint32, sizeof
 
@@ -80,6 +81,7 @@ class MachoBinary(object):
         self.dysymtab = None    # type: MachoDysymtabCommandStruct
         self.symtab = None  # type: MachoSymtabCommandStruct
         self.encryption_info = None # type: MachoEncryptionInfoStruct
+        self.dyld_info = None   # type: MachoDyldInfoCommandStruct
         self.load_dylib_commands = None # type: List[DylibCommandStruct]
 
         # cache to save work on calls to get_bytes()
@@ -122,7 +124,7 @@ class MachoBinary(object):
 
     @property
     def slice_magic(self):
-        # type: () -> None
+        # type: () -> c_uint32
         """Read magic number identifier from this Mach-O slice
         """
         return c_uint32.from_buffer(bytearray(self.get_bytes(0, sizeof(c_uint32)))).value
@@ -212,10 +214,16 @@ class MachoBinary(object):
             elif load_command.cmd in [MachoLoadCommands.LC_ENCRYPTION_INFO,
                                       MachoLoadCommands.LC_ENCRYPTION_INFO_64]:
                 self.encryption_info = MachoEncryptionInfoStruct(self, offset)
+
             elif load_command.cmd == MachoLoadCommands.LC_SYMTAB:
                 self.symtab = MachoSymtabCommandStruct(self, offset)
+
             elif load_command.cmd == MachoLoadCommands.LC_DYSYMTAB:
                 self.dysymtab = MachoDysymtabCommandStruct(self, offset)
+
+            elif load_command.cmd in [MachoLoadCommands.LC_DYLD_INFO, MachoLoadCommands.LC_DYLD_INFO_ONLY]:
+                self.dyld_info = MachoDyldInfoCommandStruct(self, offset)
+
             elif load_command.cmd in [MachoLoadCommands.LC_LOAD_DYLIB, MachoLoadCommands.LC_LOAD_WEAK_DYLIB]:
                 dylib_load_command = DylibCommandStruct(self, offset)
                 dylib_load_command.fileoff = offset
@@ -255,6 +263,33 @@ class MachoBinary(object):
         # we looked through all sections and didn't find one explicitly containing this address
         # guess by using the highest-addressed section we've seen
         return max_section
+
+    def segment_for_index(self, segment_index: int) -> Optional[MachoSegmentCommandStruct]:
+        if segment_index < 0 or segment_index >= len(self.segment_commands):
+            return None
+        # TODO(PT): store segment order in some way that doesn't rely on dicts being sorted by insertion order
+        return [x for x in self.segment_commands.values()][segment_index]
+
+    def segment_for_address(self, virt_addr: int) -> Optional[MachoSegmentCommandStruct]:
+        # invalid address?
+        if virt_addr < self.get_virtual_base():
+            return None
+
+        # if the address given is past the last declared section, translate based on the last section
+        # so, we need to keep track of the last seen section
+        max_segment = self.segment_commands[0]
+
+        for segment_name in self.segment_commands:
+            cmd = self.segment_commands[segment_name]
+            # update highest section
+            if cmd.vmaddr > max_segment.vmaddr:
+                max_segment = cmd
+
+            if cmd.vmaddr <= virt_addr < cmd.vmaddr + cmd.vmsize:
+                return cmd
+        # we looked through all sections and didn't find one explicitly containing this address
+        # guess by using the highest-addressed section we've seen
+        return max_segment
 
     def _parse_sections_for_segment(self, segment, segment_offset):
         # type: (MachoSegmentCommandStruct, int) -> None
@@ -481,4 +516,73 @@ class MachoBinary(object):
         range1 = (offset, offset + size)
         range2 = (self.encryption_info.cryptoff, self.encryption_info.cryptoff + self.encryption_info.cryptsize)
         return range1[1] >= range2[0] and range2[1] >= range1[0]
+
+    def dylib_for_library_ordinal(self, library_ordinal: int) -> Optional[DylibCommandStruct]:
+        """Retrieve the library information for the 'library ordinal' value, or None if no entry exists there.
+        Library ordinals are 1-indexed.
+
+        https://opensource.apple.com/source/cctools/cctools-795/include/mach-o/loader.h
+        """
+        idx = library_ordinal - 1
+        # library ordinals are 1-indexed
+        # if the input is invalid, return None
+        if library_ordinal < 1 or idx >= len(self.load_dylib_commands):
+            return None
+        return self.load_dylib_commands[idx]
+
+    def dylib_name_for_library_ordinal(self, library_ordinal: int) -> str:
+        """Read the name of the dynamic library by its library ordinal
+        """
+        source_dylib = self.dylib_for_library_ordinal(library_ordinal)
+        if source_dylib:
+            source_name_addr = source_dylib.fileoff + \
+                               source_dylib.dylib.name.offset + \
+                               self.get_virtual_base()
+            source_name = self.get_full_string_from_start_address(source_name_addr)
+        else:
+            # we have encountered binaries where the n_desc indicates a nonexistent library ordinal
+            # Netflix.app/frameworks/widevine_cdm_sdk_oemcrypto_release.framework/widevine_cdm_sdk_oemcrypto_release
+            # indicates an ordinal 254, when the binary only actually has 8 LC_LOAD_DYLIB commands.
+            # if we encounter a buggy binary like this, just use a placeholder name
+            source_name = '<unknown dylib>'
+        return source_name
+
+    def read_pointer_section(self, section_name):
+        # type: (Text) -> (List[int], List[int])
+        """Read all the pointers in a section
+
+        It is the caller's responsibility to only call this with a `section_name` which indicates a section which should
+        only contain a pointer list.
+
+        The return value is two lists of pointers.
+        The first List contains the virtual addresses of each entry in the section.
+        The second List contains the pointer values contained at each of these addresses.
+
+        The indexes of these two lists are matched up; that is, list1[0] is the virtual address of the first pointer
+        in the requested section, and list2[0] is the pointer value contained at that address.
+        """
+        locations = []  # type: List[int]
+        entries = []  # type: List[int]
+        if section_name not in self.sections:
+            return locations, entries
+
+        section = self.sections[section_name]
+        section_base = section.address
+        section_data = section.content
+
+        binary_word = self.platform_word_type
+        pointer_count = int(len(section_data) / sizeof(binary_word))
+        pointer_off = 0
+
+        for i in range(pointer_count):
+            # convert section offset of entry to absolute virtual address
+            locations.append(section_base + pointer_off)
+
+            data_end = pointer_off + sizeof(binary_word)
+            val = binary_word.from_buffer(bytearray(section_data[pointer_off:data_end])).value
+            entries.append(val)
+
+            pointer_off += sizeof(binary_word)
+
+        return locations, entries
 

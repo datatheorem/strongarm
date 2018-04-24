@@ -1,10 +1,4 @@
 # -*- coding: utf-8 -*-
-from __future__ import absolute_import
-from __future__ import unicode_literals
-from __future__ import print_function
-
-from ctypes import sizeof, c_void_p
-
 from capstone import Cs, CsInsn, CS_ARCH_ARM64, CS_MODE_ARM
 from typing import Text, List, Dict, Optional, Tuple
 from typing import TYPE_CHECKING
@@ -18,6 +12,7 @@ from strongarm.macho.objc_runtime_data_parser import \
     ObjcClass, \
     ObjcCategory, \
     ObjcProtocol
+from strongarm.macho.dyld_info_parser import DyldInfoParser, DyldBoundSymbol
 from strongarm import DebugUtil
 
 
@@ -40,11 +35,11 @@ class MachoAnalyzer(object):
         self.cs = Cs(CS_ARCH_ARM64, CS_MODE_ARM)
         self.cs.detail = True
 
-        # data cached by various methods
-        self._lazy_symbol_entry_pointers = None # type: List[int]
-        self._imported_symbol_map = None    # type: Dict[int, Text]
-        self._external_branch_destinations_to_symbol_names = None   # type: Dict[int, Text]
-        self._external_symbol_names_to_branch_destinations = None   # type: Dict[Text, int]
+        # Map of each dyld stub address to the DyldBoundSymbol it represents
+        self._dyld_bound_symbols: Dict[int, DyldBoundSymbol] = None
+        # Each __stubs function calls a single dyld stub address, which has a corresponding DyldBoundSymbol.
+        # Map of each __stub function to the associated name of the DyldBoundSymbol
+        self._imported_symbol_addresses_to_names: Dict[int, str] = None
 
         self.crossref_helper = MachoStringTableHelper(bin)
         self.imported_symbols = self.crossref_helper.imported_symbols
@@ -102,123 +97,32 @@ class MachoAnalyzer(object):
         # type: () -> List[ObjcProtocol]
         return self.objc_helper.protocols
 
-    def _parse_la_symbol_ptr_list(self):
-        # type: () -> List[int]
-        """Parse lazy symbol section into a list of pointers
-        The lazy symbol section contains dummy pointers to known locations, which dyld_stub_binder will
-        rewrite into their real runtime addresses when the dylibs are loaded.
-
-        * IMPORTANT *
-        This method actually records the _virtual address where the destination pointer is recorded_, not the value
-        of the garbage pointer.
-        This is because the actual content of these pointers is useless until runtime (since they point to nonexistent
-        data), but their ordering in the lazy symbol table is the same as described in other symbol tables, so
-        we need the index
-
-        Returns:
-            A list of pointers containing the virtual addresses of each pointer in this section
-
+    @property
+    def dyld_bound_symbols(self) -> Dict[int, DyldBoundSymbol]:
+        """Return a Dict of each imported dyld stub to the corresponding symbol to be bound at runtime.
         """
-        if self._lazy_symbol_entry_pointers:
-            return self._lazy_symbol_entry_pointers
+        if self._dyld_bound_symbols:
+            return self._dyld_bound_symbols
 
-        section_pointers = []   # type: List[int]
-        if '__la_symbol_ptr' not in self.binary.sections:
-            return section_pointers
-
-        lazy_sym_section = self.binary.sections['__la_symbol_ptr']
-        # __la_symbol_ptr is just an array of pointers
-        # the number of pointers is the size, in bytes, of the section, divided by a 64b pointer size
-        sym_ptr_count = int(lazy_sym_section.cmd.size / sizeof(c_void_p))
-
-        # this section's data starts at the file offset field
-        section_data_ptr = lazy_sym_section.cmd.addr
-        # read every pointer in the table
-        for i in range(sym_ptr_count):
-            # this addr is the address in the file of this data, plus the slide that the file has requested,
-            # to result in the final address that would be referenced elsewhere in this Mach-O
-            section_pointers.append(section_data_ptr)
-            # go to next pointer in list
-            section_data_ptr += sizeof(c_void_p)
-
-        self._lazy_symbol_entry_pointers = section_pointers
-        return section_pointers
+        self._dyld_bound_symbols = DyldInfoParser(self.binary).dyld_stubs_to_symbols
+        return self._dyld_bound_symbols
 
     @property
-    def _la_symbol_ptr_to_symbol_name_map(self):
+    def imp_stubs_to_symbol_names(self):
         # type: () -> Dict[int, Text]
-        """Cross-reference Mach-O sections to produce __la_symbol_ptr pointers -> external symbol name map.
-
-        This map will only contain entries for symbols that are defined outside the main binary.
-        This method cross references data in __la_symbol_ptr, the indirect symbol table
-
-        The map created by this method DOES NOT correspond to the addresses used by branch destinations.
-        Branch destinations will actually point to entries in __imp_stubs. This is a helper function for a method
-        to map __imp_stubs entries to symbol names
-
-        Returns:
-            Map of __la_symbol_ptr pointers to the strings corresponding to the name of each symbol
+        """Return a Dict of callable implementation stubs to the names of the imported symbols they correspond to.
         """
-        if self._imported_symbol_map:
-            return self._imported_symbol_map
-
-        imported_symbol_map = {}    # type: Dict[int, Text]
-        if '__la_symbol_ptr' not in self.binary.sections:
-            return imported_symbol_map
-
-        # the reserved1 field of the lazy symbol section header holds the starting index of this table's entries,
-        # within the indirect symbol table
-        # so, for any address in the lazy symbol, its translated address into the indirect symbol table is:
-        # lazy_sym_section.reserved1 + index
-        lazy_sym_offset_within_indirect_symtab = self.binary.sections['__la_symbol_ptr'].cmd.reserved1
-        # this list contains the contents of __la_symbol_ptr
-        external_symtab = self._parse_la_symbol_ptr_list()
-
-        # indirect symbol table is a list of indexes into larger symbol table
-        indirect_symtab = self.binary.get_indirect_symbol_table()
-        symtab = self.binary.symtab_contents
-
-        for (index, symbol_ptr) in enumerate(external_symtab):
-            # as above, for an index idx in __la_symbol_ptr, the corresponding entry within the symbol table (from which
-            # we can get the string name of this symbol) is given by the value in the indirect symbol table at index:
-            # la_symbol_ptr_command.reserved1 + idx
-            offset = indirect_symtab[lazy_sym_offset_within_indirect_symtab + index]
-
-            # T1Twitter.framework has several thousand symtab entries whose offset is 0xc00000000
-            # I don't know why these are in the symbol table but they clearly don't point to real data
-            # if an offset points to a bad index, let's just ignore it
-            if offset >= len(symtab):
-                continue
-
-            sym = symtab[offset]
-
-            # we now have the Nlist64 symbol for the __la_symbol_ptr entry
-            # the starting index of the string within the string table for this symbol is given by the n_strx field
-            strtab_idx = sym.n_un.n_strx
-
-            symbol_name = self.crossref_helper.string_table_entry_for_strtab_index(strtab_idx).full_string
-            # record this mapping of address to symbol name
-            imported_symbol_map[symbol_ptr] = symbol_name
-
-        self._imported_symbol_map = imported_symbol_map
-        return imported_symbol_map
-
-    @property
-    def external_branch_destinations_to_symbol_names(self):
-        # type: () -> Dict[int, Text]
-        """Return a Dict of addresses to the external symbols they correspond to
-        """
-        if self._external_branch_destinations_to_symbol_names:
-            return self._external_branch_destinations_to_symbol_names
+        if self._imported_symbol_addresses_to_names:
+            return self._imported_symbol_addresses_to_names
 
         symbol_name_map = {}
         stubs = self.imp_stubs
-        la_sym_ptr_name_map = self._la_symbol_ptr_to_symbol_name_map
+        stub_map = self.dyld_bound_symbols
 
         unnamed_stub_count = 0
         for stub in stubs:
-            if stub.destination in la_sym_ptr_name_map:
-                symbol_name = la_sym_ptr_name_map[stub.destination]
+            if stub.destination in stub_map:
+                symbol_name = stub_map[stub.destination].name
                 symbol_name_map[stub.address] = symbol_name
             else:
                 # add in stub which is not backed by a named symbol
@@ -228,31 +132,15 @@ class MachoAnalyzer(object):
                 unnamed_stub_count += 1
                 symbol_name_map[stub.destination] = name
 
-        self._external_branch_destinations_to_symbol_names = symbol_name_map
+        self._imported_symbol_addresses_to_names = symbol_name_map
         return symbol_name_map
-
-    @property
-    def external_symbol_names_to_branch_destinations(self):
-        # type: () -> Dict[Text, int]
-        """Return a Dict of external symbol names to the addresses they'll be called at
-        """
-        if self._external_symbol_names_to_branch_destinations:
-            return self._external_symbol_names_to_branch_destinations
-
-        call_address_map = {}
-        for key in self.external_branch_destinations_to_symbol_names:
-            value = self.external_branch_destinations_to_symbol_names[key]
-            call_address_map[value] = key
-
-        self._external_symbol_names_to_branch_destinations = call_address_map
-        return call_address_map
 
     def symbol_name_for_branch_destination(self, branch_address):
         # type: (int) -> Text
         """Get the associated symbol name for a given branch destination
         """
-        if branch_address in self.external_branch_destinations_to_symbol_names:
-            return self.external_branch_destinations_to_symbol_names[branch_address]
+        if branch_address in self.imp_stubs_to_symbol_names:
+            return self.imp_stubs_to_symbol_names[branch_address]
         raise RuntimeError('Unknown branch destination {}. Is this a local branch?'.format(
             hex(branch_address)
         ))

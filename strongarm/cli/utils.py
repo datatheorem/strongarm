@@ -177,7 +177,9 @@ def print_binary_load_commands(binary: MachoBinary) -> None:
 def print_binary_segments(binary: MachoBinary) -> None:
     print('\nSegments:')
     for segment, cmd in binary.segment_commands.items():
-        print(f"\t[{format(cmd.vmaddr, '#011x')} - {format(cmd.vmaddr + cmd.vmsize, '#011x')}] {segment}")
+        file_loc = f"[{format(cmd.fileoff, '#011x')} - {format(cmd.fileoff + cmd.filesize, '#011x')}]"
+        virtual_loc = f"[{format(cmd.vmaddr, '#011x')} - {format(cmd.vmaddr + cmd.vmsize, '#011x')}]"
+        print(f'\t{virtual_loc} (file {file_loc}) {segment}')
 
 
 def print_binary_sections(binary: MachoBinary) -> None:

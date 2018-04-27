@@ -429,3 +429,49 @@ a register's contents. We can look at each caller, and determine the contents of
 (recursively repeating this step if necessary), to get a List of possible values for the contents of the
 initially requested register. We could also return info about which code paths each possible value would have
 originated from.
+
+### Advanced CodeSearch
+
+For a potential check to mark deprecated iOS SDK usage, we need to know when
+certain values are being passed to certain functions.
+
+Specifically, we want to know when a classref corresponding to a deprecated iOS class
+is accessed, or when a message is sent using a selref corresponding to a deprecated selector.
+
+If we generalize these requirements, we come up with a `CodeSearchTerm` that takes a named
+function and a list of 'watched' arguments, and returns any instances where the named function
+is called with the specified arguments. This could look something like:
+
+```python
+CodeSearchTermNamedFunctionCall(function_name: str) -> List[CodeSearchResult]
+CodeSearchTermNamedFunctionCallWithArguments(function_name: str, allowed_arguments: List[int])
+```
+
+We also need a way to indicate the argument index; i.e. we don't care about arg0, but collect
+a code location when arg1 contains one of these allowed values.
+
+Maybe `allowed_arguments` should be a `List[List[int]]`. For arguments you don't care about, specify an
+empty list at that index. Perhaps `Dict[int, List[int]]` is clearer.
+
+Then, searching for usage of a deprecated classref becomes simply:
+
+```python
+CodeSearchTermNamedFunctionCall(
+    '_objc_msgSend',
+    {0: deprecated_classref_ptrs},
+)
+CodeSearchTermNamedFunctionCall(
+    '_objc_msgSend',
+    {1: potentially_deprecated_selref_ptrs},
+)
+```
+
+This has some overlap with `CodeSearchTermCallDestination`, but I'm willing to accept it for now.
+
+For the selrefs, there needs to be a second step to try to identify which class is targeted by a given invocation.
+For example, class A may have a deprecated selector `-init`, but we don't want to mark all
+`-init` usage as deprecated. It will not be possible to do this statically in most cases.
+It'd be good if we had some way to gaurantee a selector was only used to reference some external symbol.
+
+Check all the xrefs for the deprecated selectors and only search for the ones which have no collisions
+with locally implemented sels? Not ideal, but it'd work.

@@ -405,6 +405,10 @@ class MachoAnalyzer(object):
         search_results = [] # type: List[CodeSearchResult]
         entry_point_list = self.get_objc_methods()
         for method_info in entry_point_list:
+            DebugUtil.log(
+                self,
+                f'search_code: {hex(method_info.imp_addr)} -[{method_info.objc_class.name} {method_info.objc_sel.name}]'
+            )
             try:
                 function_analyzer = ObjcFunctionAnalyzer.get_function_analyzer_for_method(self.binary, method_info)
                 search_results += function_analyzer.search_code(code_search)
@@ -457,3 +461,7 @@ class MachoAnalyzer(object):
 
         classref_index = classref_destinations.index(class_location)
         return classref_locations[classref_index]
+
+    def selref_for_selector_name(self, selector_name: str) -> Optional[int]:
+        return self.objc_helper.selref_for_selector_name(selector_name)
+

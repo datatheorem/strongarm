@@ -578,7 +578,7 @@ class ObjcFunctionAnalyzer(object):
         # there's no way we can resolve the value.
         stack_pointer_reg = 'sp'
         if stack_pointer_reg in needed_links or stack_pointer_reg in unknown_regs:
-            DebugUtil.log(self, f'{hex(int(target_addr))}: {desired_reg} = stack dependent')
+            # DebugUtil.log(self, f'{hex(int(target_addr))}: {desired_reg} = stack dependent')
             return RegisterContents(RegisterContentsType.UNKNOWN, 0)
 
         # once we've broken out of the above loop, we should have all the values we need to compute the
@@ -600,7 +600,7 @@ class ObjcFunctionAnalyzer(object):
 
             arg_index = int(unknown_regs[0])
 
-            DebugUtil.log(self, f'{hex(int(target_addr))}: {desired_reg} = function arg #{arg_index}')
+            # DebugUtil.log(self, f'{hex(int(target_addr))}: {desired_reg} = function arg #{arg_index}')
             return RegisterContents(RegisterContentsType.FUNCTION_ARG, arg_index)
 
         # for every register in the waiting list,
@@ -613,7 +613,7 @@ class ObjcFunctionAnalyzer(object):
         # handle residual
         final_register_value += extra_offset
 
-        DebugUtil.log(self, f'{hex(int(target_addr))}: {desired_reg} = {hex(final_register_value)}')
+        # DebugUtil.log(self, f'{hex(int(target_addr))}: {desired_reg} = {hex(final_register_value)}')
         return RegisterContents(RegisterContentsType.IMMEDIATE, final_register_value)
 
     def _resolve_register_value_from_data_links(self, desired_reg, links, resolved_registers):

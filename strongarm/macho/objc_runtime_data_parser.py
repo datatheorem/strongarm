@@ -86,6 +86,9 @@ class ObjcRuntimeDataParser(object):
         DebugUtil.log(self, 'Step 3: Resolving symbol name to source dylib map...')
         self._sym_to_dylib_path = self._parse_linked_dylib_symbols()
 
+    def selrefs_to_selectors(self) -> Dict[int, ObjcSelector]:
+        return self._selref_ptr_to_selector_map
+
     def _parse_linked_dylib_symbols(self):
         # type: () -> Dict[Text, Text]
         syms_to_dylib_path = {}

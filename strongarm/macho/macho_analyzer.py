@@ -411,3 +411,49 @@ class MachoAnalyzer(object):
             except RuntimeError:
                 continue
         return search_results
+
+    def class_name_for_class_pointer(self, classref: int) -> Optional[str]:
+        """Given a classref, return the name of the class.
+        This method will handle classes implemented within the binary and imported classes.
+        """
+        if classref in self.imported_symbols_to_symbol_names:
+            # imported class
+            return self.imported_symbols_to_symbol_names[classref]
+
+        # otherwise, the class is implemented within a binary and we have an ObjcClass for it
+        # TODO(PT): add MachoBinary.read_pointer() for convenience
+        word_type = self.binary.platform_word_type
+        class_location = word_type.from_buffer(
+            bytearray(self.binary.get_content_from_virtual_address(classref, sizeof(word_type)))
+        ).value
+        local_class = [x for x in self.objc_classes() if x.raw_struct.binary_offset == class_location]
+        if len(local_class):
+            return local_class[0].name
+
+        # invalid classref
+        return None
+
+    def classref_for_class_name(self, class_name: str) -> Optional[int]:
+        """Given a class name, try to find a classref for it.
+        """
+        # is it an imported class?
+        classrefs = [addr for addr, x in self.dyld_bound_symbols.items() if x.name == class_name]
+        if len(classrefs):
+            return classrefs[0]
+
+        # TODO(PT): this is expensive! We should do one analysis step of __objc_classrefs and create a map.
+        classref_locations, classref_destinations = self.binary.read_pointer_section('__objc_classrefs')
+
+        # is it a local class?
+        class_location = [x.raw_struct.binary_offset for x in self.objc_classes() if x.name == class_name]
+        if not len(class_location):
+            # unknown class name
+            return None
+        class_location = class_location[0]
+
+        if class_location not in classref_destinations:
+            # unknown class name
+            return None
+
+        classref_index = classref_destinations.index(class_location)
+        return classref_locations[classref_index]

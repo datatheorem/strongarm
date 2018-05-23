@@ -11,28 +11,29 @@ from strongarm.macho.arch_independent_structs import \
     ObjcDataRawStruct, \
     ObjcMethodStruct, \
     ObjcMethodListStruct, \
-    DylibCommandStruct, \
     ObjcCategoryRawStruct, \
-    ObjcProtocolRawStruct
+    ObjcProtocolRawStruct, \
+    ArchIndependentStructure
 from strongarm.debug_util import DebugUtil
 from strongarm.macho.macho_binary import MachoBinary
 
 
 class ObjcClass(object):
-    __slots__ = ['name', 'selectors']
+    __slots__ = ['raw_struct', 'name', 'selectors']
 
-    def __init__(self, name, selectors):
-        # type: (Text, List[ObjcSelector]) -> None
+    def __init__(self, raw_struct, name, selectors):
+        # type: (ArchIndependentStructure, Text, List[ObjcSelector]) -> None
         self.name = name
         self.selectors = selectors
+        self.raw_struct = raw_struct
 
 
 class ObjcCategory(ObjcClass):
-    __slots__ = ['name', 'base_class', 'selectors']
+    __slots__ = ['raw_struct', 'name', 'base_class', 'selectors']
 
-    def __init__(self, base_class, name, selectors):
-        # type: (Text, Text, List[ObjcSelector]) -> None
-        super(ObjcCategory, self).__init__(name, selectors)
+    def __init__(self, raw_struct, base_class, name, selectors):
+        # type: (ObjcCategoryRawStruct, Text, Text, List[ObjcSelector]) -> None
+        super(ObjcCategory, self).__init__(raw_struct, name, selectors)
         self.base_class = base_class
 
 
@@ -43,8 +44,7 @@ class ObjcProtocol(ObjcClass):
 class ObjcSelector(object):
     __slots__ = ['name', 'selref', 'implementation', 'is_external_definition']
 
-    def __init__(self, name, selref, implementation):
-        # type: (Text, ObjcSelref, Optional[int]) -> None
+    def __init__(self, name: str, selref: 'ObjcSelref', implementation: Optional[int]) -> None:
         self.name = name
         self.selref = selref
         self.implementation = implementation
@@ -268,7 +268,7 @@ class ObjcRuntimeDataParser(object):
         if objc_protocol_struct.optional_class_methods:
             selectors += self.read_selectors_from_methlist_ptr(objc_protocol_struct.optional_class_methods)
 
-        return ObjcProtocol(name, selectors)
+        return ObjcProtocol(objc_protocol_struct, name, selectors)
 
     def _parse_objc_category_entry(self, objc_category_struct):
         # type: (ObjcCategoryRawStruct) -> ObjcCategory
@@ -287,16 +287,16 @@ class ObjcRuntimeDataParser(object):
         if objc_category_struct.class_methods:
             selectors += self.read_selectors_from_methlist_ptr(objc_category_struct.class_methods)
 
-        return ObjcCategory(base_class, name, selectors)
+        return ObjcCategory(objc_category_struct, base_class, name, selectors)
 
-    def _parse_objc_data_entry(self, objc_data_struct):
-        # type: (ObjcDataRawStruct) -> ObjcClass
+    def _parse_objc_data_entry(self, objc_class_struct, objc_data_struct):
+        # type: (ObjcClassRawStruct, ObjcDataRawStruct) -> ObjcClass
         name = self.binary.get_full_string_from_start_address(objc_data_struct.name)
         selectors = []
         # if the class implements no methods, base_methods will be the null pointer
         if objc_data_struct.base_methods:
             selectors += self.read_selectors_from_methlist_ptr(objc_data_struct.base_methods)
-        return ObjcClass(name, selectors)
+        return ObjcClass(objc_class_struct, name, selectors)
 
     def _get_catlist_pointers(self):
         # type: () -> List[int]

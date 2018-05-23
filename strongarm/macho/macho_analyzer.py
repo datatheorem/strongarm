@@ -139,6 +139,13 @@ class MachoAnalyzer(object):
         self._imported_symbol_addresses_to_names = symbol_name_map
         return symbol_name_map
 
+    @property
+    def imported_symbols_to_symbol_names(self) -> Dict[int, str]:
+        """Return a Dict of imported symbol pointers to their names.
+        These symbols are not necessarily callable, but may rather be imported classes, for example.
+        """
+        return {addr: x.name for addr, x in self.dyld_bound_symbols.items()}
+
     def symbol_name_for_branch_destination(self, branch_address):
         # type: (int) -> Text
         """Get the associated symbol name for a given branch destination

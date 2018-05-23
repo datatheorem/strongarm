@@ -90,7 +90,7 @@ class ArchIndependentStructure(object):
             pass
 
         implementation = None   # type: Any
-        data = None # type: Any
+        data = None     # type: Any
 
 
 class MachoHeaderStruct(ArchIndependentStructure):

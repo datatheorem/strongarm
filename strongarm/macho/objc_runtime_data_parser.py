@@ -191,11 +191,23 @@ class ObjcRuntimeDataParser(object):
         for ptr in classlist_pointers:
             objc_class = self._get_objc_class_from_classlist_pointer(ptr)
             if objc_class:
+                # parse the instance method list
                 objc_data_struct = self._get_objc_data_from_objc_class(objc_class)
                 if objc_data_struct:
                     # read information from each struct __objc_data
-                    parsed_class = self._parse_objc_data_entry(objc_data_struct)
+                    parsed_class = self._parse_objc_data_entry(objc_class, objc_data_struct)
                     parsed_objc_classes.append(parsed_class)
+
+                # parse the metaclass if it exists
+                # the metaclass has the same name as the actual class
+                # the difference is the metaclass's method list contains class methods
+                metaclass = ObjcClassRawStruct(self.binary, objc_class.metaclass, virtual=True)
+                if metaclass:
+                    objc_data_struct = self._get_objc_data_from_objc_class(metaclass)
+                    if objc_data_struct:
+                        parsed_metaclass = self._parse_objc_data_entry(objc_class, objc_data_struct)
+                        parsed_objc_classes.append(parsed_metaclass)
+
         return parsed_objc_classes
 
     def _parse_objc_categories(self):

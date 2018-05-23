@@ -271,6 +271,15 @@ class ObjcRuntimeDataParser(object):
 
             # save this selector in the selref pointer -> selector map
             if selref:
+                # if this selector is already in the map, check if we now know the implementation addr
+                # we could have parsed the selector literal/selref pair in _parse_selrefs() but not have known the
+                # implementation, but do now. It's also possible the selref is an external method, and thus will not
+                # have a local implementation.
+                if selref.source_address in self._selref_ptr_to_selector_map:
+                    previously_parsed_selector = self._selref_ptr_to_selector_map[selref.source_address]
+                    if not previously_parsed_selector.implementation:
+                        # delete the old entry, and add back in the next line
+                        del self._selref_ptr_to_selector_map[selref.source_address]
                 self._selref_ptr_to_selector_map[selref.source_address] = selector
 
             method_entry_off += method_ent.sizeof

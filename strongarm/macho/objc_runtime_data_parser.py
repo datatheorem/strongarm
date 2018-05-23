@@ -76,7 +76,7 @@ class ObjcRuntimeDataParser(object):
         DebugUtil.log(self, 'Parsing ObjC runtime info... (this may take a while)')
 
         DebugUtil.log(self, 'Step 1: Parsing selrefs...')
-        self._selref_ptr_to_selector_map = {}   # type: Dict[int, ObjcSelector]
+        self._selref_ptr_to_selector_map: Dict[int, ObjcSelector] = {}
         self._selector_literal_ptr_to_selref_map = self._parse_selrefs()
 
         DebugUtil.log(self, 'Step 2: Parsing classes, categories, and protocols...')
@@ -105,7 +105,6 @@ class ObjcRuntimeDataParser(object):
             source_name = self.binary.dylib_name_for_library_ordinal(library_ordinal)
 
             syms_to_dylib_path[symbol_name] = source_name
-            print(f'{hex(sym.n_type)} {symbol_name} -> {source_name}')
         return syms_to_dylib_path
 
     def path_for_external_symbol(self, symbol):

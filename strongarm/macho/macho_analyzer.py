@@ -1,10 +1,13 @@
 # -*- coding: utf-8 -*-
-from capstone import Cs, CsInsn, CS_ARCH_ARM64, CS_MODE_ARM
-from typing import Text, List, Dict, Optional, Tuple
+from ctypes import sizeof
 from typing import TYPE_CHECKING
+from typing import Text, List, Dict, Optional, Tuple
+from capstone import Cs, CsInsn, CS_ARCH_ARM64, CS_MODE_ARM
 
+from strongarm import DebugUtil
 from strongarm.macho.macho_binary import MachoBinary
 from strongarm.macho.macho_imp_stubs import MachoImpStubsParser
+from strongarm.macho.dyld_info_parser import DyldInfoParser, DyldBoundSymbol
 from strongarm.macho.macho_string_table_helper import MachoStringTableHelper
 from strongarm.macho.objc_runtime_data_parser import \
     ObjcRuntimeDataParser, \
@@ -12,8 +15,6 @@ from strongarm.macho.objc_runtime_data_parser import \
     ObjcClass, \
     ObjcCategory, \
     ObjcProtocol
-from strongarm.macho.dyld_info_parser import DyldInfoParser, DyldBoundSymbol
-from strongarm import DebugUtil
 
 
 if TYPE_CHECKING:
@@ -35,8 +36,8 @@ class MachoAnalyzer(object):
         self.cs = Cs(CS_ARCH_ARM64, CS_MODE_ARM)
         self.cs.detail = True
 
-        # Map of each dyld stub address to the DyldBoundSymbol it represents
-        self._dyld_bound_symbols: Dict[int, DyldBoundSymbol] = None
+        # Worker to parse dyld bytecode stream and extract dyld stub addresses to the DyldBoundSymbol they represent
+        self._dyld_info_parser: DyldInfoParser = None
         # Each __stubs function calls a single dyld stub address, which has a corresponding DyldBoundSymbol.
         # Map of each __stub function to the associated name of the DyldBoundSymbol
         self._imported_symbol_addresses_to_names: Dict[int, str] = None
@@ -98,14 +99,17 @@ class MachoAnalyzer(object):
         return self.objc_helper.protocols
 
     @property
+    def dyld_info_parser(self) -> DyldInfoParser:
+        if self._dyld_info_parser:
+            return self._dyld_info_parser
+        self._dyld_info_parser = DyldInfoParser(self.binary)
+        return self._dyld_info_parser
+
+    @property
     def dyld_bound_symbols(self) -> Dict[int, DyldBoundSymbol]:
         """Return a Dict of each imported dyld stub to the corresponding symbol to be bound at runtime.
         """
-        if self._dyld_bound_symbols:
-            return self._dyld_bound_symbols
-
-        self._dyld_bound_symbols = DyldInfoParser(self.binary).dyld_stubs_to_symbols
-        return self._dyld_bound_symbols
+        return self.dyld_info_parser.dyld_stubs_to_symbols
 
     @property
     def imp_stubs_to_symbol_names(self):

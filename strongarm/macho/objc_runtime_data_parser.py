@@ -160,6 +160,16 @@ class ObjcRuntimeDataParser(object):
         sel = ObjcSelector(_selref.selector_literal, _selref, None)
         return sel
 
+    def selrefs_to_selectors(self) -> Dict[int, ObjcSelector]:
+        return self._selref_ptr_to_selector_map
+
+    def selref_for_selector_name(self, selector_name: str) -> Optional[int]:
+        selref_list = [x for x in self._selref_ptr_to_selector_map
+                       if self._selref_ptr_to_selector_map[x].name == selector_name]
+        if len(selref_list):
+            return selref_list[0]
+        return None
+
     def get_method_imp_addresses(self, selector):
         # type: (Text) -> List[int]
         """Given a selector, return a list of virtual addresses corresponding to the start of each IMP for that SEL

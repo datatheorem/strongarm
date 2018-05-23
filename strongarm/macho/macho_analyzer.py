@@ -1,10 +1,13 @@
 # -*- coding: utf-8 -*-
-from capstone import Cs, CsInsn, CS_ARCH_ARM64, CS_MODE_ARM
-from typing import Text, List, Dict, Optional, Tuple
+from ctypes import sizeof
 from typing import TYPE_CHECKING
+from typing import Text, List, Dict, Optional, Tuple
+from capstone import Cs, CsInsn, CS_ARCH_ARM64, CS_MODE_ARM
 
+from strongarm import DebugUtil
 from strongarm.macho.macho_binary import MachoBinary
 from strongarm.macho.macho_imp_stubs import MachoImpStubsParser
+from strongarm.macho.dyld_info_parser import DyldInfoParser, DyldBoundSymbol
 from strongarm.macho.macho_string_table_helper import MachoStringTableHelper
 from strongarm.macho.objc_runtime_data_parser import \
     ObjcRuntimeDataParser, \
@@ -12,8 +15,6 @@ from strongarm.macho.objc_runtime_data_parser import \
     ObjcClass, \
     ObjcCategory, \
     ObjcProtocol
-from strongarm.macho.dyld_info_parser import DyldInfoParser, DyldBoundSymbol
-from strongarm import DebugUtil
 
 
 if TYPE_CHECKING:
@@ -35,8 +36,8 @@ class MachoAnalyzer(object):
         self.cs = Cs(CS_ARCH_ARM64, CS_MODE_ARM)
         self.cs.detail = True
 
-        # Map of each dyld stub address to the DyldBoundSymbol it represents
-        self._dyld_bound_symbols: Dict[int, DyldBoundSymbol] = None
+        # Worker to parse dyld bytecode stream and extract dyld stub addresses to the DyldBoundSymbol they represent
+        self._dyld_info_parser: DyldInfoParser = None
         # Each __stubs function calls a single dyld stub address, which has a corresponding DyldBoundSymbol.
         # Map of each __stub function to the associated name of the DyldBoundSymbol
         self._imported_symbol_addresses_to_names: Dict[int, str] = None
@@ -98,14 +99,17 @@ class MachoAnalyzer(object):
         return self.objc_helper.protocols
 
     @property
+    def dyld_info_parser(self) -> DyldInfoParser:
+        if self._dyld_info_parser:
+            return self._dyld_info_parser
+        self._dyld_info_parser = DyldInfoParser(self.binary)
+        return self._dyld_info_parser
+
+    @property
     def dyld_bound_symbols(self) -> Dict[int, DyldBoundSymbol]:
         """Return a Dict of each imported dyld stub to the corresponding symbol to be bound at runtime.
         """
-        if self._dyld_bound_symbols:
-            return self._dyld_bound_symbols
-
-        self._dyld_bound_symbols = DyldInfoParser(self.binary).dyld_stubs_to_symbols
-        return self._dyld_bound_symbols
+        return self.dyld_info_parser.dyld_stubs_to_symbols
 
     @property
     def imp_stubs_to_symbol_names(self):
@@ -134,6 +138,13 @@ class MachoAnalyzer(object):
 
         self._imported_symbol_addresses_to_names = symbol_name_map
         return symbol_name_map
+
+    @property
+    def imported_symbols_to_symbol_names(self) -> Dict[int, str]:
+        """Return a Dict of imported symbol pointers to their names.
+        These symbols are not necessarily callable, but may rather be imported classes, for example.
+        """
+        return {addr: x.name for addr, x in self.dyld_bound_symbols.items()}
 
     def symbol_name_for_branch_destination(self, branch_address):
         # type: (int) -> Text
@@ -394,9 +405,63 @@ class MachoAnalyzer(object):
         search_results = [] # type: List[CodeSearchResult]
         entry_point_list = self.get_objc_methods()
         for method_info in entry_point_list:
+            DebugUtil.log(
+                self,
+                f'search_code: {hex(method_info.imp_addr)} -[{method_info.objc_class.name} {method_info.objc_sel.name}]'
+            )
             try:
                 function_analyzer = ObjcFunctionAnalyzer.get_function_analyzer_for_method(self.binary, method_info)
                 search_results += function_analyzer.search_code(code_search)
             except RuntimeError:
                 continue
         return search_results
+
+    def class_name_for_class_pointer(self, classref: int) -> Optional[str]:
+        """Given a classref, return the name of the class.
+        This method will handle classes implemented within the binary and imported classes.
+        """
+        if classref in self.imported_symbols_to_symbol_names:
+            # imported class
+            return self.imported_symbols_to_symbol_names[classref]
+
+        # otherwise, the class is implemented within a binary and we have an ObjcClass for it
+        # TODO(PT): add MachoBinary.read_pointer() for convenience
+        word_type = self.binary.platform_word_type
+        class_location = word_type.from_buffer(
+            bytearray(self.binary.get_content_from_virtual_address(classref, sizeof(word_type)))
+        ).value
+        local_class = [x for x in self.objc_classes() if x.raw_struct.binary_offset == class_location]
+        if len(local_class):
+            return local_class[0].name
+
+        # invalid classref
+        return None
+
+    def classref_for_class_name(self, class_name: str) -> Optional[int]:
+        """Given a class name, try to find a classref for it.
+        """
+        # is it an imported class?
+        classrefs = [addr for addr, x in self.dyld_bound_symbols.items() if x.name == class_name]
+        if len(classrefs):
+            return classrefs[0]
+
+        # TODO(PT): this is expensive! We should do one analysis step of __objc_classrefs and create a map.
+        classref_locations, classref_destinations = self.binary.read_pointer_section('__objc_classrefs')
+
+        # is it a local class?
+        class_location = [x.raw_struct.binary_offset for x in self.objc_classes() if x.name == class_name]
+        if not len(class_location):
+            # unknown class name
+            return None
+        class_location = class_location[0]
+
+        if class_location not in classref_destinations:
+            # unknown class name
+            return None
+
+        classref_index = classref_destinations.index(class_location)
+        return classref_locations[classref_index]
+
+    def selref_for_selector_name(self, selector_name: str) -> Optional[int]:
+        return self.objc_helper.selref_for_selector_name(selector_name)
+

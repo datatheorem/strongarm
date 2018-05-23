@@ -80,6 +80,8 @@ class ArchIndependentStructure(object):
 
         # record size of underlying struct, for when traversing file by structs
         self.sizeof = sizeof(struct_type)
+        # record the location in the binary this struct was parsed from
+        self.binary_offset = binary_offset
 
     if TYPE_CHECKING:
         # GVR suggested to use this pattern to ignore dynamic attribute assignment errors
@@ -88,7 +90,7 @@ class ArchIndependentStructure(object):
             pass
 
         implementation = None   # type: Any
-        data = None # type: Any
+        data = None     # type: Any
 
 
 class MachoHeaderStruct(ArchIndependentStructure):

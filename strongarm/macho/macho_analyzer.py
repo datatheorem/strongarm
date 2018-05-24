@@ -426,6 +426,10 @@ class MachoAnalyzer(object):
 
         # otherwise, the class is implemented within a binary and we have an ObjcClass for it
         class_location = self.binary.read_word(classref)
+        if not class_location:
+            # invalid pointer
+            return None
+
         local_class = [x for x in self.objc_classes() if x.raw_struct.binary_offset == class_location]
         if len(local_class):
             return local_class[0].name

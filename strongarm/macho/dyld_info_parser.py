@@ -60,9 +60,6 @@ class DyldInfoParser:
             shift += 7
             offset += 1
 
-        # attempt to catch signed values and convert them if encountered
-        if result > 0x100000000:
-            result = ctypes.c_long(result).value
         return result, offset
 
     @staticmethod
@@ -131,6 +128,11 @@ class DyldInfoParser:
                 segment_offset, index = self.read_uleb(binding_info, index)
             elif opcode == BindOpcode.BIND_OPCODE_ADD_ADDR_ULEB:
                 addend, index = self.read_uleb(binding_info, index)
+
+                # attempt to catch signed values and convert them if encountered
+                if addend > 0x100000000:
+                    addend = ctypes.c_long(addend).value
+
                 segment_offset += addend
             elif opcode == BindOpcode.BIND_OPCODE_DO_BIND:
                 commit_stub()
@@ -138,6 +140,11 @@ class DyldInfoParser:
             elif opcode == BindOpcode.BIND_OPCODE_DO_BIND_ADD_ADDR_ULEB:
                 commit_stub()
                 addend, index = self.read_uleb(binding_info, index)
+
+                # attempt to catch signed values and convert them if encountered
+                if addend > 0x100000000:
+                    addend = ctypes.c_long(addend).value
+
                 segment_offset += addend
             elif opcode == BindOpcode.BIND_OPCODE_DO_BIND_ADD_ADDR_IMM_SCALED:
                 commit_stub()

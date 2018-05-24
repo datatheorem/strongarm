@@ -77,7 +77,9 @@ class ObjcRuntimeDataParser(object):
 
         DebugUtil.log(self, 'Step 1: Parsing selrefs...')
         self._selref_ptr_to_selector_map: Dict[int, ObjcSelector] = {}
-        self._selector_literal_ptr_to_selref_map = self._parse_selrefs()
+        self._selector_literal_ptr_to_selref_map: Dict[int, ObjcSelref] = {}
+        # this method populates self._selector_literal_ptr_to_selref_map and self._selref_ptr_to_selector_map
+        self._parse_selrefs()
 
         DebugUtil.log(self, 'Step 2: Parsing classes, categories, and protocols...')
         self.classes = self._parse_class_and_category_info()
@@ -118,12 +120,14 @@ class ObjcRuntimeDataParser(object):
         # type: (int) -> int
         return (n_desc >> 8) & 0xff
 
-    def _parse_selrefs(self):
-        # type: () -> Dict[int, ObjcSelref]
-        """Parse the binary's list of selrefs, and create a Dict where a selref (pointer) maps to a wrapped ObjcSelref
-        """
-        selector_literal_ptr_to_selrefs = {}  # type: Dict[int, ObjcSelref]
-
+    def _parse_selrefs(self) -> None:
+        """Parse the binary's selref list, and store the data.
+        
+        This method populates self._selector_literal_ptr_to_selref_map.
+        It also *PARTLY* populates self._selref_ptr_to_selector_map. All selrefs keys will have an ObjcSelector
+        value, but none of the ObjcSelector objects will have their `implementation` field filled, because
+        at this point in the parse we do not yet know the implementations of each selector. ObjcSelectors which we
+        later find an implementation for are updated in self.read_selectors_from_methlist_ptr"""
         selref_pointers, selector_literal_pointers = self.binary.read_pointer_section('__objc_selrefs')
         # sanity check
         if len(selref_pointers) != len(selector_literal_pointers):
@@ -138,10 +142,10 @@ class ObjcRuntimeDataParser(object):
             wrapped_selref = ObjcSelref(selref_ptr, selector_literal_ptr, selector_string)
 
             # map the selector string pointer to the ObjcSelref
-            selector_literal_ptr_to_selrefs[selector_literal_ptr] = wrapped_selref
+            self._selector_literal_ptr_to_selref_map[selector_literal_ptr] = wrapped_selref
             # add second mapping in selref list
+            # we don't know the implementation address yet but it will be updated when we parse method lists
             self._selref_ptr_to_selector_map[selref_ptr] = ObjcSelector(selector_string, wrapped_selref, None)
-        return selector_literal_ptr_to_selrefs
 
     def selector_for_selref(self, selref_addr):
         # type: (int) -> Optional[ObjcSelector]

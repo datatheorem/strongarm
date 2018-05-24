@@ -445,8 +445,7 @@ class MachoAnalyzer(object):
     def classref_for_class_name(self, class_name: str) -> Optional[int]:
         """Given a class name, try to find a classref for it.
         """
-        # is it an imported class?
-        classrefs = [addr for addr, x in self.dyld_bound_symbols.items() if x.name == class_name]
+        classrefs = [addr for addr, name in self.imported_symbols_to_symbol_names.items() if name == class_name]
         if len(classrefs):
             return classrefs[0]
 

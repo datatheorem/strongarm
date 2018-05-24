@@ -425,11 +425,7 @@ class MachoAnalyzer(object):
             return self.imported_symbols_to_symbol_names[classref]
 
         # otherwise, the class is implemented within a binary and we have an ObjcClass for it
-        # TODO(PT): add MachoBinary.read_pointer() for convenience
-        word_type = self.binary.platform_word_type
-        class_location = word_type.from_buffer(
-            bytearray(self.binary.get_content_from_virtual_address(classref, sizeof(word_type)))
-        ).value
+        class_location = self.binary.read_word(classref)
         local_class = [x for x in self.objc_classes() if x.raw_struct.binary_offset == class_location]
         if len(local_class):
             return local_class[0].name

@@ -63,23 +63,19 @@ class TestFunctionAnalyzer(unittest.TestCase):
     def test_search_call_graph(self):
         from strongarm.objc import CodeSearch, CodeSearchTermCallDestination
         # external function
-        search = CodeSearch(
-            required_matches=[
-                CodeSearchTermCallDestination(
-                    self.binary,
-                    invokes_address=TestFunctionAnalyzer.SEC_TRUST_EVALUATE_STUB_ADDR
-                )
-            ],
-            requires_all_terms_matched=True
-        )
+        search = CodeSearch([
+            CodeSearchTermCallDestination(
+                self.binary,
+                invokes_address=TestFunctionAnalyzer.SEC_TRUST_EVALUATE_STUB_ADDR
+            )
+        ])
         results = self.function_analyzer.search_call_graph(search)
         self.assertEqual(len(results), 1)
         self.assertEqual(results[0].found_instruction.address, 0x1000064a0)
 
         # local branch
         search = CodeSearch(
-            required_matches=[CodeSearchTermCallDestination(self.binary, invokes_address=0x100006518)],
-            requires_all_terms_matched=True
+            [CodeSearchTermCallDestination(self.binary, invokes_address=0x100006518)]
         )
         results = self.function_analyzer.search_call_graph(search)
         self.assertEqual(len(results), 1)
@@ -87,8 +83,7 @@ class TestFunctionAnalyzer(unittest.TestCase):
 
         # fake destination
         search = CodeSearch(
-            required_matches=[CodeSearchTermCallDestination(self.binary, invokes_address=0xdeadbeef)],
-            requires_all_terms_matched=True
+            [CodeSearchTermCallDestination(self.binary, invokes_address=0xdeadbeef)],
         )
         results = self.function_analyzer.search_call_graph(search)
         self.assertEqual(len(results), 0)
@@ -96,8 +91,7 @@ class TestFunctionAnalyzer(unittest.TestCase):
     def test_search_selector(self):
         from strongarm.objc import CodeSearch, CodeSearchTermCallDestination
         query = CodeSearch(
-            required_matches=[CodeSearchTermCallDestination(self.binary, invokes_selector='initWithFrame:')],
-            requires_all_terms_matched=True
+            [CodeSearchTermCallDestination(self.binary, invokes_selector='initWithFrame:')],
         )
         results = self.analyzer.search_code(query)
         self.assertEqual(len(results), 1)

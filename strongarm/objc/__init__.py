@@ -13,13 +13,14 @@ from .objc_analyzer import \
 from .objc_query import \
     CodeSearch, \
     CodeSearchTerm, \
-    CodeSearchResult, \
     CodeSearchTermCallDestination, \
     CodeSearchTermInstructionIndex, \
     CodeSearchTermInstructionMnemonic, \
     CodeSearchTermInstructionOperand, \
     CodeSearchTermRegisterContents, \
-    CodeSearchTermFunctionCallWithArguments
+    CodeSearchTermFunctionCallWithArguments, \
+    CodeSearchResult, \
+    CodeSearchResultFunctionCallWithArguments
 
 from .objc_instruction import \
     ObjcBranchInstruction, \

@@ -3,7 +3,7 @@ from __future__ import absolute_import
 from __future__ import unicode_literals
 from __future__ import print_function
 
-from typing import List, Text, Optional, Dict
+from typing import List, Text, Optional, Dict, Union
 
 from strongarm.debug_util import DebugUtil
 
@@ -127,7 +127,7 @@ class MachoBinary(object):
         # type: () -> c_uint32
         """Read magic number identifier from this Mach-O slice
         """
-        return c_uint32.from_buffer(bytearray(self.get_bytes(0, sizeof(c_uint32)))).value
+        return self.read_word(0, virtual=False, word_type=c_uint32)
 
     def verify_magic(self):
         # type: () -> bool
@@ -409,8 +409,7 @@ class MachoBinary(object):
 
         # indirect symtab is an array of uint32's
         for i in range(self.dysymtab.nindirectsyms):
-            indirect_symtab_bytes = self.get_bytes(indirect_symtab_off, sizeof(c_uint32))
-            indirect_symtab_entry = c_uint32.from_buffer(bytearray(indirect_symtab_bytes))
+            indirect_symtab_entry = self.read_word(indirect_symtab_off, virtual=False, word_type=c_uint32)
             indirect_symtab.append(int(indirect_symtab_entry.value))
             # traverse to next pointer
             indirect_symtab_off += sizeof(c_uint32)

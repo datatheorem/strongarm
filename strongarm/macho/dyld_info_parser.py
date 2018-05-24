@@ -139,7 +139,9 @@ class DyldInfoParser:
             elif opcode == BindOpcode.BIND_OPCODE_DO_BIND_ADD_ADDR_ULEB:
                 commit_stub()
                 segment_offset += pointer_size
+                
                 addend, index = self.read_uleb(binding_info, index)
+                segment_offset += addend
             elif opcode == BindOpcode.BIND_OPCODE_DO_BIND_ADD_ADDR_IMM_SCALED:
                 commit_stub()
                 # I think the format is <immediate>, <repeat times>

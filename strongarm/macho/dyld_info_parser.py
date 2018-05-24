@@ -138,6 +138,7 @@ class DyldInfoParser:
                 segment_offset += pointer_size
             elif opcode == BindOpcode.BIND_OPCODE_DO_BIND_ADD_ADDR_ULEB:
                 commit_stub()
+                segment_offset += pointer_size
                 addend, index = self.read_uleb(binding_info, index)
             elif opcode == BindOpcode.BIND_OPCODE_DO_BIND_ADD_ADDR_IMM_SCALED:
                 commit_stub()

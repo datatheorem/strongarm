@@ -586,10 +586,10 @@ class MachoBinary(object):
 
         return locations, entries
 
-    def read_pointer(self,
-                     address: int,
-                     virtual=True,
-                     word_type=None) -> Optional[Union[c_uint32, c_uint64]]:
+    def read_word(self,
+                  address: int,
+                  virtual=True,
+                  word_type=None) -> Optional[Union[c_uint32, c_uint64]]:
         """Attempt to read a word from the binary at a virtual address. Returns None if the address is invalid.
         """
         if not word_type:

@@ -198,19 +198,21 @@ class ObjcRuntimeDataParser(object):
                 # parse the instance method list
                 objc_data_struct = self._get_objc_data_from_objc_class(objc_class)
                 if objc_data_struct:
-                    # read information from each struct __objc_data
+                    # the class's associated struct __objc_data contains the method list
                     parsed_class = self._parse_objc_data_entry(objc_class, objc_data_struct)
-                    parsed_objc_classes.append(parsed_class)
 
                 # parse the metaclass if it exists
+                # the class stores instance methods and the metaclass's method list contains class methods
                 # the metaclass has the same name as the actual class
-                # the difference is the metaclass's method list contains class methods
-                metaclass = ObjcClassRawStruct(self.binary, objc_class.metaclass, virtual=True)
+                metaclass = self._get_objc_class_from_classlist_pointer(objc_class.metaclass)
                 if metaclass:
                     objc_data_struct = self._get_objc_data_from_objc_class(metaclass)
                     if objc_data_struct:
                         parsed_metaclass = self._parse_objc_data_entry(objc_class, objc_data_struct)
-                        parsed_objc_classes.append(parsed_metaclass)
+                        # just add in the selectors from the metaclass to the real class
+                        parsed_class.selectors += parsed_metaclass.selectors
+
+                parsed_objc_classes.append(parsed_class)
 
         return parsed_objc_classes
 

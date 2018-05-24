@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-from ctypes import sizeof
+import logging
 from typing import TYPE_CHECKING
 from typing import Text, List, Dict, Optional, Tuple
 from capstone import Cs, CsInsn, CS_ARCH_ARM64, CS_MODE_ARM
@@ -402,9 +402,9 @@ class MachoAnalyzer(object):
             code_search
         ))
 
-        search_results = [] # type: List[CodeSearchResult]
+        search_results: List[CodeSearchResult] = []
         entry_point_list = self.get_objc_methods()
-        for method_info in entry_point_list:
+        for i, method_info in enumerate(entry_point_list):
             DebugUtil.log(
                 self,
                 f'search_code: {hex(method_info.imp_addr)} -[{method_info.objc_class.name} {method_info.objc_sel.name}]'
@@ -414,6 +414,11 @@ class MachoAnalyzer(object):
                 search_results += function_analyzer.search_code(code_search)
             except RuntimeError:
                 continue
+
+            checkpoint_index = int(len(entry_point_list) / 10)
+            if i % checkpoint_index == 0:
+                percent_complete = int((i / checkpoint_index) * 10)
+                logging.info(f'binary code search {percent_complete}% complete')
         return search_results
 
     def class_name_for_class_pointer(self, classref: int) -> Optional[str]:

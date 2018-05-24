@@ -223,29 +223,16 @@ class ObjcFunctionAnalyzer(object):
         maximum_index = len(self.instructions)
         step = 1
 
-        search_results = []
+        search_results: List[CodeSearchResult] = []
         for instruction in self.instructions[minimum_index:maximum_index:step]:
-            has_any_condition_failed = False
-            for search_term in code_search.required_matches:
+            for search_term in code_search.search_terms:
                 if isinstance(search_term, CodeSearchTermInstructionIndex):
                     # this term is where minimum_index, maximum_index, step, comes from, along w/ search_backwards flag
                     raise NotImplementedError()
 
-                if search_term.satisfied(self, instruction):
-                    if not code_search.requires_all_terms_matched:
-                        # matched a single term which is sufficient for storing a result
-                        wrapped_instruction = ObjcInstruction.parse_instruction(self, instruction)
-                        result = CodeSearchResult([search_term], self, wrapped_instruction)
-                        search_results.append(result)
-                else:
-                    has_any_condition_failed = True
-                    if code_search.requires_all_terms_matched:
-                        break
-            if code_search.requires_all_terms_matched and not has_any_condition_failed:
-                # matched all terms
-                wrapped_instruction = ObjcInstruction.parse_instruction(self, instruction)
-                result = CodeSearchResult(code_search.required_matches, self, wrapped_instruction)
-                search_results.append(result)
+                result = search_term.satisfied(self, instruction)
+                if result:
+                    search_results.append(result)
         return search_results
 
     def get_local_branches(self):
@@ -682,13 +669,10 @@ class ObjcBlockAnalyzer(ObjcFunctionAnalyzer):
              Tuple of register containing target Block->invoke, and the index this instruction was found at
         """
         from .objc_query import CodeSearchTermInstructionMnemonic, CodeSearchTermInstructionOperand
-        block_invoke_search = CodeSearch(
-            required_matches=[
-                CodeSearchTermInstructionMnemonic(self.binary, allow_mnemonics=['blr']),
-                CodeSearchTermInstructionOperand(self.binary, operand_index=0, operand_type=ARM64_OP_REG)
-            ],
-            requires_all_terms_matched=True
-        )
+        block_invoke_search = CodeSearch([
+            CodeSearchTermInstructionMnemonic(self.binary, allow_mnemonics=['blr']),
+            CodeSearchTermInstructionOperand(self.binary, operand_index=0, operand_type=ARM64_OP_REG)
+        ])
         for search_result in self.search_code(block_invoke_search):
             # in the past, find_block_invoke would find a block load from an instruction like:
             # ldr x8, [<block containing reg>, 0x10]

@@ -35,9 +35,6 @@ class DyldBoundSymbol:
         self.name = name
         self.dylib = self.binary.dylib_for_library_ordinal(library_ordinal)
 
-        dylib_description = self.binary.dylib_name_for_library_ordinal(library_ordinal)
-        logging.debug(f'Dyld stub @ {hex(self.address)}: {self.name} from {self.library_ordinal} {dylib_description}')
-
 
 class DyldInfoParser:
     def __init__(self, binary: MachoBinary):

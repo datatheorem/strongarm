@@ -415,10 +415,11 @@ class MachoAnalyzer(object):
             except RuntimeError:
                 continue
 
-            checkpoint_index = int(len(entry_point_list) / 10)
-            if i % checkpoint_index == 0:
-                percent_complete = int((i / checkpoint_index) * 10)
-                logging.info(f'binary code search {percent_complete}% complete')
+            if len(entry_point_list):
+                checkpoint_index = int(len(entry_point_list) / 10)
+                if i % checkpoint_index == 0:
+                    percent_complete = int((i / checkpoint_index) * 10)
+                    logging.info(f'binary code search {percent_complete}% complete')
         return search_results
 
     def class_name_for_class_pointer(self, classref: int) -> Optional[str]:

@@ -462,10 +462,6 @@ class ObjcFunctionAnalyzer(object):
         # let's also skip any branch instruction, because they won't be necessary for determining a register value
         excluded_instructions += ObjcUnconditionalBranchInstruction.UNCONDITIONAL_BRANCH_MNEMONICS
 
-        # we'll skip instructions which move data between vector registers
-        # TODO(PT): move this to ObjcInstruction
-        vector_registers = ['d', 's', 'v']
-
         # find data starting backwards from start_index
         # TODO(PT): instead of blindly going through instructions backwards,
         # only follow possible code paths split into basic blocks from ObjcBasicBlock
@@ -494,10 +490,8 @@ class ObjcFunctionAnalyzer(object):
 
             dst_reg_name = instr.reg_name(dst.value.reg)
             # ignore vector instructions
-            for vector_prefix in vector_registers:
-                if vector_prefix in dst_reg_name:
-                    continue
-
+            if ObjcInstruction.is_vector_register(dst_reg_name):
+                continue
             dst_reg_name = self._trimmed_reg_name(dst_reg_name)
 
             # is this register needed for us to determine the value of the requested register?

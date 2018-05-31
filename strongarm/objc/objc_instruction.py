@@ -15,6 +15,8 @@ if TYPE_CHECKING:
 
 
 class ObjcInstruction(object):
+    VECTOR_REGISTER_PREFIXES = ['d', 's', 'v']
+
     def __init__(self, instruction):
         # type: (CsInsn) -> None
         self.raw_instr = instruction
@@ -22,6 +24,15 @@ class ObjcInstruction(object):
 
         self.is_msgSend_call = None # type: bool
         self.symbol = None
+
+    @classmethod
+    def is_vector_register(cls, reg_name: str) -> bool:
+        """Returns True if the register refers to a vector register; False otherwise.
+        """
+        for vector_prefix in ObjcInstruction.VECTOR_REGISTER_PREFIXES:
+            if vector_prefix in reg_name:
+                return True
+        return False
 
     @classmethod
     def parse_instruction(cls, function_analyzer, instruction):

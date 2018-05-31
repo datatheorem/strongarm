@@ -407,7 +407,7 @@ class ObjcFunctionAnalyzer(object):
               Register name with trimmed size prefix, or unmodified name if not a GP register
 
         """
-        if reg_name[0] in ['x', 'w', 'r', 's', 'd', 'q'] and reg_name != 'sp':
+        if reg_name[0] in ['x', 'w', 'r', 'q'] and reg_name != 'sp':
             return reg_name[1::]
         return reg_name
 
@@ -450,6 +450,22 @@ class ObjcFunctionAnalyzer(object):
         # the #0xf60 and add it to the final value of x0 at the end of the operation
         extra_offset = 0
 
+        # some instructions will have the same format as register transformations,
+        # but are actually unrelated to what we're looking for
+        # for example, str x1, [sp, #0x38] would be identified by this function as moving something from sp into
+        # x1, but with that particular instruction it's the other way around: x1 is being stored somewhere offset
+        # from sp.
+        # to avoid this bug, we need to exclude some instructions from being looked at by this method.
+        excluded_instructions = [
+            'str',
+        ]
+        # let's also skip any branch instruction, because they won't be necessary for determining a register value
+        excluded_instructions += ObjcUnconditionalBranchInstruction.UNCONDITIONAL_BRANCH_MNEMONICS
+
+        # we'll skip instructions which move data between vector registers
+        # TODO(PT): move this to ObjcInstruction
+        vector_registers = ['d', 's', 'v']
+
         # find data starting backwards from start_index
         # TODO(PT): instead of blindly going through instructions backwards,
         # only follow possible code paths split into basic blocks from ObjcBasicBlock
@@ -459,17 +475,7 @@ class ObjcFunctionAnalyzer(object):
                 # found everything we need
                 break
 
-            # some instructions will have the same format as register transformations,
-            # but are actually unrelated to what we're looking for
-            # for example, str x1, [sp, #0x38] would be identified by this function as moving something from sp into
-            # x1, but with that particular instruction it's the other way around: x1 is being stored somewhere offset
-            # from sp.
-            # to avoid this bug, we need to exclude some instructions from being looked at by this method.
-            excluded_instructions = [
-                'str',
-            ]
-            # let's also skip any branch instruction, because they won't be necessary for determining a register value
-            excluded_instructions += ObjcUnconditionalBranchInstruction.UNCONDITIONAL_BRANCH_MNEMONICS
+            # skip instructions we want to ignore
             if instr.mnemonic in excluded_instructions:
                 continue
 
@@ -485,7 +491,15 @@ class ObjcFunctionAnalyzer(object):
             # we're only interested in instructions whose destination is a register
             if dst.type != ARM64_OP_REG:
                 continue
-            dst_reg_name = self._trimmed_reg_name(instr.reg_name(dst.value.reg))
+
+            dst_reg_name = instr.reg_name(dst.value.reg)
+            # ignore vector instructions
+            for vector_prefix in vector_registers:
+                if vector_prefix in dst_reg_name:
+                    continue
+
+            dst_reg_name = self._trimmed_reg_name(dst_reg_name)
+
             # is this register needed for us to determine the value of the requested register?
             if dst_reg_name not in unknown_regs:
                 continue

@@ -53,7 +53,6 @@ class MachoStringTableHelper(object):
         """
         string_table_entries = {}
         entry_start_idx = 0
-        strtab = self.binary.get_raw_string_table()
         for idx, ch in enumerate(strtab):
             # end of current string?
             if ch == 0x00:

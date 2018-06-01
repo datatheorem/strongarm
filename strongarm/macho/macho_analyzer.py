@@ -526,3 +526,22 @@ class MachoAnalyzer(object):
 
         return None
 
+    def stringref_for_string(self, string: str) -> Optional[int]:
+        """Try to find the stringref for a provided string.
+        If the string is not present in the binary, this method returns None.
+
+        If you are looking for a C string, pass the string with no additional formatting.
+        If you are looking for an Objective-C string literal (CFStringRef), enclose your string in @"".
+        """
+        is_cfstring = False
+        if string.startswith('@"'):
+            if not string.endswith('"'):
+                raise RuntimeError(f'incorrectly formatted ObjC string literal {string}')
+
+            is_cfstring = True
+            # trim the @" prefix and the " suffix
+            string = string[2:-1]
+
+        if is_cfstring:
+            return self._stringref_for_cfstring(string)
+        return self._stringref_for_cstring(string)

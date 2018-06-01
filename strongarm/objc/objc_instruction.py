@@ -3,9 +3,11 @@ from __future__ import absolute_import
 from __future__ import unicode_literals
 from __future__ import print_function
 
-from capstone import CsInsn
-from typing import TYPE_CHECKING
 from typing import Union, Text
+from typing import TYPE_CHECKING
+
+from capstone import CsInsn
+from capstone.arm64 import ARM64_OP_REG, ARM64_OP_IMM, ARM64_OP_MEM
 
 import strongarm.macho.macho_analyzer
 
@@ -31,6 +33,30 @@ class ObjcInstruction(object):
         """
         for vector_prefix in ObjcInstruction.VECTOR_REGISTER_PREFIXES:
             if vector_prefix in reg_name:
+                return True
+        return False
+
+    @classmethod
+    def _operand_uses_vector_registers(cls, instruction: CsInsn, operand) -> bool:
+        if operand.type == ARM64_OP_IMM:
+            return False
+
+        reg_name = ''
+        if operand.type == ARM64_OP_REG:
+            reg_name = instruction.reg_name(operand.value.reg)
+        elif operand.type == ARM64_OP_MEM:
+            reg_name = instruction.reg_name(operand.mem.base)
+        else:
+            raise RuntimeError(f'unknown operand type {operand.type} in instr at {instruction.address}')
+        return ObjcInstruction.is_vector_register(reg_name)
+
+    @classmethod
+    def instruction_uses_vector_registers(cls, instruction: CsInsn) -> bool:
+        """Returns True if the instruction accesses vector registers.
+        False if the instruction only uses general-purpose registers.
+        """
+        for op in instruction.operands:
+            if ObjcInstruction._operand_uses_vector_registers(instruction, op):
                 return True
         return False
 

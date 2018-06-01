@@ -4,9 +4,12 @@ from typing import TYPE_CHECKING
 from typing import Text, List, Dict, Optional, Tuple
 from capstone import Cs, CsInsn, CS_ARCH_ARM64, CS_MODE_ARM
 
+from ctypes import sizeof
+
 from strongarm import DebugUtil
 from strongarm.macho.macho_binary import MachoBinary
 from strongarm.macho.macho_imp_stubs import MachoImpStubsParser
+from strongarm.macho.arch_independent_structs import CFStringStruct, CFString32, CFString64
 from strongarm.macho.dyld_info_parser import DyldInfoParser, DyldBoundSymbol
 from strongarm.macho.macho_string_table_helper import MachoStringTableHelper
 from strongarm.macho.objc_runtime_data_parser import \
@@ -497,3 +500,29 @@ class MachoAnalyzer(object):
 
         # didn't find the string the user requested
         return None
+
+    def _stringref_for_cfstring(self, string: str) -> Optional[int]:
+        """Try to find the stringref in __cfstrings for a provided Objective-C string literal.
+        If the string is not present in the __cfstrings section, this method returns None.
+        """
+        # TODO(PT): This is SLOW and WASTEFUL!!!
+        # These transformations should be done ONCE on initial analysis!
+        if '__cfstring' not in self.binary.sections:
+            return None
+
+        sizeof_cfstring = sizeof(CFString64) if self.binary.is_64bit else sizeof(CFString32)
+        cfstrings_section = self.binary.sections['__cfstring']
+        cfstrings_base = cfstrings_section.address
+
+        cfstrings_count = int((cfstrings_section.end_address - cfstrings_section.address) / sizeof_cfstring)
+        for i in range(cfstrings_count):
+            cfstring_addr = cfstrings_base + (i * sizeof_cfstring)
+            cfstring = CFStringStruct(self.binary, cfstring_addr, virtual=True)
+
+            # check if this is the string the user requested
+            string_address = cfstring.literal
+            if self.binary.read_string_at_address(string_address) == string:
+                return cfstring_addr
+
+        return None
+

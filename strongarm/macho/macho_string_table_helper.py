@@ -27,16 +27,16 @@ class MachoStringTableHelper(object):
     # TODO(PT): generalize the preprocessing of a string table where we efficiently map string start addresses to
     # full strings, so we don't need to do an O(n) search for a (struct __objc_data).name or something
 
-    def __init__(self, binary):
-        # type: (MachoBinary) -> None
+    def __init__(self, binary: MachoBinary) -> None:
         self.binary = binary
-        self.string_table_entries = self._process_string_table_entries()
-        self.imported_symbols = None    # type: List[Text]
-        self.exported_symbols = None    # type: List[Text]
+        self.string_table_entries = MachoStringTableHelper.transform_string_section(self.binary.get_raw_string_table())
+        self.imported_symbols: List[Text] = None
+        self.exported_symbols: List[Text] = None
         self.parse_sym_lists()
 
-    def _process_string_table_entries(self):
-        # type: () -> Dict[int, MachoStringTableEntry]
+    @classmethod
+    def transform_string_section(cls,
+                                 strtab: List[int]) -> Dict[int, MachoStringTableEntry]:
         """Create more efficient representation of string table data
 
         Often, tables in a Mach-O will reference data within the string table.
@@ -53,7 +53,6 @@ class MachoStringTableHelper(object):
         """
         string_table_entries = {}
         entry_start_idx = 0
-        strtab = self.binary.get_raw_string_table()
         for idx, ch in enumerate(strtab):
             # end of current string?
             if ch == 0x00:

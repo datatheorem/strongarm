@@ -4,9 +4,12 @@ from typing import TYPE_CHECKING
 from typing import Text, List, Dict, Optional, Tuple
 from capstone import Cs, CsInsn, CS_ARCH_ARM64, CS_MODE_ARM
 
+from ctypes import sizeof
+
 from strongarm import DebugUtil
 from strongarm.macho.macho_binary import MachoBinary
 from strongarm.macho.macho_imp_stubs import MachoImpStubsParser
+from strongarm.macho.arch_independent_structs import CFStringStruct, CFString32, CFString64
 from strongarm.macho.dyld_info_parser import DyldInfoParser, DyldBoundSymbol
 from strongarm.macho.macho_string_table_helper import MachoStringTableHelper
 from strongarm.macho.objc_runtime_data_parser import \
@@ -471,3 +474,74 @@ class MachoAnalyzer(object):
     def selref_for_selector_name(self, selector_name: str) -> Optional[int]:
         return self.objc_helper.selref_for_selector_name(selector_name)
 
+    def _stringref_for_cstring(self, string: str) -> Optional[int]:
+        """Try to find the stringref in __cstrings for a provided C string.
+        If the string is not present in the __cstrings section, this method returns None.
+        """
+        # TODO(PT): This is SLOW and WASTEFUL!!!
+        # These transformations should be done ONCE on initial analysis!
+        if '__cstring' not in self.binary.sections:
+            return None
+        strings_section = self.binary.sections['__cstring']
+
+        strings_base = strings_section.address
+        strings_content = self.binary.sections['__cstring'].content
+
+        # split into characters (string table is packed and each entry is terminated by a null character)
+        string_table = list(strings_content)
+        transformed_strings = MachoStringTableHelper.transform_string_section(string_table)
+        for idx, entry in transformed_strings.items():
+            print(f'{hex(strings_base+idx)}: {entry.full_string}')
+            if entry.full_string == string:
+                # found the string we're looking for
+                # the address is the base of __cstring plus the index of the entry
+                stringref_address = strings_base + idx
+                return stringref_address
+
+        # didn't find the string the user requested
+        return None
+
+    def _stringref_for_cfstring(self, string: str) -> Optional[int]:
+        """Try to find the stringref in __cfstrings for a provided Objective-C string literal.
+        If the string is not present in the __cfstrings section, this method returns None.
+        """
+        # TODO(PT): This is SLOW and WASTEFUL!!!
+        # These transformations should be done ONCE on initial analysis!
+        if '__cfstring' not in self.binary.sections:
+            return None
+
+        sizeof_cfstring = sizeof(CFString64) if self.binary.is_64bit else sizeof(CFString32)
+        cfstrings_section = self.binary.sections['__cfstring']
+        cfstrings_base = cfstrings_section.address
+
+        cfstrings_count = int((cfstrings_section.end_address - cfstrings_section.address) / sizeof_cfstring)
+        for i in range(cfstrings_count):
+            cfstring_addr = cfstrings_base + (i * sizeof_cfstring)
+            cfstring = CFStringStruct(self.binary, cfstring_addr, virtual=True)
+
+            # check if this is the string the user requested
+            string_address = cfstring.literal
+            if self.binary.read_string_at_address(string_address) == string:
+                return cfstring_addr
+
+        return None
+
+    def stringref_for_string(self, string: str) -> Optional[int]:
+        """Try to find the stringref for a provided string.
+        If the string is not present in the binary, this method returns None.
+
+        If you are looking for a C string, pass the string with no additional formatting.
+        If you are looking for an Objective-C string literal (CFStringRef), enclose your string in @"".
+        """
+        is_cfstring = False
+        if string.startswith('@"'):
+            if not string.endswith('"'):
+                raise RuntimeError(f'incorrectly formatted ObjC string literal {string}')
+
+            is_cfstring = True
+            # trim the @" prefix and the " suffix
+            string = string[2:-1]
+
+        if is_cfstring:
+            return self._stringref_for_cfstring(string)
+        return self._stringref_for_cstring(string)

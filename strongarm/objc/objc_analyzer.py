@@ -481,6 +481,10 @@ class ObjcFunctionAnalyzer(object):
             if len(operands) < 2:
                 continue
 
+            # ignore instructions accessing vector registers
+            if ObjcInstruction.instruction_uses_vector_registers(instr):
+                continue
+
             dst = operands[0]
             src = operands[1]
 
@@ -488,11 +492,7 @@ class ObjcFunctionAnalyzer(object):
             if dst.type != ARM64_OP_REG:
                 continue
 
-            dst_reg_name = instr.reg_name(dst.value.reg)
-            # ignore vector instructions
-            if ObjcInstruction.is_vector_register(dst_reg_name):
-                continue
-            dst_reg_name = self._trimmed_reg_name(dst_reg_name)
+            dst_reg_name = self._trimmed_reg_name(instr.reg_name(dst.value.reg))
 
             # is this register needed for us to determine the value of the requested register?
             if dst_reg_name not in unknown_regs:

@@ -390,8 +390,7 @@ class ObjcFunctionAnalyzer(object):
         return contents.value
 
     @staticmethod
-    def _trimmed_reg_name(reg_name):
-        # type: (Text) -> Text
+    def _trimmed_reg_name(reg_name: str) -> str:
         """Remove 'x', 'r', 'w', or 'q' from general purpose register name
         This is so the register strings 'x22' and 'w22', which are two slices of the same register,
         map to the same register.

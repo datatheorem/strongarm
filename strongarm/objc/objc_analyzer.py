@@ -390,28 +390,25 @@ class ObjcFunctionAnalyzer(object):
         return contents.value
 
     @staticmethod
-    def _trimmed_reg_name(reg_name: str) -> str:
-        """Remove 'x', 'r', 'w', or 'q' from general purpose register name
+    def trimmed_register_name(reg_name: str) -> str:
+        """Remove 'x', 'r', or 'w' from general purpose register name
         This is so the register strings 'x22' and 'w22', which are two slices of the same register,
         map to the same register.
 
-        Will return non-GP registers, such as 'sp', as-is.
-
-        Also strips NEON registers; 's' 32b registers, 'd' 64b registers, and 'q' 128b registers
+        Returns non-GP registers, such as 'sp', as-is.
+        Returns NEON registers ('s' 32b registers, 'd' 64b registers, and 'q' 128b registers) as-is.
 
         Args:
               reg_name: Full register name to trim
 
         Returns:
               Register name with trimmed size prefix, or unmodified name if not a GP register
-
         """
-        if reg_name[0] in ['x', 'w', 'r', 'q'] and reg_name != 'sp':
+        if reg_name[0] in ['x', 'w', 'r']:
             return reg_name[1::]
         return reg_name
 
-    def get_register_contents_at_instruction(self, register, instruction):
-        # type: (Text, ObjcInstruction) -> RegisterContents
+    def get_register_contents_at_instruction(self, register: str, instruction: ObjcInstruction) -> RegisterContents:
         """Analyze instructions backwards from `instruction` to find the data in `register`
         This function will read all instructions until it gathers all data and assignments necessary to determine
         value of the desired register.
@@ -438,7 +435,7 @@ class ObjcFunctionAnalyzer(object):
         # TODO(PT): write CsInsn instructions by hand to make this function easy to test w/ different scenarios
         # List of registers whose values we need to find
         # initially, we need to find the value of whatever the user requested
-        unknown_regs = [self._trimmed_reg_name(desired_reg)]
+        unknown_regs = [self.trimmed_register_name(desired_reg)]
         # map of name -> value for registers whose values have been resolved to an immediate
         determined_values = {}
         # map of name -> (name, value). key is register needing to be resolved,
@@ -491,7 +488,7 @@ class ObjcFunctionAnalyzer(object):
             if dst.type != ARM64_OP_REG:
                 continue
 
-            dst_reg_name = self._trimmed_reg_name(instr.reg_name(dst.value.reg))
+            dst_reg_name = self.trimmed_register_name(instr.reg_name(dst.value.reg))
 
             # is this register needed for us to determine the value of the requested register?
             if dst_reg_name not in unknown_regs:
@@ -506,7 +503,7 @@ class ObjcFunctionAnalyzer(object):
             if len(operands) > 2:
                 src2 = operands[2]
                 if src.type == ARM64_OP_REG:
-                    src_reg_name = self._trimmed_reg_name(instr.reg_name(src.value.reg))
+                    src_reg_name = self.trimmed_register_name(instr.reg_name(src.value.reg))
                     if src_reg_name == 'zr':
                         # skip over zero register and set source to third operand
                         src = operands[2]
@@ -531,7 +528,7 @@ class ObjcFunctionAnalyzer(object):
                 # we now need the value of src before dst can be determined
                 # move dst from list of unknown registers to list of registers waiting for another value
                 unknown_regs.remove(dst_reg_name)
-                src_reg_name = self._trimmed_reg_name(instr.reg_name(src.value.reg))
+                src_reg_name = self.trimmed_register_name(instr.reg_name(src.value.reg))
 
                 # do we already know the exact value of the source?
                 if src_reg_name in determined_values:
@@ -553,7 +550,7 @@ class ObjcFunctionAnalyzer(object):
                 # an instruction with an operand of type ARM64_OP_MEM might look like:
                 # ldr x1, [x3, #0x1000]
                 # here, the bracketed portion is accessible through src.mem, which has a reg base and imm disp property
-                src_reg_name = self._trimmed_reg_name(instr.reg_name(src.mem.base))
+                src_reg_name = self.trimmed_register_name(instr.reg_name(src.mem.base))
                 # dst is being assigned to the value of another register, plus a signed offset
                 unknown_regs.remove(dst_reg_name)
                 if src_reg_name in determined_values:
@@ -628,7 +625,7 @@ class ObjcFunctionAnalyzer(object):
         if len(resolved_registers) == 0:
             raise RuntimeError('need at least one known value to resolve data dependencies')
 
-        desired_reg = self._trimmed_reg_name(desired_reg)
+        desired_reg = self.trimmed_register_name(desired_reg)
         if desired_reg not in links and desired_reg not in resolved_registers:
             raise RuntimeError('invalid data set? desired_reg {} can\'t be determined from '
                                'links {}, resolved_registers {}'.format(desired_reg,
@@ -665,7 +662,7 @@ class ObjcBlockAnalyzer(ObjcFunctionAnalyzer):
         ObjcFunctionAnalyzer.__init__(self, binary, instructions)
 
         self.initial_block_reg = initial_block_reg
-        self.block_arg_index = int(self._trimmed_reg_name(self.initial_block_reg))
+        self.block_arg_index = int(self.trimmed_register_name(self.initial_block_reg))
         self.invoke_instruction, self.invocation_instruction_index = self.find_block_invoke()
 
     def find_block_invoke(self):
@@ -692,7 +689,7 @@ class ObjcBlockAnalyzer(ObjcFunctionAnalyzer):
             found_branch_instruction = search_result.found_instruction
             contents = self.get_register_contents_at_instruction(self.initial_block_reg, found_branch_instruction)
 
-            trimmed_block_argument_reg = int(self._trimmed_reg_name(self.initial_block_reg))
+            trimmed_block_argument_reg = int(self.trimmed_register_name(self.initial_block_reg))
             if contents.type != RegisterContentsType.FUNCTION_ARG:
                 # not what we're looking for; branch destination didn't come from function arg
                 continue

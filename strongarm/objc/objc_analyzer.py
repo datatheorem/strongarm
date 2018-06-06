@@ -409,6 +409,10 @@ class ObjcFunctionAnalyzer(object):
         return reg_name
 
     def get_register_contents_at_instruction(self, register: str, instruction: ObjcInstruction) -> RegisterContents:
+        from strongarm.objc.dataflow import dataflow
+        return dataflow.get_register_contents_at_instruction_fast(register, self, instruction)
+
+    def get_register_contents_at_instruction2(self, register: str, instruction: ObjcInstruction) -> RegisterContents:
         """Analyze instructions backwards from `instruction` to find the data in `register`
         This function will read all instructions until it gathers all data and assignments necessary to determine
         value of the desired register.
@@ -615,7 +619,7 @@ class ObjcFunctionAnalyzer(object):
         Args:
               desired_reg: string containing name of register whose value should be determined
               links: mapping of register data dependencies. For example, x1's value might be x22's value plus an
-              offset of 0x300, so links['x1'] = ('x22', 0x300)
+                  offset of 0x300, so links['x1'] = ('x22', 0x300)
               resolved_registers: mapping of registers whose final value is already known
 
         Returns:

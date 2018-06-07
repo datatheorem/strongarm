@@ -8,6 +8,7 @@ from capstone import CsInsn
 
 from strongarm.debug_util import DebugUtil
 from strongarm.macho import MachoBinary
+
 from .objc_instruction import \
     ObjcInstruction, \
     ObjcBranchInstruction, \
@@ -16,6 +17,8 @@ from .objc_query import \
     CodeSearch, \
     CodeSearchResult, \
     CodeSearchTermInstructionIndex
+from .register_contents import RegisterContents, RegisterContentsType
+from .dataflow import get_register_contents_at_instruction_fast
 
 
 class ObjcMethodInfo(object):
@@ -27,20 +30,6 @@ class ObjcMethodInfo(object):
         self.objc_class = objc_class
         self.objc_sel = objc_sel
         self.imp_addr = imp
-
-
-class RegisterContentsType(Enum):
-    FUNCTION_ARG = 0
-    IMMEDIATE = 1
-    UNKNOWN = 2
-
-
-class RegisterContents(object):
-
-    def __init__(self, value_type, value):
-        # type: (RegisterContentsType, int) -> None
-        self.type = value_type
-        self.value = value
 
 
 class ObjcFunctionAnalyzer(object):
@@ -409,8 +398,7 @@ class ObjcFunctionAnalyzer(object):
         return reg_name
 
     def get_register_contents_at_instruction(self, register: str, instruction: ObjcInstruction) -> RegisterContents:
-        from strongarm.objc.dataflow import dataflow
-        return dataflow.get_register_contents_at_instruction_fast(register, self, instruction)
+        return get_register_contents_at_instruction_fast(register, self, instruction)
 
     def get_register_contents_at_instruction2(self, register: str, instruction: ObjcInstruction) -> RegisterContents:
         """Analyze instructions backwards from `instruction` to find the data in `register`

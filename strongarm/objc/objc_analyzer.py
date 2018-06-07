@@ -1,6 +1,5 @@
 # -*- coding: utf-8 -*-
-
-from enum import Enum
+import functools
 from typing import Text, List, Optional, Dict, Tuple
 
 from capstone.arm64 import ARM64_OP_REG, ARM64_OP_IMM, ARM64_OP_MEM
@@ -397,6 +396,7 @@ class ObjcFunctionAnalyzer(object):
             return reg_name[1::]
         return reg_name
 
+    @functools.lru_cache(maxsize=100)
     def get_register_contents_at_instruction(self, register: str, instruction: ObjcInstruction) -> RegisterContents:
         return get_register_contents_at_instruction_fast(register, self, instruction)
 

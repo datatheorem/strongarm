@@ -1,4 +1,4 @@
-from setuptools import setup, find_packages
+from setuptools import setup, find_packages, Extension
 from setuptools.command.install import install
 from subprocess import call
 
@@ -10,6 +10,13 @@ class CapstoneInstall(install):
         call(['/bin/sh', './install_dependencies.sh'])
         self.do_egg_install()
 
+
+dataflow_module = Extension('strongarm.objc.dataflow',
+                            sources=['strongarm/objc/dataflow.cpp'],
+                            libraries=['capstone'],
+                            language='c++',
+                            extra_compile_args=['-std=c++11'])
+
 setup(
     name='strongarm',
     version=__version__,
@@ -17,6 +24,7 @@ setup(
     author='Data Theorem',
     url='https://bitbucket.org/datatheorem/strongarm',
     packages=find_packages(exclude=['tests']),
+    ext_modules=[dataflow_module],
     cmdclass={
         'install': CapstoneInstall,
     },

@@ -49,7 +49,7 @@ Benefits
 
 The original Python code did not use any esoteric or obscure features of Python. The translated C++ code does not use any advanced features of C++. All data structures used are simple and common. There is a rough 1:1 translation of ideas from one to the other, and the new code should be understandable for any general-purpose programmer.
 
-By significantly reducing the time it takes to scan an app, everyone involved with scanning iOS apps regains productivity. While apps are scanned with gammaray en masse in the cloud, I know I still regularly scan apps manually at the command line, and I'm sure Ethan and Alban do as well. By reducing the time it takes for a scan to complete, we cut down on waiting around, mental baggage while we check the terminal tab every couple minutes, don't need to context switch back to what we were looking for in the scan finding once it completes, etc.
+By significantly reducing the time it takes to scan an app, everyone involved with scanning iOS apps regains productivity. While apps are scanned with gammaray en masse in the cloud, I know I still regularly scan apps manually at the command line, and I'm sure Ethan, Eric, and Alban do as well. By reducing the time it takes for a scan to complete, we cut down on waiting around, mental baggage while we check the terminal tab every couple minutes, don't need to context switch back to what we were looking for in the scan finding once it completes, etc.
 
 By significantly reducing the cost of analysis, we reduce the incurred cost of adding new CodeSearch checks in the future. It's reasonable to expect that as time goes on we will add more in-depth static analysis checks, and by building objectively better infrastructure now we reap benefits later.
 

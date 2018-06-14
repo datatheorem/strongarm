@@ -38,7 +38,7 @@ The exact prototypes for the two new public methods are:
 
 ```c++
 // get_register_contents_at_instruction_fast(desired_register: str, function_analyzer: ObjcFunctionAnalyzer, instruction: ObjcInstruction) -> RegisterContents
-Object* get_register_contents_at_instruction_fast(PyObject* self, PyObject* args);
+PyObject* get_register_contents_at_instruction_fast(PyObject* self, PyObject* args);
 
 // determine_function_boundary(bytecode: bytes, start_address: int) -> int
 PyObject* determine_function_boundary(PyObject* self, PyObject* args);

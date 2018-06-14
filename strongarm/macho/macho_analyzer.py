@@ -174,7 +174,7 @@ class MachoAnalyzer(object):
         from strongarm.objc.dataflow import determine_function_boundary
 
         if start_address in self._cached_function_boundaries:
-            end_address = self._cached_function_boundaries(start_address)
+            end_address = self._cached_function_boundaries[start_address]
         else:
             # limit functions to 8kb
             max_function_size = 0x2000

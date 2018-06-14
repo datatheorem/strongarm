@@ -72,7 +72,7 @@ I have already profiled the memory usage of using this branch with many apps in 
 
 01-0094 + 01-0075          |  Full Gammaray Scan
 :-------------------------:|:-------------------------:
-![](dataflow-proposal/searches-only.png)  |  ![](dataflow-proposal/full-scan.png)
+![search checks only](dataflow-proposal/searches-only.png)  |  ![full scan](dataflow-proposal/full-scan.png)
 
 Raw data
 -------------------

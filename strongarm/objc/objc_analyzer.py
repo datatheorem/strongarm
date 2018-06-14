@@ -356,6 +356,7 @@ class ObjcBlockAnalyzer(ObjcFunctionAnalyzer):
         self.block_arg_index = int(self.trimmed_register_name(self.initial_block_reg))
         self.invoke_instruction, self.invocation_instruction_index = self.find_block_invoke()
 
+    @staticmethod
     def trimmed_register_name(reg_name: str) -> str:
         """Remove 'x', 'r', or 'w' from general purpose register name
         This is so the register strings 'x22' and 'w22', which are two slices of the same register,

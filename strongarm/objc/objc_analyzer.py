@@ -214,10 +214,6 @@ class ObjcFunctionAnalyzer(object):
         search_results: List[CodeSearchResult] = []
         for instruction in self.instructions[minimum_index:maximum_index:step]:
             for search_term in code_search.search_terms:
-                if isinstance(search_term, CodeSearchTermInstructionIndex):
-                    # this term is where minimum_index, maximum_index, step, comes from, along w/ search_backwards flag
-                    raise NotImplementedError()
-
                 result = search_term.satisfied(self, instruction)
                 if result:
                     search_results.append(result)
@@ -270,39 +266,6 @@ class ObjcFunctionAnalyzer(object):
         return "{addr}:\t{mnemonic}\t{ops}".format(addr=hex(int(instr.address)),
                                                    mnemonic=instr.mnemonic,
                                                    ops=instr.op_str)
-
-    def track_reg(self, reg):
-        # type: (Text) -> List[Text]
-        """
-        Track the flow of data starting in a register through a list of instructions
-        Args:
-            reg: Register containing initial location of data
-        Returns:
-            List containing all registers which contain data originally in reg
-        """
-        # list containing all registers which hold the same value as initial argument reg
-        regs_holding_value = [reg]
-        for instr in self.instructions:
-            # TODO(pt) track other versions of move w/ suffix e.g. movz
-            # do instructions like movz only operate on literals? we only care about reg to reg
-            if instr.mnemonic == 'mov':
-                if len(instr.operands) != 2:
-                    raise RuntimeError('Encountered mov with more than 2 operands! {}'.format(
-                        self.format_instruction(instr)
-                    ))
-                # in mov instruction, operands[0] is dst and operands[1] is src
-                src = instr.reg_name(instr.operands[1].value.reg)
-                dst = instr.reg_name(instr.operands[0].value.reg)
-
-                # check if we're copying tracked value to another register
-                if src in regs_holding_value and dst not in regs_holding_value:
-                    # add destination register to list of registers containing value to track
-                    regs_holding_value.append(dst)
-                # check if we're copying something new into a register previously containing tracked value
-                elif dst in regs_holding_value and src not in regs_holding_value:
-                    # register being overwrote -- no longer contains tracked value, so remove from list
-                    regs_holding_value.remove(dst)
-        return regs_holding_value
 
     # TODO(PT): this should return the branch and the instruction index for caller convenience
     def next_branch_after_instruction_index(self, start_index):
@@ -378,6 +341,21 @@ class ObjcFunctionAnalyzer(object):
         return contents.value
 
     @staticmethod
+    @functools.lru_cache(maxsize=100)
+    def get_register_contents_at_instruction(self, register: str, instruction: ObjcInstruction) -> RegisterContents:
+        return get_register_contents_at_instruction_fast(register, self, instruction)
+
+
+class ObjcBlockAnalyzer(ObjcFunctionAnalyzer):
+    # XXX(PT): This class is very old and outdated.
+    def __init__(self, binary, instructions, initial_block_reg):
+        # type: (MachoBinary, List[CsInsn], Text) -> None
+        ObjcFunctionAnalyzer.__init__(self, binary, instructions)
+
+        self.initial_block_reg = initial_block_reg
+        self.block_arg_index = int(self.trimmed_register_name(self.initial_block_reg))
+        self.invoke_instruction, self.invocation_instruction_index = self.find_block_invoke()
+
     def trimmed_register_name(reg_name: str) -> str:
         """Remove 'x', 'r', or 'w' from general purpose register name
         This is so the register strings 'x22' and 'w22', which are two slices of the same register,
@@ -395,21 +373,6 @@ class ObjcFunctionAnalyzer(object):
         if reg_name[0] in ['x', 'w', 'r']:
             return reg_name[1::]
         return reg_name
-
-    @functools.lru_cache(maxsize=100)
-    def get_register_contents_at_instruction(self, register: str, instruction: ObjcInstruction) -> RegisterContents:
-        return get_register_contents_at_instruction_fast(register, self, instruction)
-
-
-class ObjcBlockAnalyzer(ObjcFunctionAnalyzer):
-
-    def __init__(self, binary, instructions, initial_block_reg):
-        # type: (MachoBinary, List[CsInsn], Text) -> None
-        ObjcFunctionAnalyzer.__init__(self, binary, instructions)
-
-        self.initial_block_reg = initial_block_reg
-        self.block_arg_index = int(self.trimmed_register_name(self.initial_block_reg))
-        self.invoke_instruction, self.invocation_instruction_index = self.find_block_invoke()
 
     def find_block_invoke(self):
         # type: () -> Tuple[ObjcInstruction, int]

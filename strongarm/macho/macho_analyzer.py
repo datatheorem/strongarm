@@ -167,8 +167,7 @@ class MachoAnalyzer(object):
         instructions = [instr for instr in self.cs.disasm(func_str, start_address)]
         return instructions
 
-    def get_function_instructions(self, start_address):
-        # type: (int) -> List[CsInsn]
+    def get_function_instructions(self, start_address: int) -> List[CsInsn]:
         """Get a list of disassembled instructions for the function beginning at start_address
         """
         from strongarm.objc.dataflow import determine_function_boundary

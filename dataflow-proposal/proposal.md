@@ -72,13 +72,14 @@ I have already profiled the memory usage of using this branch with many apps in 
 
 01-0094 + 01-0075          |  Full Gammaray Scan
 :-------------------------:|:-------------------------:
-![](./searches-only.png)  |  ![](./full-scan.png)
+![](dataflow-proposal/searches-only.png)  |  ![](dataflow-proposal/full-scan.png)
 
 Raw data
 -------------------
 
 * strongarm/master, gammaray with only CodeSearch checks
 
+```
 +-------------------------------+----------------+---------------+
 |           Bundle ID           | Code Size (MB) | Scan Time (s) |
 +-------------------------------+----------------+---------------+
@@ -93,9 +94,11 @@ Raw data
 | com.google.ios.youtube        |          72.57 |        373.35 |
 | com.ubercab.UberClient        |          89.49 |        343.94 |
 +-------------------------------+----------------+---------------+
+```
 
 * strongarm/master, gammaray with full scan
 
+```
 +-------------------------------+----------------+---------------+
 |           Bundle ID           | Code Size (MB) | Scan Time (s) |
 +-------------------------------+----------------+---------------+
@@ -110,9 +113,11 @@ Raw data
 | com.google.ios.youtube        |          72.57 |        382.36 |
 | com.ubercab.UberClient        |          89.49 |        345.12 |
 +-------------------------------+----------------+---------------+
+```
 
 * strongarm/c-dataflow, gammaray with only CodeSearch checks
 
+```
 +-------------------------------+----------------+---------------+
 |           Bundle ID           | Code Size (MB) | Scan Time (s) |
 +-------------------------------+----------------+---------------+
@@ -127,9 +132,11 @@ Raw data
 | com.google.ios.youtube        |          72.57 |        210.32 |
 | com.ubercab.UberClient        |          89.49 |        171.82 |
 +-------------------------------+----------------+---------------+
+```
 
 * strongarm/c-dataflow, gammaray with full scan
 
+```
 +-------------------------------+----------------+---------------+
 |           Bundle ID           | Code Size (MB) | Scan Time (s) |
 +-------------------------------+----------------+---------------+
@@ -144,3 +151,4 @@ Raw data
 | com.google.ios.youtube        |          72.57 |        228.22 |
 | com.ubercab.UberClient        |          89.49 |        187.77 |
 +-------------------------------+----------------+---------------+
+```

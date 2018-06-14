@@ -71,11 +71,13 @@ There is roughly a 50% difference in scan times when comparing the existing code
 
 I have verified functionality of the C++ extension and that it provides the same results as the original Python. Unit tests pass, and gammaray produces the same findings with both branches. 
 
+`01-0094` and `01-0075`         |  Full Gammaray Scan
+:-------------------------:|:-------------------------:
+![search checks only](https://bitbucket.org/datatheorem/strongarm-ios/raw/c-dataflow/dataflow-proposal/searches-only.png)  |  ![full scan](https://bitbucket.org/datatheorem/strongarm-ios/raw/c-dataflow/dataflow-proposal/full-scan.png)
+
 I have already profiled the memory usage of using this branch with many apps in a single Python process. I have identified and fixed memory leaks that arose from retaining references to Python objects when they went out of scope of C++, and no memory leaks remain. When multiple apps are scanned, memory usage does not grow.
 
-01-0094 + 01-0075          |  Full Gammaray Scan
-:-------------------------:|:-------------------------:
-![search checks only](searches-only.png)  |  ![full scan](full-scan.png)
+For the above graphs, 10 apps were scanned using gammaray that included strongarm/master and the C++ extension. That is, every app is represented by 2 points in each graph, one red and one green. Labels were ommitted because they caused the graphs to be too cluttered.
 
 Raw data
 -------------------

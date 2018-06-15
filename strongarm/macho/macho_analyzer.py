@@ -272,7 +272,7 @@ class MachoAnalyzer(object):
 
             checkpoint_index = len(entry_point_list) // 10
             if checkpoint_index and i % checkpoint_index == 0:
-                percent_complete = int(i / len(entry_point_list) * 10)
+                percent_complete = int((i / len(entry_point_list) + 0.01) * 100)
                 logging.info(f'binary code search {percent_complete}% complete')
         return search_results
 

@@ -4,7 +4,7 @@ from typing import TYPE_CHECKING
 from typing import Text, List, Dict, Optional, Tuple
 from capstone import Cs, CsInsn, CS_ARCH_ARM64, CS_MODE_ARM
 
-from ctypes import sizeof
+from ctypes import create_string_buffer, sizeof
 
 from strongarm import DebugUtil
 from strongarm.macho.macho_binary import MachoBinary
@@ -167,171 +167,23 @@ class MachoAnalyzer(object):
         instructions = [instr for instr in self.cs.disasm(func_str, start_address)]
         return instructions
 
-    def _find_function_boundary(self, start_address, size, instructions):
-        # type: (int, int, List[CsInsn]) -> Tuple[List[CsInsn], int]
-        """Helper function to search for a function boundary within a given block of executable code
-
-        This function searches from start_address up to start_address + size looking for a set of
-        instructions resembling a function boundary. If a function boundary is identified its address will be returned,
-        or else 0 will be returned if no boundary was found.
-
-        Args:
-            start_address: The entry point of the function to be analyzed
-            size: The maximum size (in bytes) that this function will search for a function exit
-            instructions: An empty list, or a list of instructions within the analyzed function that have already
-                been disassembled, and will not be disassembled again. Also, this function will only start searching
-                from after the last instruction in this list.
-
-        Returns:
-            A tuple of a list of disassembled instructions, and an int. If the end-of-function was not found
-            within the specified search space, the list will contain all the diassembled instructions from
-            [start_address to start_address + size], and the int will be 0 to indicate failure. Otherwise,
-            the end-of-function was successfully found, and the list will contain all the instructions within the
-            function, and the int will be the end address of the function.
-        """
-
-        # we need to keep track of the first instruction we should analyze, so this function doesn't have to keep
-        # analyzing the same instructions over and over when the search space increases.
-        # if the passed instructions are the empty list (meaning this is the first attempt at finding this function
-        # boundary), then we start searching at the first instruction
-        if not len(instructions):
-            # get executable code in requested region
-            next_instr_addr = start_address
-            instructions = self._disassemble_region(start_address, size)
-        else:
-            # append to instructions
-            # figure out the last disasm'd instruction
-            last_disassembled_instruction_addr = instructions[-1].address
-            disassembled_range = last_disassembled_instruction_addr - instructions[0].address
-
-            # we should start searching at the instruction after the last one we previously looked at
-            next_instr_addr = last_disassembled_instruction_addr + self._BYTES_IN_INSTRUCTION
-            # get executable code of remainder
-            remainder_bytes = size - disassembled_range
-            instructions += self._disassemble_region(next_instr_addr, remainder_bytes)
-
-        # this will be set to an address if we find one,
-        # or will stay 0. If it remains 0 we know we didn't find the end of the function
-        end_address = 0
-        # flag to be used when we encounter an unconditional branch
-        # if we encounter an unconditional branch and recently loaded the link register with a stored value,
-        # it is exceedingly likely that the unconditional branch serves as the last statement in the function,
-        # as after the branch the link register will contain whatever it was after loading it from the stack here,
-        # and execution will jump back to the caller of this function
-        next_branch_is_return = False
-        # if a function makes no other calls to other subroutines
-        # (and thus never modifies the link register),
-        # then it's possible for the last instruction to be an unconditional branch,
-        # without first loading the link register from the stack
-        # this tracks whether the link register has been modified in the code block
-        # if it has, then we know we can only be at the end of function if we've seen a
-        # ldp ..., x30, ...
-        has_modified_lr = False
-
-        # convert next_instr_addr to an index within instructions array
-        # this is the difference between next_instr_addr and the address of the entry point, divided by the
-        # byte count in an instruction
-        first_instr_to_analyze_idx = (next_instr_addr - start_address) / self._BYTES_IN_INSTRUCTION
-        first_instr_to_analyze_idx = int(first_instr_to_analyze_idx)
-        # traverse instructions, looking for signs of end-of-function
-        for instr in instructions[first_instr_to_analyze_idx:]:
-            mnemonic = instr.mnemonic
-            # ret mnemonic is sure sign we've found end of the function!
-            if mnemonic == 'ret':
-                end_address = instr.address
-                break
-
-            # slightly less strong heuristic
-            # in the uncommon case that a function ends in a branch,
-            # it *must* have moved something sane into the link register,
-            # or else the program would jump to an unreasonable place after the branch.
-            # The sole exception to this rule is if a function never modifies the link
-            # register in the first place, which is tracked by has_modified_lr.
-            # (branching to another function would entail modifying the link register, so this is another way of
-            # saying the function is entirely local)
-            # we could possibly strengthen the has_modified_lr check by also checking for this pattern:
-            # in the prologue, stp ..., x30, [sp, #0x...]
-            # then a corresponding ldp ..., x30, [sp, #0x...]
-            elif mnemonic == 'ldp':
-                # are we restoring a value into link register?
-                load_dst_1 = instr.reg_name(instr.operands[0].value.reg)
-                load_dst_2 = instr.reg_name(instr.operands[1].value.reg)
-                # link register on ARM64 is x30
-                link_register = 'x30'
-                if load_dst_1 == link_register or load_dst_2 == link_register:
-                    next_branch_is_return = True
-
-            # branch with link inherently modifies the link register,
-            # which means the function *must* have stored link register at some point,
-            # which means we can later use an ldp ..., x30 as a heuristic for function epilogue
-            elif mnemonic in ['bl', 'blx']:
-                has_modified_lr = True
-            # unconditional branch instruction
-            # this could be a local branch, or it could be the last statement in the function
-            # we detect which based on the flags set previously while iterating the code
-            elif mnemonic == 'b':
-                if next_branch_is_return or not has_modified_lr:
-                    end_address = instr.address
-                    break
-
-        # long to int
-        end_address = int(end_address)
-
-        # if we found the end address of the function, trim the instructions list up to the last instruction in the
-        # function
-        # otherwise, the instructions list will remain the full list of instructions from the start of the function
-        # up to the requested search size
-        if end_address:
-            # trim instructions up to the instruction at end_address
-            last_instruction_idx = int((end_address - start_address) / 4)
-            instructions = instructions[:last_instruction_idx+1:]
-        return instructions, end_address
-
-    def _find_function_code(self, function_address):
-        # type: (int) -> Tuple[List[CsInsn], int, int]
-        """Determine the boundary of a function with a known start address, and disassemble the code
-
-        The return value will be a tuple of a List of instructions in the function, the start address, and the end
-        address.
-        """
-        # get_content_from_virtual_address wants a size for how much data to grab,
-        # but we don't actually know how big the function is!
-        # start off by grabbing a small amount of bytes, and keep doubling search area until function boundary is hit
-        end_address = 0
-        search_size = 0x80
-        instructions = []   # type: List[CsInsn]
-        while not end_address:
-            # place upper limit on search space
-            # limit to 32kb of code in a single function
-            if search_size == 0x10000:
-                raise RuntimeError("Couldn't detect end-of-function within {} bytes for function starting at {}".format(
-                    hex(int(search_size/2)),
-                    hex(function_address)
-                ))
-            if search_size >= 0x2000:
-                DebugUtil.log(self, 'WARNING: Analyzing large function at {} (search space == {} bytes)'.format(
-                    hex(function_address),
-                    hex(search_size)
-                ))
-
-            instructions, end_address = self._find_function_boundary(function_address, search_size, instructions)
-            # double search space
-            search_size *= 2
-        return instructions, function_address, end_address
-
-    def get_function_instructions(self, start_address):
-        # type: (int) -> List[CsInsn]
+    def get_function_instructions(self, start_address: int) -> List[CsInsn]:
         """Get a list of disassembled instructions for the function beginning at start_address
         """
+        from strongarm.objc.dataflow import determine_function_boundary
+
         if start_address in self._cached_function_boundaries:
             end_address = self._cached_function_boundaries[start_address]
-            instructions = self._disassemble_region(start_address, end_address - start_address)
         else:
+            # limit functions to 8kb
+            max_function_size = 0x2000
+            binary_data = self.binary.get_content_from_virtual_address(start_address, max_function_size)
+            bytecode = create_string_buffer(bytes(binary_data), max_function_size)
             # not in cache. calculate function boundary, then cache it
-            instructions, _, end_address = self._find_function_code(start_address)
+            end_address = determine_function_boundary(bytecode, start_address)
             self._cached_function_boundaries[start_address] = end_address
-        if not end_address:
-            raise RuntimeError('Couldn\'t parse function @ {}'.format(start_address))
+
+        instructions = self._disassemble_region(start_address, end_address - start_address)
         return instructions
 
     def imp_for_selref(self, selref_ptr):
@@ -418,12 +270,10 @@ class MachoAnalyzer(object):
             except RuntimeError:
                 continue
 
-            if len(entry_point_list):
-                checkpoint_index = int(len(entry_point_list) / 10)
-                if checkpoint_index:
-                    if i % checkpoint_index == 0:
-                        percent_complete = int((i / checkpoint_index) * 10)
-                        logging.info(f'binary code search {percent_complete}% complete')
+            checkpoint_index = len(entry_point_list) // 10
+            if checkpoint_index and i % checkpoint_index == 0:
+                percent_complete = int((i / len(entry_point_list) + 0.01) * 100)
+                logging.info(f'binary code search {percent_complete}% complete')
         return search_results
 
     def class_name_for_class_pointer(self, classref: int) -> Optional[str]:

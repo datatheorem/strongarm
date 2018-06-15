@@ -104,8 +104,7 @@ class ObjcBranchInstruction(ObjcInstruction):
         return instr
 
     @classmethod
-    def is_branch_instruction(cls, instruction):
-        # type: (CsInsn) -> bool
+    def is_branch_instruction(cls, instruction: CsInsn) -> bool:
         """Returns True if the CsInsn represents a branch instruction, False otherwise
         """
         return instruction.mnemonic in ObjcUnconditionalBranchInstruction.UNCONDITIONAL_BRANCH_MNEMONICS \

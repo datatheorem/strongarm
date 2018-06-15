@@ -9,13 +9,10 @@ from strongarm.objc import \
 binary = MachoParser('./tests/bin/StrongarmControlFlowTarget').get_arm64_slice()
 analyzer = MachoAnalyzer(binary)
 
-log_search = CodeSearch(
-    required_matches=[
+log_search = CodeSearch([
         CodeSearchTermCallDestination(binary, invokes_symbol='_printf'),
         CodeSearchTermCallDestination(binary, invokes_symbol='_NSLog')
-    ],
-    requires_all_terms_matched=False
-)
+])
 search_results = analyzer.search_code(log_search)
 for search_result in search_results:
     function_containing_log_call = search_result.found_function

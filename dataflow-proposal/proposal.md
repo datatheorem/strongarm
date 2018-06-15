@@ -67,13 +67,11 @@ There is also the penultimate concern that this extension is C++, and we all kno
 Results
 -------------------
 
-There is roughly a 50% difference in scan times when comparing the existing code to the C++ extension. That is to say, for any given scan, it will complete in half the time it did before.
+There is roughly a 80% difference in scan times when comparing the existing code to the C++ extension. That is to say, the new branch completes 3 scans in the time master would take to complete 1 scan.
 
 I have verified functionality of the C++ extension and that it provides the same results as the original Python. Unit tests pass, and gammaray produces the same findings with both branches. 
 
-`01-0094` and `01-0075`         |  Full Gammaray Scan
-:-------------------------:|:-------------------------:
-![search checks only](https://bitbucket.org/datatheorem/strongarm-ios/raw/c-dataflow/dataflow-proposal/searches-only.png)  |  ![full scan](https://bitbucket.org/datatheorem/strongarm-ios/raw/c-dataflow/dataflow-proposal/full-scan.png)
+![gammaray scan comparison](https://bitbucket.org/datatheorem/strongarm-ios/raw/c-dataflow/dataflow-proposal/full-scan.png)
 
 I have already profiled the memory usage of using this branch with many apps in a single Python process. I have identified and fixed memory leaks that arose from retaining references to Python objects when they went out of scope of C++, and no memory leaks remain. When multiple apps are scanned, memory usage does not grow.
 

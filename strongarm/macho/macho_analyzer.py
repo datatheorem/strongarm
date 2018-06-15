@@ -175,8 +175,8 @@ class MachoAnalyzer(object):
         if start_address in self._cached_function_boundaries:
             end_address = self._cached_function_boundaries[start_address]
         else:
-            # limit functions to 16kb
-            max_function_size = 0x4000
+            # limit functions to 8kb
+            max_function_size = 0x2000
             binary_data = self.binary.get_content_from_virtual_address(start_address, max_function_size)
             bytecode = create_string_buffer(bytes(binary_data), max_function_size)
             # not in cache. calculate function boundary, then cache it

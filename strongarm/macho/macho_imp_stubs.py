@@ -32,22 +32,19 @@ class MachoImpStub(object):
     This object contains the starting address of the stub (which will be the destination for branches),
     as well as the __la_symbol_ptr entry which is targeted by the stub.
     """
-    def __init__(self, address, destination):
-        # type: (int, int) -> None
+    def __init__(self, address: int, destination: int) -> None:
         self.address = address
         self.destination = destination
 
 
 class MachoImpStubsParser(object):
-    def __init__(self, binary, capstone_disasm):
-        # type: (MachoBinary, Cs) -> None
+    def __init__(self, binary: MachoBinary, capstone_disasm: Cs) -> None:
         self.binary = binary
         self._cs = capstone_disasm
         self.imp_stubs = self._parse_all_stubs()
 
     @staticmethod
-    def _parse_stub_from_instructions(instr1, instr2, instr3):
-        # type: (CsInsn, CsInsn, CsInsn) -> MachoImpStub
+    def _parse_stub_from_instructions(instr1: CsInsn, instr2: CsInsn, instr3: CsInsn) -> MachoImpStub:
         # TODO(PT): write CsInsn by hand to test this function
         # each stub follows one of two patterns
         # pattern 1: nop / ldr x16, <sym> / br x16

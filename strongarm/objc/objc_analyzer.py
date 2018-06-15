@@ -1,6 +1,5 @@
 # -*- coding: utf-8 -*-
-
-from enum import Enum
+import functools
 from typing import Text, List, Optional, Dict, Tuple
 
 from capstone.arm64 import ARM64_OP_REG, ARM64_OP_IMM, ARM64_OP_MEM
@@ -8,6 +7,7 @@ from capstone import CsInsn
 
 from strongarm.debug_util import DebugUtil
 from strongarm.macho import MachoBinary
+
 from .objc_instruction import \
     ObjcInstruction, \
     ObjcBranchInstruction, \
@@ -16,6 +16,8 @@ from .objc_query import \
     CodeSearch, \
     CodeSearchResult, \
     CodeSearchTermInstructionIndex
+from .register_contents import RegisterContents, RegisterContentsType
+from .dataflow import get_register_contents_at_instruction_fast
 
 
 class ObjcMethodInfo(object):
@@ -27,20 +29,6 @@ class ObjcMethodInfo(object):
         self.objc_class = objc_class
         self.objc_sel = objc_sel
         self.imp_addr = imp
-
-
-class RegisterContentsType(Enum):
-    FUNCTION_ARG = 0
-    IMMEDIATE = 1
-    UNKNOWN = 2
-
-
-class RegisterContents(object):
-
-    def __init__(self, value_type, value):
-        # type: (RegisterContentsType, int) -> None
-        self.type = value_type
-        self.value = value
 
 
 class ObjcFunctionAnalyzer(object):
@@ -226,10 +214,6 @@ class ObjcFunctionAnalyzer(object):
         search_results: List[CodeSearchResult] = []
         for instruction in self.instructions[minimum_index:maximum_index:step]:
             for search_term in code_search.search_terms:
-                if isinstance(search_term, CodeSearchTermInstructionIndex):
-                    # this term is where minimum_index, maximum_index, step, comes from, along w/ search_backwards flag
-                    raise NotImplementedError()
-
                 result = search_term.satisfied(self, instruction)
                 if result:
                     search_results.append(result)
@@ -282,39 +266,6 @@ class ObjcFunctionAnalyzer(object):
         return "{addr}:\t{mnemonic}\t{ops}".format(addr=hex(int(instr.address)),
                                                    mnemonic=instr.mnemonic,
                                                    ops=instr.op_str)
-
-    def track_reg(self, reg):
-        # type: (Text) -> List[Text]
-        """
-        Track the flow of data starting in a register through a list of instructions
-        Args:
-            reg: Register containing initial location of data
-        Returns:
-            List containing all registers which contain data originally in reg
-        """
-        # list containing all registers which hold the same value as initial argument reg
-        regs_holding_value = [reg]
-        for instr in self.instructions:
-            # TODO(pt) track other versions of move w/ suffix e.g. movz
-            # do instructions like movz only operate on literals? we only care about reg to reg
-            if instr.mnemonic == 'mov':
-                if len(instr.operands) != 2:
-                    raise RuntimeError('Encountered mov with more than 2 operands! {}'.format(
-                        self.format_instruction(instr)
-                    ))
-                # in mov instruction, operands[0] is dst and operands[1] is src
-                src = instr.reg_name(instr.operands[1].value.reg)
-                dst = instr.reg_name(instr.operands[0].value.reg)
-
-                # check if we're copying tracked value to another register
-                if src in regs_holding_value and dst not in regs_holding_value:
-                    # add destination register to list of registers containing value to track
-                    regs_holding_value.append(dst)
-                # check if we're copying something new into a register previously containing tracked value
-                elif dst in regs_holding_value and src not in regs_holding_value:
-                    # register being overwrote -- no longer contains tracked value, so remove from list
-                    regs_holding_value.remove(dst)
-        return regs_holding_value
 
     # TODO(PT): this should return the branch and the instruction index for caller convenience
     def next_branch_after_instruction_index(self, start_index):
@@ -389,285 +340,39 @@ class ObjcFunctionAnalyzer(object):
             ))
         return contents.value
 
+    @functools.lru_cache(maxsize=100)
+    def get_register_contents_at_instruction(self, register: str, instruction: ObjcInstruction) -> RegisterContents:
+        return get_register_contents_at_instruction_fast(register, self, instruction)
+
+
+class ObjcBlockAnalyzer(ObjcFunctionAnalyzer):
+    # XXX(PT): This class is very old and outdated.
+    def __init__(self, binary, instructions, initial_block_reg):
+        # type: (MachoBinary, List[CsInsn], Text) -> None
+        ObjcFunctionAnalyzer.__init__(self, binary, instructions)
+
+        self.initial_block_reg = initial_block_reg
+        self.block_arg_index = int(self.trimmed_register_name(self.initial_block_reg))
+        self.invoke_instruction, self.invocation_instruction_index = self.find_block_invoke()
+
     @staticmethod
-    def _trimmed_reg_name(reg_name):
-        # type: (Text) -> Text
-        """Remove 'x', 'r', 'w', or 'q' from general purpose register name
+    def trimmed_register_name(reg_name: str) -> str:
+        """Remove 'x', 'r', or 'w' from general purpose register name
         This is so the register strings 'x22' and 'w22', which are two slices of the same register,
         map to the same register.
 
-        Will return non-GP registers, such as 'sp', as-is.
-
-        Also strips NEON registers; 's' 32b registers, 'd' 64b registers, and 'q' 128b registers
+        Returns non-GP registers, such as 'sp', as-is.
+        Returns NEON registers ('s' 32b registers, 'd' 64b registers, and 'q' 128b registers) as-is.
 
         Args:
               reg_name: Full register name to trim
 
         Returns:
               Register name with trimmed size prefix, or unmodified name if not a GP register
-
         """
-        if reg_name[0] in ['x', 'w', 'r', 'q'] and reg_name != 'sp':
+        if reg_name[0] in ['x', 'w', 'r']:
             return reg_name[1::]
         return reg_name
-
-    def get_register_contents_at_instruction(self, register, instruction):
-        # type: (Text, ObjcInstruction) -> RegisterContents
-        """Analyze instructions backwards from `instruction` to find the data in `register`
-        This function will read all instructions until it gathers all data and assignments necessary to determine
-        value of the desired register.
-
-        For example, if we have a function like the following:
-        15  | adrp x8, #0x1011bc000
-        16  | ldr x22, [x8, #0x378]
-        ... | ...
-        130 | mov x1, x22
-        131 | bl objc_msgSend <-- ObjcFunctionAnalyzer.get_register_contents_at_instruction('x1', 131) = 0x1011bc378
-
-        Args:
-            register: string containing name of register whose data should be determined
-            instruction: the instruction marking the execution point where the register value should be determined
-
-        Returns:
-            A RegisterContents instance encapsulating information about the contents of the specified register at the
-            specified point of execution
-        """
-        desired_reg = register
-        target_addr = instruction.address
-        start_index = self._get_instruction_index_of_address(target_addr)
-
-        # TODO(PT): write CsInsn instructions by hand to make this function easy to test w/ different scenarios
-        # List of registers whose values we need to find
-        # initially, we need to find the value of whatever the user requested
-        unknown_regs = [self._trimmed_reg_name(desired_reg)]
-        # map of name -> value for registers whose values have been resolved to an immediate
-        determined_values = {}
-        # map of name -> (name, value). key is register needing to be resolved,
-        # value is tuple containing (register containing source value, signed offset from source register)
-        needed_links = {}
-        # helper to handle instructions that this method doesn't totally parse
-        # when we detect an instruction like add x0, x0, #0xf60, instead of trying to handle it we just keep track of
-        # the #0xf60 and add it to the final value of x0 at the end of the operation
-        extra_offset = 0
-
-        # some instructions will have the same format as register transformations,
-        # but are actually unrelated to what we're looking for
-        # for example, str x1, [sp, #0x38] would be identified by this function as moving something from sp into
-        # x1, but with that particular instruction it's the other way around: x1 is being stored somewhere offset
-        # from sp.
-        # to avoid this bug, we need to exclude some instructions from being looked at by this method.
-        excluded_instructions = [
-            'str',
-        ]
-        # let's also skip any branch instruction, because they won't be necessary for determining a register value
-        excluded_instructions += ObjcUnconditionalBranchInstruction.UNCONDITIONAL_BRANCH_MNEMONICS
-
-        # find data starting backwards from start_index
-        # TODO(PT): instead of blindly going through instructions backwards,
-        # only follow possible code paths split into basic blocks from ObjcBasicBlock
-        for instr in self.instructions[start_index::-1]:
-            # still looking for anything?
-            if len(unknown_regs) == 0:
-                # found everything we need
-                break
-
-            # skip instructions we want to ignore
-            if instr.mnemonic in excluded_instructions:
-                continue
-
-            # we only care about instructions that could be moving data between registers
-            # therefore, the minimum number of operands an instruction we're interested in could have is 2
-            operands = instr.operands
-            if len(operands) < 2:
-                continue
-
-            # ignore instructions accessing vector registers
-            if ObjcInstruction.instruction_uses_vector_registers(instr):
-                continue
-
-            dst = operands[0]
-            src = operands[1]
-
-            # we're only interested in instructions whose destination is a register
-            if dst.type != ARM64_OP_REG:
-                continue
-
-            dst_reg_name = self._trimmed_reg_name(instr.reg_name(dst.value.reg))
-
-            # is this register needed for us to determine the value of the requested register?
-            if dst_reg_name not in unknown_regs:
-                continue
-
-            # src might not actually be the first operand
-            # this could be an instruction like 'orr', whose invocation might look like this:
-            # orr x1, wzr, #0x2
-            # here, wzr is used as a 'trick' and the real source is the third operand
-            # try to detect this pattern
-            # zr indicates zero-register
-            if len(operands) > 2:
-                src2 = operands[2]
-                if src.type == ARM64_OP_REG:
-                    src_reg_name = self._trimmed_reg_name(instr.reg_name(src.value.reg))
-                    if src_reg_name == 'zr':
-                        # skip over zero register and set source to third operand
-                        src = operands[2]
-                    # we might see an instruction like add x0, x0, #0xf60
-                    # in this case, x0 is both the source and dest, but for our purposes it's the dest
-                    # TODO(PT): handle instructions with 2 source operands (like add)
-                    elif src2.type == ARM64_OP_IMM:
-                        # ensure we're handling an instruction where the first 2 registers are the same
-                        # we don't know how to handle the case where they're different registers
-                        if dst_reg_name != src_reg_name:
-                            return RegisterContents(RegisterContentsType.UNKNOWN, 0)
-                        extra_offset += src2.value.imm
-                        continue
-
-            if src.type == ARM64_OP_IMM:
-                # we now know the immediate value in dst_reg_name
-                # remove it from unknown list
-                unknown_regs.remove(dst_reg_name)
-                # add it to known list, along with its value
-                determined_values[dst_reg_name] = src.value.imm
-            elif src.type == ARM64_OP_REG:
-                # we now need the value of src before dst can be determined
-                # move dst from list of unknown registers to list of registers waiting for another value
-                unknown_regs.remove(dst_reg_name)
-                src_reg_name = self._trimmed_reg_name(instr.reg_name(src.value.reg))
-
-                # do we already know the exact value of the source?
-                if src_reg_name in determined_values:
-                    # value of dst will just be whatever src contains
-                    dst_value = determined_values[src_reg_name]
-                    determined_values[dst_reg_name] = dst_value
-                # is the source the zero register?
-                elif src_reg_name == 'zr':
-                    # value of dst will be 0
-                    dst_value = 0
-                    determined_values[dst_reg_name] = dst_value
-                else:
-                    # we'll need to resolve src before we can know dst,
-                    # add dst -> src to links list
-                    needed_links[dst_reg_name] = src_reg_name, 0
-                    # and add src to registers to search for
-                    unknown_regs.append(src_reg_name)
-            elif src.type == ARM64_OP_MEM:
-                # an instruction with an operand of type ARM64_OP_MEM might look like:
-                # ldr x1, [x3, #0x1000]
-                # here, the bracketed portion is accessible through src.mem, which has a reg base and imm disp property
-                src_reg_name = self._trimmed_reg_name(instr.reg_name(src.mem.base))
-                # dst is being assigned to the value of another register, plus a signed offset
-                unknown_regs.remove(dst_reg_name)
-                if src_reg_name in determined_values:
-                    # we know dst value is value in src plus an offset,
-                    # and we know what's in source
-                    # we now know the value of dst
-                    dst_value = determined_values[src_reg_name] + src.mem.disp
-                    determined_values[dst_reg_name] = dst_value
-                else:
-                    # we must find src's value to resolve dst
-                    unknown_regs.append(src_reg_name)
-                    # add dst -> src + offset to links list
-                    needed_links[dst_reg_name] = src_reg_name, src.mem.disp
-
-        # if any of the data dependencies for our desired register uses the stack pointer,
-        # there's no way we can resolve the value.
-        stack_pointer_reg = 'sp'
-        if stack_pointer_reg in needed_links or stack_pointer_reg in unknown_regs:
-            # DebugUtil.log(self, f'{hex(int(target_addr))}: {desired_reg} = stack dependent')
-            return RegisterContents(RegisterContentsType.UNKNOWN, 0)
-
-        # once we've broken out of the above loop, we should have all the values we need to compute the
-        # final value of the desired register.
-
-        # if we broke out of the above loop and there is still content in unknown_regs,
-        # the desired value must have been an argument to the function
-        if len(unknown_regs):
-            # if the above assumption is correct, there should only be 1 reg in unknown_regs
-            if len(unknown_regs) > 1:
-                DebugUtil.log(self, 'Exited loop with unknown list! instr 0 {} idx {} unknown {} links {} known {}'.format(
-                    hex(int(self.start_address)),
-                    start_index,
-                    unknown_regs,
-                    needed_links,
-                    determined_values,
-                ))
-                raise RuntimeError('Data-flow loop exited before all unknowns were marked {}'.format(unknown_regs))
-
-            arg_index = int(unknown_regs[0])
-
-            # DebugUtil.log(self, f'{hex(int(target_addr))}: {desired_reg} = function arg #{arg_index}')
-            return RegisterContents(RegisterContentsType.FUNCTION_ARG, arg_index)
-
-        # for every register in the waiting list,
-        # cross reference all its dependent variables to calculate the final value
-        final_register_value = self._resolve_register_value_from_data_links(
-            desired_reg,
-            needed_links,
-            determined_values
-        )
-        # handle residual
-        final_register_value += extra_offset
-
-        # DebugUtil.log(self, f'{hex(int(target_addr))}: {desired_reg} = {hex(final_register_value)}')
-        return RegisterContents(RegisterContentsType.IMMEDIATE, final_register_value)
-
-    def _resolve_register_value_from_data_links(self, desired_reg, links, resolved_registers):
-        # type: (Text, Dict[Text, Tuple[Text, int]], Dict[Text, int]) -> int
-        """Resolve data dependencies for each register to find final value of desired_reg
-        This method will throw an Exception if the arguments cannot be resolved.
-
-        Args:
-              desired_reg: string containing name of register whose value should be determined
-              links: mapping of register data dependencies. For example, x1's value might be x22's value plus an
-              offset of 0x300, so links['x1'] = ('x22', 0x300)
-              resolved_registers: mapping of registers whose final value is already known
-
-        Returns:
-            The final value contained in desired_reg after resolving all data dependencies
-        """
-
-        if len(resolved_registers) == 0:
-            raise RuntimeError('need at least one known value to resolve data dependencies')
-
-        desired_reg = self._trimmed_reg_name(desired_reg)
-        if desired_reg not in links and desired_reg not in resolved_registers:
-            raise RuntimeError('invalid data set? desired_reg {} can\'t be determined from '
-                               'links {}, resolved_registers {}'.format(desired_reg,
-                                                                        links,
-                                                                        resolved_registers))
-
-        # do we know the value of this register?
-        if desired_reg in resolved_registers:
-            # desired_reg is a known immediate
-            return resolved_registers[desired_reg]
-
-        # 'desired_reg' is the value of 'source_reg', plus 'offset'
-        # to determine value in desired_reg,
-        # we must find the value of source_reg, and then apply the offset
-        source_reg, offset = links[desired_reg]
-
-        # resolve source reg value, then add offset
-        source_reg_val = self._resolve_register_value_from_data_links(source_reg, links, resolved_registers)
-        desired_reg_val = source_reg_val + offset
-
-        # this link has been resolved! remove from links list
-        links.pop(desired_reg)
-        # add to list of known values
-        resolved_registers[desired_reg] = desired_reg_val
-
-        # successfully resolved the value!
-        return desired_reg_val
-
-
-class ObjcBlockAnalyzer(ObjcFunctionAnalyzer):
-
-    def __init__(self, binary, instructions, initial_block_reg):
-        # type: (MachoBinary, List[CsInsn], Text) -> None
-        ObjcFunctionAnalyzer.__init__(self, binary, instructions)
-
-        self.initial_block_reg = initial_block_reg
-        self.block_arg_index = int(self._trimmed_reg_name(self.initial_block_reg))
-        self.invoke_instruction, self.invocation_instruction_index = self.find_block_invoke()
 
     def find_block_invoke(self):
         # type: () -> Tuple[ObjcInstruction, int]
@@ -693,7 +398,7 @@ class ObjcBlockAnalyzer(ObjcFunctionAnalyzer):
             found_branch_instruction = search_result.found_instruction
             contents = self.get_register_contents_at_instruction(self.initial_block_reg, found_branch_instruction)
 
-            trimmed_block_argument_reg = int(self._trimmed_reg_name(self.initial_block_reg))
+            trimmed_block_argument_reg = int(self.trimmed_register_name(self.initial_block_reg))
             if contents.type != RegisterContentsType.FUNCTION_ARG:
                 # not what we're looking for; branch destination didn't come from function arg
                 continue

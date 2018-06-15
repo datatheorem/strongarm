@@ -340,7 +340,6 @@ class ObjcFunctionAnalyzer(object):
             ))
         return contents.value
 
-    @staticmethod
     @functools.lru_cache(maxsize=100)
     def get_register_contents_at_instruction(self, register: str, instruction: ObjcInstruction) -> RegisterContents:
         return get_register_contents_at_instruction_fast(register, self, instruction)

@@ -4,6 +4,7 @@ bin/
 include/
 lib/
 dist/
+build/
 
 # Pycharms
 .idea

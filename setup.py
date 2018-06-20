@@ -1,6 +1,7 @@
 from setuptools import setup, find_packages, Extension
 from setuptools.command.install import install
 from setuptools.command.build_py import build_py
+from setuptools.command.build_ext import build_ext
 from subprocess import call
 
 from strongarm import __version__
@@ -13,7 +14,7 @@ class CapstoneInstall(install):
         super(CapstoneInstall, self).run()
 
 
-class CapstoneBuild(build_py):
+class CapstoneBuild(build_ext):
     def run(self):
         print(f'XXX Capstone build')
         call(['/bin/sh', './install_dependencies.sh'])
@@ -36,8 +37,7 @@ setup(
     packages=find_packages(exclude=['tests']),
     ext_modules=[dataflow_module],
     cmdclass={
-        'install': CapstoneInstall,
-        'build': CapstoneBuild,
+        'build_ext': CapstoneBuild,
     },
     install_requires=[
         'typing',

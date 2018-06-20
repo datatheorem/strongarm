@@ -1,22 +1,12 @@
 from setuptools import setup, find_packages, Extension
-from setuptools.command.install import install
-from setuptools.command.build_py import build_py
 from setuptools.command.build_ext import build_ext
 from subprocess import call
 
 from strongarm import __version__
 
 
-class CapstoneInstall(install):
-    def run(self):
-        print(f'XXX Capstone install')
-        call(['/bin/sh', './install_dependencies.sh'])
-        super(CapstoneInstall, self).run()
-
-
 class CapstoneBuild(build_ext):
     def run(self):
-        print(f'XXX Capstone build')
         call(['/bin/sh', './install_dependencies.sh'])
         super(CapstoneBuild, self).run()
 

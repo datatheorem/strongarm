@@ -23,7 +23,7 @@ class CapstoneBuild(build_ext):
 
 dataflow_module = Extension('strongarm.objc.dataflow',
                             sources=['strongarm/objc/dataflow.cpp'],
-                            include_dirs=['/usr/local/include'],
+                            include_dirs=['/usr/local/include/', '/usr/include/'],
                             libraries=['capstone'],
                             language='c++',
                             extra_compile_args=['-std=c++11', '-Wextra', '-O2', '-march=native', '-mtune=native', '-fomit-frame-pointer'])

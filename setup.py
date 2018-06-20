@@ -8,7 +8,7 @@ from strongarm import __version__
 class CapstoneInstall(install):
     def run(self):
         call(['/bin/sh', './install_dependencies.sh'])
-        self.do_egg_install()
+        super(CapstoneInstall, self).run()
 
 
 dataflow_module = Extension('strongarm.objc.dataflow',

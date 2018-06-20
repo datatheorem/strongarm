@@ -8,7 +8,7 @@ case `uname` in
     Linux)
         # capstone
         apt-get update
-        apt-get install libcapstone3 -y --allow-unauthenticated
+        apt-get install libcapstone3 libcapstone-dev -y --allow-unauthenticated
         ;;
     *)
           echo "Unsupported platform: `uname`" >&2

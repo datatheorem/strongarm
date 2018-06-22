@@ -16,7 +16,7 @@ dataflow_module = Extension('strongarm.objc.dataflow',
                             include_dirs=['/usr/local/include/', '/usr/include/'],
                             libraries=['capstone'],
                             language='c++',
-                            extra_compile_args=['-std=c++11', '-Wextra', '-O2', '-march=native', '-mtune=native', '-fomit-frame-pointer'])
+                            extra_compile_args=['-std=c++11', '-Wextra', '-O2', '-march=native', '-mtune=native', '-fomit-frame-pointer', '-L/usr/local/lib'])
 
 setup(
     name='strongarm',

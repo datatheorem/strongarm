@@ -180,7 +180,8 @@ class MachoAnalyzer(object):
             binary_data = self.binary.get_content_from_virtual_address(start_address, max_function_size)
             bytecode = create_string_buffer(bytes(binary_data), max_function_size)
             # not in cache. calculate function boundary, then cache it
-            end_address = determine_function_boundary(bytecode, start_address)
+            # add 1 instruction size to the end address so the last instruction is included in the function scope
+            end_address = determine_function_boundary(bytecode, start_address) + MachoBinary.BYTES_PER_INSTRUCTION
             self._cached_function_boundaries[start_address] = end_address
 
         instructions = self._disassemble_region(start_address, end_address - start_address)

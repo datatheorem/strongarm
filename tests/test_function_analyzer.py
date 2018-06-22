@@ -143,11 +143,3 @@ class TestFunctionAnalyzer(unittest.TestCase):
         # there's only 68 instructions, there's no way there could be another branch after this index
         branch = self.function_analyzer.next_branch_after_instruction_index(68)
         self.assertIsNone(branch)
-
-    def test_track_register(self):
-        found_registers_containing_initial_reg = self.function_analyzer.track_reg('x4')
-        final_registers_containing_initial_reg = [u'x4', u'x19', u'x0']
-        self.assertEqual(
-            sorted(found_registers_containing_initial_reg),
-            sorted(final_registers_containing_initial_reg)
-        )

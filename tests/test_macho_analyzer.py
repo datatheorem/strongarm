@@ -1,14 +1,11 @@
 # -*- coding: utf-8 -*-
-from __future__ import absolute_import
-from __future__ import unicode_literals
-from __future__ import print_function
-
 import os
 import unittest
+from ctypes import create_string_buffer
 
-from strongarm.macho.macho_analyzer import MachoAnalyzer
 from strongarm.macho.macho_parse import MachoParser
-from strongarm.macho.macho_binary import MachoBinary
+from strongarm.macho.macho_analyzer import MachoAnalyzer
+from strongarm.objc.dataflow import determine_function_boundary
 
 
 class TestMachoAnalyzer(unittest.TestCase):
@@ -37,8 +34,14 @@ class TestMachoAnalyzer(unittest.TestCase):
         start_addr = 0x100006420
         correct_end_addr = 0x100006530
 
-        _, end = self.analyzer._find_function_boundary(start_addr, 0x200, [])
-        self.assertEqual(end, correct_end_addr)
+        # defined in MachoAnalyzer
+        max_function_size = 0x2000
+        binary_data = self.binary.get_content_from_virtual_address(start_addr, max_function_size)
+        bytecode = create_string_buffer(bytes(binary_data), max_function_size)
+        # not in cache. calculate function boundary, then cache it
+        guessed_end_address = determine_function_boundary(bytecode, start_addr)
+
+        self.assertEqual(guessed_end_address, correct_end_addr)
 
     def test_find_imported_symbols(self):
         correct_imported_symbols = ['_NSClassFromString',

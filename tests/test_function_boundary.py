@@ -1,14 +1,11 @@
 # -*- coding: utf-8 -*-
-from __future__ import absolute_import
-from __future__ import unicode_literals
-from __future__ import print_function
-
-import unittest
 import os
+import unittest
+from ctypes import create_string_buffer
 
 from strongarm.macho.macho_parse import MachoParser
-from strongarm.macho.macho_binary import MachoBinary
 from strongarm.macho.macho_analyzer import MachoAnalyzer
+from strongarm.objc.dataflow import determine_function_boundary
 
 
 class FunctionBoundaryTests(unittest.TestCase):
@@ -25,9 +22,14 @@ class FunctionBoundaryTests(unittest.TestCase):
         # this function ends with a ret instruction
         start_address = 0x1000066dc
         end_address = 0x1000066e0
-        actual_size = end_address - start_address
 
-        _, guessed_end_address = self.analyzer._find_function_boundary(start_address, actual_size * 2, [])
+        # defined in MachoAnalyzer
+        max_function_size = 0x2000
+        binary_data = self.binary.get_content_from_virtual_address(start_address, max_function_size)
+        bytecode = create_string_buffer(bytes(binary_data), max_function_size)
+        # not in cache. calculate function boundary, then cache it
+        guessed_end_address = determine_function_boundary(bytecode, start_address)
+
         self.assertEqual(end_address, guessed_end_address)
 
     def test_function_boundary_bl(self):
@@ -37,9 +39,13 @@ class FunctionBoundaryTests(unittest.TestCase):
         start_address = 0x100006708
         end_address = 0x100006718
 
-        actual_size = end_address - start_address
+        # defined in MachoAnalyzer
+        max_function_size = 0x2000
+        binary_data = self.binary.get_content_from_virtual_address(start_address, max_function_size)
+        bytecode = create_string_buffer(bytes(binary_data), max_function_size)
+        # not in cache. calculate function boundary, then cache it
+        guessed_end_address = determine_function_boundary(bytecode, start_address)
 
-        _, guessed_end_address = self.analyzer._find_function_boundary(start_address, actual_size * 2, [])
         self.assertEqual(end_address, guessed_end_address)
 
     def test_find_method_code(self):
@@ -52,7 +58,10 @@ class FunctionBoundaryTests(unittest.TestCase):
         self.assertEqual(correct_start_address, imp_func.start_address)
         self.assertEqual(correct_end_address, imp_func.end_address)
 
-        instructions, start_address, end_address = self.analyzer._find_function_code(correct_start_address)
+        instructions = self.analyzer.get_function_instructions(correct_start_address)
+        start_address = instructions[0].address
+        end_address = instructions[-1].address
+
         self.assertEqual(correct_start_address, start_address)
         self.assertEqual(correct_end_address, end_address)
         self.assertEqual(correct_start_address, instructions[0].address)

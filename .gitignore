@@ -13,8 +13,9 @@ build/
 *.tar.gz
 pip-selfcheck.json
 
-# Compiled .py files
+# Compiled files
 *.py[cod]
+*.so
 
 # Installer logs
 pip-log.txt

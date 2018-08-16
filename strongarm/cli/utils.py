@@ -76,7 +76,7 @@ def args_from_sel_name(sel: Text) -> List[Text]:
 
 
 def disassemble_method(binary: MachoBinary, method: ObjcMethodInfo) -> Text:
-    disassembled_text = []  # type: List[Text]
+    disassembled_text = []  # type: List[str]
 
     # figure out the arguments based on the sel name
     sel_args = args_from_sel_name(method.objc_sel.name)

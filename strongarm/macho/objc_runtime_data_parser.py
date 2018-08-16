@@ -13,27 +13,38 @@ from strongarm.macho.arch_independent_structs import \
     ObjcMethodListStruct, \
     ObjcCategoryRawStruct, \
     ObjcProtocolRawStruct, \
+    ObjcProtocolListStruct, \
     ArchIndependentStructure
 from strongarm.debug_util import DebugUtil
 from strongarm.macho.macho_binary import MachoBinary
 
 
 class ObjcClass(object):
-    __slots__ = ['raw_struct', 'name', 'selectors']
+    __slots__ = ['raw_struct', 'name', 'selectors', 'protocols']
 
-    def __init__(self, raw_struct, name, selectors):
-        # type: (ArchIndependentStructure, Text, List[ObjcSelector]) -> None
+    def __init__(self,
+                 raw_struct: ArchIndependentStructure,
+                 name: str,
+                 selectors: List['ObjcSelector'],
+                 protocols: List['ObjcProtocol'] = None) -> None:
         self.name = name
         self.selectors = selectors
         self.raw_struct = raw_struct
+        self.protocols = protocols
+        if not self.protocols:
+            self.protocols = []
 
 
 class ObjcCategory(ObjcClass):
-    __slots__ = ['raw_struct', 'name', 'base_class', 'selectors']
+    __slots__ = ['raw_struct', 'name', 'base_class', 'selectors', 'protocols']
 
-    def __init__(self, raw_struct, base_class, name, selectors):
-        # type: (ObjcCategoryRawStruct, Text, Text, List[ObjcSelector]) -> None
-        super(ObjcCategory, self).__init__(raw_struct, name, selectors)
+    def __init__(self,
+                 raw_struct: ObjcCategoryRawStruct,
+                 base_class: str,
+                 name: str ,
+                 selectors: List['ObjcSelector'],
+                 protocols: List['ObjcProtocol'] = None) -> None:
+        super(ObjcCategory, self).__init__(raw_struct, name, selectors, protocols)
         self.base_class = base_class
 
 

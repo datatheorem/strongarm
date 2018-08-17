@@ -334,6 +334,23 @@ class MachoAnalyzer(object):
     def selref_for_selector_name(self, selector_name: str) -> Optional[int]:
         return self.objc_helper.selref_for_selector_name(selector_name)
 
+    def strings(self) -> Set[str]:
+        """Return the list of strings in the binary's __cstring section.
+        """
+        # TODO(PT): This is SLOW and WASTEFUL!!!
+        # These transformations should be done ONCE on initial analysis!
+        # This method should cache its result.
+        if '__cstring' not in self.binary.sections:
+            return []
+
+        strings_section = self.binary.sections['__cstring']
+        strings_content = strings_section.content
+
+        # split into characters (string table is packed and each entry is terminated by a null character)
+        string_table = list(strings_content)
+        transformed_strings = MachoStringTableHelper.transform_string_section(string_table)
+        return set((x.full_string for x in transformed_strings.values()))
+
     def _stringref_for_cstring(self, string: str) -> Optional[int]:
         """Try to find the stringref in __cstrings for a provided C string.
         If the string is not present in the __cstrings section, this method returns None.

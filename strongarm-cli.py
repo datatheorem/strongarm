@@ -183,6 +183,10 @@ def strongarm_script(binary: MachoBinary, analyzer: MachoAnalyzer):
 
 
 def main():
+    # XXX(PT): Change this if you want to run a quick script! Write it in strongarm_script()
+    script = True
+    # end of config
+
     parser = argparse.ArgumentParser(description='Mach-O Analyzer')
     parser.add_argument(
         '--verbose', action='store_true', help=
@@ -223,8 +227,6 @@ def main():
     analyzer = MachoAnalyzer.get_analyzer(binary)
     shell = StrongarmShell(binary, analyzer)
 
-    # XXX(PT): Change this if you want to run a quick script! Write it in strongarm_script()
-    script = True
     if script:
         strongarm_script(binary, analyzer)
     else:

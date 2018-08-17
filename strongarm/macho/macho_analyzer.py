@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 import logging
 from typing import TYPE_CHECKING
-from typing import Text, List, Dict, Optional, Tuple
+from typing import Text, List, Dict, Optional, Tuple, Set
 from capstone import Cs, CsInsn, CS_ARCH_ARM64, CS_MODE_ARM
 
 from ctypes import create_string_buffer, sizeof
@@ -141,13 +141,22 @@ class MachoAnalyzer(object):
 
         self._imported_symbol_addresses_to_names = symbol_name_map
         return symbol_name_map
-
+    
     @property
     def imported_symbols_to_symbol_names(self) -> Dict[int, str]:
         """Return a Dict of imported symbol pointers to their names.
         These symbols are not necessarily callable, but may rather be imported classes, for example.
+        Inverse of MachoAnalyzer.imported_symbol_names_to_pointers()
         """
         return {addr: x.name for addr, x in self.dyld_bound_symbols.items()}
+
+    @property
+    def imported_symbol_names_to_pointers(self) -> Dict[str, int]:
+        """Return a Dict of imported symbol names to their pointers.
+        These symbols are not necessarily callable.
+        Inverse of MachoAnalyzer.imported_symbol_names_to_pointers()
+        """
+        return {x.name: addr for addr, x in self.dyld_bound_symbols.items()}
 
     def symbol_name_for_branch_destination(self, branch_address):
         # type: (int) -> Text

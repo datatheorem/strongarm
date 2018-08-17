@@ -13,6 +13,7 @@ from strongarm.macho import \
 from strongarm.cli.utils import \
     pick_macho_slice, \
     disassemble_method, \
+    disassemble_function, \
     print_binary_info, \
     print_binary_load_commands, \
     print_binary_segments, \
@@ -98,6 +99,7 @@ class StrongarmShell:
             'info': (InfoCommand(self.binary, self.analyzer).description(), self.info),
             'sels': ('List selectors implemented by a class. sels [class]', self.selectors),
             'disasm': ('Decompile a given selector. disasm [sel]', self.disasm),
+            'disasm_f': ('Decompile a given selector. disasm [sel]', self.disasm_f),
         }
         print('strongarm interactive shell\nType \'help\' for available commands.')
         self.active = True
@@ -129,6 +131,14 @@ class StrongarmShell:
             return
 
         disassembled_str = disassemble_method(self.binary, matching_sels[0])
+        print(disassembled_str)
+
+    def disasm_f(self, args):
+        if not len(args):
+            print('Usage: disasm [sel]')
+            return
+
+        disassembled_str = disassemble_function(self.binary, int(args[0], 16))
         print(disassembled_str)
 
     def help(self, args):

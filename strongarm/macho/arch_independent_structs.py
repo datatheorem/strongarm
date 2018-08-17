@@ -31,7 +31,8 @@ from strongarm.macho.macho_definitions import \
     ObjcCategoryRaw32, \
     ObjcCategoryRaw64, \
     ObjcProtocolRaw32, \
-    ObjcProtocolRaw64
+    ObjcProtocolRaw64, \
+    ObjcProtocolList
 
 # create type alias for the following classes that inherit from ArchIndependentStructure
 if TYPE_CHECKING:
@@ -127,6 +128,11 @@ class ObjcDataRawStruct(ArchIndependentStructure):
 class ObjcProtocolRawStruct(ArchIndependentStructure):
     _32_BIT_STRUCT = ObjcProtocolRaw32
     _64_BIT_STRUCT = ObjcProtocolRaw64
+
+
+class ObjcProtocolListStruct(ArchIndependentStructure):
+    _32_BIT_STRUCT = ObjcProtocolList
+    _64_BIT_STRUCT = ObjcProtocolList
 
 
 class ObjcCategoryRawStruct(ArchIndependentStructure):

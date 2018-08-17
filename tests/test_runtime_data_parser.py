@@ -5,6 +5,7 @@ from __future__ import print_function
 
 import os
 import unittest
+from typing import List
 
 from strongarm.macho import MachoParser, ObjcRuntimeDataParser, ObjcCategory
 
@@ -92,3 +93,33 @@ class TestObjcRuntimeDataParser(unittest.TestCase):
                              'URLSessionDidFinishEventsForBackgroundURLSession:']
         for s in correct_selectors:
             self.assertTrue(s in [sel.name for sel in session_protocol.selectors])
+
+    def test_class_conforming_protocols(self):
+        def check_class_conformed_protocols(class_name: str, correct_protocols: List[str]):
+            cls = [x for x in objc_parser.classes if x.name == class_name][0]
+            self.assertIsNotNone(cls)
+            conformed_protocol_names = [x.name for x in cls.protocols]
+            self.assertEqual(correct_protocols, conformed_protocol_names)
+
+        parser = MachoParser(TestObjcRuntimeDataParser.CATEGORY_PATH)
+        binary = parser.get_arm64_slice()
+        objc_parser = ObjcRuntimeDataParser(binary)
+
+        check_class_conformed_protocols(
+            'CDVInAppBrowserViewController',
+            [
+                'CDVScreenOrientationDelegate',
+                'WKNavigationDelegate',
+                'WKUIDelegate',
+                'WKScriptMessageHandler'
+            ]
+        )
+        check_class_conformed_protocols(
+            '_TtC26Digital_Advisory_Solutions21LicenceViewController',
+            ['UITableViewDataSource']
+        )
+        # this class doesn't conform to any protocols
+        check_class_conformed_protocols(
+            'BadFilesDetector',
+            []
+        )

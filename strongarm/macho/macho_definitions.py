@@ -392,7 +392,7 @@ class ObjcCategoryRaw32(Structure):
         ('base_class', c_uint32),
         ('instance_methods', c_uint32),
         ('class_methods', c_uint32),
-        ('protocols', c_uint32),
+        ('base_protocols', c_uint32),
         ('instance_properties', c_uint32)
     ]
 
@@ -403,7 +403,7 @@ class ObjcCategoryRaw64(Structure):
         ('base_class', c_uint64),
         ('instance_methods', c_uint64),
         ('class_methods', c_uint64),
-        ('protocols', c_uint64),
+        ('base_protocols', c_uint64),
         ('instance_properties', c_uint64)
     ]
 
@@ -463,6 +463,12 @@ class ObjcMethodList(Structure):
     _fields_ = [
         ('flags', c_uint32),
         ('methcount', c_uint32),
+    ]
+
+
+class ObjcProtocolList(Structure):
+    _fields_ = [
+        ('count', c_uint64)
     ]
 
 

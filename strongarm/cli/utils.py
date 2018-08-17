@@ -76,7 +76,7 @@ def args_from_sel_name(sel: Text) -> List[Text]:
 
 
 def disassemble_method(binary: MachoBinary, method: ObjcMethodInfo) -> Text:
-    disassembled_text = []  # type: List[Text]
+    disassembled_text = []  # type: List[str]
 
     # figure out the arguments based on the sel name
     sel_args = args_from_sel_name(method.objc_sel.name)
@@ -88,7 +88,12 @@ def disassemble_method(binary: MachoBinary, method: ObjcMethodInfo) -> Text:
     signature += ');'
     disassembled_text.append(signature)
 
-    function_analyzer = ObjcFunctionAnalyzer.get_function_analyzer(binary, method.imp_addr)
+    return disassemble_function(binary, method.imp_addr, disassembled_text, sel_args)
+
+
+def disassemble_function(binary: MachoBinary, function_addr: int, prefix: List[str] = [], sel_args = None) -> Text:
+    disassembled_text = prefix
+    function_analyzer = ObjcFunctionAnalyzer.get_function_analyzer(binary, function_addr)
 
     basic_blocks = ObjcBasicBlock.get_basic_blocks(function_analyzer)
     # transform basic blocks into tuples of (basic block start addr, basic block end addr)
@@ -146,6 +151,25 @@ def disassemble_method(binary: MachoBinary, method: ObjcMethodInfo) -> Text:
 
                         instruction_string += method_arg_string
                     instruction_string += ');'
+            else:
+                instruction_string += f'({hex(instr.address)})('
+                arg_count = 4
+                for i in range(arg_count):
+                    # x0 is self, x1 is the SEL, real args start at x2
+                    register = 'x{}'.format(i)
+                    method_arg = function_analyzer.get_register_contents_at_instruction(register, wrapped_instr)
+
+                    method_arg_string = f'{register}: '
+                    if method_arg.type == RegisterContentsType.UNKNOWN:
+                        method_arg_string += '<?>'
+                    elif method_arg.type == RegisterContentsType.FUNCTION_ARG:
+                        method_arg_string += f'func arg {method_arg.value}'
+                    elif method_arg.type == RegisterContentsType.IMMEDIATE:
+                        method_arg_string += hex(method_arg.value)
+
+                    instruction_string += method_arg_string
+                    instruction_string += ', '
+                instruction_string += ');'
         else:
             if len(instr.operands) == 2 and instr.operands[1].type == ARM64_OP_IMM:
                 # try reading a string

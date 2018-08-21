@@ -8,6 +8,7 @@ import unittest
 
 from strongarm.macho import MachoAnalyzer, MachoParser
 from strongarm.objc import ObjcFunctionAnalyzer, ObjcInstruction
+from strongarm.objc import RegisterContentsType, RegisterContents
 
 
 class TestFunctionAnalyzer(unittest.TestCase):
@@ -143,3 +144,19 @@ class TestFunctionAnalyzer(unittest.TestCase):
         # there's only 68 instructions, there's no way there could be another branch after this index
         branch = self.function_analyzer.next_branch_after_instruction_index(68)
         self.assertIsNone(branch)
+
+    def test_three_op_add(self):
+        # 0x000000010000665c         adrp       x0, #0x102a41000
+        # 0x0000000100006660         add        x0, x0, #0x458
+        # 0x0000000100006664         bl         0x101f8600c
+        three_op_binary = os.path.join(os.path.dirname(__file__),
+                                       'bin',
+                                       'ThreeOpAddInstruction')
+        binary = MachoParser(three_op_binary).get_arm64_slice()
+        analyzer = MachoAnalyzer.get_analyzer(binary)
+        function_analyzer = ObjcFunctionAnalyzer(binary, analyzer.get_function_instructions(0x10000665c))
+        target_instr = function_analyzer.get_instruction_at_address(0x100006664)
+        wrapped_instr = ObjcInstruction.parse_instruction(function_analyzer, target_instr)
+        contents = function_analyzer.get_register_contents_at_instruction('x0', wrapped_instr)
+        self.assertEqual(RegisterContentsType.IMMEDIATE, contents.type)
+        self.assertEqual(0x102a41458, contents.value)

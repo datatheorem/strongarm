@@ -13,7 +13,7 @@ class CapstoneBuild(build_ext):
 
 dataflow_module = Extension('strongarm.objc.dataflow',
                             sources=['strongarm/objc/dataflow.cpp'],
-                            include_dirs=['/usr/local/include/', '/usr/include/'],
+                            include_dirs=['/usr/local/include/', '/usr/include/', '/Applications/Xcode.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/include/c++/v1'],
                             libraries=['capstone'],
                             library_dirs=['/usr/local/lib'],
                             language='c++',

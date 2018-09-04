@@ -1,6 +1,6 @@
 from setuptools import setup, find_packages, Extension
 from setuptools.command.build_ext import build_ext
-from subprocess import call
+from subprocess import call, check_output
 
 from strongarm import __version__
 
@@ -11,9 +11,13 @@ class CapstoneBuild(build_ext):
         super(CapstoneBuild, self).run()
 
 
+# EA: when in a (my?) pipenv enviroment, clang does not inherit the c++ header search path. Manually find and provide
+xcode_path = check_output('xcode-select -p', shell=True)
+xcode_cpp_search_path = f'{xcode_path}/Toolchains/XcodeDefault.xctoolchain/usr/include/c++/v1'
+
 dataflow_module = Extension('strongarm.objc.dataflow',
                             sources=['strongarm/objc/dataflow.cpp'],
-                            include_dirs=['/usr/local/include/', '/usr/include/', '/Applications/Xcode.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/include/c++/v1'],
+                            include_dirs=['/usr/local/include/', '/usr/include/', xcode_cpp_search_path],
                             libraries=['capstone'],
                             library_dirs=['/usr/local/lib'],
                             language='c++',

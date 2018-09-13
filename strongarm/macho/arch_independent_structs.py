@@ -54,8 +54,8 @@ if TYPE_CHECKING:
 
 
 class ArchIndependentStructure:
-    _32_BIT_STRUCT: _32_BIT_STRUCT_ALIAS = None
-    _64_BIT_STRUCT: _64_BIT_STRUCT_ALIAS = None
+    _32_BIT_STRUCT: '_32_BIT_STRUCT_ALIAS' = None
+    _64_BIT_STRUCT: '_64_BIT_STRUCT_ALIAS' = None
 
     def __init__(self, binary: 'MachoBinary', binary_offset: int, virtual=False) -> None:
         """Parse structure from 32bit or 64bit definition, depending on the active binary

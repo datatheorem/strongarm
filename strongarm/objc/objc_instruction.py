@@ -55,7 +55,7 @@ class ObjcInstruction:
         return False
 
     @classmethod
-    def parse_instruction(cls, function_analyzer: ObjcFunctionAnalyzer, instruction: CsInsn) -> 'ObjcInstruction':
+    def parse_instruction(cls, function_analyzer: 'ObjcFunctionAnalyzer', instruction: CsInsn) -> 'ObjcInstruction':
         """Read an instruction and encapsulate it in the appropriate ObjcInstruction subclass
         """
         if ObjcBranchInstruction.is_branch_instruction(instruction):
@@ -79,7 +79,9 @@ class ObjcBranchInstruction(ObjcInstruction):
         self.is_local_branch: bool = None
 
     @classmethod
-    def parse_instruction(cls, function_analyzer: ObjcFunctionAnalyzer, instruction: CsInsn) -> 'ObjcBranchInstruction':
+    def parse_instruction(cls,
+                          function_analyzer: 'ObjcFunctionAnalyzer',
+                          instruction: CsInsn) -> 'ObjcBranchInstruction':
         """Read a branch instruction and encapsulate it in the appropriate ObjcBranchInstruction subclass
         """
         # use appropriate subclass
@@ -115,7 +117,7 @@ class ObjcUnconditionalBranchInstruction(ObjcBranchInstruction):
                                       ]
     OBJC_MSGSEND_FUNCTIONS = ['_objc_msgSend', '_objc_msgSendSuper2']
 
-    def __init__(self, function_analyzer: ObjcFunctionAnalyzer, instruction: CsInsn) -> None:
+    def __init__(self, function_analyzer: 'ObjcFunctionAnalyzer', instruction: CsInsn) -> None:
         if instruction.mnemonic not in ObjcUnconditionalBranchInstruction.UNCONDITIONAL_BRANCH_MNEMONICS:
             raise ValueError('ObjcUnconditionalBranchInstruction instantiated with invalid mnemonic {}'.format(
                 instruction.mnemonic
@@ -135,7 +137,7 @@ class ObjcUnconditionalBranchInstruction(ObjcBranchInstruction):
 
         self.is_external_c_call = self.symbol is not None
 
-    def _patch_msgSend_destination(self, function_analyzer: ObjcFunctionAnalyzer) -> None:
+    def _patch_msgSend_destination(self, function_analyzer: 'ObjcFunctionAnalyzer') -> None:
         # validate instruction
         if not self.is_msgSend_call or \
            self.raw_instr.mnemonic not in ['bl', 'b'] or \
@@ -187,7 +189,7 @@ class ObjcConditionalBranchInstruction(ObjcBranchInstruction):
                            ]
     CONDITIONAL_BRANCH_MNEMONICS = SINGLE_OP_MNEMONICS + DOUBLE_OP_MNEMONICS
 
-    def __init__(self, function_analyzer: ObjcFunctionAnalyzer, instruction: CsInsn) -> None:
+    def __init__(self, function_analyzer: 'ObjcFunctionAnalyzer', instruction: CsInsn) -> None:
         if instruction.mnemonic not in ObjcConditionalBranchInstruction.CONDITIONAL_BRANCH_MNEMONICS:
             raise ValueError('ObjcConditionalBranchInstruction instantiated with invalid mnemonic {}'.format(
                 instruction.mnemonic

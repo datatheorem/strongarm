@@ -234,7 +234,7 @@ class MachoBinary:
 
         # if the address given is past the last declared section, translate based on the last section
         # so, we need to keep track of the last seen section
-        max_section = next(iter(self.sections))
+        max_section = next(iter(self.sections.values()))
 
         for section_name in self.sections:
             section = self.sections[section_name]

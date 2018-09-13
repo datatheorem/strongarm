@@ -4,6 +4,7 @@ from typing import TYPE_CHECKING
 
 from .objc_analyzer import ObjcFunctionAnalyzer
 from strongarm.debug_util import DebugUtil
+from capstone import CsInsn
 
 
 if TYPE_CHECKING:

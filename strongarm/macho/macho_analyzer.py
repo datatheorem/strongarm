@@ -206,7 +206,7 @@ class MachoAnalyzer:
         from strongarm.objc import ObjcFunctionAnalyzer # type: ignore
         from strongarm.objc import CodeSearch, CodeSearchResult # type: ignore
 
-    def get_imps_for_sel(self, selector: str) -> List[ObjcFunctionAnalyzer]:
+    def get_imps_for_sel(self, selector: str) -> List['ObjcFunctionAnalyzer']:
         """Retrieve a list of the disassembled function data for every implementation of a provided selector
         Args:
             selector: The selector name who's implementations should be found
@@ -224,7 +224,7 @@ class MachoAnalyzer:
             implementation_analyzers.append(function_analyzer)
         return implementation_analyzers
 
-    def get_objc_methods(self) -> List[ObjcMethodInfo]:
+    def get_objc_methods(self) -> List['ObjcMethodInfo']:
         """Get a List of ObjcMethodInfo's representing all ObjC methods implemented in the Mach-O.
         """
         from strongarm.objc import ObjcMethodInfo   # type: ignore

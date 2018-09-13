@@ -53,7 +53,7 @@ if TYPE_CHECKING:
                                  Type[ObjcProtocolRaw64]]
 
 
-class ArchIndependentStructure(object):
+class ArchIndependentStructure:
     _32_BIT_STRUCT: _32_BIT_STRUCT_ALIAS = None
     _64_BIT_STRUCT: _64_BIT_STRUCT_ALIAS = None
 

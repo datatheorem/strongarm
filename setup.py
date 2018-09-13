@@ -43,6 +43,5 @@ setup(
         'typing',
         'capstone',
         'enum34',
-        'six',
     ],
 )

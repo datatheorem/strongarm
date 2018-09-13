@@ -25,7 +25,7 @@ class BinaryEncryptedError(Exception):
     pass
 
 
-class MachoSection(object):
+class MachoSection:
     def __init__(self, binary: 'MachoBinary', section_command: MachoSectionRawStruct) -> None:
         self.cmd = section_command
         # ignore these types due to dynamic attributes of associated types
@@ -36,7 +36,7 @@ class MachoSection(object):
         self.end_address = self.address + section_command.size  # type: ignore
 
 
-class MachoBinary(object):
+class MachoBinary:
     _MAG_64 = [
         MachArch.MH_MAGIC_64,
         MachArch.MH_CIGAM_64

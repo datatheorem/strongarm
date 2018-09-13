@@ -5,7 +5,7 @@ from strongarm.macho.macho_binary import MachoBinary
 from strongarm.macho.macho_definitions import NLIST_NTYPE, NTYPE_VALUES
 
 
-class MachoStringTableEntry(object):
+class MachoStringTableEntry:
     """Class encapsulating an entry into the Mach-O string table
     """
     __slots__ = ['start_idx', 'length', 'full_string']
@@ -16,7 +16,7 @@ class MachoStringTableEntry(object):
         self.full_string = content
 
 
-class MachoStringTableHelper(object):
+class MachoStringTableHelper:
     """Class containing helper functions for processing different tables in a Mach-O
     """
     # TODO(PT): generalize the preprocessing of a string table where we efficiently map string start addresses to

@@ -24,7 +24,7 @@ if TYPE_CHECKING:
     from strongarm.objc import ObjcFunctionAnalyzer, ObjcMethodInfo  # type: ignore
 
 
-class MachoAnalyzer(object):
+class MachoAnalyzer:
     _BYTES_IN_INSTRUCTION = 4
 
     # keep map of active MachoAnalyzer instances

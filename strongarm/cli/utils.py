@@ -91,7 +91,20 @@ def disassemble_method(binary: MachoBinary, method: ObjcMethodInfo) -> str:
     return disassemble_function(binary, method.imp_addr, disassembled_text, sel_args)
 
 
-def disassemble_function(binary: MachoBinary, function_addr: int, prefix: List[str] = [], sel_args = None) -> Text:
+def print_instr(instr):
+    instruction_string = ''
+    instruction_string += '\t{}\t\t{}'.format(hex(instr.address), instr.mnemonic)
+
+    # add each arg to the string
+    for i, arg in enumerate(instr.operands):
+        instruction_string += ' ' + format_instruction_arg(instr, arg)
+        if i != len(instr.operands) - 1:
+            instruction_string += ','
+
+
+def disassemble_function(binary: MachoBinary, function_addr: int, prefix: List[str] = None, sel_args = None) -> str:
+    if not prefix:
+        prefix = []
     disassembled_text = prefix
     function_analyzer = ObjcFunctionAnalyzer.get_function_analyzer(binary, function_addr)
 

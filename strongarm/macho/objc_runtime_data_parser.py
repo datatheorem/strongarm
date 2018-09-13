@@ -15,7 +15,7 @@ from strongarm.debug_util import DebugUtil
 from strongarm.macho.macho_binary import MachoBinary
 
 
-class ObjcClass(object):
+class ObjcClass:
     __slots__ = ['raw_struct', 'name', 'selectors', 'protocols']
 
     def __init__(self,
@@ -48,7 +48,7 @@ class ObjcProtocol(ObjcClass):
     pass
 
 
-class ObjcSelector(object):
+class ObjcSelector:
     __slots__ = ['name', 'selref', 'implementation', 'is_external_definition']
 
     def __init__(self, name: str, selref: 'ObjcSelref', implementation: Optional[int]) -> None:
@@ -66,7 +66,7 @@ class ObjcSelector(object):
     __repr__ = __str__
 
 
-class ObjcSelref(object):
+class ObjcSelref:
     __slots__ = ['source_address', 'destination_address', 'selector_literal']
 
     def __init__(self, source_address: int, destination_address: int, selector_literal: str) -> None:
@@ -75,7 +75,7 @@ class ObjcSelref(object):
         self.selector_literal = selector_literal
 
 
-class ObjcRuntimeDataParser(object):
+class ObjcRuntimeDataParser:
     def __init__(self, binary: MachoBinary) -> None:
         self.binary = binary
         DebugUtil.log(self, 'Parsing ObjC runtime info... (this may take a while)')

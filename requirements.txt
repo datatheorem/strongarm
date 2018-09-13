@@ -2,5 +2,4 @@
 typing
 capstone
 enum34
-six
 --process-dependency-links

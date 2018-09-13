@@ -33,7 +33,7 @@ class MachoImpStub:
         self.destination = destination
 
 
-class MachoImpStubsParser(object):
+class MachoImpStubsParser:
     def __init__(self, binary: MachoBinary, capstone_disasm: Cs) -> None:
         self.binary = binary
         self._cs = capstone_disasm

@@ -4,7 +4,7 @@ from __future__ import unicode_literals
 from __future__ import print_function
 
 
-class DebugUtil(object):
+class DebugUtil:
     debug = False
 
     @classmethod

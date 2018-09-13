@@ -1,10 +1,6 @@
 # -*- coding: utf-8 -*-
-from __future__ import absolute_import
-from __future__ import unicode_literals
-from __future__ import print_function
-
-from typing import List, Optional, Text, Dict
 from ctypes import sizeof
+from typing import List, Optional, Dict
 
 from strongarm.macho.arch_independent_structs import \
     ObjcClassRawStruct, \
@@ -62,7 +58,7 @@ class ObjcSelector(object):
 
         self.is_external_definition = (not self.implementation)
 
-    def __str__(self):  # type: ignore
+    def __str__(self) -> str:
         imp_addr = 'NaN'
         if self.implementation:
             imp_addr = hex(int(self.implementation))
@@ -73,16 +69,14 @@ class ObjcSelector(object):
 class ObjcSelref(object):
     __slots__ = ['source_address', 'destination_address', 'selector_literal']
 
-    def __init__(self, source_address, destination_address, selector_literal):
-        # type: (int, int, Text) -> None
+    def __init__(self, source_address: int, destination_address: int, selector_literal: str) -> None:
         self.source_address = source_address
         self.destination_address = destination_address
         self.selector_literal = selector_literal
 
 
 class ObjcRuntimeDataParser(object):
-    def __init__(self, binary):
-        # type: (MachoBinary) -> None
+    def __init__(self, binary: MachoBinary) -> None:
         self.binary = binary
         DebugUtil.log(self, 'Parsing ObjC runtime info... (this may take a while)')
 
@@ -99,8 +93,7 @@ class ObjcRuntimeDataParser(object):
         DebugUtil.log(self, 'Step 3: Resolving symbol name to source dylib map...')
         self._sym_to_dylib_path = self._parse_linked_dylib_symbols()
 
-    def _parse_linked_dylib_symbols(self):
-        # type: () -> Dict[Text, Text]
+    def _parse_linked_dylib_symbols(self) -> Dict[str, str]:
         syms_to_dylib_path = {}
 
         symtab = self.binary.symtab
@@ -120,15 +113,13 @@ class ObjcRuntimeDataParser(object):
             syms_to_dylib_path[symbol_name] = source_name
         return syms_to_dylib_path
 
-    def path_for_external_symbol(self, symbol):
-        # type: (Text) -> Optional[Text]
+    def path_for_external_symbol(self, symbol: str) -> Optional[str]:
         if symbol in self._sym_to_dylib_path:
             return self._sym_to_dylib_path[symbol]
         return None
 
     @staticmethod
-    def _library_ordinal_from_n_desc(n_desc):
-        # type: (int) -> int
+    def _library_ordinal_from_n_desc(n_desc: int) -> int:
         return (n_desc >> 8) & 0xff
 
     def _parse_selrefs(self) -> None:
@@ -158,8 +149,7 @@ class ObjcRuntimeDataParser(object):
             # we don't know the implementation address yet but it will be updated when we parse method lists
             self._selref_ptr_to_selector_map[selref_ptr] = ObjcSelector(selector_string, wrapped_selref, None)
 
-    def selector_for_selref(self, selref_addr):
-        # type: (int) -> Optional[ObjcSelector]
+    def selector_for_selref(self, selref_addr: int) -> Optional[ObjcSelector]:
         if selref_addr in self._selref_ptr_to_selector_map:
             return self._selref_ptr_to_selector_map[selref_addr]
 
@@ -185,8 +175,7 @@ class ObjcRuntimeDataParser(object):
             return selref_list[0]
         return None
 
-    def get_method_imp_addresses(self, selector):
-        # type: (Text) -> List[int]
+    def get_method_imp_addresses(self, selector: str) -> List[int]:
         """Given a selector, return a list of virtual addresses corresponding to the start of each IMP for that SEL
         """
         imp_addresses = []
@@ -196,8 +185,7 @@ class ObjcRuntimeDataParser(object):
                     imp_addresses.append(objc_sel.implementation)
         return imp_addresses
 
-    def _parse_objc_classes(self):
-        # type: () -> List[ObjcClass]
+    def _parse_objc_classes(self) -> List[ObjcClass]:
         """Read Objective-C class data in __objc_classlist, __objc_data to get classes and selectors in binary
         """
         DebugUtil.log(self, 'Cross-referencing __objc_classlist, __objc_class, and __objc_data entries...')
@@ -227,8 +215,7 @@ class ObjcRuntimeDataParser(object):
 
         return parsed_objc_classes
 
-    def _parse_objc_categories(self):
-        # type: () -> List[ObjcCategory]
+    def _parse_objc_categories(self) -> List[ObjcCategory]:
         DebugUtil.log(self, 'Cross referencing __objc_catlist, __objc_category, and __objc_data entries...')
         parsed_categories = []
         category_pointers = self._get_catlist_pointers()
@@ -239,8 +226,7 @@ class ObjcRuntimeDataParser(object):
                 parsed_categories.append(parsed_category)
         return parsed_categories
 
-    def _parse_class_and_category_info(self):
-        # type: () -> List[ObjcClass]
+    def _parse_class_and_category_info(self) -> List[ObjcClass]:
         """Parse classes and categories referenced by __objc_classlist and __objc_catlist
         """
         classes = []
@@ -248,8 +234,7 @@ class ObjcRuntimeDataParser(object):
         classes += self._parse_objc_categories()
         return classes
 
-    def _parse_global_protocol_info(self):
-        # type: () -> List[ObjcProtocol]
+    def _parse_global_protocol_info(self) -> List[ObjcProtocol]:
         """Parse protocols which code in the app conforms to, referenced by __objc_protolist
         """
         DebugUtil.log(self, 'Cross referencing __objc_protolist, __objc_protocol, and __objc_data entries...')
@@ -295,8 +280,7 @@ class ObjcRuntimeDataParser(object):
             method_entry_off += method_ent.sizeof
         return selectors
 
-    def _parse_objc_protocol_entry(self, objc_protocol_struct):
-        # type: (ObjcProtocolRawStruct) -> ObjcProtocol
+    def _parse_objc_protocol_entry(self, objc_protocol_struct: ObjcProtocolRawStruct) -> ObjcProtocol:
         name = self.binary.get_full_string_from_start_address(objc_protocol_struct.name)
         selectors = []
         if objc_protocol_struct.required_instance_methods:
@@ -310,8 +294,7 @@ class ObjcRuntimeDataParser(object):
 
         return ObjcProtocol(objc_protocol_struct, name, selectors)
 
-    def _parse_objc_category_entry(self, objc_category_struct):
-        # type: (ObjcCategoryRawStruct) -> ObjcCategory
+    def _parse_objc_category_entry(self, objc_category_struct: ObjcCategoryRawStruct) -> ObjcCategory:
         selectors = []
         protocols = []
         name = self.binary.get_full_string_from_start_address(objc_category_struct.name)
@@ -372,43 +355,37 @@ class ObjcRuntimeDataParser(object):
                 protocols.append(parsed_protocol)
         return protocols
 
-    def _get_catlist_pointers(self):
-        # type: () -> List[int]
+    def _get_catlist_pointers(self) -> List[int]:
         """Read pointers in __objc_catlist into list
         """
         _, catlist_pointers = self.binary.read_pointer_section('__objc_catlist')
         return catlist_pointers
 
-    def _get_protolist_pointers(self):
-        # type: () -> List[int]
+    def _get_protolist_pointers(self) -> List[int]:
         """Read pointers in __objc_protolist into list
         """
         _, protolist_pointers = self.binary.read_pointer_section('__objc_protolist')
         return protolist_pointers
 
-    def _get_classlist_pointers(self):
-        # type: () -> List[int]
+    def _get_classlist_pointers(self) -> List[int]:
         """Read pointers in __objc_classlist into list
         """
         _, classlist_pointers = self.binary.read_pointer_section('__objc_classlist')
         return classlist_pointers
 
-    def _get_objc_category_from_catlist_pointer(self, category_struct_pointer):
-        # type: (int) -> ObjcCategoryRawStruct
+    def _get_objc_category_from_catlist_pointer(self, category_struct_pointer: int) -> ObjcCategoryRawStruct:
         """Read a struct __objc_category from the location indicated by the provided __objc_catlist pointer
         """
         category_entry = ObjcCategoryRawStruct(self.binary, category_struct_pointer, virtual=True)
         return category_entry
 
-    def _get_objc_protocol_from_pointer(self, protocol_struct_pointer):
-        # type: (int) -> ObjcProtocolRawStruct
+    def _get_objc_protocol_from_pointer(self, protocol_struct_pointer: int) -> ObjcProtocolRawStruct:
         """Read a struct __objc_protocol from the location indicated by the provided struct objc_protocol_list pointer
         """
         protocol_entry = ObjcProtocolRawStruct(self.binary, protocol_struct_pointer, virtual=True)
         return protocol_entry
 
-    def _get_objc_class_from_classlist_pointer(self, class_struct_pointer):
-        # type: (int) -> ObjcClassRawStruct
+    def _get_objc_class_from_classlist_pointer(self, class_struct_pointer: int) -> ObjcClassRawStruct:
         """Read a struct __objc_class from the location indicated by the __objc_classlist pointer
         """
         class_entry = ObjcClassRawStruct(self.binary, class_struct_pointer, virtual=True)
@@ -420,8 +397,7 @@ class ObjcRuntimeDataParser(object):
         class_entry.data &= ~0x3
         return class_entry
 
-    def _get_objc_data_from_objc_class(self, objc_class):
-        # type: (ObjcClassRawStruct) -> Optional[ObjcDataRawStruct]
+    def _get_objc_data_from_objc_class(self, objc_class: ObjcClassRawStruct) -> Optional[ObjcDataRawStruct]:
         """Read a struct __objc_data from a provided struct __objc_class
         If the struct __objc_class describe invalid or no corresponding data, None will be returned.
         """

@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 
 import re
-from typing import Text, List
+from typing import List
 
 from capstone import CsInsn
 from capstone.arm64 import \
@@ -49,7 +49,7 @@ def pick_macho_slice(parser: MachoParser) -> MachoBinary:
     return parsed_binary
 
 
-def format_instruction_arg(instruction: CsInsn, arg: Arm64Op) -> Text:
+def format_instruction_arg(instruction: CsInsn, arg: Arm64Op) -> str:
     if arg.type == ARM64_OP_REG:
         return instruction.reg_name(arg.value.reg)
     elif arg.type == ARM64_OP_IMM:
@@ -59,7 +59,7 @@ def format_instruction_arg(instruction: CsInsn, arg: Arm64Op) -> Text:
     raise RuntimeError('unknown arg type {}'.format(arg.type))
 
 
-def args_from_sel_name(sel: Text) -> List[Text]:
+def args_from_sel_name(sel: str) -> List[str]:
     sel_components = sel.split(':')
     sel_args = ['self', '@selector({})'.format(sel)]
     for component in sel_components:
@@ -75,8 +75,8 @@ def args_from_sel_name(sel: Text) -> List[Text]:
     return sel_args
 
 
-def disassemble_method(binary: MachoBinary, method: ObjcMethodInfo) -> Text:
-    disassembled_text = []  # type: List[str]
+def disassemble_method(binary: MachoBinary, method: ObjcMethodInfo) -> str:
+    disassembled_text: List[str] = []
 
     # figure out the arguments based on the sel name
     sel_args = args_from_sel_name(method.objc_sel.name)
@@ -234,7 +234,7 @@ def print_analyzer_exported_symbols(analyzer: MachoAnalyzer) -> None:
 def print_selector(objc_class: ObjcClass, selector: ObjcSelector):
     # belongs to a class or category?
     if isinstance(objc_class, ObjcCategory):
-        category = objc_class   # type: ObjcCategory
+        category: ObjcCategory = objc_class
         class_name = '{} ({})'.format(category.base_class, category.name)
     else:
         class_name = objc_class.name
@@ -256,7 +256,7 @@ def print_analyzer_classes(analyzer: MachoAnalyzer):
     for objc_class in classes:
         # belongs to a class or category?
         if isinstance(objc_class, ObjcCategory):
-            category = objc_class   # type: ObjcCategory
+            category: ObjcCategory = objc_class
             class_name = '{} ({})'.format(category.base_class, category.name)
         else:
             class_name = objc_class.name

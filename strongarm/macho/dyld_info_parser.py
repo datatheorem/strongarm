@@ -1,6 +1,7 @@
 # -*- coding: utf-8 -*-
 import ctypes
 import logging
+
 from typing import Dict
 from enum import IntEnum
 

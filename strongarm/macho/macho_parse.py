@@ -1,21 +1,17 @@
 # -*- coding: utf-8 -*-
-from __future__ import absolute_import
-from __future__ import unicode_literals
-from __future__ import print_function
-
 from strongarm.macho.macho_binary import MachoBinary
 from strongarm.macho.macho_definitions import MachArch, MachoFatHeader, MachoFatArch, swap32
 
 from ctypes import sizeof, c_uint32
 import io
-from typing import Text, Optional, List
+from typing import Optional, List
 
 
 class ArchitectureNotSupportedError(Exception):
     pass
 
 
-class MachoParser(object):
+class MachoParser:
     _FAT_MAGIC = [
         MachArch.FAT_MAGIC,
         MachArch.FAT_CIGAM,
@@ -36,18 +32,16 @@ class MachoParser(object):
 
     SUPPORTED_MAG = _FAT_MAGIC + _SUPPORTED_SLICE_MAG
 
-    def __init__(self, filename):
-        # type: (Text) -> None
+    def __init__(self, filename: str) -> None:
         self.filename = filename.encode('utf-8')
 
-        self.header = None
-        self.is_swapped = None  # type: bool
-        self.slices = []    # type: List[MachoBinary]
+        self.header: MachoFatHeader = None
+        self.is_swapped: bool = None
+        self.slices: List[MachoBinary] = []
 
         self.parse()
 
-    def get_arm64_slice(self):
-        # type: () -> Optional[MachoBinary]
+    def get_arm64_slice(self) -> Optional[MachoBinary]:
         """Retrieve the parsed slice from the FAT built for ARM64
         """
         arm64_slices = [x for x in self.slices if x.header.cputype == MachArch.MH_CPU_TYPE_ARM64]
@@ -55,8 +49,7 @@ class MachoParser(object):
             return arm64_slices[0]
         return None
 
-    def get_armv7_slice(self):
-        # type: () -> Optional[MachoBinary]
+    def get_armv7_slice(self) -> Optional[MachoBinary]:
         """Retrieve the parsed slice from the FAT built for ARMv7
         """
         armv7_slices = [x for x in self.slices if x.header.cputype == MachArch.MH_CPU_TYPE_ARM]
@@ -64,8 +57,7 @@ class MachoParser(object):
             return armv7_slices[0]
         return None
 
-    def parse(self):
-        # type: () -> None
+    def parse(self) -> None:
         """Parse a Mach-O or FAT archive represented by file at a given path
         This method will throw an exception if an binary is passed which is malformed or not a
         valid Mach-O or FAT archive
@@ -80,8 +72,7 @@ class MachoParser(object):
         else:
             self.parse_thin_header(0)
 
-    def parse_thin_header(self, fileoff):
-        # type: (int) -> None
+    def parse_thin_header(self, fileoff: int) -> None:
         """Parse a known Mach-O header at a given file offset, and add it to self.slices
         This method will throw an Exception if the data at fileoff is not a valid Mach-O header
 
@@ -101,8 +92,7 @@ class MachoParser(object):
             raise RuntimeError('parsed MachoBinary missing Mach-O header field')
         self.slices.append(attempt)
 
-    def parse_fat_header(self):
-        # type: () -> None
+    def parse_fat_header(self) -> None:
         """Parse the FAT header implicitly found at the start of the file
         This method will also parse all Mach-O slices that the FAT describes
         """
@@ -138,8 +128,7 @@ class MachoParser(object):
             # move to next fat_arch structure in file
             read_off += sizeof(MachoFatArch)
 
-    def _check_is_macho_header(self, offset):
-        # type: (int) -> bool
+    def _check_is_macho_header(self, offset: int) -> bool:
         """Check if the data located at a file offset represents a valid Mach-O header, based on the magic
 
         Args:
@@ -153,8 +142,7 @@ class MachoParser(object):
         magic = c_uint32.from_buffer(bytearray(self.get_bytes(offset, sizeof(c_uint32)))).value
         return magic in MachoParser._MACHO_MAGIC
 
-    def is_magic_supported(self):
-        # type: () -> bool
+    def is_magic_supported(self) -> bool:
         """Check whether a magic number represents a file format which this class is capable of parsing
 
         Args:
@@ -167,14 +155,12 @@ class MachoParser(object):
         return self.file_magic in MachoParser.SUPPORTED_MAG
 
     @property
-    def file_magic(self):
-        # type: () -> int
+    def file_magic(self) -> int:
         """Read file magic"""
         return c_uint32.from_buffer(bytearray(self.get_bytes(0, sizeof(c_uint32)))).value
 
     @property
-    def is_fat(self):
-        # type: () -> bool
+    def is_fat(self) -> bool:
         """Check if file magic indicates a FAT archive or not
 
         Returns:
@@ -183,8 +169,7 @@ class MachoParser(object):
         """
         return self.file_magic in MachoParser._FAT_MAGIC
 
-    def should_swap_bytes(self):
-        # type: () -> bool
+    def should_swap_bytes(self) -> bool:
         """Check if we need to swap due to a difference in endianness between host and binary
 
         Returns:
@@ -196,8 +181,7 @@ class MachoParser(object):
         # everything we touch currently is little endian, so let's not worry about it for now
         return self.file_magic in MachoParser._BIG_ENDIAN_MAG
 
-    def get_bytes(self, offset, size):
-        # type: (int, int) -> bytes
+    def get_bytes(self, offset: int, size: int) -> bytes:
         """Read a byte list from binary file of a given size, starting from a given offset
 
         Args:

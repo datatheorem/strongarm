@@ -1,15 +1,11 @@
 # -*- coding: utf-8 -*-
-from __future__ import absolute_import
-from __future__ import unicode_literals
-from __future__ import print_function
-
 import struct
-from ctypes import Union, Structure, c_uint8, c_uint16, c_uint32, c_uint64, c_int32, c_char, c_int64, c_char_p, c_int16
+
 from enum import IntEnum
+from ctypes import Union, Structure, c_uint8, c_uint16, c_uint32, c_uint64, c_char, c_char_p, c_int16
 
 
-def swap32(i):
-    # type: (int) -> int
+def swap32(i: int) -> int:
     """Reverse the bytes of a little-endian integer representation ie (3) -> 50331648"""
     return struct.unpack("<I", struct.pack(">I", i))[0]
 

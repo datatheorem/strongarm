@@ -1,9 +1,5 @@
 # -*- coding: utf-8 -*-
-from __future__ import absolute_import
-from __future__ import unicode_literals
-from __future__ import print_function
-
-from typing import Optional, Dict, Text, List
+from typing import Optional, Dict, List
 
 from strongarm.macho.macho_binary import MachoBinary
 from strongarm.macho.macho_definitions import NLIST_NTYPE, NTYPE_VALUES
@@ -14,8 +10,7 @@ class MachoStringTableEntry(object):
     """
     __slots__ = ['start_idx', 'length', 'full_string']
 
-    def __init__(self, start_idx, length, content):
-        # type: (int, int, Text) -> None
+    def __init__(self, start_idx: int, length: int, content: str) -> None:
         self.start_idx = start_idx
         self.length = length
         self.full_string = content
@@ -30,8 +25,8 @@ class MachoStringTableHelper(object):
     def __init__(self, binary: MachoBinary) -> None:
         self.binary = binary
         self.string_table_entries = MachoStringTableHelper.transform_string_section(self.binary.get_raw_string_table())
-        self.imported_symbols: List[Text] = None
-        self.exported_symbols: List[Text] = None
+        self.imported_symbols: List[str] = None
+        self.exported_symbols: List[str] = None
         self.parse_sym_lists()
 
     @classmethod
@@ -73,8 +68,7 @@ class MachoStringTableHelper(object):
                 entry_start_idx = idx + 1
         return string_table_entries
 
-    def string_table_entry_for_strtab_index(self, start_idx):
-        # type: (int) -> Optional[MachoStringTableEntry]
+    def string_table_entry_for_strtab_index(self, start_idx: int) -> Optional[MachoStringTableEntry]:
         """For a index in the packed character table, get the corresponding MachoStringTableEntry
 
         Returns:
@@ -84,8 +78,7 @@ class MachoStringTableHelper(object):
             return self.string_table_entries[start_idx]
         return None
 
-    def parse_sym_lists(self):
-        # type: () -> None
+    def parse_sym_lists(self) -> None:
         """Read imported and exported symbol names referenced by symtab from the string table.
         """
 

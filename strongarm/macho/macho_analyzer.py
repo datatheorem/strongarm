@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 import logging
 from typing import TYPE_CHECKING
-from typing import Text, List, Dict, Optional, Tuple, Set
+from typing import List, Dict, Optional, Set
 from capstone import Cs, CsInsn, CS_ARCH_ARM64, CS_MODE_ARM
 
 from ctypes import create_string_buffer, sizeof
@@ -31,10 +31,9 @@ class MachoAnalyzer(object):
     # each MachoAnalyzer operates on a single MachoBinary which will never change in the lifecycle of the analyzer
     # also, some MachoAnalyzer operations are expensive, but they only have to be done once per instance
     # so, we only keep one analyzer for each MachoBinary
-    active_analyzer_map = {}    # type: Dict[MachoBinary, MachoAnalyzer]
+    active_analyzer_map: Dict[MachoBinary, 'MachoAnalyzer'] = {}
 
-    def __init__(self, bin):
-        # type: (MachoBinary) -> None
+    def __init__(self, bin: MachoBinary) -> None:
         self.binary = bin
         self.cs = Cs(CS_ARCH_ARM64, CS_MODE_ARM)
         self.cs.detail = True
@@ -50,10 +49,10 @@ class MachoAnalyzer(object):
         self.exported_symbols = self.crossref_helper.exported_symbols
 
         self.imp_stubs = MachoImpStubsParser(bin, self.cs).imp_stubs
-        self._objc_helper = None    # type: ObjcRuntimeDataParser
-        self._objc_method_list = None   # type: List[ObjcMethodInfo]
+        self._objc_helper: ObjcRuntimeDataParser = None
+        self._objc_method_list: List[ObjcMethodInfo] = None
 
-        self._cached_function_boundaries = {}   # type: Dict[int, int]
+        self._cached_function_boundaries: Dict[int, int] = {}
 
         # done setting up, store this analyzer in class cache
         MachoAnalyzer.active_analyzer_map[bin] = self
@@ -66,15 +65,13 @@ class MachoAnalyzer(object):
         cls.active_analyzer_map = {}
 
     @property
-    def objc_helper(self):
-        # type: () -> ObjcRuntimeDataParser
+    def objc_helper(self) -> ObjcRuntimeDataParser:
         if not self._objc_helper:
             self._objc_helper = ObjcRuntimeDataParser(self.binary)
         return self._objc_helper
 
     @classmethod
-    def get_analyzer(cls, bin):
-        # type: (MachoBinary) -> MachoAnalyzer
+    def get_analyzer(cls, bin: MachoBinary) -> 'MachoAnalyzer':
         """Get a cached analyzer for a given MachoBinary
         """
         if bin in cls.active_analyzer_map:
@@ -82,23 +79,21 @@ class MachoAnalyzer(object):
             return cls.active_analyzer_map[bin]
         return MachoAnalyzer(bin)
 
-    def objc_classes(self):
+    def objc_classes(self) -> List[ObjcClass]:
         """Return the List of classes and categories implemented within the binary
         """
-        # type: () -> List[ObjcClass]
         return self.objc_helper.classes
 
-    def objc_categories(self):
+    def objc_categories(self) -> List[ObjcCategory]:
         """Return the List of categories implemented within the app
         """
         all_classes = self.objc_classes()
-        categories = [c for c in all_classes if type(c) == ObjcCategory]
+        categories: List[ObjcCategory] = [c for c in all_classes if type(c) == ObjcCategory]
         return categories
 
-    def get_conformed_protocols(self):
+    def get_conformed_protocols(self) -> List[ObjcProtocol]:
         """Return the List of protocols to which code within the binary conforms
         """
-        # type: () -> List[ObjcProtocol]
         return self.objc_helper.protocols
 
     @property
@@ -115,8 +110,7 @@ class MachoAnalyzer(object):
         return self.dyld_info_parser.dyld_stubs_to_symbols
 
     @property
-    def imp_stubs_to_symbol_names(self):
-        # type: () -> Dict[int, Text]
+    def imp_stubs_to_symbol_names(self) -> Dict[int, str]:
         """Return a Dict of callable implementation stubs to the names of the imported symbols they correspond to.
         """
         if self._imported_symbol_addresses_to_names:
@@ -135,7 +129,7 @@ class MachoAnalyzer(object):
                 # add in stub which is not backed by a named symbol
                 # a stub contained in the __stubs section that was not backed by a named symbol was first
                 # encountered in com.intuit.mobilebanking01132.app/PlugIns/CMA Balance Widget.appex/CMA Balance Widget
-                name = 'unnamed_stub_{}'.format(unnamed_stub_count)
+                name = f'unnamed_stub_{unnamed_stub_count}'
                 unnamed_stub_count += 1
                 symbol_name_map[stub.destination] = name
 
@@ -158,8 +152,7 @@ class MachoAnalyzer(object):
         """
         return {x.name: addr for addr, x in self.dyld_bound_symbols.items()}
 
-    def symbol_name_for_branch_destination(self, branch_address):
-        # type: (int) -> Text
+    def symbol_name_for_branch_destination(self, branch_address: int) -> str:
         """Get the associated symbol name for a given branch destination
         """
         if branch_address in self.imp_stubs_to_symbol_names:
@@ -168,8 +161,7 @@ class MachoAnalyzer(object):
             hex(branch_address)
         ))
 
-    def _disassemble_region(self, start_address, size):
-        # type: (int, int) -> List[CsInsn]
+    def _disassemble_region(self, start_address: int, size: int) -> List[CsInsn]:
         """Disassemble the executable code in a given region into a list of CsInsn objects
         """
         func_str = bytes(self.binary.get_content_from_virtual_address(virtual_address=start_address, size=size))
@@ -196,19 +188,16 @@ class MachoAnalyzer(object):
         instructions = self._disassemble_region(start_address, end_address - start_address)
         return instructions
 
-    def imp_for_selref(self, selref_ptr):
-        # type: (int) -> Optional[int]
+    def imp_for_selref(self, selref_ptr: int) -> Optional[int]:
         selector = self.objc_helper.selector_for_selref(selref_ptr)
         if not selector:
             return None
         return selector.implementation
 
-    def selector_for_selref(self, selref_ptr):
-        # type: (int) -> Optional[ObjcSelector]
+    def selector_for_selref(self, selref_ptr: int) -> Optional[ObjcSelector]:
         return self.objc_helper.selector_for_selref(selref_ptr)
 
-    def get_method_imp_addresses(self, selector):
-        # type: (Text) -> List[int]
+    def get_method_imp_addresses(self, selector: str) -> List[int]:
         """Given a selector, return a list of virtual addresses corresponding to the start of each IMP for that SEL
         """
         return self.objc_helper.get_method_imp_addresses(selector)
@@ -217,8 +206,7 @@ class MachoAnalyzer(object):
         from strongarm.objc import ObjcFunctionAnalyzer # type: ignore
         from strongarm.objc import CodeSearch, CodeSearchResult # type: ignore
 
-    def get_imps_for_sel(self, selector):
-        # type: (Text) -> List[ObjcFunctionAnalyzer]
+    def get_imps_for_sel(self, selector: str) -> List[ObjcFunctionAnalyzer]:
         """Retrieve a list of the disassembled function data for every implementation of a provided selector
         Args:
             selector: The selector name who's implementations should be found
@@ -236,8 +224,7 @@ class MachoAnalyzer(object):
             implementation_analyzers.append(function_analyzer)
         return implementation_analyzers
 
-    def get_objc_methods(self):
-        # type: () -> List[ObjcMethodInfo]
+    def get_objc_methods(self) -> List[ObjcMethodInfo]:
         """Get a List of ObjcMethodInfo's representing all ObjC methods implemented in the Mach-O.
         """
         from strongarm.objc import ObjcMethodInfo   # type: ignore
@@ -253,14 +240,13 @@ class MachoAnalyzer(object):
         self._objc_method_list = method_list
         return self._objc_method_list
 
-    def search_code(self, code_search):
-        # type: (CodeSearch) -> List[CodeSearchResult]
+    def search_code(self, code_search: 'CodeSearch') -> List['CodeSearchResult']:
         """Given a CodeSearch object describing rules for matching code, return a List of CodeSearchResult's
         encapsulating instructions which match the described set of conditions.
 
         The search space of this method includes all known functions within the binary.
         """
-        from strongarm.objc import CodeSearch, CodeSearchResult # type: ignore
+        from strongarm.objc import CodeSearchResult # type: ignore
         from strongarm.objc import ObjcFunctionAnalyzer # type: ignore
 
         DebugUtil.log(self, 'Performing code search on binary with search description:\n{}'.format(

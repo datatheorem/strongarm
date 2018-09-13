@@ -1,9 +1,5 @@
 # -*- coding: utf-8 -*-
-from __future__ import absolute_import
-from __future__ import unicode_literals
-from __future__ import print_function
-
-from typing import List, Text
+from typing import List
 from typing import TYPE_CHECKING
 
 from .objc_analyzer import ObjcFunctionAnalyzer
@@ -15,13 +11,12 @@ if TYPE_CHECKING:
 
 
 class ObjcBasicBlock(object):
-    def __init__(self, function_analyzer):
-        # type: (ObjcFunctionAnalyzer, int) -> None
+    def __init__(self, function_analyzer: ObjcFunctionAnalyzer) -> None:
         self._function_analyzer = function_analyzer
 
     @classmethod
-    def get_basic_blocks(cls, function_analyzer):
-        # type: (ObjcFunctionAnalyzer) -> List[List[CsInsn]]
+    def get_basic_blocks(cls, function_analyzer: ObjcFunctionAnalyzer) -> List[List[CsInsn]]:
+        # TODO(PT): is there something more elegant we can return than a list of lists of instructions?
         local_branch_instructions = function_analyzer.get_local_branches()
 
         # TODO(PT): make it more efficient to get the start indexes of local branches

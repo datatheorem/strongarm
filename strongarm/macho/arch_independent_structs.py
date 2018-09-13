@@ -1,6 +1,7 @@
+# -*- coding: utf-8 -*-
 from ctypes import sizeof
 
-from typing import Union, Type, Any, Text
+from typing import Union, Type, Any
 from typing import TYPE_CHECKING
 
 from strongarm.macho.macho_definitions import \
@@ -53,11 +54,10 @@ if TYPE_CHECKING:
 
 
 class ArchIndependentStructure(object):
-    _32_BIT_STRUCT = None   # type: _32_BIT_STRUCT_ALIAS
-    _64_BIT_STRUCT = None   # type: _64_BIT_STRUCT_ALIAS
+    _32_BIT_STRUCT: _32_BIT_STRUCT_ALIAS = None
+    _64_BIT_STRUCT: _64_BIT_STRUCT_ALIAS = None
 
-    def __init__(self, binary, binary_offset, virtual=False):
-        # type: ('MachoBinary', int, bool) -> None
+    def __init__(self, binary: 'MachoBinary', binary_offset: int, virtual=False) -> None:
         """Parse structure from 32bit or 64bit definition, depending on the active binary
         
         Args:
@@ -86,12 +86,11 @@ class ArchIndependentStructure(object):
 
     if TYPE_CHECKING:
         # GVR suggested to use this pattern to ignore dynamic attribute assignment errors
-        def __getattr__(self, key):
-            # type: (Text) -> Any
+        def __getattr__(self, key: str) -> Any:
             pass
 
-        implementation = None   # type: Any
-        data = None     # type: Any
+        implementation: Any = None
+        data: Any = None
 
 
 class MachoHeaderStruct(ArchIndependentStructure):
@@ -164,10 +163,9 @@ class DylibCommandStruct(ArchIndependentStructure):
     _32_BIT_STRUCT = DylibCommand
     _64_BIT_STRUCT = DylibCommand
 
-    def __init__(self, binary, binary_offset, virtual=False):
-        # type: (Any, int, bool) -> None
+    def __init__(self, binary: 'MachoBinary', binary_offset: int, virtual=False) -> None:
         super(DylibCommandStruct, self).__init__(binary, binary_offset, virtual)
-        self.fileoff = None # type: int
+        self.fileoff: int = None
 
 
 class MachoLoadCommandStruct(ArchIndependentStructure):

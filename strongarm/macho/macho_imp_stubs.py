@@ -1,15 +1,11 @@
 # -*- coding: utf-8 -*-
-from __future__ import absolute_import
-from __future__ import unicode_literals
-from __future__ import print_function
-
 from typing import List
 from capstone import Cs, CsInsn
 
 from strongarm.macho.macho_binary import MachoBinary
 
 
-class MachoImpStub(object):
+class MachoImpStub:
     """Encapsulates entry in __imp_stubs section
 
     An 'entry' in the __imp_stubs section is a very short function which jumps to a pointer in the __got or
@@ -87,8 +83,7 @@ class MachoImpStubsParser(object):
         stub = MachoImpStub(stub_addr, stub_dest)
         return stub
 
-    def _parse_all_stubs(self):
-        # type: () -> List[MachoImpStub]
+    def _parse_all_stubs(self) -> List[MachoImpStub]:
         if '__stubs' not in self.binary.sections:
             return []
 

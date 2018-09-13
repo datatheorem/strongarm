@@ -1,9 +1,5 @@
 # -*- coding: utf-8 -*-
-from __future__ import absolute_import
-from __future__ import unicode_literals
-from __future__ import print_function
-
-from typing import List, Text, Optional, Dict, Union
+from typing import List, Tuple, Optional, Dict, Union
 
 from strongarm.debug_util import DebugUtil
 
@@ -30,8 +26,7 @@ class BinaryEncryptedError(Exception):
 
 
 class MachoSection(object):
-    def __init__(self, binary, section_command):
-        # type: (MachoBinary, MachoSectionRawStruct) -> None
+    def __init__(self, binary: 'MachoBinary', section_command: MachoSectionRawStruct) -> None:
         self.cmd = section_command
         # ignore these types due to dynamic attributes of associated types
         self.content = binary.get_bytes(section_command.offset, section_command.size)   # type: ignore
@@ -57,32 +52,31 @@ class MachoBinary(object):
     SUPPORTED_MAG = _MAG_64 + _MAG_32
     BYTES_PER_INSTRUCTION = 4
 
-    def __init__(self, filename, offset_within_fat=0):
-        # type: (bytes, int) -> None
+    def __init__(self, filename: bytes, offset_within_fat=0) -> None:
         # info about this Mach-O's file representation
         self.filename = filename
         self._offset_within_fat = offset_within_fat
 
         # generic Mach-O header info
-        self.is_64bit = None    # type: bool
-        self.is_swap = None     # type: bool
-        self.cpu_type = None    # type: CPU_TYPE
+        self.is_64bit: bool = None
+        self.is_swap: bool = None
+        self.cpu_type: CPU_TYPE = None
         self._load_commands_end_addr = None
 
         # Mach-O header data
-        self.header = None  # type: MachoHeaderStruct
-        self.header_flags = None    # type: List[int]
-        self.file_type = None   # type: MachoFileType
+        self.header: MachoHeaderStruct = None
+        self.header_flags: List[int] = None
+        self.file_type: MachoFileType = None
 
         # segment and section commands from Mach-O header
-        self.segment_commands = None    # type: Dict[Text, MachoSegmentCommandStruct]
-        self.sections = None    # type: Dict[Text, MachoSection]
+        self.segment_commands: Dict[str, MachoSegmentCommandStruct] = None
+        self.sections: Dict[str, MachoSection] = None
         # also store specific interesting sections which are useful to us
-        self.dysymtab = None    # type: MachoDysymtabCommandStruct
-        self.symtab = None  # type: MachoSymtabCommandStruct
-        self.encryption_info = None # type: MachoEncryptionInfoStruct
-        self.dyld_info = None   # type: MachoDyldInfoCommandStruct
-        self.load_dylib_commands = None # type: List[DylibCommandStruct]
+        self.dysymtab: MachoDysymtabCommandStruct = None
+        self.symtab: MachoSymtabCommandStruct = None
+        self.encryption_info: MachoEncryptionInfoStruct = None
+        self.dyld_info: MachoDyldInfoCommandStruct = None
+        self.load_dylib_commands: List[DylibCommandStruct] = None
 
         # cache to save work on calls to get_bytes()
         with open(self.filename, 'rb') as f:
@@ -96,8 +90,7 @@ class MachoBinary(object):
         self.symtab_contents = self._get_symtab_contents()
         DebugUtil.log(self, "parsed symtab, len = {}".format(len(self.symtab_contents)))
 
-    def parse(self):
-        # type: () -> bool
+    def parse(self) -> bool:
         """Attempt to parse the provided file info as a Mach-O slice
 
         Returns:
@@ -123,14 +116,12 @@ class MachoBinary(object):
         return True
 
     @property
-    def slice_magic(self):
-        # type: () -> c_uint32
+    def slice_magic(self) -> c_uint32:
         """Read magic number identifier from this Mach-O slice
         """
         return self.read_word(0, virtual=False, word_type=c_uint32)
 
-    def verify_magic(self):
-        # type: () -> bool
+    def verify_magic(self) -> bool:
         """Ensure magic at beginning of Mach-O slice indicates a supported format
 
         Returns:
@@ -139,8 +130,7 @@ class MachoBinary(object):
         """
         return self.slice_magic in MachoBinary.SUPPORTED_MAG
 
-    def magic_is_64(self):
-        # type: () -> bool
+    def magic_is_64(self) -> bool:
         """Convenience method to check if our magic corresponds to a 64-bit slice
 
         Returns:
@@ -149,8 +139,7 @@ class MachoBinary(object):
         """
         return self.slice_magic in MachoBinary._MAG_64
 
-    def parse_header(self):
-        # type: () -> None
+    def parse_header(self) -> None:
         """Read all relevant info from a Mach-O header which does not require cross-referencing.
         Specifically, this method parses the Mach-O header & header flags, CPU target,
         and all segment and section commands.
@@ -173,8 +162,7 @@ class MachoBinary(object):
         self._load_commands_end_addr = load_commands_off + self.header.sizeofcmds   # type: ignore
         self._parse_segment_commands(load_commands_off, self.header.ncmds)  # type: ignore
 
-    def _parse_header_flags(self):
-        # type: () -> None
+    def _parse_header_flags(self) -> None:
         """Interpret binary's header bitset and populate self.header_flags
         """
         self.header_flags = []
@@ -186,8 +174,7 @@ class MachoBinary(object):
                 # mask is present in bitset, add to list of included flags
                 self.header_flags.append(mask)
 
-    def _parse_segment_commands(self, offset, segment_count):
-        # type: (int, int) -> None
+    def _parse_segment_commands(self, offset: int, segment_count: int) -> None:
         """Parse Mach-O segment commands beginning at a given slice offset
 
         Args:
@@ -232,8 +219,7 @@ class MachoBinary(object):
             # move to next load command in header
             offset += load_command.cmdsize
 
-    def section_name_for_address(self, virt_addr):
-        # type: (int) -> Optional[Text]
+    def section_name_for_address(self, virt_addr: int) -> Optional[str]:
         """Given an address in the virtual address space, return the name of the section which contains it.
         """
         section = self.section_for_address(virt_addr)
@@ -241,16 +227,14 @@ class MachoBinary(object):
             return None
         return section.name.decode('UTF8')
 
-    def section_for_address(self, virt_addr):
-        # type: (int) -> Optional[MachoSection]
-        import six
+    def section_for_address(self, virt_addr: int) -> Optional[MachoSection]:
         # invalid address?
         if virt_addr < self.get_virtual_base():
             return None
 
         # if the address given is past the last declared section, translate based on the last section
         # so, we need to keep track of the last seen section
-        max_section = six.next(six.itervalues(self.sections))
+        max_section = next(iter(self.sections))
 
         for section_name in self.sections:
             section = self.sections[section_name]
@@ -291,8 +275,7 @@ class MachoBinary(object):
         # guess by using the highest-addressed section we've seen
         return max_segment
 
-    def _parse_sections_for_segment(self, segment, segment_offset):
-        # type: (MachoSegmentCommandStruct, int) -> None
+    def _parse_sections_for_segment(self, segment: MachoSegmentCommandStruct, segment_offset: int) -> None:
         """Parse all sections contained within a Mach-O segment, and add them to our list of sections
 
         Args:
@@ -316,8 +299,7 @@ class MachoBinary(object):
             # go to next section in list
             section_offset += section_command.sizeof
 
-    def get_virtual_base(self):
-        # type: () -> int
+    def get_virtual_base(self) -> int:
         """Retrieve the first virtual address of the Mach-O slice
 
         Returns:
@@ -327,8 +309,7 @@ class MachoBinary(object):
         text_seg = self.segment_commands['__TEXT']
         return text_seg.vmaddr
 
-    def get_bytes(self, offset, size):
-        # type: (int, int) -> bytearray
+    def get_bytes(self, offset: int, size: int) -> bytearray:
         """Retrieve bytes from Mach-O slice, taking into account that the slice could be at an offset within a FAT
 
         Args:
@@ -352,8 +333,7 @@ class MachoBinary(object):
 
         return bytearray(self._cached_binary[offset:offset+size])
 
-    def should_swap_bytes(self):
-        # type: () -> bool
+    def should_swap_bytes(self) -> bool:
         """Check whether self.slice_magic refers to a big-endian Mach-O binary
 
         Returns:
@@ -365,8 +345,7 @@ class MachoBinary(object):
         # everything we touch currently is little endian, so let's not worry about it for now
         return self.slice_magic in MachoBinary._MAG_BIG_ENDIAN
 
-    def get_raw_string_table(self):
-        # type: () -> List[int]
+    def get_raw_string_table(self) -> List[int]:
         """Read string table from binary, as described by LC_SYMTAB. Each strtab entry is terminated
         by a NULL character.
 
@@ -379,8 +358,7 @@ class MachoBinary(object):
         string_table = list(string_table_data)
         return string_table
 
-    def _get_symtab_contents(self):
-        # type: () -> List[MachoNlistStruct]
+    def _get_symtab_contents(self) -> List[MachoNlistStruct]:
         """Parse symbol table containing list of Nlist64's
 
         Returns:
@@ -400,8 +378,7 @@ class MachoBinary(object):
 
         return symtab
 
-    def get_indirect_symbol_table(self):
-        # type: () -> List[c_uint32]
+    def get_indirect_symbol_table(self) -> List[c_uint32]:
         indirect_symtab = []
         # dysymtab has fields that tell us the file offset of the indirect symbol table, as well as the number
         # of indirect symbols present in the mach-o
@@ -415,8 +392,7 @@ class MachoBinary(object):
             indirect_symtab_off += sizeof(c_uint32)
         return indirect_symtab
 
-    def file_offset_for_virtual_address(self, virtual_address):
-        # type: (int) -> int
+    def file_offset_for_virtual_address(self, virtual_address: int) -> int:
         # if this address is within the initial Mach-O load commands, it must be handled seperately
         # this unslid virtual address is just a 'best guess' of the physical file address, and it'll be the correct
         # address if the virtual address was within the initial load commands
@@ -435,13 +411,11 @@ class MachoBinary(object):
         binary_address = (virtual_address - section_for_address.address) + section_for_address.offset
         return binary_address
 
-    def get_content_from_virtual_address(self, virtual_address, size):
-        # type: (int, int) -> bytearray
+    def get_content_from_virtual_address(self, virtual_address: int, size: int) -> bytearray:
         binary_address = self.file_offset_for_virtual_address(virtual_address)
         return self.get_bytes(binary_address, size)
 
-    def get_full_string_from_start_address(self, start_address, virtual=True):
-        # type: (int, bool) -> Optional[Text]
+    def get_full_string_from_start_address(self, start_address: int, virtual=True) -> Optional[str]:
         """Return a string containing the bytes from start_address up to the next NULL character
         This method will return None if the specified address does not point to a UTF-8 encoded string
         """
@@ -478,8 +452,7 @@ class MachoBinary(object):
                     return None
         return None
 
-    def read_string_at_address(self, address):
-        # type: (int) -> Optional[Text]
+    def read_string_at_address(self, address: int) -> Optional[str]:
         """Read a string embedded in the binary at address
         This method will automatically parse a CFString and return the string literal if address points to one
         """
@@ -495,16 +468,14 @@ class MachoBinary(object):
             address = cfstring_ent.literal
         return self.get_full_string_from_start_address(address)
 
-    def is_encrypted(self):
-        # type: () -> bool
+    def is_encrypted(self) -> bool:
         """Returns True if the binary has an encrypted segment, False otherwise
         """
         if not self.encryption_info:
             return False
         return self.encryption_info.cryptid != 0
 
-    def is_range_encrypted(self, offset, size):
-        # type: (int, int) -> bool
+    def is_range_encrypted(self, offset: int, size: int) -> bool:
         """Returns whether the provided address range overlaps with the encrypted section of the binary.
         """
         if not self.is_encrypted():
@@ -546,8 +517,7 @@ class MachoBinary(object):
             source_name = '<unknown dylib>'
         return source_name
 
-    def read_pointer_section(self, section_name):
-        # type: (Text) -> (List[int], List[int])
+    def read_pointer_section(self, section_name: str) -> Tuple[List[int], List[int]]:
         """Read all the pointers in a section
 
         It is the caller's responsibility to only call this with a `section_name` which indicates a section which should
@@ -560,8 +530,8 @@ class MachoBinary(object):
         The indexes of these two lists are matched up; that is, list1[0] is the virtual address of the first pointer
         in the requested section, and list2[0] is the pointer value contained at that address.
         """
-        locations = []  # type: List[int]
-        entries = []  # type: List[int]
+        locations: List[int] = []
+        entries: List[int] = []
         if section_name not in self.sections:
             return locations, entries
 

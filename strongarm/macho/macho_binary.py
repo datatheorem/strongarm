@@ -217,6 +217,9 @@ class MachoBinary:
                 dylib_load_command.fileoff = offset
                 self.load_dylib_commands.append(dylib_load_command)
 
+            elif load_command.cmd == MachoLoadCommands.LC_CODE_SIGNATURE:
+                self.code_signature = MachoLinkeditDataCommand(self, offset)
+
             # move to next load command in header
             offset += load_command.cmdsize
 

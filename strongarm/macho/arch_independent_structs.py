@@ -29,6 +29,7 @@ from strongarm.macho.macho_definitions import \
     MachoSymtabCommand, \
     MachoDysymtabCommand, \
     MachoDyldInfoCommand, \
+    MachoLinkeditDataCommand, \
     ObjcCategoryRaw32, \
     ObjcCategoryRaw64, \
     ObjcProtocolRaw32, \
@@ -42,15 +43,15 @@ if TYPE_CHECKING:
                                  Type[MachoEncryptionInfo32Command], Type[MachoNlist32], Type[MachoLoadCommand],
                                  Type[ObjcDataRaw32], Type[ObjcClassRaw32], Type[ObjcMethod32], Type[ObjcMethodList],
                                  Type[DylibCommand], Type[CFString32], Type[MachoSymtabCommand],
-                                 Type[MachoDyldInfoCommand], Type[MachoDysymtabCommand], Type[ObjcCategoryRaw32],
-                                 Type[ObjcProtocolRaw32]]
+                                 Type[MachoDyldInfoCommand], Type[MachoDysymtabCommand], Type[MachoLinkeditDataCommand],
+                                 Type[ObjcCategoryRaw32], Type[ObjcProtocolRaw32]]
 
     _64_BIT_STRUCT_ALIAS = Union[Type[MachoHeader64], Type[MachoSegmentCommand64], Type[MachoSection64Raw],
                                  Type[MachoEncryptionInfo64Command], Type[MachoNlist64], Type[MachoLoadCommand],
                                  Type[ObjcDataRaw64], Type[ObjcClassRaw64], Type[ObjcMethod64], Type[ObjcMethodList],
                                  Type[DylibCommand], Type[CFString64], Type[MachoSymtabCommand],
-                                 Type[MachoDyldInfoCommand], Type[MachoDysymtabCommand], Type[ObjcCategoryRaw64],
-                                 Type[ObjcProtocolRaw64]]
+                                 Type[MachoDyldInfoCommand], Type[MachoDysymtabCommand], Type[MachoLinkeditDataCommand],
+                                 Type[ObjcCategoryRaw64], Type[ObjcProtocolRaw64]]
 
 
 class ArchIndependentStructure:
@@ -186,3 +187,8 @@ class MachoDysymtabCommandStruct(ArchIndependentStructure):
 class MachoDyldInfoCommandStruct(ArchIndependentStructure):
     _32_BIT_STRUCT = MachoDyldInfoCommand
     _64_BIT_STRUCT = MachoDyldInfoCommand
+
+
+class MachoLinkeditDataCommandStruct(ArchIndependentStructure):
+    _32_BIT_STRUCT = MachoLinkeditDataCommand
+    _64_BIT_STRUCT = MachoLinkeditDataCommand

@@ -16,7 +16,8 @@ from strongarm.macho.arch_independent_structs import \
     MachoLoadCommandStruct, \
     MachoSymtabCommandStruct, \
     MachoDysymtabCommandStruct, \
-    MachoDyldInfoCommandStruct
+    MachoDyldInfoCommandStruct, \
+    MachoLinkeditDataCommand
 
 from ctypes import c_uint64, c_uint32, sizeof
 

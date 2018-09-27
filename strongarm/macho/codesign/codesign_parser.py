@@ -1,12 +1,12 @@
-from typing import Tuple
-from ctypes import sizeof, c_uint32, c_uint64
-
+# -*- coding: utf-8 -*-
 from strongarm.macho.macho_binary import MachoBinary
 
 from .codesign_definitions import (
     CodesignBlobTypeEnum,
     CSBlob,
-    CSCodeDirectory
+    CSSuperblob,
+    CSCodeDirectory,
+    CSBlobIndex
 )
 
 
@@ -76,28 +76,28 @@ class CodesignParser:
         the layout of the child blobs.
         """
         print(f'Parsing CodeSign superblob at {hex(file_offset)}')
-        blob_magic, file_offset = self.read_cs32(file_offset)
-        if blob_magic != CodesignBlobTypeEnum.CSMAGIC_EMBEDDED_SIGNATURE:
-            raise RuntimeError(f'Can blobs other than embedded signatures be superblobs? Investigate {hex(blob_magic)}')
+        superblob = CSSuperblob(self.binary, file_offset, virtual=False)
+        if superblob.magic != CodesignBlobTypeEnum.CSMAGIC_EMBEDDED_SIGNATURE:
+            raise RuntimeError(f'Can blobs other than embedded signatures be superblobs? {hex(superblob.magic)}')
 
-        blob_length, file_offset = self.read_cs32(file_offset)
-        index_entry_count, file_offset = self.read_cs32(file_offset)
+        print(f'Superblob has {superblob.index_entry_count} sub-blobs')
 
-        print(f'Superblob has {index_entry_count} sub-blobs')
+        file_offset += superblob.sizeof
+        for i in range(superblob.index_entry_count):
+            csblob_index = self.parse_csblob_index(file_offset)
+            csblob_file_offset = self._codesign_entry + csblob_index.offset
+            print(f'Sub-blob @ {hex(csblob_file_offset)}: {self.get_index_blob_name(csblob_index)}')
 
-        for i in range(index_entry_count):
-            self.parse_csblob_index(file_offset)
-            file_offset += sizeof(c_uint32)*2
+            # parse the blob we learned about
+            self.parse_codesign_resource(csblob_file_offset)
 
-    def parse_csblob_index(self, file_offset: int):
-        """Parse a csblob_index at the file offset.
-        A csblob_index is a header structure describing the type/layout of a superblob's child blob.
-        This method will parse the index header, then parse the sub-blob itself.
+            # iterate to the next blob index struct in list
+            file_offset += csblob_index.sizeof
+
+    @staticmethod
+    def get_index_blob_name(blob_index: CSBlobIndex):
+        """Get the human-readable blob type from the `type` field in a CSBlobIndex.
         """
-        blob_type, file_offset = self.read_cs32(file_offset)
-        blob_offset, file_offset = self.read_cs32(file_offset)
-        blob_file_offset = self._codesign_entry + blob_offset
-
         # cs_blobs.h
         blob_types = {0: 'Code Directory',
                       1: 'Info slot',
@@ -107,9 +107,14 @@ class CodesignParser:
                       5: 'Embedded Entitlements',
                       0x1000: 'Alternate Code Directory',
                       0x10000: 'CMS Signature'}
-        print(f'Sub-blob @ {hex(blob_file_offset)}: {blob_types[blob_type]}')
-        # parse the blob we learned about
-        self.parse_codesign_resource(blob_file_offset)
+        return blob_types[blob_index.type]
+
+    def parse_csblob_index(self, file_offset: int) -> CSBlobIndex:
+        """Parse a csblob_index at the file offset.
+        A csblob_index is a header structure describing the type/layout of a superblob's child blob.
+        This method will parse and return the index header.
+        """
+        return CSBlobIndex(self.binary, file_offset, virtual=False)
 
     def parse_code_directory(self, file_offset: int):
         """Parse a Code Directory at the file offset.
@@ -162,7 +167,7 @@ class CodesignParser:
             raise RuntimeError(f'incorrect magic for embedded entitlements: {hex(entitlements_blob.magic)}')
         blob_end = entitlements_blob.binary_offset + entitlements_blob.length
 
-        xml_start = file_offset
+        xml_start = file_offset + entitlements_blob.sizeof
         xml_length = blob_end - xml_start
         print(f'Entitlements XML from {hex(xml_start)} to {hex(xml_start + xml_length)}')
 

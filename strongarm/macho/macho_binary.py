@@ -78,6 +78,7 @@ class MachoBinary:
         self.encryption_info: MachoEncryptionInfoStruct = None
         self.dyld_info: MachoDyldInfoCommandStruct = None
         self.load_dylib_commands: List[DylibCommandStruct] = None
+        self._codesign_parser: CodesignParser = None
 
         # cache to save work on calls to get_bytes()
         with open(self.filename, 'rb') as f:
@@ -575,3 +576,11 @@ class MachoBinary:
         if not file_bytes:
             return None
         return word_type.from_buffer(bytearray(file_bytes)).value
+
+    def get_entitlements(self) -> bytearray:
+        """Read the entitlements the binary was signed with.
+        """
+        from strongarm.macho.codesign import CodesignParser
+        if not self._codesign_parser:
+            self._codesign_parser = CodesignParser(self)
+        return self._codesign_parser.entitlements

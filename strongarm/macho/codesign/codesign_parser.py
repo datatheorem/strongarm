@@ -97,22 +97,19 @@ class CodesignParser:
     def parse_code_directory(self, file_offset: int):
         """Parse a Code Directory at the file offset.
         """
-        # TODO(PT): make mach-o structures for CodeSigning structs
         code_directory = CSCodeDirectory(self.binary, file_offset, virtual=False)
-        if code_directory.magic != CodesignBlobTypeEnum.CSMAGIC_CODE_DIRECTORY:
-            raise RuntimeError(f'incorrect magic for CodeDirectory header: {hex(code_directory.magic)}')
-        # Version 0x20100: scatter_offset
-        # Version 0x20200: team offset
-        if code_directory.version < 0x20200:
-            raise RuntimeError(f'sizeof(CSCodeDirectory) is too large, team_offset/scatter_offset not included!')
 
         identifier_address = code_directory.binary_offset + code_directory.identifier_offset
         identifier_string = self.binary.get_full_string_from_start_address(identifier_address, virtual=False)
         self.signing_identifier = identifier_string
 
-        team_id_address = code_directory.binary_offset + code_directory.team_offset
-        team_id_string = self.binary.get_full_string_from_start_address(team_id_address, virtual=False)
-        self.signing_team_id = team_id_string
+        # Version 0x20100+ includes scatter_offset
+        # Version 0x20200+ includes team offset
+        if code_directory.version >= 0x20200:
+            # Note that if the version < 0x20200, the CSCodeDirectory structure parses past the end of the actual struct
+            team_id_address = code_directory.binary_offset + code_directory.team_offset
+            team_id_string = self.binary.get_full_string_from_start_address(team_id_address, virtual=False)
+            self.signing_team_id = team_id_string
 
     def parse_entitlements(self, file_offset: int) -> bytearray:
         """Parse the embedded entitlements blob at the file offset.

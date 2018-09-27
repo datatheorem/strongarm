@@ -103,6 +103,8 @@ class CodesignParser:
             raise RuntimeError(f'incorrect magic for CodeDirectory header: {hex(code_directory.magic)}')
         # Version 0x20100: scatter_offset
         # Version 0x20200: team offset
+        if code_directory.version < 0x20200:
+            raise RuntimeError(f'sizeof(CSCodeDirectory) is too large, team_offset/scatter_offset not included!')
 
         identifier_address = code_directory.binary_offset + code_directory.identifier_offset
         identifier_string = self.binary.get_full_string_from_start_address(identifier_address, virtual=False)

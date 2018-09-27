@@ -1,23 +1,12 @@
-from strongarm.macho.macho_binary import MachoBinary
 from typing import Tuple
 from ctypes import sizeof, c_uint32, c_uint64
-from enum import IntEnum
 
+from strongarm.macho.macho_binary import MachoBinary
 
-class CodesignBlobTypeEnum(IntEnum):
-    """Magic numbers for codesigning blobs
-    https://opensource.apple.com/source/Security/Security-57031.1.35/Security/libsecurity_codesigning/lib/CSCommonPriv.h
-    https://opensource.apple.com/source/libsecurity_utilities/libsecurity_utilities-55030/lib/blob.h.auto.html
-    https://opensource.apple.com/source/xnu/xnu-4570.1.46/osfmk/kern/cs_blobs.h.auto.html
-    https://opensource.apple.com/source/xnu/xnu-2422.1.72/bsd/sys/codesign.h
-    """
-    CSMAGIC_REQUIREMENT           = 0xfade0c00  # single requirement blob
-    CSMAGIC_REQUIREMENT_SET       = 0xfade0c01  # requirements vector (internal requirements)
-    CSMAGIC_CODE_DIRECTORY        = 0xfade0c02  # CodeDirectory blob
-    CSMAGIC_EMBEDDED_SIGNATURE    = 0xfade0cc0  # embedded signature data
-    CSMAGIC_DETACHED_SIGNATURE    = 0xfade0cc1  # multi-arch collection of embedded signatures
-    CSMAGIC_EMBEDDED_ENTITLEMENTS = 0xfade7171  # embedded entitlements
-    CSMAGIC_BLOBWRAPPER           = 0xfade0b01  # CMS signature, "among other things" from the source code
+from .codesign_definitions import (
+    CodesignBlobTypeEnum,
+    CSCodeDirectory
+)
 
 
 class CodesignParser:
@@ -127,52 +116,36 @@ class CodesignParser:
         # TODO(PT): make mach-o structures for CodeSigning structs
         print(f'Parsing CodeSign Code Directory')
         code_directory_head = file_offset
-        magic, file_offset = self.read_cs32(file_offset)
-        if magic != CodesignBlobTypeEnum.CSMAGIC_CODE_DIRECTORY:
-            raise RuntimeError(f'incorrect magic for CodeDirectory header: {magic}')
 
-        length, file_offset = self.read_cs32(file_offset)
-        version, file_offset = self.read_cs32(file_offset)
-        flags, file_offset = self.read_cs32(file_offset)
-        hash_offset, file_offset = self.read_cs32(file_offset)
-        identifier_offset, file_offset = self.read_cs32(file_offset)
-        special_slots_count, file_offset = self.read_cs32(file_offset)
-        code_slots_count, file_offset = self.read_cs32(file_offset)
-        code_limit, file_offset = self.read_cs32(file_offset)
-        hash_size, file_offset = self.read_cs_byte(file_offset)
-        hash_type, file_offset = self.read_cs_byte(file_offset)
-        platform, file_offset = self.read_cs_byte(file_offset)
-        page_size, file_offset = self.read_cs_byte(file_offset)
-        unused, file_offset = self.read_cs32(file_offset)
-
-        # Version 0x20100
-        scatter_offset, file_offset = self.read_cs32(file_offset)
-        # Version 0x20200
-        team_offset, file_offset = self.read_cs32(file_offset)
+        code_directory = CSCodeDirectory(self.binary, file_offset, virtual=False)
+        if code_directory.magic != CodesignBlobTypeEnum.CSMAGIC_CODE_DIRECTORY:
+            raise RuntimeError(f'incorrect magic for CodeDirectory header: {hex(code_directory.magic)}')
+        # Version 0x20100: scatter_offset
+        # Version 0x20200: team offset
 
         print(f'CodeSign Code Directory @ {hex(code_directory_head)}\n'
               f'-----------------------\n'
-              f'Magic: {hex(magic)}\n'
-              f'Length: {hex(length)}\n'
-              f'Version: {hex(version)}\n'
-              f'Flags: {hex(flags)}\n'
-              f'Hash offset: {hex(hash_offset)}\n'
-              f'Identifier offset: {hex(identifier_offset)}\n'
-              f'Special slots count: {special_slots_count}\n'
-              f'Code slots count: {code_slots_count}\n'
-              f'Code limit: {hex(code_limit)}\n'
-              f'Hash size: {hex(hash_size)}\n'
-              f'Hash type: {hex(hash_type)}\n'
-              f'Platform: {hex(platform)}\n'
-              f'Page size: {hex(page_size)}\n'
-              f'Scatter offset: {hex(scatter_offset)}\n'
-              f'Team ID offset: {hex(team_offset)}\n')
-        identifier_address = code_directory_head + identifier_offset
+              f'Magic: {hex(code_directory.magic)}\n'
+              f'Length: {hex(code_directory.length)}\n'
+              f'Version: {hex(code_directory.version)}\n'
+              f'Flags: {hex(code_directory.flags)}\n'
+              f'Hash offset: {hex(code_directory.hash_offset)}\n'
+              f'Identifier offset: {hex(code_directory.identifier_offset)}\n'
+              f'Special slots count: {code_directory.special_slots_count}\n'
+              f'Code slots count: {code_directory.code_slots_count}\n'
+              f'Code limit: {hex(code_directory.code_limit)}\n'
+              f'Hash size: {hex(code_directory.hash_size)}\n'
+              f'Hash type: {hex(code_directory.hash_type)}\n'
+              f'Platform: {hex(code_directory.platform)}\n'
+              f'Page size: {hex(code_directory.page_size)}\n'
+              f'Scatter offset: {hex(code_directory.scatter_offset)}\n'
+              f'Team ID offset: {hex(code_directory.team_offset)}\n')
+        identifier_address = code_directory.binary_offset + code_directory.identifier_offset
         identifier_string = self.binary.get_full_string_from_start_address(identifier_address, virtual=False)
         self.signing_identifier = identifier_string
         print(f'Identifier ({hex(identifier_address)}): {self.signing_identifier}')
 
-        team_id_address = code_directory_head + team_offset
+        team_id_address = code_directory.binary_offset + code_directory.team_offset
         team_id_string = self.binary.get_full_string_from_start_address(team_id_address, virtual=False)
         self.signing_team_id = team_id_string
         print(f'Team ID    ({hex(team_id_address)}): {self.signing_team_id}')

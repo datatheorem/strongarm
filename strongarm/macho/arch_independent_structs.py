@@ -70,6 +70,7 @@ class ArchIndependentStructure:
             struct_type = self._64_BIT_STRUCT
         else:
             struct_type = self._32_BIT_STRUCT
+
         if virtual:
             struct_bytes = binary.get_content_from_virtual_address(binary_offset, sizeof(struct_type))
         else:

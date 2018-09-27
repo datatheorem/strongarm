@@ -32,6 +32,12 @@ class CSBlobStruct(BigEndianStructure):
     ]
 
 
+class CSSuperblobStruct(BigEndianStructure):
+    _fields_ = CSBlobStruct._fields_ + [
+        ('index_entry_count', c_uint32)
+    ]
+
+
 class CSCodeDirectoryStruct(BigEndianStructure):
     _fields_ = CSBlobStruct._fields_ + [
         ('version', c_uint32),
@@ -51,11 +57,28 @@ class CSCodeDirectoryStruct(BigEndianStructure):
     ]
 
 
+class CSBlobIndexStruct(BigEndianStructure):
+    _fields_ = [
+        ('type', c_uint32),
+        ('offset', c_uint32)
+    ]
+
+
 class CSBlob(ArchIndependentStructure):
     _32_BIT_STRUCT = CSBlobStruct
     _64_BIT_STRUCT = CSBlobStruct
 
 
+class CSSuperblob(ArchIndependentStructure):
+    _32_BIT_STRUCT = CSSuperblobStruct
+    _64_BIT_STRUCT = CSSuperblobStruct
+
+
 class CSCodeDirectory(ArchIndependentStructure):
     _32_BIT_STRUCT = CSCodeDirectoryStruct
     _64_BIT_STRUCT = CSCodeDirectoryStruct
+
+
+class CSBlobIndex(ArchIndependentStructure):
+    _32_BIT_STRUCT = CSBlobIndexStruct
+    _64_BIT_STRUCT = CSBlobIndexStruct

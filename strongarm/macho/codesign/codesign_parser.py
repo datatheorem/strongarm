@@ -18,18 +18,17 @@ class CodesignParser:
         self.signing_team_id: str = None
 
         self._codesign_entry = self.binary.code_signature.dataoff
-        self.parse_codesign_resource(self._codesign_entry)
+        self.parse_codesign_blob(self._codesign_entry)
 
     def read_32_big_endian(self, offset: int) -> int:
         """Read a 32-bit word from the file offset in big-endian order.
-        Returns the word that was read and an incremented file pointer.
         """
         word_bytes = self.binary.get_bytes(offset, 4)
         word = int.from_bytes(word_bytes, byteorder='big')
         return word
 
-    def parse_codesign_resource(self, file_offset: int) -> None:
-        """High-level parser to parse the codesign construct at the file offset.
+    def parse_codesign_blob(self, file_offset: int) -> None:
+        """High-level parser to parse the codesign blob at the file offset.
         """
         magic = self.read_32_big_endian(file_offset)
 
@@ -40,37 +39,35 @@ class CodesignParser:
         elif magic == CodesignBlobTypeEnum.CSMAGIC_EMBEDDED_ENTITLEMENTS:
             self.entitlements = self.parse_entitlements(file_offset)
         elif magic == CodesignBlobTypeEnum.CSMAGIC_REQUIREMENT:
-            print(f'Skipping CodeSign requirement at {hex(file_offset)}')
+            pass
         elif magic == CodesignBlobTypeEnum.CSMAGIC_REQUIREMENT_SET:
-            print(f'Skipping CodeSign requirement set at {hex(file_offset)}')
+            pass
         elif magic == CodesignBlobTypeEnum.CSMAGIC_DETACHED_SIGNATURE:
-            print(f'Skipping CodeSign detached signature at {hex(file_offset)}')
+            pass
         elif magic == CodesignBlobTypeEnum.CSMAGIC_BLOBWRAPPER:
-            print(f'Skipping CodeSign blob wrapper at {hex(file_offset)}')
+            pass
         else:
-            print(f'Skipping unknown codesign magic: {hex(magic)}')
+            # unknown magic
+            raise RuntimeError(f'Unknown CodeSign blob magic: {hex(magic)}')
 
     def parse_superblob(self, file_offset: int):
         """Parse a codesign 'superblob' at the provided file offset.
         This is a blob which embeds several child blobs.
-        The superblob format is the superblob header, followed by several 'csblob_index' structures describing
+        The superblob format is the superblob header, followed by several csblob_index structures describing
         the layout of the child blobs.
         """
-        print(f'Parsing CodeSign superblob at {hex(file_offset)}')
         superblob = CSSuperblob(self.binary, file_offset, virtual=False)
         if superblob.magic != CodesignBlobTypeEnum.CSMAGIC_EMBEDDED_SIGNATURE:
             raise RuntimeError(f'Can blobs other than embedded signatures be superblobs? {hex(superblob.magic)}')
 
-        print(f'Superblob has {superblob.index_entry_count} sub-blobs')
-
+        # move past the superblob header to the first index struct entry
         file_offset += superblob.sizeof
         for i in range(superblob.index_entry_count):
             csblob_index = self.parse_csblob_index(file_offset)
             csblob_file_offset = self._codesign_entry + csblob_index.offset
-            print(f'Sub-blob @ {hex(csblob_file_offset)}: {self.get_index_blob_name(csblob_index)}')
 
             # parse the blob we learned about
-            self.parse_codesign_resource(csblob_file_offset)
+            self.parse_codesign_blob(csblob_file_offset)
 
             # iterate to the next blob index struct in list
             file_offset += csblob_index.sizeof
@@ -101,48 +98,24 @@ class CodesignParser:
         """Parse a Code Directory at the file offset.
         """
         # TODO(PT): make mach-o structures for CodeSigning structs
-        print(f'Parsing CodeSign Code Directory')
-        code_directory_head = file_offset
-
         code_directory = CSCodeDirectory(self.binary, file_offset, virtual=False)
         if code_directory.magic != CodesignBlobTypeEnum.CSMAGIC_CODE_DIRECTORY:
             raise RuntimeError(f'incorrect magic for CodeDirectory header: {hex(code_directory.magic)}')
         # Version 0x20100: scatter_offset
         # Version 0x20200: team offset
 
-        print(f'CodeSign Code Directory @ {hex(code_directory_head)}\n'
-              f'-----------------------\n'
-              f'Magic: {hex(code_directory.magic)}\n'
-              f'Length: {hex(code_directory.length)}\n'
-              f'Version: {hex(code_directory.version)}\n'
-              f'Flags: {hex(code_directory.flags)}\n'
-              f'Hash offset: {hex(code_directory.hash_offset)}\n'
-              f'Identifier offset: {hex(code_directory.identifier_offset)}\n'
-              f'Special slots count: {code_directory.special_slots_count}\n'
-              f'Code slots count: {code_directory.code_slots_count}\n'
-              f'Code limit: {hex(code_directory.code_limit)}\n'
-              f'Hash size: {hex(code_directory.hash_size)}\n'
-              f'Hash type: {hex(code_directory.hash_type)}\n'
-              f'Platform: {hex(code_directory.platform)}\n'
-              f'Page size: {hex(code_directory.page_size)}\n'
-              f'Scatter offset: {hex(code_directory.scatter_offset)}\n'
-              f'Team ID offset: {hex(code_directory.team_offset)}\n')
         identifier_address = code_directory.binary_offset + code_directory.identifier_offset
         identifier_string = self.binary.get_full_string_from_start_address(identifier_address, virtual=False)
         self.signing_identifier = identifier_string
-        print(f'Identifier ({hex(identifier_address)}): {self.signing_identifier}')
 
         team_id_address = code_directory.binary_offset + code_directory.team_offset
         team_id_string = self.binary.get_full_string_from_start_address(team_id_address, virtual=False)
         self.signing_team_id = team_id_string
-        print(f'Team ID    ({hex(team_id_address)}): {self.signing_team_id}')
 
     def parse_entitlements(self, file_offset: int) -> bytearray:
         """Parse the embedded entitlements blob at the file offset.
         Returns a bytearray of the embedded entitlements.
         """
-        print(f'Parsing CodeSign embedded entitlements at {hex(file_offset)}')
-
         entitlements_blob = CSBlob(self.binary, file_offset, virtual=False)
         if entitlements_blob.magic != CodesignBlobTypeEnum.CSMAGIC_EMBEDDED_ENTITLEMENTS:
             raise RuntimeError(f'incorrect magic for embedded entitlements: {hex(entitlements_blob.magic)}')
@@ -150,8 +123,5 @@ class CodesignParser:
 
         xml_start = file_offset + entitlements_blob.sizeof
         xml_length = blob_end - xml_start
-        print(f'Entitlements XML from {hex(xml_start)} to {hex(xml_start + xml_length)}')
-
         xml = self.binary.get_bytes(xml_start, xml_length)
-        print(f'Found embedded entitlements XML:\n{xml}')
         return xml

@@ -23,10 +23,17 @@ class CodesignBlobTypeEnum(IntEnum):
     CSMAGIC_BLOBWRAPPER           = 0xfade0b01  # CMS signature, "among other things" from the source code
 
 
-class CSCodeDirectoryStruct(BigEndianStructure):
+class CSBlobStruct(BigEndianStructure):
+    """Basic CodeSign blob structure. These fields shared by all CodeSign blob structures.
+    """
     _fields_ = [
         ('magic', c_uint32),
-        ('length', c_uint32),
+        ('length', c_uint32)
+    ]
+
+
+class CSCodeDirectoryStruct(BigEndianStructure):
+    _fields_ = CSBlobStruct._fields_ + [
         ('version', c_uint32),
         ('flags', c_uint32),
         ('hash_offset', c_uint32),
@@ -42,6 +49,11 @@ class CSCodeDirectoryStruct(BigEndianStructure):
         ('scatter_offset', c_uint32),
         ('team_offset', c_uint32),
     ]
+
+
+class CSBlob(ArchIndependentStructure):
+    _32_BIT_STRUCT = CSBlobStruct
+    _64_BIT_STRUCT = CSBlobStruct
 
 
 class CSCodeDirectory(ArchIndependentStructure):

@@ -5,6 +5,7 @@ from strongarm.macho.macho_binary import MachoBinary
 
 from .codesign_definitions import (
     CodesignBlobTypeEnum,
+    CSBlob,
     CSCodeDirectory
 )
 
@@ -156,12 +157,10 @@ class CodesignParser:
         """
         print(f'Parsing CodeSign embedded entitlements at {hex(file_offset)}')
 
-        entitlements_blob_start = file_offset
-        magic, file_offset = self.read_cs32(file_offset)
-        if magic != CodesignBlobTypeEnum.CSMAGIC_EMBEDDED_ENTITLEMENTS:
-            raise RuntimeError(f'incorrect magic for embedded entitlements: {hex(magic)}')
-        blob_length, file_offset = self.read_cs32(file_offset)
-        blob_end = entitlements_blob_start + blob_length
+        entitlements_blob = CSBlob(self.binary, file_offset, virtual=False)
+        if entitlements_blob.magic != CodesignBlobTypeEnum.CSMAGIC_EMBEDDED_ENTITLEMENTS:
+            raise RuntimeError(f'incorrect magic for embedded entitlements: {hex(entitlements_blob.magic)}')
+        blob_end = entitlements_blob.binary_offset + entitlements_blob.length
 
         xml_start = file_offset
         xml_length = blob_end - xml_start

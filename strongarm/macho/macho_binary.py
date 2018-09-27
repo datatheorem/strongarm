@@ -563,7 +563,6 @@ class MachoBinary:
     def read_word(self,
                   address: int,
                   virtual=True,
-                  swap=False,
                   word_type=None) -> Optional[Union[c_uint32, c_uint64]]:
         """Attempt to read a word from the binary at a virtual address. Returns None if the address is invalid.
         """
@@ -575,11 +574,4 @@ class MachoBinary:
             file_bytes = self.get_bytes(address, sizeof(word_type))
         if not file_bytes:
             return None
-
-        if swap:
-            file_bytes = file_bytes[::-1]
-            swapped = bytearray(len(file_bytes))
-            swapped[0::2] = file_bytes[1::2]
-            swapped[1::2] = file_bytes[0::2]
-
         return word_type.from_buffer(bytearray(file_bytes)).value

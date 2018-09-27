@@ -7,6 +7,7 @@ from capstone import Cs, CsInsn, CS_ARCH_ARM64, CS_MODE_ARM
 from ctypes import create_string_buffer, sizeof
 
 from strongarm import DebugUtil
+from strongarm.macho.codesign import CodesignParser
 from strongarm.macho.macho_binary import MachoBinary
 from strongarm.macho.macho_imp_stubs import MachoImpStubsParser
 from strongarm.macho.arch_independent_structs import CFStringStruct, CFString32, CFString64
@@ -53,6 +54,8 @@ class MachoAnalyzer:
         self._objc_method_list: List[ObjcMethodInfo] = None
 
         self._cached_function_boundaries: Dict[int, int] = {}
+
+        self._codesign_parser: CodesignParser = None
 
         # done setting up, store this analyzer in class cache
         MachoAnalyzer.active_analyzer_map[bin] = self
@@ -408,3 +411,10 @@ class MachoAnalyzer:
         if is_cfstring:
             return self._stringref_for_cfstring(string)
         return self._stringref_for_cstring(string)
+
+    def get_entitlements(self) -> bytearray:
+        """Read the entitlements the binary was signed with.
+        """
+        if not self._codesign_parser:
+            self._codesign_parser = CodesignParser(self.binary)
+        return self._codesign_parser.entitlements

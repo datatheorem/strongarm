@@ -20,37 +20,18 @@ class CodesignParser:
         self._codesign_entry = self.binary.code_signature.dataoff
         self.parse_codesign_resource(self._codesign_entry)
 
-    def read_cs_byte(self, offset: int) -> Tuple[int, int]:
-        """Read a byte from the file offset.
-        Returns the byte that was read and an incremented file pointer.
-        """
-        byte = int.from_bytes(self.binary.get_bytes(offset, 1), byteorder='little')
-        return byte, offset + 1
-
-    def read_cs32(self, offset: int) -> Tuple[int, int]:
+    def read_32_big_endian(self, offset: int) -> int:
         """Read a 32-bit word from the file offset in big-endian order.
         Returns the word that was read and an incremented file pointer.
         """
-        word = self.binary.read_word(offset,
-                                     virtual=False,
-                                     swap=True,
-                                     word_type=c_uint32)
-        return word, offset + 4
-
-    def read_cs64(self, offset: int) -> Tuple[int, int]:
-        """Read a 64-bit word from the file offset in big-endian order.
-        Returns the word that was read and an incremented file pointer.
-        """
-        word = self.binary.read_word(offset,
-                                     virtual=False,
-                                     swap=True,
-                                     word_type=c_uint64)
-        return word, offset + 8
+        word_bytes = self.binary.get_bytes(offset, 4)
+        word = int.from_bytes(word_bytes, byteorder='big')
+        return word
 
     def parse_codesign_resource(self, file_offset: int) -> None:
         """High-level parser to parse the codesign construct at the file offset.
         """
-        magic, _ = self.read_cs32(file_offset)
+        magic = self.read_32_big_endian(file_offset)
 
         if magic == CodesignBlobTypeEnum.CSMAGIC_CODE_DIRECTORY:
             self.parse_code_directory(file_offset)

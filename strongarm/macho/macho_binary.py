@@ -54,6 +54,7 @@ class MachoBinary:
     BYTES_PER_INSTRUCTION = 4
 
     def __init__(self, filename: bytes, offset_within_fat=0) -> None:
+        from .codesign.codesign_parser import CodesignParser
         # info about this Mach-O's file representation
         self.filename = filename
         self._offset_within_fat = offset_within_fat
@@ -78,6 +79,8 @@ class MachoBinary:
         self.encryption_info: MachoEncryptionInfoStruct = None
         self.dyld_info: MachoDyldInfoCommandStruct = None
         self.load_dylib_commands: List[DylibCommandStruct] = None
+        self.code_signature_cmd: MachoLinkeditDataCommandStruct = None
+
         self._codesign_parser: CodesignParser = None
 
         # cache to save work on calls to get_bytes()
@@ -220,7 +223,7 @@ class MachoBinary:
                 self.load_dylib_commands.append(dylib_load_command)
 
             elif load_command.cmd == MachoLoadCommands.LC_CODE_SIGNATURE:
-                self.code_signature = MachoLinkeditDataCommandStruct(self, offset)
+                self.code_signature_cmd = MachoLinkeditDataCommandStruct(self, offset)
 
             # move to next load command in header
             offset += load_command.cmdsize

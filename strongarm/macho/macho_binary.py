@@ -81,7 +81,7 @@ class MachoBinary:
         self.load_dylib_commands: List[DylibCommandStruct] = None
         self.code_signature_cmd: MachoLinkeditDataCommandStruct = None
 
-        self._codesign_parser: CodesignParser = None
+        self.__codesign_parser: CodesignParser = None
 
         # cache to save work on calls to get_bytes()
         with open(self.filename, 'rb') as f:
@@ -580,10 +580,24 @@ class MachoBinary:
             return None
         return word_type.from_buffer(bytearray(file_bytes)).value
 
+    @property
+    def _codesign_parser(self) -> 'CodesignParser':
+        from strongarm.macho.codesign import CodesignParser
+        if not self.__codesign_parser:
+            self.__codesign_parser = CodesignParser(self)
+        return self.__codesign_parser
+
     def get_entitlements(self) -> bytearray:
         """Read the entitlements the binary was signed with.
         """
-        from strongarm.macho.codesign import CodesignParser
-        if not self._codesign_parser:
-            self._codesign_parser = CodesignParser(self)
         return self._codesign_parser.entitlements
+
+    def get_signing_identity(self) -> str:
+        """Read the bundle ID the binary was signed as.
+        """
+        return self._codesign_parser.signing_identifier
+
+    def get_team_id(self) -> str:
+        """Read the team ID the binary was signed with.
+        """
+        return self._codesign_parser.signing_team_id

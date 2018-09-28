@@ -228,6 +228,7 @@ def main():
     shell = StrongarmShell(binary, analyzer)
 
     if script:
+        print(f'Running provided script...\n\n')
         strongarm_script(binary, analyzer)
     else:
         autorun_cmd = 'info metadata segments sections loads'

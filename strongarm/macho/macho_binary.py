@@ -16,7 +16,8 @@ from strongarm.macho.arch_independent_structs import \
     MachoLoadCommandStruct, \
     MachoSymtabCommandStruct, \
     MachoDysymtabCommandStruct, \
-    MachoDyldInfoCommandStruct
+    MachoDyldInfoCommandStruct, \
+    MachoLinkeditDataCommandStruct
 
 from ctypes import c_uint64, c_uint32, sizeof
 
@@ -53,6 +54,7 @@ class MachoBinary:
     BYTES_PER_INSTRUCTION = 4
 
     def __init__(self, filename: bytes, offset_within_fat=0) -> None:
+        from .codesign.codesign_parser import CodesignParser
         # info about this Mach-O's file representation
         self.filename = filename
         self._offset_within_fat = offset_within_fat
@@ -77,9 +79,13 @@ class MachoBinary:
         self.encryption_info: MachoEncryptionInfoStruct = None
         self.dyld_info: MachoDyldInfoCommandStruct = None
         self.load_dylib_commands: List[DylibCommandStruct] = None
+        self.code_signature_cmd: MachoLinkeditDataCommandStruct = None
+
+        self._codesign_parser: CodesignParser = None
 
         # cache to save work on calls to get_bytes()
         with open(self.filename, 'rb') as f:
+            # TODO(PT): this should only read to the end of our FAT slice!
             self._cached_binary = f.read()[offset_within_fat:]
 
         # kickoff for parsing this slice
@@ -215,6 +221,9 @@ class MachoBinary:
                 dylib_load_command = DylibCommandStruct(self, offset)
                 dylib_load_command.fileoff = offset
                 self.load_dylib_commands.append(dylib_load_command)
+
+            elif load_command.cmd == MachoLoadCommands.LC_CODE_SIGNATURE:
+                self.code_signature_cmd = MachoLinkeditDataCommandStruct(self, offset)
 
             # move to next load command in header
             offset += load_command.cmdsize
@@ -569,5 +578,12 @@ class MachoBinary:
             file_bytes = self.get_bytes(address, sizeof(word_type))
         if not file_bytes:
             return None
-
         return word_type.from_buffer(bytearray(file_bytes)).value
+
+    def get_entitlements(self) -> bytearray:
+        """Read the entitlements the binary was signed with.
+        """
+        from strongarm.macho.codesign import CodesignParser
+        if not self._codesign_parser:
+            self._codesign_parser = CodesignParser(self)
+        return self._codesign_parser.entitlements

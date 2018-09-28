@@ -208,6 +208,19 @@ class MachoDyldInfoCommand(Structure):
     ]
 
 
+class MachoLinkeditDataCommand(Structure):
+    """Python representation of struct linkedit_data_command
+
+    Definition found in <mach-o/loader.h>
+    """
+    _fields_ = [
+        ('cmd', c_uint32),
+        ('cmdsize', c_uint32),
+        ('dataoff', c_uint32),
+        ('datasize', c_uint32),
+    ]
+
+
 class MachoNlistUn(Union):
     """Python representation of union n_un
 

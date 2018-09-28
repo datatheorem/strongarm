@@ -9,10 +9,6 @@ from strongarm.macho.arch_independent_structs import ArchIndependentStructure
 
 class CodesignBlobTypeEnum(IntEnum):
     """Magic numbers for codesigning blobs
-    https://opensource.apple.com/source/Security/Security-57031.1.35/Security/libsecurity_codesigning/lib/CSCommonPriv.h
-    https://opensource.apple.com/source/libsecurity_utilities/libsecurity_utilities-55030/lib/blob.h.auto.html
-    https://opensource.apple.com/source/xnu/xnu-4570.1.46/osfmk/kern/cs_blobs.h.auto.html
-    https://opensource.apple.com/source/xnu/xnu-2422.1.72/bsd/sys/codesign.h
     """
     CSMAGIC_REQUIREMENT           = 0xfade0c00  # single requirement blob
     CSMAGIC_REQUIREMENT_SET       = 0xfade0c01  # requirements vector (internal requirements)

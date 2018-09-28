@@ -11,6 +11,13 @@ from .codesign_definitions import (
 
 
 class CodesignParser:
+    """Parser for the CodeSign blobs in __LINKEDIT pointed to by LC_CODE_SIGNATURE.
+    https://opensource.apple.com/source/xnu/xnu-2422.1.72/bsd/sys/codesign.h
+    https://opensource.apple.com/source/xnu/xnu-4570.1.46/osfmk/kern/cs_blobs.h.auto.html
+    https://opensource.apple.com/source/libsecurity_utilities/libsecurity_utilities-55030/lib/blob.h.auto.html
+    https://opensource.apple.com/source/Security/Security-57031.1.35/Security/libsecurity_codesigning/lib/CSCommonPriv.h
+    """
+
     def __init__(self, binary: MachoBinary):
         self.binary = binary
         self.entitlements: bytearray = None
@@ -62,11 +69,13 @@ class CodesignParser:
 
         # move past the superblob header to the first index struct entry
         file_offset += superblob.sizeof
+
+        # parse each struct csblob_index following the superblob header
         for i in range(superblob.index_entry_count):
             csblob_index = self.parse_csblob_index(file_offset)
             csblob_file_offset = self._codesign_entry + csblob_index.offset
 
-            # parse the blob we learned about
+            # found a blob, now parse it
             self.parse_codesign_blob(csblob_file_offset)
 
             # iterate to the next blob index struct in list
@@ -118,6 +127,7 @@ class CodesignParser:
         entitlements_blob = CSBlob(self.binary, file_offset, virtual=False)
         if entitlements_blob.magic != CodesignBlobTypeEnum.CSMAGIC_EMBEDDED_ENTITLEMENTS:
             raise RuntimeError(f'incorrect magic for embedded entitlements: {hex(entitlements_blob.magic)}')
+
         blob_end = entitlements_blob.binary_offset + entitlements_blob.length
 
         xml_start = file_offset + entitlements_blob.sizeof

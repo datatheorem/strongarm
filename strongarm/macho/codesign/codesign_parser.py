@@ -24,7 +24,7 @@ class CodesignParser:
         self.signing_identifier: str = None
         self.signing_team_id: str = None
 
-        self._codesign_entry = self.binary.code_signature.dataoff
+        self._codesign_entry = self.binary.code_signature_cmd.dataoff
         self.parse_codesign_blob(self._codesign_entry)
 
     def read_32_big_endian(self, offset: int) -> int:

@@ -15,10 +15,10 @@ class TestCodeSignParser(unittest.TestCase):
         self.codesign_parser = CodesignParser(self.binary)
 
     def test_find_codesign_command(self):
-        self.assertEqual(0x1d, self.binary.code_signature.cmd)
-        self.assertEqual(0x10, self.binary.code_signature.cmdsize)
-        self.assertEqual(0x12d2e0, self.binary.code_signature.dataoff)
-        self.assertEqual(0x6500, self.binary.code_signature.datasize)
+        self.assertEqual(0x1d, self.binary.code_signature_cmd.cmd)
+        self.assertEqual(0x10, self.binary.code_signature_cmd.cmdsize)
+        self.assertEqual(0x12d2e0, self.binary.code_signature_cmd.dataoff)
+        self.assertEqual(0x6500, self.binary.code_signature_cmd.datasize)
 
     def test_entitlements(self):
         correct_ents = bytearray(

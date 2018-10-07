@@ -1,4 +1,5 @@
 # -*- coding: utf-8 -*-
+from strongarm.debug_util import DebugUtil
 from strongarm.macho.macho_binary import MachoBinary
 
 from .codesign_definitions import (
@@ -55,7 +56,7 @@ class CodesignParser:
             pass
         else:
             # unknown magic
-            raise RuntimeError(f'Unknown CodeSign blob magic: {hex(magic)}')
+            DebugUtil.log(self, f'Unknown CodeSign blob magic @ {hex(file_offset)}: {hex(magic)}')
 
     def parse_superblob(self, file_offset: int):
         """Parse a codesign 'superblob' at the provided file offset.

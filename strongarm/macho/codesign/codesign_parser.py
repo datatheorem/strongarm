@@ -120,6 +120,22 @@ class CodesignParser:
             team_id_address = code_directory.binary_offset + code_directory.team_offset
             team_id_string = self.binary.get_full_string_from_start_address(team_id_address, virtual=False)
             self.signing_team_id = team_id_string
+    def print_code_directory(self, code_dir: CSCodeDirectory) -> None:
+        print(f'CodeDirectory @ {hex(code_dir.binary_offset)}')
+        print(f'-----------------------')
+        print(f'Version: {hex(code_dir.version)}')
+        print(f'Flags: {hex(code_dir.flags)}')
+        print(f'Hash offset: {hex(code_dir.hash_offset)}')
+        print(f'Identifier offset: {hex(code_dir.identifier_offset)}')
+        print(f'Special slots count: {code_dir.special_slots_count}')
+        print(f'Code limit: {hex(code_dir.code_limit)}')
+        print(f'Hash size: {hex(code_dir.hash_size)}')
+        print(f'Hash type: {hex(code_dir.hash_type)}')
+        print(f'Platform: {hex(code_dir.platform)}')
+        print(f'Page size: {hex(code_dir.page_size)}')
+        print(f'Scatter offset: {hex(code_dir.scatter_offset)}')
+        print(f'Team offset: {hex(code_dir.team_offset)}')
+        print()
 
     def parse_entitlements(self, file_offset: int) -> bytearray:
         """Parse the embedded entitlements blob at the file offset.

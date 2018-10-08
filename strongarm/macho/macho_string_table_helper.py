@@ -55,7 +55,13 @@ class MachoStringTableHelper:
 
                 # read this string now that we know the start index and length
                 entry_end_idx = entry_start_idx + length
-                entry_content = bytearray(strtab[entry_start_idx:entry_end_idx:]).decode('UTF-8')
+                entry_byte_content = bytearray(strtab[entry_start_idx:entry_end_idx:])
+                try:
+                    entry_content = entry_byte_content.decode('utf-8')
+                except UnicodeDecodeError:
+                    # get a string literal of the raw bytes
+                    # 0x0080 -> "b'\\x00\\x80'"
+                    entry_content = str(bytes(entry_byte_content))
 
                 # record in list
                 ent = MachoStringTableEntry(entry_start_idx, length, entry_content)

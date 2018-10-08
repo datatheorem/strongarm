@@ -59,8 +59,7 @@ class MachoStringTableHelper:
                 try:
                     entry_content = entry_byte_content.decode('utf-8')
                 except UnicodeDecodeError:
-                    # get a string literal of the raw bytes
-                    # 0x0080 -> "b'\\x00\\x80'"
+                    # get a string literal of the raw bytes. 0x0080 -> "b'\\x00\\x80'"
                     entry_content = str(bytes(entry_byte_content))
 
                 # record in list

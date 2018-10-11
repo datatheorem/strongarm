@@ -34,14 +34,10 @@ class TestMachoAnalyzer(unittest.TestCase):
         start_addr = 0x100006420
         correct_end_addr = 0x100006530
 
-        # defined in MachoAnalyzer
-        max_function_size = 0x2000
-        binary_data = self.binary.get_content_from_virtual_address(start_addr, max_function_size)
-        bytecode = create_string_buffer(bytes(binary_data), max_function_size)
-        # not in cache. calculate function boundary, then cache it
-        guessed_end_address = determine_function_boundary(bytecode, start_addr)
-
-        self.assertEqual(guessed_end_address, correct_end_addr)
+        found_instructions = self.analyzer.get_function_instructions(start_addr)
+        self.assertEqual(69, len(found_instructions))
+        found_end_addr = found_instructions[-1].address
+        self.assertEqual(correct_end_addr, found_end_addr)
 
     def test_find_imported_symbols(self):
         correct_imported_symbols = ['_NSClassFromString',

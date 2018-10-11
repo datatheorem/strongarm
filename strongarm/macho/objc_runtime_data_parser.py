@@ -194,6 +194,7 @@ class ObjcRuntimeDataParser:
         for ptr in classlist_pointers:
             objc_class = self._get_objc_class_from_classlist_pointer(ptr)
             if objc_class:
+                parsed_class = None
                 # parse the instance method list
                 objc_data_struct = self._get_objc_data_from_objc_class(objc_class)
                 if objc_data_struct:
@@ -208,9 +209,17 @@ class ObjcRuntimeDataParser:
                     objc_data_struct = self._get_objc_data_from_objc_class(metaclass)
                     if objc_data_struct:
                         parsed_metaclass = self._parse_objc_data_entry(objc_class, objc_data_struct)
-                        # just add in the selectors from the metaclass to the real class
-                        parsed_class.selectors += parsed_metaclass.selectors
+                        if parsed_class:
+                            # add in selectors from the metaclass to the real class
+                            parsed_class.selectors += parsed_metaclass.selectors
+                        else:
+                            # no base class found, set the base class to the metaclass
+                            parsed_class = parsed_metaclass
 
+                # sanity check
+                # ensure we either found a class or metaclass
+                if not parsed_class:
+                    raise RuntimeError(f'Failed to parse classref {hex(ptr)}')
                 parsed_objc_classes.append(parsed_class)
 
         return parsed_objc_classes
@@ -413,4 +422,3 @@ class ObjcRuntimeDataParser:
             ))
             return None
         return data_entry
-

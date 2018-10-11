@@ -34,7 +34,8 @@ from strongarm.macho.macho_definitions import \
     ObjcCategoryRaw64, \
     ObjcProtocolRaw32, \
     ObjcProtocolRaw64, \
-    ObjcProtocolList
+    ObjcProtocolList32, \
+    ObjcProtocolList64
 
 # create type alias for the following classes that inherit from ArchIndependentStructure
 if TYPE_CHECKING:
@@ -71,6 +72,7 @@ class ArchIndependentStructure:
         else:
             struct_type = self._32_BIT_STRUCT
 
+        self._is_addr_virtual = virtual
         if virtual:
             struct_bytes = binary.get_content_from_virtual_address(binary_offset, sizeof(struct_type))
         else:
@@ -93,6 +95,14 @@ class ArchIndependentStructure:
 
         implementation: Any = None
         data: Any = None
+
+    def __repr__(self):
+        rep = f''
+        rep += f'{self.__class__.__name__} ('
+        for field_name in self.__dict__.keys():
+            rep += f'{field_name}: {hex(getattr(self, field_name))}\t'
+        rep += f'\b)'
+        return rep
 
 
 class MachoHeaderStruct(ArchIndependentStructure):
@@ -132,8 +142,8 @@ class ObjcProtocolRawStruct(ArchIndependentStructure):
 
 
 class ObjcProtocolListStruct(ArchIndependentStructure):
-    _32_BIT_STRUCT = ObjcProtocolList
-    _64_BIT_STRUCT = ObjcProtocolList
+    _32_BIT_STRUCT = ObjcProtocolList32
+    _64_BIT_STRUCT = ObjcProtocolList64
 
 
 class ObjcCategoryRawStruct(ArchIndependentStructure):

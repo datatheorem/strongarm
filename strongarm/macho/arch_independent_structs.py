@@ -97,8 +97,7 @@ class ArchIndependentStructure:
         data: Any = None
 
     def __repr__(self):
-        rep = f''
-        rep += f'{self.__class__.__name__} ('
+        rep = f'{self.__class__.__name__} ('
         for field_name in self.__dict__.keys():
             rep += f'{field_name}: {hex(getattr(self, field_name))}\t'
         rep += f'\b)'

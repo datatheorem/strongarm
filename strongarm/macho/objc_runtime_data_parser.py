@@ -194,14 +194,12 @@ class ObjcRuntimeDataParser:
         for ptr in classlist_pointers:
             objc_class = self._get_objc_class_from_classlist_pointer(ptr)
             if objc_class:
+                parsed_class = None
                 # parse the instance method list
                 objc_data_struct = self._get_objc_data_from_objc_class(objc_class)
-                if not objc_data_struct:
-                    DebugUtil.log(self, 'WARNING: no instance method list for a classlist ptr! Investigate')
-                    continue
-                # the class's associated struct __objc_data contains the method list
-                print(f'parsing struct __objc_data {objc_data_struct}')
-                parsed_class = self._parse_objc_data_entry(objc_class, objc_data_struct)
+                if objc_data_struct:
+                    # the class's associated struct __objc_data contains the method list
+                    parsed_class = self._parse_objc_data_entry(objc_class, objc_data_struct)
 
                 # parse the metaclass if it exists
                 # the class stores instance methods and the metaclass's method list contains class methods
@@ -211,9 +209,17 @@ class ObjcRuntimeDataParser:
                     objc_data_struct = self._get_objc_data_from_objc_class(metaclass)
                     if objc_data_struct:
                         parsed_metaclass = self._parse_objc_data_entry(objc_class, objc_data_struct)
-                        # just add in the selectors from the metaclass to the real class
-                        parsed_class.selectors += parsed_metaclass.selectors
+                        if parsed_class:
+                            # add in selectors from the metaclass to the real class
+                            parsed_class.selectors += parsed_metaclass.selectors
+                        else:
+                            # no base class found, set the base class to the metaclass
+                            parsed_class = parsed_metaclass
 
+                # sanity check
+                # ensure we either found a class or metaclass
+                if not parsed_class:
+                    raise RuntimeError(f'Failed to parse classref {hex(ptr)}')
                 parsed_objc_classes.append(parsed_class)
 
         return parsed_objc_classes

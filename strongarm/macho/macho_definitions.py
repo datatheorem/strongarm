@@ -475,7 +475,13 @@ class ObjcMethodList(Structure):
     ]
 
 
-class ObjcProtocolList(Structure):
+class ObjcProtocolList32(Structure):
+    _fields_ = [
+        ('count', c_uint32)
+    ]
+
+
+class ObjcProtocolList64(Structure):
     _fields_ = [
         ('count', c_uint64)
     ]

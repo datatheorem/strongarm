@@ -196,9 +196,12 @@ class ObjcRuntimeDataParser:
             if objc_class:
                 # parse the instance method list
                 objc_data_struct = self._get_objc_data_from_objc_class(objc_class)
-                if objc_data_struct:
-                    # the class's associated struct __objc_data contains the method list
-                    parsed_class = self._parse_objc_data_entry(objc_class, objc_data_struct)
+                if not objc_data_struct:
+                    DebugUtil.log(self, 'WARNING: no instance method list for a classlist ptr! Investigate')
+                    continue
+                # the class's associated struct __objc_data contains the method list
+                print(f'parsing struct __objc_data {objc_data_struct}')
+                parsed_class = self._parse_objc_data_entry(objc_class, objc_data_struct)
 
                 # parse the metaclass if it exists
                 # the class stores instance methods and the metaclass's method list contains class methods
@@ -413,4 +416,3 @@ class ObjcRuntimeDataParser:
             ))
             return None
         return data_entry
-

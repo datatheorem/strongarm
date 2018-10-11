@@ -9,6 +9,7 @@ from strongarm.macho import MachoParser, ObjcRuntimeDataParser, ObjcCategory
 class TestObjcRuntimeDataParser(unittest.TestCase):
     FAT_PATH = os.path.join(os.path.dirname(__file__), 'bin', 'StrongarmTarget')
     CATEGORY_PATH = os.path.join(os.path.dirname(__file__), 'bin', 'DigitalAdvisorySolutions')
+    PROTOCOL_32BIT_PATH = os.path.join(os.path.dirname(__file__), 'bin', 'USPossibilities')
 
     def test_path_for_external_symbol(self):
         parser = MachoParser(TestObjcRuntimeDataParser.FAT_PATH)
@@ -119,3 +120,13 @@ class TestObjcRuntimeDataParser(unittest.TestCase):
             'BadFilesDetector',
             []
         )
+
+    def test_protocol_32bit(self):
+        parser = MachoParser(TestObjcRuntimeDataParser.PROTOCOL_32BIT_PATH)
+        binary = parser.get_armv7_slice()
+        objc_parser = ObjcRuntimeDataParser(binary)
+        self.assertEqual(66, len(objc_parser.classes))
+        test_cls = [x for x in objc_parser.classes if x.name == 'Pepsico_iPhoneAppDelegate'][0]
+        self.assertEqual(2, len(test_cls.protocols))
+        proto_names = [x.name for x in test_cls.protocols]
+        self.assertEqual(['UIApplicationDelegate', 'UITabBarControllerDelegate'], proto_names)

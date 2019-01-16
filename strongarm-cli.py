@@ -100,9 +100,53 @@ class StrongarmShell:
             'sels': ('List selectors implemented by a class. sels [class]', self.selectors),
             'disasm': ('Decompile a given selector. disasm [sel]', self.disasm),
             'disasm_f': ('Decompile a given selector. disasm [sel]', self.disasm_f),
+            'dump': ('Hex dump a memory address. dump [size] [virtual address]', self.dump_memory),
         }
         print('strongarm interactive shell\nType \'help\' for available commands.')
         self.active = True
+
+    def dump_memory(self, args):
+        def err():
+            print('Usage: dump [size] [virtual address]')
+            return
+
+        if len(args) < 2:
+            return err()
+        try:
+            dump_size = int(args[0], 10)
+            address = int(args[1], 16)
+        except ValueError as e:
+            print(f'Failed to interpret address: {e}')
+            return err()
+
+        binary_data = self.binary.get_content_from_virtual_address(address, dump_size)
+
+        # split to 16 byte regions
+        region_size = 16
+        current_index = 0
+        while True:
+            if current_index >= dump_size:
+                break
+            # grab the next grouping of bytes
+            byte_region = binary_data[current_index:current_index+region_size]
+
+            region_start = address + current_index
+            region_start_str = hex(region_start)
+            print(region_start_str, end='\t\t')
+
+            ascii_rep = '|'
+            for idx, byte in enumerate(byte_region):
+                print('{:02x}'.format(byte), end=' ')
+                # indent every 8 bytes
+                if idx > 0 and (idx + 1) % 8 == 0:
+                    print('\t', end='')
+
+                ascii_byte = chr(byte) if 32 <= byte < 127 else '.'
+                ascii_rep += ascii_byte
+            ascii_rep += '|'
+            print(ascii_rep)
+
+            current_index += region_size
 
     def selectors(self, args):
         if not len(args):

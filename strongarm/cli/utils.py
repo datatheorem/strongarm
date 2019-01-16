@@ -27,6 +27,40 @@ from strongarm.objc import \
     ObjcInstruction
 
 
+class StringFormatter:
+    @staticmethod
+    def green(string):
+        return f'\033[0;32m{string}\033[0m'
+
+    @staticmethod
+    def magenta(string):
+        return StringFormatter.seed(197, string)
+
+    @staticmethod
+    def red(string):
+        return f'\033[31;1m{string}\033[0m'
+
+    @staticmethod
+    def orange(string):
+        return StringFormatter.seed(208, string)
+
+    @staticmethod
+    def blue(string):
+        return f'\033[34;1m{string}\033[0m'
+
+    @staticmethod
+    def seed(seed, string):
+        return f'\033[38;5;{seed}m{string}\033[0m'
+
+    @staticmethod
+    def none(string):
+        return string
+
+    @staticmethod
+    def bold(string):
+        return f'\033[1m{string}\033[0m'
+
+
 def pick_macho_slice(parser: MachoParser) -> MachoBinary:
     """Retrieve a MachoBinary slice from a MachoParser, with a preference for an arm64 slice
     """
@@ -47,6 +81,27 @@ def pick_macho_slice(parser: MachoParser) -> MachoBinary:
             if parsed_binary.cpu_type == CPU_TYPE.ARM64:
                 break
     return parsed_binary
+
+
+class _StringPalette:
+    REG = StringFormatter.none
+    IMM = StringFormatter.none
+    MNEMONIC = StringFormatter.none
+    BASIC_BLOCk = StringFormatter.none
+    ADDRESS = StringFormatter.none
+    ANNOTATION = StringFormatter.none
+    STRING = StringFormatter.none
+
+
+class StringPalette(_StringPalette):
+    REG = StringFormatter.green
+    IMM = StringFormatter.blue
+    MNEMONIC = StringFormatter.magenta
+    BASIC_BLOCK = StringFormatter.orange
+    ADDRESS = StringFormatter.bold
+    ANNOTATION = StringFormatter.orange
+    ANNOTATION_ARGS = StringFormatter.blue
+    STRING = StringFormatter.red
 
 
 def format_instruction_arg(instruction: CsInsn, arg: Arm64Op) -> str:

@@ -106,11 +106,14 @@ class StringPalette(_StringPalette):
 
 def format_instruction_arg(instruction: CsInsn, arg: Arm64Op) -> str:
     if arg.type == ARM64_OP_REG:
-        return instruction.reg_name(arg.value.reg)
+        return StringPalette.REG(instruction.reg_name(arg.value.reg))
     elif arg.type == ARM64_OP_IMM:
-        return hex(arg.value.imm)
+        return StringPalette.IMM(hex(arg.value.imm))
     elif arg.type == ARM64_OP_MEM:
-        return '[{} #{}]'.format(instruction.reg_name(arg.mem.base), hex(arg.mem.disp))
+        return '[{} #{}]'.format(
+            StringPalette.REG(instruction.reg_name(arg.mem.base)),
+            StringPalette.IMM(hex(arg.mem.disp))
+        )
     raise RuntimeError('unknown arg type {}'.format(arg.type))
 
 
@@ -157,7 +160,73 @@ def print_instr(instr):
             instruction_string += ','
 
 
-def disassemble_function(binary: MachoBinary, function_addr: int, prefix: List[str] = None, sel_args = None) -> str:
+def annotate_instruction(function_analyzer: ObjcFunctionAnalyzer, sel_args, instr: CsInsn):
+    annotation = '\t\t'
+    # parse as an ObjcInstruction
+    wrapped_instr = ObjcInstruction.parse_instruction(function_analyzer,
+                                                      function_analyzer.get_instruction_at_address(instr.address))
+
+    if isinstance(wrapped_instr, ObjcBranchInstruction):
+        wrapped_instr: ObjcBranchInstruction = wrapped_instr
+
+        annotation += '#\t'
+        if function_analyzer.is_local_branch(wrapped_instr):
+            annotation += StringPalette.ANNOTATION(f'jump loc_{hex(wrapped_instr.destination_address)}')
+        elif wrapped_instr.symbol:
+            annotation += StringPalette.ANNOTATION(wrapped_instr.symbol)
+
+            if not wrapped_instr.selector:
+                annotation += StringPalette.ANNOTATION('();')
+            else:
+                args = f'(id, @selector({wrapped_instr.selector.name})'
+                annotation += StringPalette.ANNOTATION_ARGS(args)
+
+                # figure out argument count passed to selector
+                arg_count = wrapped_instr.selector.name.count(':')
+                for i in range(arg_count):
+                    # x0 is self, x1 is the SEL, real args start at x2
+                    register = 'x{}'.format(i + 2)
+                    method_arg = function_analyzer.get_register_contents_at_instruction(register, wrapped_instr)
+
+                    method_arg_string = ', '
+                    if method_arg.type == RegisterContentsType.UNKNOWN:
+                        method_arg_string += '<?>'
+                    elif method_arg.type == RegisterContentsType.FUNCTION_ARG:
+                        method_arg_string += sel_args[method_arg.value]
+                    elif method_arg.type == RegisterContentsType.IMMEDIATE:
+                        method_arg_string += hex(method_arg.value)
+
+                    annotation += StringPalette.STRING(method_arg_string)
+                annotation += ');'
+        else:
+            annotation += StringPalette.ANNOTATION(f'({hex(instr.address)})(')
+            arg_count = 4
+            for i in range(arg_count):
+                # x0 is self, x1 is the SEL, real args start at x2
+                register = 'x{}'.format(i)
+                method_arg = function_analyzer.get_register_contents_at_instruction(register, wrapped_instr)
+
+                method_arg_string = f'{register}: '
+                if method_arg.type == RegisterContentsType.UNKNOWN:
+                    method_arg_string += '<?>'
+                elif method_arg.type == RegisterContentsType.FUNCTION_ARG:
+                    method_arg_string += f'func arg {method_arg.value}'
+                elif method_arg.type == RegisterContentsType.IMMEDIATE:
+                    method_arg_string += hex(method_arg.value)
+
+                annotation += StringPalette.ANNOTATION_ARGS(method_arg_string)
+                annotation += ', '
+            annotation += ');'
+    else:
+        if len(instr.operands) == 2 and instr.operands[1].type == ARM64_OP_IMM:
+            # try reading a string
+            binary_str = function_analyzer.binary.read_string_at_address(instr.operands[1].value.imm)
+            if binary_str:
+                annotation += StringPalette.STRING(f'#\t"{binary_str}"')
+    return annotation
+
+
+def disassemble_function(binary: MachoBinary, function_addr: int, prefix: List[str] = None, sel_args=None) -> str:
     if not prefix:
         prefix = []
     disassembled_text = prefix
@@ -175,9 +244,14 @@ def disassemble_function(binary: MachoBinary, function_addr: int, prefix: List[s
         instruction_string = ''
         # add visual indicator if this is a basic block boundary
         if instr.address in basic_block_boundaries:
-            instruction_string += '----------------------------------------------- #\tbasic block boundary\n'
+            instruction_string += StringPalette.BASIC_BLOCK(
+                f'--- loc_{hex(instr.address)} ----------\n'
+            )
 
-        instruction_string += '\t{}\t\t{}'.format(hex(instr.address), instr.mnemonic)
+        instruction_string += '\t{}\t\t{}'.format(
+            StringPalette.ADDRESS(hex(instr.address)),
+            StringPalette.MNEMONIC(instr.mnemonic)
+        )
 
         # add each arg to the string
         for i, arg in enumerate(instr.operands):
@@ -185,65 +259,7 @@ def disassemble_function(binary: MachoBinary, function_addr: int, prefix: List[s
             if i != len(instr.operands) - 1:
                 instruction_string += ','
 
-        instruction_string += '\t\t\t'
-        # parse as an ObjcInstruction
-        wrapped_instr = ObjcInstruction.parse_instruction(function_analyzer,
-                                                          function_analyzer.get_instruction_at_address(instr.address))
-
-        if isinstance(wrapped_instr, ObjcBranchInstruction):
-            instruction_string += '#\t'
-            if function_analyzer.is_local_branch(wrapped_instr):
-                instruction_string += 'local branch'
-            elif wrapped_instr.symbol:
-                instruction_string += wrapped_instr.symbol
-
-                if not wrapped_instr.selector:
-                    instruction_string += '();'
-                else:
-                    instruction_string += '(id, @selector({})'.format(wrapped_instr.selector.name)
-
-                    # figure out argument count passed to selector
-                    arg_count = wrapped_instr.selector.name.count(':')
-                    for i in range(arg_count):
-                        # x0 is self, x1 is the SEL, real args start at x2
-                        register = 'x{}'.format(i + 2)
-                        method_arg = function_analyzer.get_register_contents_at_instruction(register, wrapped_instr)
-
-                        method_arg_string = ', '
-                        if method_arg.type == RegisterContentsType.UNKNOWN:
-                            method_arg_string += '<?>'
-                        elif method_arg.type == RegisterContentsType.FUNCTION_ARG:
-                            method_arg_string += sel_args[method_arg.value]
-                        elif method_arg.type == RegisterContentsType.IMMEDIATE:
-                            method_arg_string += hex(method_arg.value)
-
-                        instruction_string += method_arg_string
-                    instruction_string += ');'
-            else:
-                instruction_string += f'({hex(instr.address)})('
-                arg_count = 4
-                for i in range(arg_count):
-                    # x0 is self, x1 is the SEL, real args start at x2
-                    register = 'x{}'.format(i)
-                    method_arg = function_analyzer.get_register_contents_at_instruction(register, wrapped_instr)
-
-                    method_arg_string = f'{register}: '
-                    if method_arg.type == RegisterContentsType.UNKNOWN:
-                        method_arg_string += '<?>'
-                    elif method_arg.type == RegisterContentsType.FUNCTION_ARG:
-                        method_arg_string += f'func arg {method_arg.value}'
-                    elif method_arg.type == RegisterContentsType.IMMEDIATE:
-                        method_arg_string += hex(method_arg.value)
-
-                    instruction_string += method_arg_string
-                    instruction_string += ', '
-                instruction_string += ');'
-        else:
-            if len(instr.operands) == 2 and instr.operands[1].type == ARM64_OP_IMM:
-                # try reading a string
-                binary_str = binary.read_string_at_address(instr.operands[1].value.imm)
-                if binary_str:
-                    instruction_string += '#\t"{}"'.format(binary_str)
+        instruction_string += annotate_instruction(function_analyzer, sel_args, instr)
         disassembled_text.append(instruction_string)
 
     return '\n'.join(disassembled_text)

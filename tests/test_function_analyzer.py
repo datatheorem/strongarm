@@ -118,6 +118,7 @@ class TestFunctionAnalyzer(unittest.TestCase):
         """Test cases for dataflow where a single register has an immediate, then has a 'data link' from the same reg.
         Related ticket: SCAN-577-dataflow-fix
         """
+        # Given I provide assembly where an address is loaded via a page load + page offset, using the same register
         # 0x000000010000428c    adrp       x1, #0x10011a000
         # 0x0000000100004290    add        x1, x1, #0x9c8
         binary = MachoParser(TestFunctionAnalyzer.DIGITAL_ADVISORY_PATH).get_arm64_slice()
@@ -131,17 +132,23 @@ class TestFunctionAnalyzer(unittest.TestCase):
             function_analyzer,
             function_analyzer.get_instruction_at_address(0x100004290)
         )
+        # If I ask for the contents of the register
         contents = function_analyzer.get_register_contents_at_instruction('x1', instruction)
+        # Then I get the correct value
         self.assertEqual(contents.type, RegisterContentsType.IMMEDIATE)
         self.assertEqual(contents.value, 0x10011a9c8)
 
+        # Another test case with the same assumptions
+        # Given I provide assembly where an address is loaded via a page load + page offset, using the same register
         # 0x0000000100004744    adrp       x8, #0x100115000
         # 0x0000000100004748    ldr        x8, [x8, #0x60]
         instruction = ObjcInstruction.parse_instruction(
             function_analyzer,
             function_analyzer.get_instruction_at_address(0x100004748)
         )
+        # If I ask for the contents of the register
         contents = function_analyzer.get_register_contents_at_instruction('x8', instruction)
+        self.assertEqual(contents.value, 0x10011a9c8)
         self.assertEqual(contents.type, RegisterContentsType.IMMEDIATE)
         self.assertEqual(contents.value, 0x100115060)
 

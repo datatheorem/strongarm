@@ -148,7 +148,7 @@ class TestFunctionAnalyzer(unittest.TestCase):
         )
         # If I ask for the contents of the register
         contents = function_analyzer.get_register_contents_at_instruction('x8', instruction)
-        self.assertEqual(contents.value, 0x10011a9c8)
+        # Then I get the correct value
         self.assertEqual(contents.type, RegisterContentsType.IMMEDIATE)
         self.assertEqual(contents.value, 0x100115060)
 

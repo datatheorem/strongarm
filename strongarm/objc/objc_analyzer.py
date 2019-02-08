@@ -29,13 +29,16 @@ class ObjcMethodInfo:
         self.objc_sel = objc_sel
         self.imp_addr = imp
 
+    def __repr__(self):
+        return f'-[{self.objc_class.name} {self.objc_sel.name}]'
+
 
 class ObjcFunctionAnalyzer(object):
     """Provides utility functions for introspecting on a set of instructions which represent a function body.
     As Objective-C is a strict superset of C, ObjcFunctionAnalyzer can also be used on pure C functions.
     """
 
-    def __init__(self, binary: MachoBinary, instructions: List[CsInsn], method_info=None):
+    def __init__(self, binary: MachoBinary, instructions: List[CsInsn], method_info: ObjcMethodInfo = None):
         from strongarm.macho import MachoAnalyzer
         try:
             self.start_address = instructions[0].address

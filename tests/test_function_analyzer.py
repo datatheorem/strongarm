@@ -9,6 +9,7 @@ from strongarm.objc import RegisterContentsType
 
 class TestFunctionAnalyzer(unittest.TestCase):
     FAT_PATH = os.path.join(os.path.dirname(__file__), 'bin', 'StrongarmTarget')
+    DIGITAL_ADVISORY_PATH = os.path.join(os.path.dirname(__file__), 'bin', 'DigitalAdvisorySolutions')
 
     OBJC_RETAIN_STUB_ADDR = 0x1000067cc
     SEC_TRUST_EVALUATE_STUB_ADDR = 0x100006760
@@ -112,6 +113,44 @@ class TestFunctionAnalyzer(unittest.TestCase):
         contents = self.function_analyzer.get_register_contents_at_instruction('x1', another_instr)
         self.assertEqual(contents.type, RegisterContentsType.IMMEDIATE)
         self.assertEqual(contents.value, 0x1000090c0)
+
+    def test_get_register_contents_at_instruction_same_reg(self):
+        """Test cases for dataflow where a single register has an immediate, then has a 'data link' from the same reg.
+        Related ticket: SCAN-577-dataflow-fix
+        """
+        # Given I provide assembly where an address is loaded via a page load + page offset, using the same register
+        # 0x000000010000428c    adrp       x1, #0x10011a000
+        # 0x0000000100004290    add        x1, x1, #0x9c8
+        binary = MachoParser(TestFunctionAnalyzer.DIGITAL_ADVISORY_PATH).get_arm64_slice()
+
+        function_analyzer = ObjcFunctionAnalyzer.get_function_analyzer_for_signature(
+            binary,
+            'AppDelegate',
+            'application:didFinishLaunchingWithOptions:'
+        )
+        instruction = ObjcInstruction.parse_instruction(
+            function_analyzer,
+            function_analyzer.get_instruction_at_address(0x100004290)
+        )
+        # If I ask for the contents of the register
+        contents = function_analyzer.get_register_contents_at_instruction('x1', instruction)
+        # Then I get the correct value
+        self.assertEqual(contents.type, RegisterContentsType.IMMEDIATE)
+        self.assertEqual(contents.value, 0x10011a9c8)
+
+        # Another test case with the same assumptions
+        # Given I provide assembly where an address is loaded via a page load + page offset, using the same register
+        # 0x0000000100004744    adrp       x8, #0x100115000
+        # 0x0000000100004748    ldr        x8, [x8, #0x60]
+        instruction = ObjcInstruction.parse_instruction(
+            function_analyzer,
+            function_analyzer.get_instruction_at_address(0x100004748)
+        )
+        # If I ask for the contents of the register
+        contents = function_analyzer.get_register_contents_at_instruction('x8', instruction)
+        # Then I get the correct value
+        self.assertEqual(contents.type, RegisterContentsType.IMMEDIATE)
+        self.assertEqual(contents.value, 0x100115060)
 
     def test_get_selref(self):
         objc_msgSendInstr = ObjcInstruction.parse_instruction(self.function_analyzer, self.instructions[16])

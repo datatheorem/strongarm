@@ -44,8 +44,6 @@ def print_header(args) -> None:
         print(line)
 
 
-
-
 class InfoCommand:
     def __init__(self, binary: MachoBinary, analyzer: MachoAnalyzer):
         self.binary = binary

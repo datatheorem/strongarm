@@ -135,10 +135,27 @@ class ObjcFunctionAnalyzer(object):
         Returns:
             An ObjcFunctionAnalyzer suitable for introspecting the provided method
         """
+        # TODO(PT): it seems like this & related methods should be moved to MachoAnalyzer
         from strongarm.macho.macho_analyzer import MachoAnalyzer
         analyzer = MachoAnalyzer.get_analyzer(binary)
         instructions = analyzer.get_function_instructions(method_info.imp_addr)
         return ObjcFunctionAnalyzer(binary, instructions, method_info=method_info)
+
+    @classmethod
+    def get_function_analyzer_for_signature(cls,
+                                            binary: MachoBinary,
+                                            class_name: str,
+                                            sel_name: str) -> 'ObjcFunctionAnalyzer':
+        from strongarm.macho.macho_analyzer import MachoAnalyzer
+        analyzer = MachoAnalyzer.get_analyzer(binary)
+        for objc_cls in analyzer.objc_classes():
+            if objc_cls.name == class_name:
+                for sel in objc_cls.selectors:
+                    if sel.name == sel_name:
+                        # XXX(PT): where are the method info's normally stored? Can we grab it from there?
+                        method_info = ObjcMethodInfo(objc_cls, sel, sel.implementation)
+                        return ObjcFunctionAnalyzer.get_function_analyzer_for_method(binary, method_info)
+        raise RuntimeError(f'No found function analyzer for -[{class_name} {sel_name}]')
 
     @property
     def call_targets(self) -> List[ObjcBranchInstruction]:

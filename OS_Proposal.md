@@ -1,4 +1,4 @@
-I propose we open source the Mach-O parsing/cross referencing APIs of strongarm, and keep the `CodeSearch` API for internal use.
+I propose we open source the Mach-O parsing/cross-referencing APIs of strongarm, and keep the `CodeSearch` API for internal use.
 
 Open sourcing strongarm would be positive for several reasons:
     * Puts DT in a better position in terms of tech we can point to publicly (in addition to TrustKit, alfred, etc.)

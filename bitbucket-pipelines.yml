@@ -6,4 +6,6 @@ pipelines:
         script:
           - pip install -r requirements.txt
           - python setup.py install
+          # Build the dataflow module
+          - python setup.py build_ext --inplae
           - python run_tests.py

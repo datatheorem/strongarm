@@ -15,7 +15,6 @@ from .objc_query import \
 
 from .objc_analyzer import \
     ObjcFunctionAnalyzer, \
-    ObjcBlockAnalyzer, \
     RegisterContentsType, \
     RegisterContents, \
     ObjcMethodInfo

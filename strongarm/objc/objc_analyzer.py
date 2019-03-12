@@ -29,13 +29,16 @@ class ObjcMethodInfo:
         self.objc_sel = objc_sel
         self.imp_addr = imp
 
+    def __repr__(self):
+        return f'-[{self.objc_class.name} {self.objc_sel.name}]'
+
 
 class ObjcFunctionAnalyzer(object):
     """Provides utility functions for introspecting on a set of instructions which represent a function body.
     As Objective-C is a strict superset of C, ObjcFunctionAnalyzer can also be used on pure C functions.
     """
 
-    def __init__(self, binary: MachoBinary, instructions: List[CsInsn], method_info=None):
+    def __init__(self, binary: MachoBinary, instructions: List[CsInsn], method_info: ObjcMethodInfo = None):
         from strongarm.macho import MachoAnalyzer
         try:
             self.start_address = instructions[0].address
@@ -344,65 +347,3 @@ class ObjcFunctionAnalyzer(object):
     @functools.lru_cache(maxsize=100)
     def get_register_contents_at_instruction(self, register: str, instruction: ObjcInstruction) -> RegisterContents:
         return get_register_contents_at_instruction_fast(register, self, instruction)
-
-
-class ObjcBlockAnalyzer(ObjcFunctionAnalyzer):
-    # XXX(PT): This class is very old and outdated.
-    def __init__(self, binary: MachoBinary, instructions: List[CsInsn], initial_block_reg: str) -> None:
-        ObjcFunctionAnalyzer.__init__(self, binary, instructions)
-
-        self.initial_block_reg = initial_block_reg
-        self.block_arg_index = int(self.trimmed_register_name(self.initial_block_reg))
-        self.invoke_instruction, self.invocation_instruction_index = self.find_block_invoke()
-
-    @staticmethod
-    def trimmed_register_name(reg_name: str) -> str:
-        """Remove 'x', 'r', or 'w' from general purpose register name
-        This is so the register strings 'x22' and 'w22', which are two slices of the same register,
-        map to the same register.
-
-        Returns non-GP registers, such as 'sp', as-is.
-        Returns NEON registers ('s' 32b registers, 'd' 64b registers, and 'q' 128b registers) as-is.
-
-        Args:
-              reg_name: Full register name to trim
-
-        Returns:
-              Register name with trimmed size prefix, or unmodified name if not a GP register
-        """
-        if reg_name[0] in ['x', 'w', 'r']:
-            return reg_name[1::]
-        return reg_name
-
-    def find_block_invoke(self) -> Tuple[ObjcInstruction, int]:
-        """Find instruction where the targeted Block->invoke is loaded into
-
-        Returns:
-             Tuple of register containing target Block->invoke, and the index this instruction was found at
-        """
-        from .objc_query import CodeSearchTermInstructionMnemonic, CodeSearchTermInstructionOperand
-        block_invoke_search = CodeSearch([
-            CodeSearchTermInstructionMnemonic(self.binary, allow_mnemonics=['blr']),
-            CodeSearchTermInstructionOperand(self.binary, operand_index=0, operand_type=ARM64_OP_REG)
-        ])
-        for search_result in self.search_code(block_invoke_search):
-            # in the past, find_block_invoke would find a block load from an instruction like:
-            # ldr x8, [<block containing reg>, 0x10]
-            # then, we look for a block invoke instruction:
-            # blr x8
-            # Now, we just look for a blr to a register that has a dependency on the data originally in the register
-            # containing the block pointer.
-            # this is very likely to work more or less all the time.
-            # TODO(PT): CodeSearchTermDataDependency?
-            found_branch_instruction = search_result.found_instruction
-            contents = self.get_register_contents_at_instruction(self.initial_block_reg, found_branch_instruction)
-
-            trimmed_block_argument_reg = int(self.trimmed_register_name(self.initial_block_reg))
-            if contents.type != RegisterContentsType.FUNCTION_ARG:
-                # not what we're looking for; branch destination didn't come from function arg
-                continue
-            if contents.value != trimmed_block_argument_reg:
-                # not what we're looking for; branch destination is sourced from the wrong register
-                continue
-            return found_branch_instruction, self.instructions.index(found_branch_instruction.raw_instr)
-        raise RuntimeError('never found block invoke')

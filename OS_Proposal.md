@@ -1,3 +1,6 @@
+Open Sourcing Strongarm... question mark?
+-----------------------------------------
+
 I propose we open source the Mach-O parsing/cross-referencing APIs of strongarm, and keep the `CodeSearch` API for internal use.
 
 Open sourcing strongarm would be positive for several reasons:
@@ -25,7 +28,7 @@ This would have a few benefits:
 * Demonstrating how easy it is to extract and manipulate high-level data from Mach-O's
 * Serve as API documentation
 
-Open Source
+Open Source Components
 ---------------
 
 * All Mach-O parsing/cross referencing APIs
@@ -54,14 +57,14 @@ Open Source
     * The CLI depends on function boundary detection to disassemble methods
     * **NOTE** Same note as above
 
-Closed Source
+Closed Source Components
 ---------------
 
 * API which allows simple searches through all a binary's code for execution points matching a query.
     * Allows creation of typically dynamic security checks. Specifically, checking for invocations of some 'unsafe' API.
     * This is the most business-critical portion of strongarm
     
-Scripts
+Provided Scripts
 ---------------
 
 * strongarm_nm

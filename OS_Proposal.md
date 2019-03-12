@@ -1,11 +1,11 @@
-Open Sourcing Strongarm... question mark?
+Open Sourcing strongarm... question mark?
 -----------------------------------------
 
 I propose we open source the Mach-O parsing/cross-referencing APIs of strongarm, and keep the `CodeSearch` API for internal use.
 
 Open sourcing strongarm would be positive for several reasons:
 
-* Puts DT in a better position in terms of tech we can point to publicly (in addition to TrustKit, alfred, etc.)
+* Puts DataTheorem in a better position in terms of cool tech we can point to publicly (in addition to TrustKit, alfred, etc.)
 * As strongarm cannibalizes several popular Mach-O tools, strongarm scripts become a one-stop-shop for various Mach-O questions people like me often need to ask.
     * Lots of people (and businesses, **including us!**) rely on these random Github projects that aren't always maintained
 * Provides a de-facto tool for cross-platform Mach-O scripting.

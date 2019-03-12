@@ -57,7 +57,7 @@ Open Source
 Closed Source
 ---------------
 
-* API which allows searching through code for execution points matching a query
+* API which allows simple searches through all a binary's code for execution points matching a query.
     * Allows creation of typically dynamic security checks. Specifically, checking for invocations of some 'unsafe' API.
     * This is the most business-critical portion of strongarm
     

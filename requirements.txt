@@ -1,5 +1,3 @@
-# Requirements for strongarm as a python module
 typing
 capstone
 enum34
---process-dependency-links

@@ -7,6 +7,8 @@ Open sourcing strongarm would be positive for several reasons:
     * Lots of people (and businesses, **including us!**) rely on these random Github projects that aren't always maintained
 * Provides a de-facto tool for cross-platform Mach-O scripting.
     * strongarm provides functionality of tools like otool and codesign, which are macOS only.
+* It's a general-purpose Mach-O library, and has more usefulness than what DataTheorem uses it for.
+    * While we don't have the need for every possible use case, it can solve problems that other people have, without any impact to us aside from more goodwill in the world.
 * It's something I put a lot of effort/heart in to, and it would be personally positive to be able to show it off
     
 That said, it's dangerous to hand out something we rely on for highly technical checks. Thus, `CodeSearch` and related subclasses should be kept private.

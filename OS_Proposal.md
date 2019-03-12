@@ -43,10 +43,11 @@ Open Source
 * Dataflow analysis (`get_register_contents_at_instruction`)
     * While this is used heavily within `CodeSearch`, it has other uses throughout strongarm.
     * The CLI depends on DFA for annotating C and Objective-C calls in assembly.
-    * *NOTE* this is implemented in C++ and works as a C Python extension. If we think the code is valuable, we can distribute the compiled extension rather than the C++ source.
+    * *NOTE* This is implemented in C++ and works as a C Python extension. If we think the code is valuable, we can distribute the compiled extension rather than the C++ source.
     
-* Function boundary detection
+* Function boundary detection (`find_function_boundary`)
     * The CLI depends on function boundary detection to disassemble methods
+    * *NOTE* Same note as above
 
 Closed Source
 ---------------

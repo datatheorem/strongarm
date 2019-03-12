@@ -4,7 +4,7 @@ Open sourcing strongarm would be positive for several reasons:
 
 * Puts DT in a better position in terms of tech we can point to publicly (in addition to TrustKit, alfred, etc.)
 * As strongarm cannibalizes several popular Mach-O tools, strongarm scripts become a one-stop-shop for various Mach-O questions people like me often need to ask.
-    * Lots of people (and businesses, including us!) rely on these random Github projects that aren't always maintained
+    * Lots of people (and businesses, **including us!**) rely on these random Github projects that aren't always maintained
 * Provides a de-facto tool for cross-platform Mach-O scripting.
     * strongarm provides functionality of tools like otool and codesign, which are macOS only.
 * It's something I put a lot of effort/heart in to, and it would be personally positive to be able to show it off
@@ -36,7 +36,7 @@ Open Source
         * ObjC selector/class/category data
         
     * Replaces otool, nm, strings, classdump, some uses of jtool
-        * Platform agnostic otool substitute
+        * **Platform agnostic** otool substitute
         
     * Allows modification of Mach-O's (planned feature)
         * Replaces insert_dylib, ldid, macho_edit, some uses of jtool
@@ -46,11 +46,11 @@ Open Source
 * Dataflow analysis (`get_register_contents_at_instruction`)
     * While this is used heavily within `CodeSearch`, it has other uses throughout strongarm.
     * The CLI depends on DFA for annotating C and Objective-C calls in assembly.
-    * *NOTE* This is implemented in C++ and works as a C Python extension. If we think the code is valuable, we can distribute the compiled extension rather than the C++ source.
+    * **NOTE** This is implemented in C++ and works as a C Python extension. If we think the code is valuable, we can distribute the compiled extension rather than the C++ source.
     
 * Function boundary detection (`find_function_boundary`)
     * The CLI depends on function boundary detection to disassemble methods
-    * *NOTE* Same note as above
+    * **NOTE** Same note as above
 
 Closed Source
 ---------------

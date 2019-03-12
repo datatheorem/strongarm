@@ -1,12 +1,13 @@
 I propose we open source the Mach-O parsing/cross-referencing APIs of strongarm, and keep the `CodeSearch` API for internal use.
 
 Open sourcing strongarm would be positive for several reasons:
-    * Puts DT in a better position in terms of tech we can point to publicly (in addition to TrustKit, alfred, etc.)
-    * As strongarm cannibalizes several popular Mach-O tools, strongarm scripts become a one-stop-shop for various Mach-O questions people like me often need to ask.
-        * Lots of people (and businesses, including us!) rely on these random Github projects that aren't always maintained
-    * Provides a de-facto tool for cross-platform Mach-O scripting.
-        * strongarm provides functionality of tools like otool and codesign, which are macOS only.
-    * It's something I put a lot of effort/heart in to, and it would be personally positive to be able to show it off
+
+* Puts DT in a better position in terms of tech we can point to publicly (in addition to TrustKit, alfred, etc.)
+* As strongarm cannibalizes several popular Mach-O tools, strongarm scripts become a one-stop-shop for various Mach-O questions people like me often need to ask.
+    * Lots of people (and businesses, including us!) rely on these random Github projects that aren't always maintained
+* Provides a de-facto tool for cross-platform Mach-O scripting.
+    * strongarm provides functionality of tools like otool and codesign, which are macOS only.
+* It's something I put a lot of effort/heart in to, and it would be personally positive to be able to show it off
     
 That said, it's dangerous to hand out something we rely on for highly technical checks. Thus, `CodeSearch` and related subclasses should be kept private.
 They make it too easy to ask high-level questions about a binary's code, which can be used in straightforward ways to write security checks.
@@ -17,12 +18,14 @@ After all, strongarm replaces tools like `insert_dylib`, a free project which we
 
 As part of this, we should also write and include several scripts which implement common tools in small strongarm scripts.
 This would have a few benefits:
-    * Demonstrating strongarm's API and scope
-    * Demonstrating how easy it is to extract and manipulate high-level data from Mach-O's
-    * Serve as API documentation
+
+* Demonstrating strongarm's API and scope
+* Demonstrating how easy it is to extract and manipulate high-level data from Mach-O's
+* Serve as API documentation
 
 Open Source
 ---------------
+
 * All Mach-O parsing/cross referencing APIs
 
     * Allows easy creation of scripts to query information about Mach-O's
@@ -51,12 +54,14 @@ Open Source
 
 Closed Source
 ---------------
+
 * API which allows searching through code for execution points matching a query
     * Allows creation of typically dynamic security checks. Specifically, checking for invocations of some 'unsafe' API.
     * This is the most business-critical portion of strongarm
     
 Scripts
 ---------------
+
 * strongarm_nm
 * strongarm_cli (provides hex dumping, strings, otool, etc)
 * strongarm_ldid

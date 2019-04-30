@@ -6,7 +6,7 @@ strongarm includes a Mach-O/FAT archive parser as well as utilities for reconstr
 
 The name 'strongarm' refers to both 'macho' and 'arm'.
 
-For usage examples, see [here](Examples.md)
+For usage examples, see [here](scripts/Examples.md)
 
 Components
 ---------

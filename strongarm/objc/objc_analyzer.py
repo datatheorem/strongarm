@@ -1,8 +1,7 @@
-# -*- coding: utf-8 -*-
 import functools
-from typing import List, Optional, Tuple
+from typing import List, Optional
 
-from capstone.arm64 import ARM64_OP_REG, ARM64_OP_IMM, ARM64_OP_MEM
+from capstone.arm64 import ARM64_OP_IMM, ARM64_OP_MEM
 from capstone import CsInsn
 
 from strongarm.debug_util import DebugUtil
@@ -14,8 +13,7 @@ from .objc_instruction import \
     ObjcUnconditionalBranchInstruction
 from .objc_query import \
     CodeSearch, \
-    CodeSearchResult, \
-    CodeSearchTermInstructionIndex
+    CodeSearchResult
 from .register_contents import RegisterContents, RegisterContentsType
 from .dataflow import get_register_contents_at_instruction_fast
 

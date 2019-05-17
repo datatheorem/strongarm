@@ -8,4 +8,4 @@ pipelines:
           - python setup.py install
           # Build the dataflow module
           - python setup.py build_ext --inplace
-          - python run_tests.py
+          - pytest

@@ -1,17 +1,15 @@
-# -*- coding: utf-8 -*-
 import os
-import unittest
-from ctypes import create_string_buffer
+import pytest
 
 from strongarm.macho.macho_parse import MachoParser
 from strongarm.macho.macho_analyzer import MachoAnalyzer
 from strongarm.objc.dataflow import determine_function_boundary
 
 
-class TestMachoAnalyzer(unittest.TestCase):
+class TestMachoAnalyzer:
     FAT_PATH = os.path.join(os.path.dirname(__file__), 'bin', 'StrongarmTarget')
 
-    def setUp(self):
+    def setup_method(self):
         parser = MachoParser(TestMachoAnalyzer.FAT_PATH)
         self.binary = parser.slices[0]
         self.analyzer = MachoAnalyzer.get_analyzer(self.binary)
@@ -21,23 +19,23 @@ class TestMachoAnalyzer(unittest.TestCase):
         imp_within_bin_selref = 0x100009078
         found_imp_address = self.analyzer.imp_for_selref(imp_within_bin_selref)
         correct_imp_address = 0x100006284
-        self.assertEqual(found_imp_address, correct_imp_address)
+        assert found_imp_address == correct_imp_address
 
         # selref for -[UIFont systemFontOfSize:]
         imp_outside_bin_selref = 0x100009088
-        self.assertIsNone(self.analyzer.imp_for_selref(imp_outside_bin_selref))
+        assert self.analyzer.imp_for_selref(imp_outside_bin_selref) is None
 
         imp_nonexisting = None
-        self.assertIsNone(self.analyzer.imp_for_selref(imp_nonexisting))
+        assert self.analyzer.imp_for_selref(imp_nonexisting) is None
 
     def test_find_function_boundary(self):
         start_addr = 0x100006420
         correct_end_addr = 0x100006530
 
         found_instructions = self.analyzer.get_function_instructions(start_addr)
-        self.assertEqual(69, len(found_instructions))
+        assert len(found_instructions) == 69
         found_end_addr = found_instructions[-1].address
-        self.assertEqual(correct_end_addr, found_end_addr)
+        assert found_end_addr == correct_end_addr
 
     def test_find_imported_symbols(self):
         correct_imported_symbols = ['_NSClassFromString',
@@ -74,7 +72,7 @@ class TestMachoAnalyzer(unittest.TestCase):
         found_imported_symbols = self.analyzer.imported_symbols
         # we don't want the test to fail if the arrays contain the same elements but in a different order
         # so, sort the arrays before comparing them
-        self.assertEqual(sorted(correct_imported_symbols), sorted(found_imported_symbols))
+        assert sorted(found_imported_symbols) == sorted(correct_imported_symbols)
 
     def test_find_exported_symbols(self):
         # TODO(PT): figure out how to export symbols ourselves so we can write a better test for this
@@ -85,13 +83,13 @@ class TestMachoAnalyzer(unittest.TestCase):
         found_exported_symbols = self.analyzer.exported_symbols
         # we don't want the test to fail if the arrays contain the same elements but in a different order
         # so, sort the arrays before comparing them
-        self.assertEqual(sorted(correct_exported_symbols), sorted(found_exported_symbols))
+        assert sorted(found_exported_symbols) == sorted(correct_exported_symbols)
 
     def test_cached_analyzer(self):
         # there should only be one MachoAnalyzer for a given MachoBinary
         analyzer1 = MachoAnalyzer.get_analyzer(self.binary)
         analyzer2 = MachoAnalyzer.get_analyzer(self.binary)
-        self.assertEqual(analyzer1, analyzer2)
+        assert analyzer1 == analyzer2
 
     def test_external_symbol_addr_map(self):
         sym_map = self.analyzer.dyld_bound_symbols
@@ -99,13 +97,13 @@ class TestMachoAnalyzer(unittest.TestCase):
         # make sure all the symbols listed in imported_symbols are present here
         for sym in sym_map.values():
             name = sym.name
-            self.assertTrue(name in imported_syms)
+            assert name in imported_syms
 
         # make sure all addresses from stubs have been mapped to real destination addresses
         stubs_map = self.analyzer.imp_stubs
         call_destinations = [d.destination for d in stubs_map]
         for call_destination in call_destinations:
-            self.assertTrue(call_destination in sym_map.keys())
+            assert call_destination in sym_map.keys()
 
     def test_find_dyld_bound_symbols(self):
         bound_symbols = self.analyzer.dyld_bound_symbols
@@ -158,14 +156,15 @@ class TestMachoAnalyzer(unittest.TestCase):
             0x100008088: '_objc_storeStrong',
             0x100008090: '_rand',
         }
-        self.assertEqual(sorted(bound_symbols), sorted(correct_bound_symbols))
+        assert sorted(bound_symbols) == sorted(correct_bound_symbols)
 
     def test_symbol_name_for_branch_destination(self):
         # bogus destination
-        self.assertRaises(RuntimeError, self.analyzer.symbol_name_for_branch_destination, 0xdeadbeef)
+        with pytest.raises(RuntimeError):
+            self.analyzer.symbol_name_for_branch_destination(0xdeadbeef)
 
         # objc_msgSend
-        self.assertEqual(self.analyzer.symbol_name_for_branch_destination(0x10000676c), '_UIApplicationMain')
+        assert self.analyzer.symbol_name_for_branch_destination(0x10000676c) == '_UIApplicationMain'
 
     def test_selref_to_name_map(self):
         correct_selref_to_imp_map = {
@@ -176,13 +175,13 @@ class TestMachoAnalyzer(unittest.TestCase):
         }
         # did analyzer map all selrefs?
         for selref in correct_selref_to_imp_map:
-            self.assertEqual(correct_selref_to_imp_map[selref], self.analyzer.imp_for_selref(selref))
+            assert self.analyzer.imp_for_selref(selref) == correct_selref_to_imp_map[selref]
 
         # can we get an IMP from a selref?
-        self.assertEqual(self.analyzer.imp_for_selref(0x100009070), 0x100006228)
+        assert self.analyzer.imp_for_selref(0x100009070) == 0x100006228
 
         # nonexistent or missing selref handled correctly?
-        self.assertIsNone(self.analyzer.imp_for_selref(None))
-        self.assertIsNone(self.analyzer.imp_for_selref(0xdeadbeef))
+        assert self.analyzer.imp_for_selref(None) is None
+        assert self.analyzer.imp_for_selref(0xdeadbeef) is None
 
         # TODO(PT): handle checking selref which is defined outside binary

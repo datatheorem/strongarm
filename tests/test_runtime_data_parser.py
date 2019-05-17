@@ -1,12 +1,10 @@
-# -*- coding: utf-8 -*-
 import os
-import unittest
 from typing import List
 
 from strongarm.macho import MachoParser, ObjcRuntimeDataParser, ObjcCategory
 
 
-class TestObjcRuntimeDataParser(unittest.TestCase):
+class TestObjcRuntimeDataParser:
     FAT_PATH = os.path.join(os.path.dirname(__file__), 'bin', 'StrongarmTarget')
     CATEGORY_PATH = os.path.join(os.path.dirname(__file__), 'bin', 'DigitalAdvisorySolutions')
     PROTOCOL_32BIT_PATH = os.path.join(os.path.dirname(__file__), 'bin', 'USPossibilities')
@@ -45,8 +43,8 @@ class TestObjcRuntimeDataParser(unittest.TestCase):
             'dyld_stub_binder': '/usr/lib/libSystem.B.dylib',
         }
         for symbol in correct_map:
-            self.assertEqual(correct_map[symbol], objc_parser.path_for_external_symbol(symbol))
-        self.assertIsNone(objc_parser.path_for_external_symbol('XXX_fake_symbol_XXX'))
+            assert objc_parser.path_for_external_symbol(symbol) == correct_map[symbol]
+        assert objc_parser.path_for_external_symbol('XXX_fake_symbol_XXX') is None
 
     def test_find_categories(self):
         parser = MachoParser(TestObjcRuntimeDataParser.CATEGORY_PATH)
@@ -55,14 +53,14 @@ class TestObjcRuntimeDataParser(unittest.TestCase):
 
         # extract category list
         category_classes = [x for x in objc_parser.classes if isinstance(x, ObjcCategory)]
-        self.assertEqual(len(category_classes), 9)
+        assert len(category_classes) == 9
 
         # look at one category
         category = [x for x in category_classes if x.name == 'DataController'][0]
-        self.assertEqual(len(category.selectors), 1)
+        assert len(category.selectors) == 1
         selector = category.selectors[0]
-        self.assertEqual(selector.name, 'allowsAnyHTTPSCertificateForHost:')
-        self.assertEqual(selector.implementation, 0x100005028)
+        assert selector.name == 'allowsAnyHTTPSCertificateForHost:'
+        assert selector.implementation == 0x100005028
 
     def test_find_protocols(self):
         parser = MachoParser(TestObjcRuntimeDataParser.FAT_PATH)
@@ -70,11 +68,11 @@ class TestObjcRuntimeDataParser(unittest.TestCase):
         objc_parser = ObjcRuntimeDataParser(binary)
 
         protocols = objc_parser.protocols
-        self.assertEqual(len(protocols), 3)
+        assert len(protocols) == 3
 
         correct_protocols = ['NSObject', 'NSURLSessionDelegate', 'UIApplicationDelegate']
         for p in correct_protocols:
-            self.assertTrue(p in [a.name for a in protocols])
+            assert p in [a.name for a in protocols]
 
     def test_parse_protocol(self):
         parser = MachoParser(TestObjcRuntimeDataParser.FAT_PATH)
@@ -84,19 +82,19 @@ class TestObjcRuntimeDataParser(unittest.TestCase):
         protocols = objc_parser.protocols
         # look at one protocol
         session_protocol = [p for p in protocols if p.name == 'NSURLSessionDelegate'][0]
-        self.assertEqual(len(session_protocol.selectors), 3)
+        assert len(session_protocol.selectors) == 3
         correct_selectors = ['URLSession:didBecomeInvalidWithError:',
                              'URLSession:didReceiveChallenge:completionHandler:',
                              'URLSessionDidFinishEventsForBackgroundURLSession:']
         for s in correct_selectors:
-            self.assertTrue(s in [sel.name for sel in session_protocol.selectors])
+            assert s in [sel.name for sel in session_protocol.selectors]
 
     def test_class_conforming_protocols(self):
         def check_class_conformed_protocols(class_name: str, correct_protocols: List[str]):
             cls = [x for x in objc_parser.classes if x.name == class_name][0]
-            self.assertIsNotNone(cls)
+            assert cls is not None
             conformed_protocol_names = [x.name for x in cls.protocols]
-            self.assertEqual(correct_protocols, conformed_protocol_names)
+            assert conformed_protocol_names == correct_protocols
 
         parser = MachoParser(TestObjcRuntimeDataParser.CATEGORY_PATH)
         binary = parser.get_arm64_slice()
@@ -125,8 +123,8 @@ class TestObjcRuntimeDataParser(unittest.TestCase):
         parser = MachoParser(TestObjcRuntimeDataParser.PROTOCOL_32BIT_PATH)
         binary = parser.get_armv7_slice()
         objc_parser = ObjcRuntimeDataParser(binary)
-        self.assertEqual(66, len(objc_parser.classes))
+        assert len(objc_parser.classes) == 66
         test_cls = [x for x in objc_parser.classes if x.name == 'Pepsico_iPhoneAppDelegate'][0]
-        self.assertEqual(2, len(test_cls.protocols))
+        assert len(test_cls.protocols) == 2
         proto_names = [x.name for x in test_cls.protocols]
-        self.assertEqual(['UIApplicationDelegate', 'UITabBarControllerDelegate'], proto_names)
+        assert proto_names == ['UIApplicationDelegate', 'UITabBarControllerDelegate']

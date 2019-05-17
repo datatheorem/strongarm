@@ -1,12 +1,10 @@
-# -*- coding: utf-8 -*-
 import os
-import unittest
 
 from strongarm.macho.macho_analyzer import MachoAnalyzer
 from strongarm.macho.macho_parse import MachoParser
 
 
-class TestDyldInfoParser(unittest.TestCase):
+class TestDyldInfoParser:
     BINARY1_PATH = os.path.join(os.path.dirname(__file__), 'bin', 'StrongarmTarget')
     BINARY2_PATH = os.path.join(os.path.dirname(__file__), 'bin', 'GammaRayTestBad')
 
@@ -37,17 +35,17 @@ class TestDyldInfoParser(unittest.TestCase):
              4295000176: '_objc_release', 4295000184: '_objc_retain', 4295000192: '_objc_retainAutoreleasedReturnValue',
              4295000200: '_objc_storeStrong', 4295000208: '_rand'
             }
-        self.assertEqual(correct_imported_symbols, analyzer.imported_symbols_to_symbol_names)
+        assert analyzer.imported_symbols_to_symbol_names == correct_imported_symbols
         for imported_pointer in correct_imported_symbols.keys():
             symbol_name = correct_imported_symbols[imported_pointer]
             if '_OBJC_CLASS_$_' in symbol_name:
-                self.assertEqual(symbol_name, analyzer.class_name_for_class_pointer(imported_pointer))
+                assert analyzer.class_name_for_class_pointer(imported_pointer) == symbol_name
 
                 # some symbols have multiple imported pointers, so just make sure when we lookup pointer it's the same
                 # symbol name.
                 returned_pointer = analyzer.classref_for_class_name(symbol_name)
                 check = correct_imported_symbols[returned_pointer]
-                self.assertEqual(symbol_name, check)
+                assert check == symbol_name
 
     def test_identify_imported_symbols_2(self):
         parser = MachoParser(TestDyldInfoParser.BINARY2_PATH)
@@ -58,4 +56,4 @@ class TestDyldInfoParser(unittest.TestCase):
         # which previously had a bug where we didn't increment the data pointer after binding
 
         # verify data is correct
-        self.assertEqual(0x100212338, analyzer.classref_for_class_name('_OBJC_CLASS_$_UIAlertView'))
+        assert analyzer.classref_for_class_name('_OBJC_CLASS_$_UIAlertView') == 0x100212338

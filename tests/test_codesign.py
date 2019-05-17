@@ -1,24 +1,22 @@
-# -*- coding: utf-8 -*-
 import os
-import unittest
 
 from strongarm.macho import MachoParser
 from strongarm.macho.codesign import CodesignParser
 
 
-class TestCodeSignParser(unittest.TestCase):
+class TestCodeSignParser:
     TARGET_PATH = os.path.join(os.path.dirname(__file__), 'bin', 'DigitalAdvisorySolutions')
 
-    def setUp(self):
+    def setup_method(self):
         parser = MachoParser(TestCodeSignParser.TARGET_PATH)
         self.binary = parser.get_arm64_slice()
         self.codesign_parser = CodesignParser(self.binary)
 
     def test_find_codesign_command(self):
-        self.assertEqual(0x1d, self.binary.code_signature_cmd.cmd)
-        self.assertEqual(0x10, self.binary.code_signature_cmd.cmdsize)
-        self.assertEqual(0x12d2e0, self.binary.code_signature_cmd.dataoff)
-        self.assertEqual(0x6500, self.binary.code_signature_cmd.datasize)
+        assert self.binary.code_signature_cmd.cmd == 0x1d
+        assert self.binary.code_signature_cmd.cmdsize == 0x10
+        assert self.binary.code_signature_cmd.dataoff == 0x12d2e0
+        assert self.binary.code_signature_cmd.datasize == 0x6500
 
     def test_entitlements(self):
         correct_ents = bytearray(
@@ -39,10 +37,10 @@ class TestCodeSignParser(unittest.TestCase):
             b'\n'
             b'\t</dict>\n'
             b'</plist>')
-        self.assertEqual(correct_ents, self.codesign_parser.entitlements)
+        assert self.codesign_parser.entitlements == correct_ents
 
     def test_identifier(self):
-        self.assertEqual('com.honestdollar.honestdollar', self.codesign_parser.signing_identifier)
+        assert self.codesign_parser.signing_identifier == 'com.honestdollar.honestdollar'
 
     def test_team_id(self):
-        self.assertEqual('E6435Z6R89', self.codesign_parser.signing_team_id)
+        assert self.codesign_parser.signing_team_id == 'E6435Z6R89'

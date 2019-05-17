@@ -11,7 +11,8 @@ from .objc_query import \
     CodeSearchTermRegisterContents, \
     CodeSearchTermFunctionCallWithArguments, \
     CodeSearchResult, \
-    CodeSearchResultFunctionCallWithArguments
+    CodeSearchResultFunctionCallWithArguments, \
+    CodeSearchTermObjcCall
 
 from .objc_analyzer import \
     ObjcFunctionAnalyzer, \

@@ -27,14 +27,12 @@ if TYPE_CHECKING:
 class MachoAnalyzer:
     _BYTES_IN_INSTRUCTION = 4
 
-    # keep map of active MachoAnalyzer instances
-    # each MachoAnalyzer operates on a single MachoBinary which will never change in the lifecycle of the analyzer
-    # also, some MachoAnalyzer operations are expensive, but they only have to be done once per instance
-    # so, we only keep one analyzer for each MachoBinary
-    active_analyzer_map: Dict[MachoBinary, 'MachoAnalyzer'] = {}
+    # keep map of binary -> analyzers as these do expensive one-time cross-referencing operations
+    # XXX(PT): references to these will live to the end of the process, or until clear_cache() is called.
+    _ACTIVE_ANALYZER_MAP: Dict[MachoBinary, 'MachoAnalyzer'] = {}
 
-    def __init__(self, bin: MachoBinary) -> None:
-        self.binary = bin
+    def __init__(self, binary: MachoBinary) -> None:
+        self.binary = binary
         self.cs = Cs(CS_ARCH_ARM64, CS_MODE_ARM)
         self.cs.detail = True
 
@@ -44,25 +42,25 @@ class MachoAnalyzer:
         # Map of each __stub function to the associated name of the DyldBoundSymbol
         self._imported_symbol_addresses_to_names: Dict[int, str] = None
 
-        self.crossref_helper = MachoStringTableHelper(bin)
+        self.crossref_helper = MachoStringTableHelper(binary)
         self.imported_symbols = self.crossref_helper.imported_symbols
         self.exported_symbols = self.crossref_helper.exported_symbols
 
-        self.imp_stubs = MachoImpStubsParser(bin, self.cs).imp_stubs
+        self.imp_stubs = MachoImpStubsParser(binary, self.cs).imp_stubs
         self._objc_helper: ObjcRuntimeDataParser = None
         self._objc_method_list: List[ObjcMethodInfo] = None
 
         self._cached_function_boundaries: Dict[int, int] = {}
 
         # done setting up, store this analyzer in class cache
-        MachoAnalyzer.active_analyzer_map[bin] = self
+        MachoAnalyzer._ACTIVE_ANALYZER_MAP[binary] = self
 
     @classmethod
     def clear_cache(cls):
         """Delete cached MachoAnalyzer's
         This can be used when you are finished analyzing a binary set and don't want to retain the cached data in memory
         """
-        cls.active_analyzer_map = {}
+        cls._ACTIVE_ANALYZER_MAP = {}
 
     @property
     def objc_helper(self) -> ObjcRuntimeDataParser:
@@ -74,9 +72,9 @@ class MachoAnalyzer:
     def get_analyzer(cls, bin: MachoBinary) -> 'MachoAnalyzer':
         """Get a cached analyzer for a given MachoBinary
         """
-        if bin in cls.active_analyzer_map:
+        if bin in cls._ACTIVE_ANALYZER_MAP:
             # use cached analyzer for this binary
-            return cls.active_analyzer_map[bin]
+            return cls._ACTIVE_ANALYZER_MAP[bin]
         return MachoAnalyzer(bin)
 
     def objc_classes(self) -> List[ObjcClass]:

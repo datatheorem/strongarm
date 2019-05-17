@@ -120,6 +120,7 @@ class CodesignParser:
             team_id_address = code_directory.binary_offset + code_directory.team_offset
             team_id_string = self.binary.get_full_string_from_start_address(team_id_address, virtual=False)
             self.signing_team_id = team_id_string
+
     def print_code_directory(self, code_dir: CSCodeDirectory) -> None:
         print(f'CodeDirectory @ {hex(code_dir.binary_offset)}')
         print(f'-----------------------')

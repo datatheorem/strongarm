@@ -299,7 +299,7 @@ def print_binary_sections(binary: MachoBinary) -> None:
 def print_analyzer_imported_symbols(analyzer: MachoAnalyzer) -> None:
     print('\nSymbols:')
     print('\tImported symbols:')
-    stub_map = analyzer.external_symbol_names_to_branch_destinations
+    stub_map = analyzer.imported_symbol_names_to_pointers
     for imported_sym in analyzer.imported_symbols:
         print('\t\t{}: '.format(imported_sym), end='')
         # attempt to find the call stub for this symbol

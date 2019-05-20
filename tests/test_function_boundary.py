@@ -1,6 +1,4 @@
-# -*- coding: utf-8 -*-
 import os
-import unittest
 from ctypes import create_string_buffer
 
 from strongarm.macho.macho_parse import MachoParser
@@ -8,11 +6,11 @@ from strongarm.macho.macho_analyzer import MachoAnalyzer
 from strongarm.objc.dataflow import determine_function_boundary
 
 
-class FunctionBoundaryTests(unittest.TestCase):
+class TestFunctionBoundary:
     FAT_PATH = os.path.join(os.path.dirname(__file__), 'bin', 'StrongarmTarget')
 
-    def setUp(self):
-        parser = MachoParser(FunctionBoundaryTests.FAT_PATH)
+    def setup_method(self):
+        parser = MachoParser(TestFunctionBoundary.FAT_PATH)
         self.binary = parser.slices[0]
         self.analyzer = MachoAnalyzer.get_analyzer(self.binary)
 
@@ -30,7 +28,7 @@ class FunctionBoundaryTests(unittest.TestCase):
         # not in cache. calculate function boundary, then cache it
         guessed_end_address = determine_function_boundary(bytecode, start_address)
 
-        self.assertEqual(end_address, guessed_end_address)
+        assert guessed_end_address == end_address
 
     def test_function_boundary_bl(self):
         # found in Hopper
@@ -46,7 +44,7 @@ class FunctionBoundaryTests(unittest.TestCase):
         # not in cache. calculate function boundary, then cache it
         guessed_end_address = determine_function_boundary(bytecode, start_address)
 
-        self.assertEqual(end_address, guessed_end_address)
+        assert guessed_end_address == end_address
 
     def test_find_method_code(self):
         sel = 'application:didFinishLaunchingWithOptions:'
@@ -55,19 +53,19 @@ class FunctionBoundaryTests(unittest.TestCase):
         correct_end_address = 0x1000066e0
 
         imp_func = self.analyzer.get_imps_for_sel(sel)[0]
-        self.assertEqual(correct_start_address, imp_func.start_address)
-        self.assertEqual(correct_end_address, imp_func.end_address)
+        assert imp_func.start_address == correct_start_address
+        assert imp_func.end_address == correct_end_address
 
         instructions = self.analyzer.get_function_instructions(correct_start_address)
         start_address = instructions[0].address
         end_address = instructions[-1].address
 
-        self.assertEqual(correct_start_address, start_address)
-        self.assertEqual(correct_end_address, end_address)
-        self.assertEqual(correct_start_address, instructions[0].address)
-        self.assertEqual(correct_end_address, instructions[-1].address)
+        assert start_address == correct_start_address
+        assert end_address == correct_end_address
+        assert instructions[0].address == correct_start_address
+        assert instructions[-1].address == correct_end_address
 
         bytes_per_instruction = 4
         # add 1 to account for the instruction starting at end_address
         correct_instruction_count = int((correct_end_address - correct_start_address) / bytes_per_instruction) + 1
-        self.assertEqual(correct_instruction_count, len(instructions))
+        assert len(instructions) == correct_instruction_count

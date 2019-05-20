@@ -1,3 +1,4 @@
 typing
-capstone
 enum34
+pytest
+capstone

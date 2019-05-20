@@ -1,6 +1,4 @@
-# -*- coding: utf-8 -*-
 import os
-import unittest
 
 from strongarm.macho.macho_analyzer import MachoAnalyzer
 from strongarm.macho.macho_parse import MachoParser
@@ -9,10 +7,10 @@ from strongarm.objc.objc_basic_block import ObjcBasicBlock
 from strongarm.debug_util import DebugUtil
 
 
-class TestBasicBlocks(unittest.TestCase):
+class TestBasicBlocks:
     TARGET_PATH = os.path.join(os.path.dirname(__file__), 'bin', 'StrongarmControlFlowTarget')
 
-    def setUp(self):
+    def setup_method(self):
         # turn on strongarm debug output
         DebugUtil.debug = True
 

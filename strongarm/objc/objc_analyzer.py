@@ -5,15 +5,18 @@ from capstone.arm64 import ARM64_OP_IMM, ARM64_OP_MEM
 from capstone import CsInsn
 
 from strongarm.debug_util import DebugUtil
-from strongarm.macho import MachoBinary
+from strongarm.macho import MachoBinary, VirtualMemoryPointer
 
-from .objc_instruction import \
-    ObjcInstruction, \
-    ObjcBranchInstruction, \
+from .objc_instruction import (
+    ObjcInstruction,
+    ObjcBranchInstruction,
     ObjcUnconditionalBranchInstruction
-from .objc_query import \
-    CodeSearch, \
+)
+from .objc_query import (
+    CodeSearch,
     CodeSearchResult
+)
+
 from .register_contents import RegisterContents, RegisterContentsType
 from .dataflow import get_register_contents_at_instruction_fast
 
@@ -22,7 +25,7 @@ class ObjcMethodInfo:
     from strongarm.macho import ObjcClass, ObjcSelector
     __slots__ = ['objc_class', 'objc_sel', 'imp_addr']
 
-    def __init__(self, objc_class: 'ObjcClass', objc_sel: 'ObjcSelector', imp: int) -> None:
+    def __init__(self, objc_class: 'ObjcClass', objc_sel: 'ObjcSelector', imp: VirtualMemoryPointer) -> None:
         self.objc_class = objc_class
         self.objc_sel = objc_sel
         self.imp_addr = imp
@@ -55,7 +58,7 @@ class ObjcFunctionAnalyzer(object):
 
         self._call_targets: List[ObjcBranchInstruction] = None
 
-    def _get_instruction_index_of_address(self, address: int) -> Optional[int]:
+    def _get_instruction_index_of_address(self, address: VirtualMemoryPointer) -> Optional[int]:
         """Return the index of an instruction with a provided address within the internal list of instructions
         """
         base_address = self.start_address
@@ -72,7 +75,7 @@ class ObjcFunctionAnalyzer(object):
             return self.instructions[index]
         return None
 
-    def get_instruction_at_address(self, address: int) -> Optional[CsInsn]:
+    def get_instruction_at_address(self, address: VirtualMemoryPointer) -> Optional[CsInsn]:
         """Get the Instruction within the analyzed function at a provided address.
         The return will be wrapped in an ObjcInstruction.
         This method will return None if the address is not contained within the analyzed function.
@@ -100,7 +103,7 @@ class ObjcFunctionAnalyzer(object):
             ))
 
     @classmethod
-    def get_function_analyzer(cls, binary: MachoBinary, start_address: int) -> 'ObjcFunctionAnalyzer':
+    def get_function_analyzer(cls, binary: MachoBinary, start_address: VirtualMemoryPointer) -> 'ObjcFunctionAnalyzer':
         """Get the shared analyzer for the function at start_address in the binary.
 
         This method uses a cached MachoAnalyzer if available, which is more efficient than analyzing the
@@ -297,7 +300,7 @@ class ObjcFunctionAnalyzer(object):
             return False
         return self.start_address <= branch_instruction.destination_address <= self.end_address
 
-    def get_selref_ptr(self, msgsend_instr: ObjcUnconditionalBranchInstruction) -> int:
+    def get_selref_ptr(self, msgsend_instr: ObjcUnconditionalBranchInstruction) -> VirtualMemoryPointer:
         """Retrieve contents of x1 register when control is at provided instruction
 
         Args:
@@ -305,7 +308,6 @@ class ObjcFunctionAnalyzer(object):
 
         Returns:
               Data stored in x1 at execution of msgsend_instr
-
         """
         if msgsend_instr.raw_instr.mnemonic not in ObjcUnconditionalBranchInstruction.UNCONDITIONAL_BRANCH_MNEMONICS:
             raise ValueError('get_selref_ptr() called on non-branch instruction')
@@ -340,7 +342,7 @@ class ObjcFunctionAnalyzer(object):
             raise RuntimeError('couldn\'t determine selref ptr, origates in function arg (type {})'.format(
                 contents.type.name
             ))
-        return contents.value
+        return VirtualMemoryPointer(contents.value)
 
     @functools.lru_cache(maxsize=100)
     def get_register_contents_at_instruction(self, register: str, instruction: ObjcInstruction) -> RegisterContents:

@@ -1,6 +1,3 @@
-# -*- coding: utf-8 -*-
-import struct
-
 from enum import IntEnum
 from ctypes import BigEndianStructure, c_uint8, c_uint32
 
@@ -10,13 +7,13 @@ from strongarm.macho.arch_independent_structs import ArchIndependentStructure
 class CodesignBlobTypeEnum(IntEnum):
     """Magic numbers for codesigning blobs
     """
-    CSMAGIC_REQUIREMENT           = 0xfade0c00  # single requirement blob
-    CSMAGIC_REQUIREMENT_SET       = 0xfade0c01  # requirements vector (internal requirements)
-    CSMAGIC_CODE_DIRECTORY        = 0xfade0c02  # CodeDirectory blob
-    CSMAGIC_EMBEDDED_SIGNATURE    = 0xfade0cc0  # embedded signature data
-    CSMAGIC_DETACHED_SIGNATURE    = 0xfade0cc1  # multi-arch collection of embedded signatures
+    CSMAGIC_REQUIREMENT = 0xfade0c00            # single requirement blob
+    CSMAGIC_REQUIREMENT_SET = 0xfade0c01        # requirements vector (internal requirements)
+    CSMAGIC_CODE_DIRECTORY = 0xfade0c02         # CodeDirectory blob
+    CSMAGIC_EMBEDDED_SIGNATURE = 0xfade0cc0     # embedded signature data
+    CSMAGIC_DETACHED_SIGNATURE = 0xfade0cc1     # multi-arch collection of embedded signatures
     CSMAGIC_EMBEDDED_ENTITLEMENTS = 0xfade7171  # embedded entitlements
-    CSMAGIC_BLOBWRAPPER           = 0xfade0b01  # CMS signature, "among other things" from the source code
+    CSMAGIC_BLOBWRAPPER = 0xfade0b01            # CMS signature, "among other things" from the source code
 
 
 class CSBlobStruct(BigEndianStructure):

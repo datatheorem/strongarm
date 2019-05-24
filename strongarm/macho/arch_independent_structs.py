@@ -1,41 +1,43 @@
-# -*- coding: utf-8 -*-
 from ctypes import sizeof
 
 from typing import Union, Type, Any
 from typing import TYPE_CHECKING
 
-from strongarm.macho.macho_definitions import \
-    MachoHeader32, \
-    MachoHeader64, \
-    MachoSegmentCommand32, \
-    MachoSegmentCommand64, \
-    MachoSection32Raw, \
-    MachoSection64Raw, \
-    MachoEncryptionInfo32Command, \
-    MachoEncryptionInfo64Command, \
-    MachoNlist32, \
-    MachoNlist64, \
-    ObjcDataRaw32, \
-    ObjcDataRaw64, \
-    ObjcClassRaw32, \
-    ObjcClassRaw64, \
-    ObjcMethod32, \
-    ObjcMethod64, \
-    CFString32, \
-    CFString64, \
-    ObjcMethodList, \
-    DylibCommand, \
-    MachoLoadCommand, \
-    MachoSymtabCommand, \
-    MachoDysymtabCommand, \
-    MachoDyldInfoCommand, \
-    MachoLinkeditDataCommand, \
-    ObjcCategoryRaw32, \
-    ObjcCategoryRaw64, \
-    ObjcProtocolRaw32, \
-    ObjcProtocolRaw64, \
-    ObjcProtocolList32, \
-    ObjcProtocolList64
+from strongarm.macho.macho_definitions import (
+    MachoHeader32,
+    MachoHeader64,
+    MachoSegmentCommand32,
+    MachoSegmentCommand64,
+    MachoSection32Raw,
+    MachoSection64Raw,
+    MachoEncryptionInfo32Command,
+    MachoEncryptionInfo64Command,
+    MachoNlist32,
+    MachoNlist64,
+    ObjcDataRaw32,
+    ObjcDataRaw64,
+    ObjcClassRaw32,
+    ObjcClassRaw64,
+    ObjcMethod32,
+    ObjcMethod64,
+    CFString32,
+    CFString64,
+    ObjcMethodList,
+    DylibCommand,
+    MachoLoadCommand,
+    MachoSymtabCommand,
+    MachoDysymtabCommand,
+    MachoDyldInfoCommand,
+    MachoLinkeditDataCommand,
+    ObjcCategoryRaw32,
+    ObjcCategoryRaw64,
+    ObjcProtocolRaw32,
+    ObjcProtocolRaw64,
+    ObjcProtocolList32,
+    ObjcProtocolList64,
+    StaticFilePointer,
+    VirtualMemoryPointer
+)
 
 # create type alias for the following classes that inherit from ArchIndependentStructure
 if TYPE_CHECKING:
@@ -74,9 +76,10 @@ class ArchIndependentStructure:
 
         self._is_addr_virtual = virtual
         if virtual:
-            struct_bytes = binary.get_content_from_virtual_address(binary_offset, sizeof(struct_type))
+            struct_bytes = binary.get_content_from_virtual_address(VirtualMemoryPointer(binary_offset),
+                                                                   sizeof(struct_type))
         else:
-            struct_bytes = binary.get_bytes(binary_offset, sizeof(struct_type))
+            struct_bytes = binary.get_bytes(StaticFilePointer(binary_offset), sizeof(struct_type))
 
         struct = struct_type.from_buffer(bytearray(struct_bytes))
         for field_name, _ in struct._fields_:

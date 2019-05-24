@@ -1,30 +1,32 @@
-# -*- coding: utf-8 -*-
-
 import re
 from typing import List
 
 from capstone import CsInsn
-from capstone.arm64 import \
-    Arm64Op, \
-    ARM64_OP_REG, \
-    ARM64_OP_IMM, \
+from capstone.arm64 import (
+    Arm64Op,
+    ARM64_OP_REG,
+    ARM64_OP_IMM,
     ARM64_OP_MEM
+)
 
 from strongarm.objc import ObjcMethodInfo
-from strongarm.macho import \
-    CPU_TYPE, \
-    MachoParser, \
-    MachoAnalyzer, \
-    MachoBinary, \
-    ObjcCategory, \
-    ObjcClass, \
-    ObjcSelector
-from strongarm.objc import \
-    RegisterContentsType, \
-    ObjcFunctionAnalyzer, \
-    ObjcBranchInstruction, \
-    ObjcBasicBlock, \
-    ObjcInstruction
+from strongarm.macho import (
+    CPU_TYPE,
+    MachoParser,
+    MachoBinary,
+    MachoAnalyzer,
+    ObjcClass,
+    ObjcSelector,
+    ObjcCategory,
+    VirtualMemoryPointer
+)
+from strongarm.objc import (
+    ObjcBasicBlock,
+    ObjcInstruction,
+    RegisterContentsType,
+    ObjcFunctionAnalyzer,
+    ObjcBranchInstruction,
+)
 
 
 class StringFormatter:
@@ -226,7 +228,11 @@ def annotate_instruction(function_analyzer: ObjcFunctionAnalyzer, sel_args, inst
     return annotation
 
 
-def disassemble_function(binary: MachoBinary, function_addr: int, prefix: List[str] = None, sel_args=None) -> str:
+def disassemble_function(
+        binary: MachoBinary,
+        function_addr: VirtualMemoryPointer,
+        prefix: List[str] = None,
+        sel_args=None) -> str:
     if not prefix:
         prefix = []
     disassembled_text = prefix

@@ -237,36 +237,47 @@ class MachoAnalyzer:
         self._objc_method_list = method_list
         return self._objc_method_list
 
-    def search_code(self, code_search: 'CodeSearch') -> List['CodeSearchResult']:
-        """Given a CodeSearch object describing rules for matching code, return a List of CodeSearchResult's
+    from typing import Any, Callable
+    _GLOBAL_CODESEARCH_LIST: Dict['CodeSearch', Callable[[List['CodeSearchResult']], None]] = {}
+
+    def search_code(self, code_search: 'CodeSearch', callback: Callable[[List['CodeSearchResult']], None]):
+        """Callback should take a List[CodeSearchResult]
+        """
+        DebugUtil.log(self, f'Adding Code Search to queue')
+        self._GLOBAL_CODESEARCH_LIST[code_search] = callback
+
+    def search_all_code(self):
+        """Searches the entire binary and collects results for every code search
+        Given a CodeSearch object describing rules for matching code, return a List of CodeSearchResult's
         encapsulating instructions which match the described set of conditions.
 
         The search space of this method includes all known functions within the binary.
         """
         from strongarm.objc import CodeSearchResult # type: ignore
         from strongarm.objc import ObjcFunctionAnalyzer # type: ignore
+        from collections import defaultdict
 
-        DebugUtil.log(self, 'Performing code search on binary with search description:\n{}'.format(
-            code_search
-        ))
+        DebugUtil.log(self, f'Performing {len(self._GLOBAL_CODESEARCH_LIST.keys())} code searches...')
 
-        search_results: List[CodeSearchResult] = []
+        search_results: Dict[function, List[CodeSearchResult]] = defaultdict(list)
         entry_point_list = self.get_objc_methods()
         for i, method_info in enumerate(entry_point_list):
             DebugUtil.log(
                 self,
                 f'search_code: {hex(method_info.imp_addr)} -[{method_info.objc_class.name} {method_info.objc_sel.name}]'
             )
-            try:
-                function_analyzer = ObjcFunctionAnalyzer.get_function_analyzer_for_method(self.binary, method_info)
-                search_results += function_analyzer.search_code(code_search)
-            except RuntimeError:
-                continue
+            function_analyzer = ObjcFunctionAnalyzer.get_function_analyzer_for_method(self.binary, method_info)
+            for code_search, callback in self._GLOBAL_CODESEARCH_LIST.items():
+                search_results[callback] += function_analyzer.search_code(code_search)
 
             checkpoint_index = len(entry_point_list) // 10
             if checkpoint_index and i % checkpoint_index == 0:
                 percent_complete = int((i / len(entry_point_list) + 0.01) * 100)
-                logging.info(f'binary code search {percent_complete}% complete')
+                logging.info(f'global code search {percent_complete}% complete')
+
+        # Invoke every callback with their search results
+        for callback, results in search_results.items():
+            callback(results)
         return search_results
 
     def class_name_for_class_pointer(self, classref: VirtualMemoryPointer) -> Optional[str]:

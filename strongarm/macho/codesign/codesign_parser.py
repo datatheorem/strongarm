@@ -20,7 +20,7 @@ class CodesignParser:
 
     def __init__(self, binary: MachoBinary):
         self.binary = binary
-        self.entitlements: bytearray = bytearray(b'')
+        self.entitlements: bytearray = bytearray(b'<plist></plist>')
         self.signing_identifier: str = None
         self.signing_team_id: str = None
 

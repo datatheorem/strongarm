@@ -1,4 +1,3 @@
-# -*- coding: utf-8 -*-
 from strongarm.debug_util import DebugUtil
 from strongarm.macho.macho_binary import MachoBinary
 
@@ -21,9 +20,13 @@ class CodesignParser:
 
     def __init__(self, binary: MachoBinary):
         self.binary = binary
-        self.entitlements: bytearray = None
+        self.entitlements: bytearray = bytearray(b'')
         self.signing_identifier: str = None
         self.signing_team_id: str = None
+
+        # If the binary does not have a code signature, we have nothing to do
+        if not self.binary.code_signature_cmd:
+            return
 
         self._codesign_entry = self.binary.code_signature_cmd.dataoff
         self.parse_codesign_blob(self._codesign_entry)

@@ -1,9 +1,8 @@
 import logging
-from typing import TYPE_CHECKING
-from typing import List, Dict, Optional, Set
-from capstone import Cs, CsInsn, CS_ARCH_ARM64, CS_MODE_ARM
-
 from ctypes import sizeof
+from typing import TYPE_CHECKING
+from typing import Set, List, Dict, Optional, Callable
+from capstone import Cs, CsInsn, CS_ARCH_ARM64, CS_MODE_ARM
 
 from strongarm import DebugUtil
 from strongarm.macho.macho_binary import MachoBinary
@@ -26,10 +25,15 @@ if TYPE_CHECKING:
     from strongarm.objc import ObjcFunctionAnalyzer, ObjcMethodInfo  # type: ignore
 
 
+CodeSearchCallback = Callable[['MachoAnalyzer', List['CodeSearchResult']], None]
+
+
 class MachoAnalyzer:
     # keep map of binary -> analyzers as these do expensive one-time cross-referencing operations
     # XXX(PT): references to these will live to the end of the process, or until clear_cache() is called.
     _ACTIVE_ANALYZER_MAP: Dict[MachoBinary, 'MachoAnalyzer'] = {}
+
+    _PENDING_CODESEARCHES: Dict['CodeSearch', CodeSearchCallback] = {}
 
     def __init__(self, binary: MachoBinary) -> None:
         self.binary = binary
@@ -237,14 +241,11 @@ class MachoAnalyzer:
         self._objc_method_list = method_list
         return self._objc_method_list
 
-    from typing import Any, Callable
-    _GLOBAL_CODESEARCH_LIST: Dict['CodeSearch', Callable[[List['CodeSearchResult']], None]] = {}
-
-    def search_code(self, code_search: 'CodeSearch', callback: Callable[[List['CodeSearchResult']], None]):
+    def search_code(self, code_search: 'CodeSearch', callback: CodeSearchCallback):
         """Callback should take a List[CodeSearchResult]
         """
         DebugUtil.log(self, f'Adding Code Search to queue')
-        self._GLOBAL_CODESEARCH_LIST[code_search] = callback
+        self._PENDING_CODESEARCHES[code_search] = callback
 
     def search_all_code(self):
         """Searches the entire binary and collects results for every code search
@@ -257,7 +258,7 @@ class MachoAnalyzer:
         from strongarm.objc import ObjcFunctionAnalyzer # type: ignore
         from collections import defaultdict
 
-        DebugUtil.log(self, f'Performing {len(self._GLOBAL_CODESEARCH_LIST.keys())} code searches...')
+        DebugUtil.log(self, f'Performing {len(self._PENDING_CODESEARCHES.keys())} code searches...')
 
         search_results: Dict[function, List[CodeSearchResult]] = defaultdict(list)
         entry_point_list = self.get_objc_methods()
@@ -267,7 +268,7 @@ class MachoAnalyzer:
                 f'search_code: {hex(method_info.imp_addr)} -[{method_info.objc_class.name} {method_info.objc_sel.name}]'
             )
             function_analyzer = ObjcFunctionAnalyzer.get_function_analyzer_for_method(self.binary, method_info)
-            for code_search, callback in self._GLOBAL_CODESEARCH_LIST.items():
+            for code_search, callback in self._PENDING_CODESEARCHES.items():
                 search_results[callback] += function_analyzer.search_code(code_search)
 
             checkpoint_index = len(entry_point_list) // 10
@@ -276,8 +277,14 @@ class MachoAnalyzer:
                 logging.info(f'global code search {percent_complete}% complete')
 
         # Invoke every callback with their search results
+        exceptions = []
         for callback, results in search_results.items():
-            callback(results)
+            try:
+                callback(results)
+            except Exception as e:
+                exceptions.append(e)
+        for exception in exceptions:
+            raise exception
         return search_results
 
     def class_name_for_class_pointer(self, classref: VirtualMemoryPointer) -> Optional[str]:

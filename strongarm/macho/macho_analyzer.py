@@ -277,14 +277,9 @@ class MachoAnalyzer:
                 logging.info(f'global code search {percent_complete}% complete')
 
         # Invoke every callback with their search results
-        exceptions = []
         for callback, results in search_results.items():
-            try:
-                callback(results)
-            except Exception as e:
-                exceptions.append(e)
-        for exception in exceptions:
-            raise exception
+            callback(self, results)
+
         return search_results
 
     def class_name_for_class_pointer(self, classref: VirtualMemoryPointer) -> Optional[str]:

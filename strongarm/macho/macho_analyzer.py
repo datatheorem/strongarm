@@ -1,5 +1,7 @@
 import logging
 from ctypes import sizeof
+from collections import defaultdict
+
 from typing import TYPE_CHECKING
 from typing import Set, List, Dict, Optional, Callable
 from capstone import Cs, CsInsn, CS_ARCH_ARM64, CS_MODE_ARM
@@ -254,9 +256,8 @@ class MachoAnalyzer:
 
         The search space of this method includes all known functions within the binary.
         """
-        from strongarm.objc import CodeSearchResult # type: ignore
-        from strongarm.objc import ObjcFunctionAnalyzer # type: ignore
-        from collections import defaultdict
+        from strongarm.objc import CodeSearchResult     # type: ignore
+        from strongarm.objc import ObjcFunctionAnalyzer     # type: ignore
 
         DebugUtil.log(self, f'Performing {len(self._PENDING_CODESEARCHES.keys())} code searches...')
 
@@ -279,6 +280,9 @@ class MachoAnalyzer:
         # Invoke every callback with their search results
         for callback, results in search_results.items():
             callback(self, results)
+
+        # We've dispatched all of these code searches - remove them from the pending search list
+        self._PENDING_CODESEARCHES.clear()
 
         return search_results
 

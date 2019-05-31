@@ -1,18 +1,19 @@
-# -*- coding: utf-8 -*-
 from ctypes import sizeof
 from typing import List, Optional, Dict
 
-from strongarm.macho.arch_independent_structs import \
-    ObjcClassRawStruct, \
-    ObjcDataRawStruct, \
-    ObjcMethodStruct, \
-    ObjcMethodListStruct, \
-    ObjcCategoryRawStruct, \
-    ObjcProtocolRawStruct, \
-    ObjcProtocolListStruct, \
+from strongarm.macho.arch_independent_structs import (
+    ObjcMethodStruct,
+    ObjcDataRawStruct,
+    ObjcClassRawStruct,
+    ObjcMethodListStruct,
+    ObjcCategoryRawStruct,
+    ObjcProtocolRawStruct,
+    ObjcProtocolListStruct,
     ArchIndependentStructure
+)
 from strongarm.debug_util import DebugUtil
 from strongarm.macho.macho_binary import MachoBinary
+from strongarm.macho.macho_definitions import VirtualMemoryPointer
 
 
 class ObjcClass:
@@ -37,7 +38,7 @@ class ObjcCategory(ObjcClass):
     def __init__(self,
                  raw_struct: ObjcCategoryRawStruct,
                  base_class: str,
-                 name: str ,
+                 name: str,
                  selectors: List['ObjcSelector'],
                  protocols: List['ObjcProtocol'] = None) -> None:
         super(ObjcCategory, self).__init__(raw_struct, name, selectors, protocols)
@@ -51,7 +52,7 @@ class ObjcProtocol(ObjcClass):
 class ObjcSelector:
     __slots__ = ['name', 'selref', 'implementation', 'is_external_definition']
 
-    def __init__(self, name: str, selref: 'ObjcSelref', implementation: Optional[int]) -> None:
+    def __init__(self, name: str, selref: 'ObjcSelref', implementation: Optional[VirtualMemoryPointer]) -> None:
         self.name = name
         self.selref = selref
         self.implementation = implementation
@@ -69,7 +70,10 @@ class ObjcSelector:
 class ObjcSelref:
     __slots__ = ['source_address', 'destination_address', 'selector_literal']
 
-    def __init__(self, source_address: int, destination_address: int, selector_literal: str) -> None:
+    def __init__(self,
+                 source_address: VirtualMemoryPointer,
+                 destination_address: VirtualMemoryPointer,
+                 selector_literal: str) -> None:
         self.source_address = source_address
         self.destination_address = destination_address
         self.selector_literal = selector_literal
@@ -81,8 +85,8 @@ class ObjcRuntimeDataParser:
         DebugUtil.log(self, 'Parsing ObjC runtime info... (this may take a while)')
 
         DebugUtil.log(self, 'Step 1: Parsing selrefs...')
-        self._selref_ptr_to_selector_map: Dict[int, ObjcSelector] = {}
-        self._selector_literal_ptr_to_selref_map: Dict[int, ObjcSelref] = {}
+        self._selref_ptr_to_selector_map: Dict[VirtualMemoryPointer, ObjcSelector] = {}
+        self._selector_literal_ptr_to_selref_map: Dict[VirtualMemoryPointer, ObjcSelref] = {}
         # this method populates self._selector_literal_ptr_to_selref_map and self._selref_ptr_to_selector_map
         self._parse_selrefs()
 
@@ -149,7 +153,7 @@ class ObjcRuntimeDataParser:
             # we don't know the implementation address yet but it will be updated when we parse method lists
             self._selref_ptr_to_selector_map[selref_ptr] = ObjcSelector(selector_string, wrapped_selref, None)
 
-    def selector_for_selref(self, selref_addr: int) -> Optional[ObjcSelector]:
+    def selector_for_selref(self, selref_addr: VirtualMemoryPointer) -> Optional[ObjcSelector]:
         if selref_addr in self._selref_ptr_to_selector_map:
             return self._selref_ptr_to_selector_map[selref_addr]
 
@@ -165,17 +169,17 @@ class ObjcRuntimeDataParser:
         sel = ObjcSelector(_selref.selector_literal, _selref, None)
         return sel
 
-    def selrefs_to_selectors(self) -> Dict[int, ObjcSelector]:
+    def selrefs_to_selectors(self) -> Dict[VirtualMemoryPointer, ObjcSelector]:
         return self._selref_ptr_to_selector_map
 
-    def selref_for_selector_name(self, selector_name: str) -> Optional[int]:
+    def selref_for_selector_name(self, selector_name: str) -> Optional[VirtualMemoryPointer]:
         selref_list = [x for x in self._selref_ptr_to_selector_map
                        if self._selref_ptr_to_selector_map[x].name == selector_name]
         if len(selref_list):
             return selref_list[0]
         return None
 
-    def get_method_imp_addresses(self, selector: str) -> List[int]:
+    def get_method_imp_addresses(self, selector: str) -> List[VirtualMemoryPointer]:
         """Given a selector, return a list of virtual addresses corresponding to the start of each IMP for that SEL
         """
         imp_addresses = []
@@ -250,7 +254,7 @@ class ObjcRuntimeDataParser:
         protocol_pointers = self._get_protolist_pointers()
         return self._parse_protocol_ptr_list(protocol_pointers)
 
-    def read_selectors_from_methlist_ptr(self, methlist_ptr: int) -> List[ObjcSelector]:
+    def read_selectors_from_methlist_ptr(self, methlist_ptr: VirtualMemoryPointer) -> List[ObjcSelector]:
         """Given the virtual address of a method list, return a List of ObjcSelectors encapsulating each method
         """
         methlist = ObjcMethodListStruct(self.binary, methlist_ptr, virtual=True)
@@ -342,7 +346,7 @@ class ObjcRuntimeDataParser:
 
         return ObjcClass(objc_class_struct, name, selectors, protocols)
 
-    def _protolist_ptr_to_protocol_ptr_list(self, protolist_ptr: int) -> List[int]:
+    def _protolist_ptr_to_protocol_ptr_list(self, protolist_ptr: VirtualMemoryPointer) -> List[VirtualMemoryPointer]:
         """Accepts the virtual address of an ObjcProtocolListStruct, and returns List of protocol pointers it refers to.
         """
         protolist = ObjcProtocolListStruct(self.binary, protolist_ptr, virtual=True)
@@ -355,7 +359,7 @@ class ObjcRuntimeDataParser:
             addr += sizeof(self.binary.platform_word_type)
         return protocol_pointers
 
-    def _parse_protocol_ptr_list(self, protocol_ptrs: List[int]) -> List[ObjcProtocol]:
+    def _parse_protocol_ptr_list(self, protocol_ptrs: List[VirtualMemoryPointer]) -> List[ObjcProtocol]:
         protocols = []
         for protocol_ptr in protocol_ptrs:
             objc_protocol_struct = self._get_objc_protocol_from_pointer(protocol_ptr)
@@ -364,37 +368,39 @@ class ObjcRuntimeDataParser:
                 protocols.append(parsed_protocol)
         return protocols
 
-    def _get_catlist_pointers(self) -> List[int]:
+    def _get_catlist_pointers(self) -> List[VirtualMemoryPointer]:
         """Read pointers in __objc_catlist into list
         """
         _, catlist_pointers = self.binary.read_pointer_section('__objc_catlist')
         return catlist_pointers
 
-    def _get_protolist_pointers(self) -> List[int]:
+    def _get_protolist_pointers(self) -> List[VirtualMemoryPointer]:
         """Read pointers in __objc_protolist into list
         """
         _, protolist_pointers = self.binary.read_pointer_section('__objc_protolist')
         return protolist_pointers
 
-    def _get_classlist_pointers(self) -> List[int]:
+    def _get_classlist_pointers(self) -> List[VirtualMemoryPointer]:
         """Read pointers in __objc_classlist into list
         """
         _, classlist_pointers = self.binary.read_pointer_section('__objc_classlist')
         return classlist_pointers
 
-    def _get_objc_category_from_catlist_pointer(self, category_struct_pointer: int) -> ObjcCategoryRawStruct:
+    def _get_objc_category_from_catlist_pointer(
+            self,
+            category_struct_pointer: VirtualMemoryPointer) -> ObjcCategoryRawStruct:
         """Read a struct __objc_category from the location indicated by the provided __objc_catlist pointer
         """
         category_entry = ObjcCategoryRawStruct(self.binary, category_struct_pointer, virtual=True)
         return category_entry
 
-    def _get_objc_protocol_from_pointer(self, protocol_struct_pointer: int) -> ObjcProtocolRawStruct:
+    def _get_objc_protocol_from_pointer(self, protocol_struct_pointer: VirtualMemoryPointer) -> ObjcProtocolRawStruct:
         """Read a struct __objc_protocol from the location indicated by the provided struct objc_protocol_list pointer
         """
         protocol_entry = ObjcProtocolRawStruct(self.binary, protocol_struct_pointer, virtual=True)
         return protocol_entry
 
-    def _get_objc_class_from_classlist_pointer(self, class_struct_pointer: int) -> ObjcClassRawStruct:
+    def _get_objc_class_from_classlist_pointer(self, class_struct_pointer: VirtualMemoryPointer) -> ObjcClassRawStruct:
         """Read a struct __objc_class from the location indicated by the __objc_classlist pointer
         """
         class_entry = ObjcClassRawStruct(self.binary, class_struct_pointer, virtual=True)

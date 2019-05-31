@@ -1,4 +1,3 @@
-# -*- coding: utf-8 -*-
 from typing import Optional, Dict, List
 
 from strongarm.macho.macho_binary import MachoBinary

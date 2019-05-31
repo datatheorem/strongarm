@@ -1,11 +1,10 @@
-# -*- coding: utf-8 -*-
-from typing import Union
 from typing import TYPE_CHECKING
 
 from capstone import CsInsn
 from capstone.arm64 import ARM64_OP_REG, ARM64_OP_IMM, ARM64_OP_MEM
 
 import strongarm.macho.macho_analyzer
+from strongarm.macho.macho_definitions import VirtualMemoryPointer
 
 if TYPE_CHECKING:
     from strongarm.objc import ObjcFunctionAnalyzer
@@ -64,7 +63,7 @@ class ObjcInstruction:
 
 
 class ObjcBranchInstruction(ObjcInstruction):
-    def __init__(self, instruction: CsInsn, destination_address: int) -> None:
+    def __init__(self, instruction: CsInsn, destination_address: VirtualMemoryPointer) -> None:
         super(ObjcBranchInstruction, self).__init__(instruction)
 
         self.destination_address = destination_address

@@ -1,5 +1,6 @@
 from strongarm.debug_util import DebugUtil
 from strongarm.macho.macho_binary import MachoBinary
+from strongarm.macho.macho_definitions import StaticFilePointer
 
 from .codesign_definitions import (
     CodesignBlobTypeEnum,
@@ -31,14 +32,14 @@ class CodesignParser:
         self._codesign_entry = self.binary.code_signature_cmd.dataoff
         self.parse_codesign_blob(self._codesign_entry)
 
-    def read_32_big_endian(self, offset: int) -> int:
+    def read_32_big_endian(self, offset: StaticFilePointer) -> int:
         """Read a 32-bit word from the file offset in big-endian order.
         """
         word_bytes = self.binary.get_bytes(offset, 4)
         word = int.from_bytes(word_bytes, byteorder='big')
         return word
 
-    def parse_codesign_blob(self, file_offset: int) -> None:
+    def parse_codesign_blob(self, file_offset: StaticFilePointer) -> None:
         """High-level parser to parse the codesign blob at the file offset.
         """
         magic = self.read_32_big_endian(file_offset)
@@ -61,7 +62,7 @@ class CodesignParser:
             # unknown magic
             DebugUtil.log(self, f'Unknown CodeSign blob magic @ {hex(file_offset)}: {hex(magic)}')
 
-    def parse_superblob(self, file_offset: int):
+    def parse_superblob(self, file_offset: StaticFilePointer):
         """Parse a codesign 'superblob' at the provided file offset.
         This is a blob which embeds several child blobs.
         The superblob format is the superblob header, followed by several csblob_index structures describing
@@ -72,7 +73,7 @@ class CodesignParser:
             raise RuntimeError(f'Can blobs other than embedded signatures be superblobs? {hex(superblob.magic)}')
 
         # move past the superblob header to the first index struct entry
-        file_offset += superblob.sizeof
+        file_offset += StaticFilePointer(superblob.sizeof)
 
         # parse each struct csblob_index following the superblob header
         for i in range(superblob.index_entry_count):
@@ -83,7 +84,7 @@ class CodesignParser:
             self.parse_codesign_blob(csblob_file_offset)
 
             # iterate to the next blob index struct in list
-            file_offset += csblob_index.sizeof
+            file_offset += StaticFilePointer(csblob_index.sizeof)
 
     @staticmethod
     def get_index_blob_name(blob_index: CSBlobIndex):
@@ -100,14 +101,14 @@ class CodesignParser:
                       0x10000: 'CMS Signature'}
         return blob_types[blob_index.type]
 
-    def parse_csblob_index(self, file_offset: int) -> CSBlobIndex:
+    def parse_csblob_index(self, file_offset: StaticFilePointer) -> CSBlobIndex:
         """Parse a csblob_index at the file offset.
         A csblob_index is a header structure describing the type/layout of a superblob's child blob.
         This method will parse and return the index header.
         """
         return CSBlobIndex(self.binary, file_offset, virtual=False)
 
-    def parse_code_directory(self, file_offset: int):
+    def parse_code_directory(self, file_offset: StaticFilePointer):
         """Parse a Code Directory at the file offset.
         """
         code_directory = CSCodeDirectory(self.binary, file_offset, virtual=False)
@@ -141,7 +142,7 @@ class CodesignParser:
         print(f'Team offset: {hex(code_dir.team_offset)}')
         print()
 
-    def parse_entitlements(self, file_offset: int) -> bytearray:
+    def parse_entitlements(self, file_offset: StaticFilePointer) -> bytearray:
         """Parse the embedded entitlements blob at the file offset.
         Returns a bytearray of the embedded entitlements.
         """
@@ -151,7 +152,7 @@ class CodesignParser:
 
         blob_end = entitlements_blob.binary_offset + entitlements_blob.length
 
-        xml_start = file_offset + entitlements_blob.sizeof
+        xml_start = StaticFilePointer(file_offset + entitlements_blob.sizeof)
         xml_length = blob_end - xml_start
         xml = self.binary.get_bytes(xml_start, xml_length)
         return xml

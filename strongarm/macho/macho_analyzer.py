@@ -39,6 +39,7 @@ class MachoAnalyzer:
     # Therefore, we want only one instance to exist for any MachoBinary
     # Thus, the preferred interface for getting an instance of this class is MachoAnalyzer.get_analyzer(binary),
     # which utilizes this cache
+    # XXX(PT): These references live to process termination, or until clear_cache() is called
     _ANALYZER_CACHE: Dict[MachoBinary, 'MachoAnalyzer'] = {}
 
     def __init__(self, binary: MachoBinary) -> None:
@@ -251,14 +252,22 @@ class MachoAnalyzer:
         return self._objc_method_list
 
     def search_code(self, code_search: 'CodeSearch', callback: CodeSearchCallback):
-        """Callback should take a List[CodeSearchResult]
+        """Enqueue a CodeSearch. It will be ran when `search_all_code` runs. After this, `callback` will be invoked.
+        The search space is all known Objective-C entry points within the binary.
+
+        A CodeSearch describes criteria for matching code. A CodeSearchResult encapsulates a CPU instruction and its
+        containing source function which matches the criteria of the search.
+
+        Once the CodeSearch has been run over the binary, the `callback` will be invoked, passing the relevant
+        info about the discovered code.
         """
-        DebugUtil.log(self, f'Adding Code Search to queue')
+        binary_name = Path(self.binary.filename.decode()).name
+        logging.info(f'{binary_name} enqueuing CodeSearch {code_search}. Will invoke {callback}')
         self._pending_code_searches[code_search] = callback
 
     def search_all_code(self):
         """Iterate every function in the binary, and run each pending CodeSearch over them.
-        The search space of this method is all known Objective-C entry points within the binary.
+        The search space is all known Objective-C entry points within the binary.
 
         A CodeSearch describes criteria for matching code. A CodeSearchResult encapsulates a CPU instruction and its
         containing source function which matches the criteria of the search.

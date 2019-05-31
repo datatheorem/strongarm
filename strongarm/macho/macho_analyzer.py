@@ -33,6 +33,8 @@ CodeSearchCallback = Callable[['MachoAnalyzer', 'CodeSearch', List['CodeSearchRe
 
 
 class MachoAnalyzer:
+    from strongarm.objc import CodeSearch
+
     # This class does expensive one-time cross-referencing operations
     # Therefore, we want only one instance to exist for any MachoBinary
     # Thus, the preferred interface for getting an instance of this class is MachoAnalyzer.get_analyzer(binary),
@@ -40,6 +42,8 @@ class MachoAnalyzer:
     _ANALYZER_CACHE: Dict[MachoBinary, 'MachoAnalyzer'] = {}
 
     def __init__(self, binary: MachoBinary) -> None:
+        from strongarm.objc import CodeSearch
+
         self.binary = binary
         self.cs = Cs(CS_ARCH_ARM64, CS_MODE_ARM)
         self.cs.detail = True
@@ -212,10 +216,6 @@ class MachoAnalyzer:
         """
         return self.objc_helper.get_method_imp_addresses(selector)
 
-    if TYPE_CHECKING:   # noqa
-        from strongarm.objc import ObjcFunctionAnalyzer # type: ignore
-        from strongarm.objc import CodeSearch, CodeSearchResult # type: ignore
-
     def get_imps_for_sel(self, selector: str) -> List['ObjcFunctionAnalyzer']:
         """Retrieve a list of the disassembled function data for every implementation of a provided selector
         Args:
@@ -224,7 +224,7 @@ class MachoAnalyzer:
         Returns:
             A list of ObjcFunctionAnalyzers corresponding to each found implementation of the provided selector.
         """
-        from strongarm.objc import ObjcFunctionAnalyzer # type: ignore
+        from strongarm.objc import ObjcFunctionAnalyzer     # type: ignore
 
         implementation_analyzers = []
         imp_addresses = self.get_method_imp_addresses(selector)

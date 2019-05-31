@@ -1,4 +1,5 @@
 import logging
+from pathlib import Path
 from ctypes import sizeof
 from collections import defaultdict
 
@@ -27,15 +28,16 @@ if TYPE_CHECKING:
     from strongarm.objc import ObjcFunctionAnalyzer, ObjcMethodInfo  # type: ignore
 
 
-CodeSearchCallback = Callable[['MachoAnalyzer', List['CodeSearchResult']], None]
+# Callback invoked when a CodeSearch has been executed over a binary's code. Provides the search results
+CodeSearchCallback = Callable[['MachoAnalyzer', 'CodeSearch', List['CodeSearchResult']], None]
 
 
 class MachoAnalyzer:
-    # keep map of binary -> analyzers as these do expensive one-time cross-referencing operations
-    # XXX(PT): references to these will live to the end of the process, or until clear_cache() is called.
-    _ACTIVE_ANALYZER_MAP: Dict[MachoBinary, 'MachoAnalyzer'] = {}
-
-    _PENDING_CODESEARCHES: Dict['CodeSearch', CodeSearchCallback] = {}
+    # This class does expensive one-time cross-referencing operations
+    # Therefore, we want only one instance to exist for any MachoBinary
+    # Thus, the preferred interface for getting an instance of this class is MachoAnalyzer.get_analyzer(binary),
+    # which utilizes this cache
+    _ANALYZER_CACHE: Dict[MachoBinary, 'MachoAnalyzer'] = {}
 
     def __init__(self, binary: MachoBinary) -> None:
         self.binary = binary
@@ -58,15 +60,20 @@ class MachoAnalyzer:
 
         self._cached_function_boundaries: Dict[int, int] = {}
 
+        # For efficiency, API clients submit all of their CodeSearch's at once before executing them
+        # This map is where we store the CodeSearch's that are waiting to be executed, and the
+        # callbacks which should be invoked once results are found.
+        self._pending_code_searches: Dict['CodeSearch', CodeSearchCallback] = {}
+
         # done setting up, store this analyzer in class cache
-        MachoAnalyzer._ACTIVE_ANALYZER_MAP[binary] = self
+        MachoAnalyzer._ANALYZER_CACHE[binary] = self
 
     @classmethod
     def clear_cache(cls):
         """Delete cached MachoAnalyzer's
         This can be used when you are finished analyzing a binary set and don't want to retain the cached data in memory
         """
-        cls._ACTIVE_ANALYZER_MAP = {}
+        cls._ANALYZER_CACHE.clear()
 
     @property
     def objc_helper(self) -> ObjcRuntimeDataParser:
@@ -75,13 +82,13 @@ class MachoAnalyzer:
         return self._objc_helper
 
     @classmethod
-    def get_analyzer(cls, bin: MachoBinary) -> 'MachoAnalyzer':
+    def get_analyzer(cls, binary: MachoBinary) -> 'MachoAnalyzer':
         """Get a cached analyzer for a given MachoBinary
         """
-        if bin in cls._ACTIVE_ANALYZER_MAP:
-            # use cached analyzer for this binary
-            return cls._ACTIVE_ANALYZER_MAP[bin]
-        return MachoAnalyzer(bin)
+        if binary in cls._ANALYZER_CACHE:
+            # There exists a MachoAnalyzer for this binary - use it instead of making a new one
+            return cls._ANALYZER_CACHE[binary]
+        return MachoAnalyzer(binary)
 
     def objc_classes(self) -> List[ObjcClass]:
         """Return the List of classes and categories implemented within the binary
@@ -247,38 +254,47 @@ class MachoAnalyzer:
         """Callback should take a List[CodeSearchResult]
         """
         DebugUtil.log(self, f'Adding Code Search to queue')
-        self._PENDING_CODESEARCHES[code_search] = callback
+        self._pending_code_searches[code_search] = callback
 
     def search_all_code(self):
-        """Searches the entire binary and collects results for every code search
-        Given a CodeSearch object describing rules for matching code, return a List of CodeSearchResult's
-        encapsulating instructions which match the described set of conditions.
+        """Iterate every function in the binary, and run each pending CodeSearch over them.
+        The search space of this method is all known Objective-C entry points within the binary.
 
-        The search space of this method includes all known functions within the binary.
+        A CodeSearch describes criteria for matching code. A CodeSearchResult encapsulates a CPU instruction and its
+        containing source function which matches the criteria of the search.
+
+        For each search which is executed, this method will invoke the CodeSearchCallback provided when the search
+        was requested, with the List of CodeSearchResult's which were found.
         """
-        from strongarm.objc import CodeSearchResult     # type: ignore
+        from strongarm.objc import CodeSearch, CodeSearchResult     # type: ignore
         from strongarm.objc import ObjcFunctionAnalyzer     # type: ignore
 
-        logging.info(f'Performing {len(self._PENDING_CODESEARCHES.keys())} code searches...')
+        binary_name = Path(self.binary.filename.decode()).name
+        logging.info(f'Running {len(self._pending_code_searches.keys())} code searches on {binary_name}')
 
-        search_results: Dict[function, List[CodeSearchResult]] = defaultdict(list)
         entry_point_list = self.get_objc_methods()
+        search_results: Dict['CodeSearch', List[CodeSearchResult]] = defaultdict(list)
+
         for i, method_info in enumerate(entry_point_list):
             function_analyzer = ObjcFunctionAnalyzer.get_function_analyzer_for_method(self.binary, method_info)
-            for code_search, callback in self._PENDING_CODESEARCHES.items():
-                search_results[callback] += function_analyzer.search_code(code_search)
 
+            # Run every code search on this function and record their respective results
+            for code_search, callback in self._pending_code_searches.items():
+                search_results[code_search] += function_analyzer.search_code(code_search)
+
+            # Searching a binary's code can be a time-consumptive operation, so log progress to help the user
             checkpoint_index = len(entry_point_list) // 10
             if checkpoint_index and i % checkpoint_index == 0:
                 percent_complete = int((i / len(entry_point_list) + 0.01) * 100)
-                logging.info(f'global code search {percent_complete}% complete')
+                logging.info(f'{binary_name} code search {percent_complete}% complete')
 
-        # Invoke every callback with their search results
-        for callback, results in search_results.items():
-            callback(self, results)
+        # Invoke every callback with their respective search results
+        for search, results in search_results.items():
+            callback = self._pending_code_searches[search]
+            callback(self, search, results)
 
-        # We've dispatched all of these code searches - remove them from the pending search list
-        self._PENDING_CODESEARCHES.clear()
+        # We've completed all of the waiting code searches. Drain the queue
+        self._pending_code_searches.clear()
 
         return search_results
 

@@ -1,84 +1,108 @@
 # -*- coding: utf-8 -*-
 from ctypes import sizeof
 
-from typing import Union, Type, Any
+from typing import Union, Type, Any, Optional
 from typing import TYPE_CHECKING
 
-from strongarm.macho.macho_definitions import \
-    MachoHeader32, \
-    MachoHeader64, \
-    MachoSegmentCommand32, \
-    MachoSegmentCommand64, \
-    MachoSection32Raw, \
-    MachoSection64Raw, \
-    MachoEncryptionInfo32Command, \
-    MachoEncryptionInfo64Command, \
-    MachoNlist32, \
-    MachoNlist64, \
-    ObjcDataRaw32, \
-    ObjcDataRaw64, \
-    ObjcClassRaw32, \
-    ObjcClassRaw64, \
-    ObjcMethod32, \
-    ObjcMethod64, \
-    CFString32, \
-    CFString64, \
-    ObjcMethodList, \
-    DylibCommand, \
-    MachoLoadCommand, \
-    MachoSymtabCommand, \
-    MachoDysymtabCommand, \
-    MachoDyldInfoCommand, \
-    MachoLinkeditDataCommand, \
-    ObjcCategoryRaw32, \
-    ObjcCategoryRaw64, \
-    ObjcProtocolRaw32, \
-    ObjcProtocolRaw64, \
-    ObjcProtocolList32, \
-    ObjcProtocolList64
+from strongarm.macho.macho_definitions import (
+    MachoHeader32, MachoHeader64,
+    MachoSegmentCommand32, MachoSegmentCommand64,
+    MachoSection32Raw, MachoSection64Raw,
+    MachoEncryptionInfo32Command, MachoEncryptionInfo64Command,
+    MachoNlist32, MachoNlist64,
+    MachoLoadCommand,
+    MachoSymtabCommand,
+    MachoDysymtabCommand,
+    MachoDyldInfoCommand,
+    MachoLinkeditDataCommand,
+    ObjcDataRaw32, ObjcDataRaw64,
+    ObjcClassRaw32, ObjcClassRaw64,
+    ObjcMethod32, ObjcMethod64,
+    ObjcMethodList,
+    ObjcCategoryRaw32, ObjcCategoryRaw64,
+    ObjcProtocolRaw32, ObjcProtocolRaw64,
+    ObjcProtocolList32, ObjcProtocolList64,
+    CFString32, CFString64,
+    DylibCommand,
+)
 
-# create type alias for the following classes that inherit from ArchIndependentStructure
+
 if TYPE_CHECKING:
     from strongarm.macho.macho_binary import MachoBinary
-    _32_BIT_STRUCT_ALIAS = Union[Type[MachoHeader32], Type[MachoSegmentCommand32], Type[MachoSection32Raw],
-                                 Type[MachoEncryptionInfo32Command], Type[MachoNlist32], Type[MachoLoadCommand],
-                                 Type[ObjcDataRaw32], Type[ObjcClassRaw32], Type[ObjcMethod32], Type[ObjcMethodList],
-                                 Type[DylibCommand], Type[CFString32], Type[MachoSymtabCommand],
-                                 Type[MachoDyldInfoCommand], Type[MachoDysymtabCommand], Type[MachoLinkeditDataCommand],
-                                 Type[ObjcCategoryRaw32], Type[ObjcProtocolRaw32]]
+    from .codesign.codesign_definitions import (
+        CSBlobStruct,
+        CSSuperblobStruct,
+        CSCodeDirectoryStruct,
+        CSBlobIndexStruct,
+    )
 
-    _64_BIT_STRUCT_ALIAS = Union[Type[MachoHeader64], Type[MachoSegmentCommand64], Type[MachoSection64Raw],
-                                 Type[MachoEncryptionInfo64Command], Type[MachoNlist64], Type[MachoLoadCommand],
-                                 Type[ObjcDataRaw64], Type[ObjcClassRaw64], Type[ObjcMethod64], Type[ObjcMethodList],
-                                 Type[DylibCommand], Type[CFString64], Type[MachoSymtabCommand],
-                                 Type[MachoDyldInfoCommand], Type[MachoDysymtabCommand], Type[MachoLinkeditDataCommand],
-                                 Type[ObjcCategoryRaw64], Type[ObjcProtocolRaw64]]
+# Create type alias for the following classes that inherit from ArchIndependentStructure
+_32_BIT_STRUCT_ALIAS = Union[Type[MachoHeader32], Type[MachoSegmentCommand32], Type[MachoSection32Raw],
+                             Type[MachoEncryptionInfo32Command], Type[MachoNlist32], Type[MachoLoadCommand],
+                             Type[MachoSymtabCommand], Type[MachoDysymtabCommand], Type[MachoDyldInfoCommand],
+                             Type[MachoLinkeditDataCommand], Type[ObjcDataRaw32], Type[ObjcClassRaw32],
+                             Type[ObjcMethod32], Type[ObjcMethodList], Type[ObjcCategoryRaw32],
+                             Type[ObjcProtocolRaw32], Type[ObjcProtocolList32], Type[CFString32],
+                             Type[DylibCommand], Type['CSBlobStruct'], Type['CSSuperblobStruct'],
+                             Type['CSCodeDirectoryStruct'], Type['CSBlobIndexStruct']]
+
+_64_BIT_STRUCT_ALIAS = Union[Type[MachoHeader64], Type[MachoSegmentCommand64], Type[MachoSection64Raw],
+                             Type[MachoEncryptionInfo64Command], Type[MachoNlist64], Type[MachoLoadCommand],
+                             Type[MachoSymtabCommand], Type[MachoDysymtabCommand], Type[MachoDyldInfoCommand],
+                             Type[MachoLinkeditDataCommand], Type[ObjcDataRaw64], Type[ObjcClassRaw64],
+                             Type[ObjcMethod64], Type[ObjcMethodList], Type[ObjcCategoryRaw64],
+                             Type[ObjcProtocolRaw64], Type[ObjcProtocolList64], Type[CFString64],
+                             Type[DylibCommand], Type['CSBlobStruct'], Type['CSSuperblobStruct'],
+                             Type['CSCodeDirectoryStruct'], Type['CSBlobIndexStruct']]
 
 
 class ArchIndependentStructure:
-    _32_BIT_STRUCT: '_32_BIT_STRUCT_ALIAS' = None
-    _64_BIT_STRUCT: '_64_BIT_STRUCT_ALIAS' = None
+    _32_BIT_STRUCT: Optional[_32_BIT_STRUCT_ALIAS] = None
+    _64_BIT_STRUCT: Optional[_64_BIT_STRUCT_ALIAS] = None
 
-    def __init__(self, binary: 'MachoBinary', binary_offset: int, virtual=False) -> None:
+    @classmethod
+    def struct_size(cls, is_64bit: bool = True) -> int:
+        """Get the size of the structure
+        Args:
+            is_64bit: Binary's 64 bitness
+        Returns:
+            size of the structure
+        """
+        struct_type = cls._64_BIT_STRUCT if is_64bit else cls._32_BIT_STRUCT
+        if struct_type is None:
+            raise ValueError('Undefined struct_type')
+
+        return sizeof(struct_type)
+
+    def __init__(self, binary: 'MachoBinary', binary_offset: int, virtual: bool = False) -> None:
         """Parse structure from 32bit or 64bit definition, depending on the active binary
-        
+
         Args:
             binary: The Mach-O slice to read the struct from
             binary_offset: The file offset or virtual address of the struct to read
             virtual: False if the offset is a file offset, True if it is a virtual address
         """
-        if binary.is_64bit:
-            struct_type = self._64_BIT_STRUCT
-        else:
-            struct_type = self._32_BIT_STRUCT
+        struct_size = self.__class__.struct_size(binary.is_64bit)
 
-        self._is_addr_virtual = virtual
-        if virtual:
-            struct_bytes = binary.get_content_from_virtual_address(binary_offset, sizeof(struct_type))
-        else:
-            struct_bytes = binary.get_bytes(binary_offset, sizeof(struct_type))
+        struct_bytes = binary.get_contents_from_address(binary_offset, struct_size, virtual)
 
-        struct = struct_type.from_buffer(bytearray(struct_bytes))
+        self.sizeof = 0
+        self.binary_offset = 0
+        self.alt__init__(binary_offset, struct_bytes, binary.is_64bit)
+
+    def alt__init__(self, binary_offset: int, struct_bytes: bytearray, is_64bit: bool = True) -> None:
+        """Parse structure from 32bit or 64bit definition
+
+        Args:
+            binary_offset: The file offset or virtual address of the struct to read
+            struct_bytes: The struct bytes
+            is_64bit: The binary's 64 bitness
+        """
+        struct_type = self._64_BIT_STRUCT if is_64bit else self._32_BIT_STRUCT
+        if struct_type is None:
+            raise ValueError('Undefined struct_type')
+
+        struct: ArchIndependentStructure = struct_type.from_buffer(struct_bytes)
         for field_name, _ in struct._fields_:
             # clone fields from struct to this class
             setattr(self, field_name, getattr(struct, field_name))
@@ -96,11 +120,9 @@ class ArchIndependentStructure:
         implementation: Any = None
         data: Any = None
 
-    def __repr__(self):
-        rep = f'{self.__class__.__name__} ('
-        for field_name in self.__dict__.keys():
-            rep += f'{field_name}: {hex(getattr(self, field_name))}\t'
-        rep += f'\b)'
+    def __repr__(self) -> str:
+        attributes = '\t'.join([f'{x}: {hex(getattr(self, x))}' for x in self.__dict__.keys()])
+        rep = f'{self.__class__.__name__} ({attributes})'
         return rep
 
 
@@ -173,10 +195,6 @@ class ObjcMethodListStruct(ArchIndependentStructure):
 class DylibCommandStruct(ArchIndependentStructure):
     _32_BIT_STRUCT = DylibCommand
     _64_BIT_STRUCT = DylibCommand
-
-    def __init__(self, binary: 'MachoBinary', binary_offset: int, virtual=False) -> None:
-        super(DylibCommandStruct, self).__init__(binary, binary_offset, virtual)
-        self.fileoff: int = None
 
 
 class MachoLoadCommandStruct(ArchIndependentStructure):

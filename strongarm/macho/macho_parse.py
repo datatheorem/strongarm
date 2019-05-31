@@ -2,8 +2,8 @@
 from strongarm.macho.macho_binary import MachoBinary
 from strongarm.macho.macho_definitions import MachArch, MachoFatHeader, MachoFatArch, swap32
 
-from ctypes import sizeof, c_uint32
 import io
+from ctypes import sizeof, c_uint32
 from typing import Optional, List
 
 
@@ -35,8 +35,8 @@ class MachoParser:
     def __init__(self, filename: str) -> None:
         self.filename = filename.encode('utf-8')
 
-        self.header: MachoFatHeader = None
-        self.is_swapped: bool = None
+        self.header: Optional[MachoFatHeader] = None
+        self.is_swapped: bool = False
         self.slices: List[MachoBinary] = []
 
         self.parse()
@@ -82,9 +82,7 @@ class MachoParser:
         """
         # sanity check
         if not self._check_is_macho_header(fileoff):
-            raise RuntimeError('Parsing error: data at file offset {} was not a valid Mach-O slice!'.format(
-                hex(int(fileoff))
-            ))
+            raise RuntimeError(f'Parsing error: data at file offset {hex(int(fileoff))} was not a valid Mach-O slice!')
 
         attempt = MachoBinary(self.filename, fileoff)
         # if the MachoBinary does not have a header, there was a problem parsing it

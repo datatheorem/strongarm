@@ -25,8 +25,8 @@ class MachoStringTableHelper:
     def __init__(self, binary: MachoBinary) -> None:
         self.binary = binary
         self.string_table_entries = MachoStringTableHelper.transform_string_section(self.binary.get_raw_string_table())
-        self.imported_symbols: List[str] = None
-        self.exported_symbols: List[str] = None
+        self.imported_symbols: List[str] = []
+        self.exported_symbols: List[str] = []
         self.parse_sym_lists()
 
     @classmethod

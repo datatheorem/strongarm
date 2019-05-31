@@ -31,17 +31,17 @@ class CPU_TYPE(IntEnum):
 
 
 class MachoFileType(IntEnum):
-    MH_OBJECT       = 1     # relocatable object file
-    MH_EXECUTE      = 2     # demand paged executable file
-    MH_FVMLIB       = 3     # fixed VM shared library file
-    MH_CORE         = 4     # core file
-    MH_PRELOAD      = 5     # preloaded executable file
-    MH_DYLIB        = 6     # dynamically bound shared library
-    MH_DYLINKER     = 7     # dynamic link editor
-    MH_BUNDLE       = 8     # dynamically bound bundle file
-    MH_DYLIB_STUB   = 9     # shared library stub for static linking only, no section contents
-    MH_DSYM         = 10    # shared library stub for static
-    MH_KEXT_BUNDLE  = 11    # x86_64 kext
+    MH_OBJECT = 1           # relocatable object file
+    MH_EXECUTE = 2          # demand paged executable file
+    MH_FVMLIB = 3           # fixed VM shared library file
+    MH_CORE = 4             # core file
+    MH_PRELOAD = 5          # preloaded executable file
+    MH_DYLIB = 6            # dynamically bound shared library
+    MH_DYLINKER = 7         # dynamic link editor
+    MH_BUNDLE = 8           # dynamically bound bundle file
+    MH_DYLIB_STUB = 9       # shared library stub for static linking only, no section contents
+    MH_DSYM = 10            # shared library stub for static
+    MH_KEXT_BUNDLE = 11     # x86_64 kext
 
 
 class MachoHeader32(Structure):

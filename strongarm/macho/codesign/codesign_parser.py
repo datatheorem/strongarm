@@ -1,4 +1,6 @@
 # -*- coding: utf-8 -*-
+from typing import Optional
+
 from strongarm.debug_util import DebugUtil
 from strongarm.macho.macho_binary import MachoBinary
 
@@ -19,11 +21,11 @@ class CodesignParser:
     https://opensource.apple.com/source/Security/Security-57031.1.35/Security/libsecurity_codesigning/lib/CSCommonPriv.h
     """
 
-    def __init__(self, binary: MachoBinary):
+    def __init__(self, binary: MachoBinary) -> None:
         self.binary = binary
-        self.entitlements: bytearray = None
-        self.signing_identifier: str = None
-        self.signing_team_id: str = None
+        self.entitlements: Optional[bytearray] = None
+        self.signing_identifier: Optional[str] = None
+        self.signing_team_id: Optional[str] = None
 
         self._codesign_entry = self.binary.code_signature_cmd.dataoff
         self.parse_codesign_blob(self._codesign_entry)
@@ -58,7 +60,7 @@ class CodesignParser:
             # unknown magic
             DebugUtil.log(self, f'Unknown CodeSign blob magic @ {hex(file_offset)}: {hex(magic)}')
 
-    def parse_superblob(self, file_offset: int):
+    def parse_superblob(self, file_offset: int) -> None:
         """Parse a codesign 'superblob' at the provided file offset.
         This is a blob which embeds several child blobs.
         The superblob format is the superblob header, followed by several csblob_index structures describing
@@ -83,7 +85,7 @@ class CodesignParser:
             file_offset += csblob_index.sizeof
 
     @staticmethod
-    def get_index_blob_name(blob_index: CSBlobIndex):
+    def get_index_blob_name(blob_index: CSBlobIndex) -> str:
         """Get the human-readable blob type from the `type` field in a CSBlobIndex.
         """
         # cs_blobs.h
@@ -104,7 +106,7 @@ class CodesignParser:
         """
         return CSBlobIndex(self.binary, file_offset, virtual=False)
 
-    def parse_code_directory(self, file_offset: int):
+    def parse_code_directory(self, file_offset: int) -> None:
         """Parse a Code Directory at the file offset.
         """
         code_directory = CSCodeDirectory(self.binary, file_offset, virtual=False)

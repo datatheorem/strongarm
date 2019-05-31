@@ -2,15 +2,16 @@
 from ctypes import sizeof
 from typing import List, Optional, Dict
 
-from strongarm.macho.arch_independent_structs import \
-    ObjcClassRawStruct, \
-    ObjcDataRawStruct, \
-    ObjcMethodStruct, \
-    ObjcMethodListStruct, \
-    ObjcCategoryRawStruct, \
-    ObjcProtocolRawStruct, \
-    ObjcProtocolListStruct, \
+from strongarm.macho.arch_independent_structs import (
+    ObjcClassRawStruct,
+    ObjcDataRawStruct,
+    ObjcMethodStruct,
+    ObjcMethodListStruct,
+    ObjcCategoryRawStruct,
+    ObjcProtocolRawStruct,
+    ObjcProtocolListStruct,
     ArchIndependentStructure
+)
 from strongarm.debug_util import DebugUtil
 from strongarm.macho.macho_binary import MachoBinary
 
@@ -22,7 +23,7 @@ class ObjcClass:
                  raw_struct: ArchIndependentStructure,
                  name: str,
                  selectors: List['ObjcSelector'],
-                 protocols: List['ObjcProtocol'] = None) -> None:
+                 protocols: List['ObjcProtocol'] = []) -> None:
         self.name = name
         self.selectors = selectors
         self.raw_struct = raw_struct
@@ -39,7 +40,7 @@ class ObjcCategory(ObjcClass):
                  base_class: str,
                  name: str ,
                  selectors: List['ObjcSelector'],
-                 protocols: List['ObjcProtocol'] = None) -> None:
+                 protocols: List['ObjcProtocol'] = []) -> None:
         super(ObjcCategory, self).__init__(raw_struct, name, selectors, protocols)
         self.base_class = base_class
 
@@ -51,7 +52,7 @@ class ObjcProtocol(ObjcClass):
 class ObjcSelector:
     __slots__ = ['name', 'selref', 'implementation', 'is_external_definition']
 
-    def __init__(self, name: str, selref: 'ObjcSelref', implementation: Optional[int]) -> None:
+    def __init__(self, name: str, selref: Optional['ObjcSelref'], implementation: Optional[int]) -> None:
         self.name = name
         self.selref = selref
         self.implementation = implementation
@@ -62,7 +63,7 @@ class ObjcSelector:
         imp_addr = 'NaN'
         if self.implementation:
             imp_addr = hex(int(self.implementation))
-        return '<@selector({}) at {}>'.format(self.name, imp_addr)
+        return f'<@selector({self.name}) at {imp_addr}>'
     __repr__ = __str__
 
 
@@ -106,6 +107,8 @@ class ObjcRuntimeDataParser:
             strtab_idx = sym.n_un.n_strx
             string_file_address = symtab.stroff + strtab_idx
             symbol_name = self.binary.get_full_string_from_start_address(string_file_address, virtual=False)
+            if not symbol_name:
+                raise ValueError(f'Could not find symbol_name at address {string_file_address}')
 
             library_ordinal = self._library_ordinal_from_n_desc(sym.n_desc)
             source_name = self.binary.dylib_name_for_library_ordinal(library_ordinal)
@@ -124,7 +127,7 @@ class ObjcRuntimeDataParser:
 
     def _parse_selrefs(self) -> None:
         """Parse the binary's selref list, and store the data.
-        
+
         This method populates self._selector_literal_ptr_to_selref_map.
         It also *PARTLY* populates self._selref_ptr_to_selector_map. All selrefs keys will have an ObjcSelector
         value, but none of the ObjcSelector objects will have their `implementation` field filled, because
@@ -135,12 +138,12 @@ class ObjcRuntimeDataParser:
         if len(selref_pointers) != len(selector_literal_pointers):
             raise RuntimeError('read invalid data from __objc_selrefs')
 
-        for i in range(len(selref_pointers)):
-            selref_ptr = selref_pointers[i]
-            selector_literal_ptr = selector_literal_pointers[i]
+        for selref_ptr, selector_literal_ptr in zip(selref_pointers, selector_literal_pointers):
 
             # read selector string literal from selref pointer
             selector_string = self.binary.get_full_string_from_start_address(selector_literal_ptr)
+            if not selector_string:
+                continue  # but all selectors should have a name
             wrapped_selref = ObjcSelref(selref_ptr, selector_literal_ptr, selector_string)
 
             # map the selector string pointer to the ObjcSelref
@@ -182,7 +185,8 @@ class ObjcRuntimeDataParser:
         for objc_class in self.classes:
             for objc_sel in objc_class.selectors:
                 if objc_sel.name == selector:
-                    imp_addresses.append(objc_sel.implementation)
+                    if objc_sel.implementation:
+                        imp_addresses.append(objc_sel.implementation)
         return imp_addresses
 
     def _parse_objc_classes(self) -> List[ObjcClass]:
@@ -238,7 +242,7 @@ class ObjcRuntimeDataParser:
     def _parse_class_and_category_info(self) -> List[ObjcClass]:
         """Parse classes and categories referenced by __objc_classlist and __objc_catlist
         """
-        classes = []
+        classes: List[ObjcClass] = []
         classes += self._parse_objc_classes()
         classes += self._parse_objc_categories()
         return classes
@@ -254,7 +258,7 @@ class ObjcRuntimeDataParser:
         """Given the virtual address of a method list, return a List of ObjcSelectors encapsulating each method
         """
         methlist = ObjcMethodListStruct(self.binary, methlist_ptr, virtual=True)
-        selectors = []
+        selectors: List[ObjcSelector] = []
         # parse every entry in method list
         # the first entry appears directly after the ObjcMethodListStruct
         method_entry_off = methlist_ptr + methlist.sizeof
@@ -264,11 +268,10 @@ class ObjcRuntimeDataParser:
             method_ent.implementation &= ~0x3
 
             symbol_name = self.binary.get_full_string_from_start_address(method_ent.name)
+            if not symbol_name:
+                raise ValueError(f'Could not find symbol name for {methlist_ptr}')
             # attempt to find corresponding selref
-            if method_ent.name in self._selector_literal_ptr_to_selref_map:
-                selref = self._selector_literal_ptr_to_selref_map[method_ent.name]
-            else:
-                selref = None
+            selref = self._selector_literal_ptr_to_selref_map.get(method_ent.name)
 
             selector = ObjcSelector(symbol_name, selref, method_ent.implementation)
             selectors.append(selector)
@@ -291,7 +294,10 @@ class ObjcRuntimeDataParser:
 
     def _parse_objc_protocol_entry(self, objc_protocol_struct: ObjcProtocolRawStruct) -> ObjcProtocol:
         name = self.binary.get_full_string_from_start_address(objc_protocol_struct.name)
-        selectors = []
+        if not name:
+            name = '<unknown>'
+
+        selectors: List[ObjcSelector] = []
         if objc_protocol_struct.required_instance_methods:
             selectors += self.read_selectors_from_methlist_ptr(objc_protocol_struct.required_instance_methods)
         if objc_protocol_struct.required_class_methods:
@@ -304,10 +310,12 @@ class ObjcRuntimeDataParser:
         return ObjcProtocol(objc_protocol_struct, name, selectors)
 
     def _parse_objc_category_entry(self, objc_category_struct: ObjcCategoryRawStruct) -> ObjcCategory:
-        selectors = []
-        protocols = []
         name = self.binary.get_full_string_from_start_address(objc_category_struct.name)
+        if not name:
+            name = '<unknown>'
 
+        selectors: List[ObjcSelector] = []
+        protocols: List[ObjcProtocol] = []
         # TODO(PT): if we want to parse the name of the base class, grab the destination pointer from entries in
         # __objc_classrefs; this will be the same as the address in .base_class, and by cross-reffing we can get the
         # name of the class symbol (like _OBJC_CLASS_$_NSURLRequest)
@@ -330,8 +338,11 @@ class ObjcRuntimeDataParser:
                                objc_class_struct: ObjcClassRawStruct,
                                objc_data_struct: ObjcDataRawStruct) -> ObjcClass:
         name = self.binary.get_full_string_from_start_address(objc_data_struct.name)
-        selectors = []
-        protocols = []
+        if not name:
+            name = '<unknown>'
+
+        selectors: List[ObjcSelector] = []
+        protocols: List[ObjcProtocol] = []
         # if the class implements no methods, base_methods will be the null pointer
         if objc_data_struct.base_methods:
             selectors += self.read_selectors_from_methlist_ptr(objc_data_struct.base_methods)
@@ -346,11 +357,13 @@ class ObjcRuntimeDataParser:
         """Accepts the virtual address of an ObjcProtocolListStruct, and returns List of protocol pointers it refers to.
         """
         protolist = ObjcProtocolListStruct(self.binary, protolist_ptr, virtual=True)
-        protocol_pointers = []
+        protocol_pointers: List[int] = []
         # pointers start directly after the 'count' field
         addr = protolist.binary_offset + protolist.sizeof
         for i in range(protolist.count):
-            protocol_pointers.append(self.binary.read_word(addr))
+            pointer = self.binary.read_word(addr)
+            if pointer:
+                protocol_pointers.append(pointer)
             # step to next protocol pointer in list
             addr += sizeof(self.binary.platform_word_type)
         return protocol_pointers
@@ -416,9 +429,7 @@ class ObjcRuntimeDataParser:
             # TODO(PT): sometimes we'll get addresses passed to this method that are actually struct __objc_method
             # entries, rather than struct __objc_data entries. Investigate why this is.
             # This was observed on a 32bit binary, Esquire2
-            DebugUtil.log(self, 'caught ObjcDataRaw struct with invalid fields at {}. data->name = {}'.format(
-                hex(int(objc_class.data)),
-                hex(data_entry.name)
-            ))
+            DebugUtil.log(self, f'caught ObjcDataRaw struct with invalid fields at {hex(int(objc_class.data))}.'
+                                f' data->name = {hex(data_entry.name)}')
             return None
         return data_entry

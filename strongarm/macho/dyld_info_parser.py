@@ -2,7 +2,7 @@
 import ctypes
 import logging
 
-from typing import Dict
+from typing import Dict, Tuple
 from enum import IntEnum
 
 from .macho_binary import MachoBinary
@@ -29,7 +29,7 @@ class DyldBoundSymbol:
                  binary: MachoBinary,
                  stub_addr: int,
                  library_ordinal: int,
-                 name: str):
+                 name: str) -> None:
         self.binary = binary
         self.address = stub_addr
         self.library_ordinal = library_ordinal
@@ -38,7 +38,7 @@ class DyldBoundSymbol:
 
 
 class DyldInfoParser:
-    def __init__(self, binary: MachoBinary):
+    def __init__(self, binary: MachoBinary) -> None:
         self.binary = binary
         self.dyld_info_cmd = self.binary.dyld_info
         self.dyld_stubs_to_symbols: Dict[int, DyldBoundSymbol] = {}
@@ -46,7 +46,7 @@ class DyldInfoParser:
             self.parse_dyld_info()
 
     @staticmethod
-    def read_uleb(data, offset):
+    def read_uleb(data: bytearray, offset: int) -> Tuple[int, int]:
         byte = data[offset]
         offset += 1
 
@@ -65,7 +65,7 @@ class DyldInfoParser:
         return result, offset
 
     @staticmethod
-    def get_uleb128(data, offset):
+    def get_uleb128(data: bytearray, offset: int) -> Tuple[int, int]:
         value = 0
         i = 0
         tmp = 0
@@ -77,26 +77,29 @@ class DyldInfoParser:
                 break
         if i == 4 and (tmp & 0xf0) != 0:
             print(f'parse error uleb128')
-            return -1
+            return -1, -1
         return value, i + 1
 
-    def parse_dyld_info(self):
+    def parse_dyld_info(self) -> None:
         self.parse_dyld_bytestream(self.dyld_info_cmd.bind_off, self.dyld_info_cmd.bind_size)
         self.parse_dyld_bytestream(self.dyld_info_cmd.lazy_bind_off, self.dyld_info_cmd.lazy_bind_size)
 
-    def parse_dyld_bytestream(self, fileoff: int, size: int):
+    def parse_dyld_bytestream(self, file_offset: int, size: int) -> None:
         from ctypes import sizeof
-        binding_info = self.binary.get_bytes(fileoff, size)
+        binding_info = self.binary.get_bytes(file_offset, size)
         pointer_size = sizeof(self.binary.platform_word_type)
 
         index = 0
-        name_bytes = ""
-        segment = 0
+        name_bytes: bytearray
+        segment_index = 0
         segment_offset = 0
         library_ordinal = 0
 
-        def commit_stub():
-            segment_start = self.binary.segment_for_index(segment).vmaddr
+        def commit_stub() -> None:
+            segment_command = self.binary.segment_for_index(segment_index)
+            if not segment_command:
+                return
+            segment_start = segment_command.vmaddr
             stub_addr = segment_start + segment_offset
             name = name_bytes.decode('utf-8')
 
@@ -126,7 +129,7 @@ class DyldInfoParser:
             elif opcode == BindOpcode.BIND_OPCODE_SET_ADDEND_SLEB:
                 _, index = self.read_uleb(binding_info, index)
             elif opcode == BindOpcode.BIND_OPCODE_SET_SEGMENT_AND_OFFSET_ULEB:
-                segment = immediate
+                segment_index = immediate
                 segment_offset, index = self.read_uleb(binding_info, index)
             elif opcode == BindOpcode.BIND_OPCODE_ADD_ADDR_ULEB:
                 addend, index = self.read_uleb(binding_info, index)

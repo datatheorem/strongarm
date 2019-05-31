@@ -63,12 +63,8 @@ class MachoImpStubsParser:
         for idx, op in enumerate([instr1, instr2, instr3]):
             # sanity check
             if op.mnemonic != expected_ops[idx]:
-                raise RuntimeError('Expected instr {} (idx {}) to be {} while parsing stub, was instead {}'.format(
-                    hex(op.address),
-                    idx,
-                    expected_ops[idx],
-                    op.mnemonic
-                ))
+                raise RuntimeError(f'Expected instr {hex(op.address)} (idx {idx}) to be {expected_ops[idx]}'
+                                   f' while parsing stub, was instead {op.mnemonic}')
 
         stub_addr = instr1.address
         stub_dest = 0

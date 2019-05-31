@@ -7,13 +7,15 @@ from capstone import CsInsn
 from strongarm.debug_util import DebugUtil
 from strongarm.macho import MachoBinary
 
-from .objc_instruction import \
-    ObjcInstruction, \
-    ObjcBranchInstruction, \
+from .objc_instruction import (
+    ObjcInstruction,
+    ObjcBranchInstruction,
     ObjcUnconditionalBranchInstruction
-from .objc_query import \
-    CodeSearch, \
+)
+from .objc_query import (
+    CodeSearch,
     CodeSearchResult
+)
 from .register_contents import RegisterContents, RegisterContentsType
 from .dataflow import get_register_contents_at_instruction_fast
 
@@ -22,12 +24,12 @@ class ObjcMethodInfo:
     from strongarm.macho import ObjcClass, ObjcSelector
     __slots__ = ['objc_class', 'objc_sel', 'imp_addr']
 
-    def __init__(self, objc_class: 'ObjcClass', objc_sel: 'ObjcSelector', imp: int) -> None:
+    def __init__(self, objc_class: 'ObjcClass', objc_sel: 'ObjcSelector', imp: Optional[int]) -> None:
         self.objc_class = objc_class
         self.objc_sel = objc_sel
         self.imp_addr = imp
 
-    def __repr__(self):
+    def __repr__(self) -> str:
         return f'-[{self.objc_class.name} {self.objc_sel.name}]'
 
 
@@ -36,7 +38,7 @@ class ObjcFunctionAnalyzer(object):
     As Objective-C is a strict superset of C, ObjcFunctionAnalyzer can also be used on pure C functions.
     """
 
-    def __init__(self, binary: MachoBinary, instructions: List[CsInsn], method_info: ObjcMethodInfo = None):
+    def __init__(self, binary: MachoBinary, instructions: List[CsInsn], method_info: ObjcMethodInfo = None) -> None:
         from strongarm.macho import MachoAnalyzer
         try:
             self.start_address = instructions[0].address
@@ -53,7 +55,7 @@ class ObjcFunctionAnalyzer(object):
         self.instructions = instructions
         self.method_info = method_info
 
-        self._call_targets: List[ObjcBranchInstruction] = None
+        self._call_targets: List[ObjcBranchInstruction] = []
 
     def _get_instruction_index_of_address(self, address: int) -> Optional[int]:
         """Return the index of an instruction with a provided address within the internal list of instructions
@@ -78,6 +80,8 @@ class ObjcFunctionAnalyzer(object):
         This method will return None if the address is not contained within the analyzed function.
         """
         index = self._get_instruction_index_of_address(address)
+        if not index:
+            return None
         return self.get_instruction_at_index(index)
 
     def debug_print(self, idx: int, output: str) -> None:
@@ -88,16 +92,11 @@ class ObjcFunctionAnalyzer(object):
             output: string to output to debug log
         """
         if not len(self.instructions):
-            DebugUtil.log(self, 'func(stub) {}'.format(
-                output
-            ))
+            DebugUtil.log(self, f'func(stub) {output}')
         else:
             func_base = self.start_address
             instruction_address = func_base + (idx * MachoBinary.BYTES_PER_INSTRUCTION)
-            DebugUtil.log(self, 'func({}) {}'.format(
-                hex(int(instruction_address)),
-                output
-            ))
+            DebugUtil.log(self, f'func({hex(int(instruction_address))}) {output}')
 
     @classmethod
     def get_function_analyzer(cls, binary: MachoBinary, start_address: int) -> 'ObjcFunctionAnalyzer':
@@ -132,11 +131,19 @@ class ObjcFunctionAnalyzer(object):
 
         Returns:
             An ObjcFunctionAnalyzer suitable for introspecting the provided method
+
+        Raises:
+            ValueError: Could not get function instructions for the provided method
         """
         # TODO(PT): it seems like this & related methods should be moved to MachoAnalyzer
+        if not method_info.imp_addr:
+            raise ValueError(f'Could not get method implementation address for {method_info}')
+
         from strongarm.macho.macho_analyzer import MachoAnalyzer
         analyzer = MachoAnalyzer.get_analyzer(binary)
         instructions = analyzer.get_function_instructions(method_info.imp_addr)
+        if not instructions:
+            raise ValueError(f'Could not get function instructions for {method_info}')
         return ObjcFunctionAnalyzer(binary, instructions, method_info=method_info)
 
     @classmethod
@@ -269,9 +276,7 @@ class ObjcFunctionAnalyzer(object):
         Returns:
             Formatted string representing instruction
         """
-        return "{addr}:\t{mnemonic}\t{ops}".format(addr=hex(int(instr.address)),
-                                                   mnemonic=instr.mnemonic,
-                                                   ops=instr.op_str)
+        return f'{hex(int(instr.address))}:\t{instr.mnemonic}\t{instr.op_str}'
 
     # TODO(PT): this should return the branch and the instruction index for caller convenience
     def next_branch_after_instruction_index(self, start_index: int) -> Optional[ObjcBranchInstruction]:
@@ -306,6 +311,10 @@ class ObjcFunctionAnalyzer(object):
         Returns:
               Data stored in x1 at execution of msgsend_instr
 
+        Raises:
+            ValueError: - get_selref_ptr() called on non-branch instruction
+                        - wrong type passed to get_selref_ptr()
+                        - instruction index not found for address
         """
         if msgsend_instr.raw_instr.mnemonic not in ObjcUnconditionalBranchInstruction.UNCONDITIONAL_BRANCH_MNEMONICS:
             raise ValueError('get_selref_ptr() called on non-branch instruction')
@@ -314,6 +323,9 @@ class ObjcFunctionAnalyzer(object):
 
         # try fast path to identify selref
         msgsend_idx = self._get_instruction_index_of_address(msgsend_instr.address)
+        if not msgsend_idx:
+            raise ValueError(f'instruction index not found for address {msgsend_instr.address}')
+
         search_space_start_idx = msgsend_idx - 3
         search_space_start_idx = max(0, search_space_start_idx)
         adrp_ptr = None
@@ -337,9 +349,7 @@ class ObjcFunctionAnalyzer(object):
         # retrieve whatever data is in x1 at this msgSend call
         contents = self.get_register_contents_at_instruction('x1', msgsend_instr)
         if contents.type != RegisterContentsType.IMMEDIATE:
-            raise RuntimeError('couldn\'t determine selref ptr, origates in function arg (type {})'.format(
-                contents.type.name
-            ))
+            raise RuntimeError(f'couldn\'t determine selref ptr, origates in function arg (type {contents.type.name})')
         return contents.value
 
     @functools.lru_cache(maxsize=100)

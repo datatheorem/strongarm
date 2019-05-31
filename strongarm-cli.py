@@ -3,33 +3,35 @@
 import sys
 import logging
 import argparse
-from typing import Text
+from typing import Text, List
 
 from strongarm.debug_util import DebugUtil
-from strongarm.macho import \
-    MachoParser, \
-    MachoBinary, \
+from strongarm.macho import (
+    MachoParser,
+    MachoBinary,
     MachoAnalyzer
-from strongarm.cli.utils import \
-    pick_macho_slice, \
-    disassemble_method, \
-    disassemble_function, \
-    print_binary_info, \
-    print_binary_load_commands, \
-    print_binary_segments, \
-    print_binary_sections, \
-    print_analyzer_imported_symbols, \
-    print_analyzer_exported_symbols, \
-    print_analyzer_methods, \
-    print_analyzer_classes, \
-    print_analyzer_protocols, \
+)
+from strongarm.cli.utils import (
+    pick_macho_slice,
+    disassemble_method,
+    disassemble_function,
+    print_binary_info,
+    print_binary_load_commands,
+    print_binary_segments,
+    print_binary_sections,
+    print_analyzer_imported_symbols,
+    print_analyzer_exported_symbols,
+    print_analyzer_methods,
+    print_analyzer_classes,
+    print_analyzer_protocols,
     print_selector
+)
 
 
-def print_header(args) -> None:
+def print_header(args: argparse.Namespace) -> None:
     header_lines = [
-        '\nstrongarm - Mach-O analyzer',
-        '{}'.format(args.binary_path),
+        f'\nstrongarm - Mach-O analyzer',
+        f'{args.binary_path}',
     ]
     # find longest line
     longest_line_len = 0
@@ -62,19 +64,19 @@ class InfoCommand:
             'exports': (print_analyzer_exported_symbols, self.analyzer),
         }
 
-    def description(self):
+    def description(self) -> str:
         rep = 'Read binary information. info '
         for cmd in self.commands.keys():
             rep += f'[{cmd}] '
         return rep
 
-    def run_all_commands(self):
+    def run_all_commands(self) -> None:
         for cmd in self.commands.keys():
             if cmd == 'all':
                 continue
             self.run_command(cmd)
 
-    def run_command(self, cmd: Text):
+    def run_command(self, cmd: Text) -> None:
         if cmd == 'all':
             self.run_all_commands()
             return
@@ -83,7 +85,7 @@ class InfoCommand:
             print(f'Unknown argument supplied to info: {cmd}')
             return
         func, arg = self.commands[cmd]
-        func(arg)
+        func(arg)   # type: ignore
 
 
 class StrongarmShell:
@@ -103,8 +105,8 @@ class StrongarmShell:
         print('strongarm interactive shell\nType \'help\' for available commands.')
         self.active = True
 
-    def dump_memory(self, args):
-        def err():
+    def dump_memory(self, args: List[str]) -> None:
+        def err() -> None:
             print('Usage: dump [size] [virtual address]')
             return
 
@@ -146,7 +148,7 @@ class StrongarmShell:
 
             current_index += region_size
 
-    def selectors(self, args):
+    def selectors(self, args: List[str]) -> None:
         if not len(args):
             print('Usage: sels [class]')
             return
@@ -161,7 +163,7 @@ class StrongarmShell:
         for sel in objc_class.selectors:
             print_selector(objc_class, sel)
 
-    def disasm(self, args):
+    def disasm(self, args: List[str]) -> None:
         if not len(args):
             print('Usage: disasm [sel]')
             return
@@ -175,7 +177,7 @@ class StrongarmShell:
         disassembled_str = disassemble_method(self.binary, matching_sels[0])
         print(disassembled_str)
 
-    def disasm_f(self, args):
+    def disasm_f(self, args: List[str]) -> None:
         if not len(args):
             print('Usage: disasm [sel]')
             return
@@ -183,13 +185,13 @@ class StrongarmShell:
         disassembled_str = disassemble_function(self.binary, int(args[0], 16))
         print(disassembled_str)
 
-    def help(self, args):
+    def help(self, args: List[str]) -> None:
         print('Commands\n'
               '----------------')
         for name, (description, funcptr) in self.commands.items():
             print(f'{name}: {description}')
 
-    def info(self, args):
+    def info(self, args: List[str]) -> None:
         info_cmd = InfoCommand(self.binary, self.analyzer)
         if not len(args):
             print('No option provided')
@@ -197,11 +199,11 @@ class StrongarmShell:
         for option in args:
             info_cmd.run_command(option)
 
-    def exit(self, args):
+    def exit(self, args: List[str]) -> None:
         print('Quitting...')
         self.active = False
 
-    def run_command(self, user_input: Text):
+    def run_command(self, user_input: Text) -> bool:
         components = user_input.split(' ')
         cmd_name = components[0]
         cmd_args = components[1:]
@@ -214,33 +216,33 @@ class StrongarmShell:
         func(cmd_args)
         return self.active
 
-    def process_command(self):
+    def process_command(self) -> bool:
         user_input = input('strongarm$ ')
         return self.run_command(user_input)
 
 
-def strongarm_script(binary: MachoBinary, analyzer: MachoAnalyzer):
+def strongarm_script(binary: MachoBinary, analyzer: MachoAnalyzer) -> None:
     """If you want to run a script instead of using the CLI, write it here and change `script` to `True` in main()
     """
 
 
-def main():
+def main() -> None:
     # XXX(PT): Change this if you want to run a quick script! Write it in strongarm_script()
-    script = True
+    script = False
     # end of config
 
-    parser = argparse.ArgumentParser(description='Mach-O Analyzer')
-    parser.add_argument(
+    arg_parser = argparse.ArgumentParser(description='Mach-O Analyzer')
+    arg_parser.add_argument(
         '--verbose', action='store_true', help=
         'Output extra info while analyzing'
     )
-    parser.add_argument(
+    arg_parser.add_argument(
         'binary_path', metavar='binary_path', type=str, help=
         'Path to binary to analyze'
     )
-    args = parser.parse_args()
+    args = arg_parser.parse_args()
 
-    def configure_logger():
+    def configure_logger() -> None:
         root = logging.getLogger()
         root.setLevel(logging.DEBUG)
 

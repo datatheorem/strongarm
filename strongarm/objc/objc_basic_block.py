@@ -1,14 +1,9 @@
 # -*- coding: utf-8 -*-
 from typing import List
-from typing import TYPE_CHECKING
 
 from .objc_analyzer import ObjcFunctionAnalyzer
 from strongarm.debug_util import DebugUtil
 from capstone import CsInsn
-
-
-if TYPE_CHECKING:
-    from capstone import CsInsn
 
 
 class ObjcBasicBlock(object):
@@ -44,9 +39,9 @@ class ObjcBasicBlock(object):
 
             branch_index = function_analyzer.instructions.index(branch.raw_instr)
             # a basic block ends at this branch
-            basic_block_start_indexes.append(branch_index+1)
+            basic_block_start_indexes.append(branch_index + 1)
             # a basic block begins after this branch
-            basic_block_end_indexes.append(branch_index+1)
+            basic_block_end_indexes.append(branch_index + 1)
 
         # sort arrays of basic block start/end addresses so we can zip them together into basic block ranges
         basic_block_start_indexes.sort()
@@ -58,15 +53,15 @@ class ObjcBasicBlock(object):
             if start == end:
                 basic_block_indexes.remove((start, end))
 
-        DebugUtil.log(cls, 'local branch indexes: {}'.format(basic_block_indexes))
+        DebugUtil.log(cls, f'local branch indexes: {basic_block_indexes}')
 
         basic_blocks = []
         for start_idx, end_idx in basic_block_indexes:
             basic_blocks.append(function_analyzer.instructions[start_idx:end_idx])
 
-        DebugUtil.log(cls, 'Basic blocks for function @ {}'.format(hex(int(function_analyzer.start_address))))
+        DebugUtil.log(cls, f'Basic blocks for function @ {hex(int(function_analyzer.start_address))}')
         for idx, block in enumerate(basic_blocks):
-            DebugUtil.log(cls, 'Basic Block #{}:'.format(idx))
+            DebugUtil.log(cls, f'Basic Block #{idx}:')
             for instr in block:
                 DebugUtil.log(cls, ObjcFunctionAnalyzer.format_instruction(instr))
 

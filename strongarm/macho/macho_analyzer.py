@@ -259,15 +259,11 @@ class MachoAnalyzer:
         from strongarm.objc import CodeSearchResult     # type: ignore
         from strongarm.objc import ObjcFunctionAnalyzer     # type: ignore
 
-        DebugUtil.log(self, f'Performing {len(self._PENDING_CODESEARCHES.keys())} code searches...')
+        logging.info(f'Performing {len(self._PENDING_CODESEARCHES.keys())} code searches...')
 
         search_results: Dict[function, List[CodeSearchResult]] = defaultdict(list)
         entry_point_list = self.get_objc_methods()
         for i, method_info in enumerate(entry_point_list):
-            DebugUtil.log(
-                self,
-                f'search_code: {hex(method_info.imp_addr)} -[{method_info.objc_class.name} {method_info.objc_sel.name}]'
-            )
             function_analyzer = ObjcFunctionAnalyzer.get_function_analyzer_for_method(self.binary, method_info)
             for code_search, callback in self._PENDING_CODESEARCHES.items():
                 search_results[callback] += function_analyzer.search_code(code_search)

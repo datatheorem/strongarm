@@ -219,12 +219,9 @@ class ObjcFunctionAnalyzer(object):
         encapsulating instructions which match the described set of conditions.
         """
         from .objc_query import CodeSearchResult
-        minimum_index = 0
-        maximum_index = len(self.instructions)
-        step = 1
 
         search_results: List[CodeSearchResult] = []
-        for instruction in self.instructions[minimum_index:maximum_index:step]:
+        for instruction in self.instructions:
             for search_term in code_search.search_terms:
                 result = search_term.satisfied(self, instruction)
                 if result:

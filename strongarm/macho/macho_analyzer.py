@@ -369,7 +369,7 @@ class MachoAnalyzer:
         cfstrings_count = int((cfstrings_section.end_address - cfstrings_section.address) / sizeof_cfstring)
         for i in range(cfstrings_count):
             cfstring_addr = cfstrings_base + (i * sizeof_cfstring)
-            cfstring = CFStringStruct(self.binary, cfstring_addr, virtual=True)
+            cfstring = self.binary.read_struct(cfstring_addr, CFStringStruct, virtual=True)
 
             # check if this is the string the user requested
             string_address = cfstring.literal

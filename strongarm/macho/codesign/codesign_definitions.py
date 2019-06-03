@@ -20,23 +20,22 @@ class CodesignBlobTypeEnum(IntEnum):
 class CSBlobStruct(BigEndianStructure):
     """Basic CodeSign blob structure. These fields shared by all CodeSign blob structures.
     """
-    _fields_ = (
+    _fields_ = [
         ('magic', c_uint32),
         ('length', c_uint32)
-    )
+    ]
 
 
 class CSSuperblobStruct(BigEndianStructure):
-    _fields_ = (
+    _fields_ = [
         *CSBlobStruct._fields_,
         ('index_entry_count', c_uint32)
-    )
+    ]
 
 
 class CSCodeDirectoryStruct(BigEndianStructure):
     _fields_ = [
-        ('magic', c_uint32),
-        ('length', c_uint32),
+        *CSBlobStruct._fields_,
         ('version', c_uint32),
         ('flags', c_uint32),
         ('hash_offset', c_uint32),

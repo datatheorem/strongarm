@@ -69,10 +69,16 @@ class MachoHeader64(Structure):
     ]
 
 
-class MachoSegmentCommand32(Structure):
+class MachoLoadCommand(Structure):
     _fields_ = [
         ('cmd', c_uint32),
         ('cmdsize', c_uint32),
+    ]
+
+
+class MachoSegmentCommand32(Structure):
+    _fields_ = [
+        *MachoLoadCommand._fields_,
         ('segname', c_char * 16),
         ('vmaddr', c_uint32),
         ('vmsize', c_uint32),
@@ -87,8 +93,7 @@ class MachoSegmentCommand32(Structure):
 
 class MachoSegmentCommand64(Structure):
     _fields_ = [
-        ('cmd', c_uint32),
-        ('cmdsize', c_uint32),
+        *MachoLoadCommand._fields_,
         ('segname', c_char * 16),
         ('vmaddr', c_uint64),
         ('vmsize', c_uint64),
@@ -98,13 +103,6 @@ class MachoSegmentCommand64(Structure):
         ('initprot', c_uint32),
         ('nsects', c_uint32),
         ('flags', c_uint32),
-    ]
-
-
-class MachoLoadCommand(Structure):
-    _fields_ = [
-        ('cmd', c_uint32),
-        ('cmdsize', c_uint32),
     ]
 
 
@@ -147,8 +145,7 @@ class MachoDysymtabCommand(Structure):
     Definition found in <mach-o/loader.h>
     """
     _fields_ = [
-        ('cmd', c_uint32),
-        ('cmdsize', c_uint32),
+        *MachoLoadCommand._fields_,
         ('ilocalsym', c_uint32),
         ('nlocalsym', c_uint32),
         ('iextdefsym', c_uint32),
@@ -176,8 +173,7 @@ class MachoSymtabCommand(Structure):
     Definition found in <mach-o/loader.h>
     """
     _fields_ = [
-        ('cmd', c_uint32),
-        ('cmdsize', c_uint32),
+        *MachoLoadCommand._fields_,
         ('symoff', c_uint32),
         ('nsyms', c_uint32),
         ('stroff', c_uint32),
@@ -191,8 +187,7 @@ class MachoDyldInfoCommand(Structure):
     Definition found in <mach-o/loader.h>
     """
     _fields_ = [
-        ('cmd', c_uint32),
-        ('cmdsize', c_uint32),
+        *MachoLoadCommand._fields_,
         ('rebase_off', c_uint32),
         ('rebase_size', c_uint32),
         ('bind_off', c_uint32),
@@ -214,8 +209,7 @@ class MachoLinkeditDataCommand(Structure):
     Definition found in <mach-o/loader.h>
     """
     _fields_ = [
-        ('cmd', c_uint32),
-        ('cmdsize', c_uint32),
+        *MachoLoadCommand._fields_,
         ('dataoff', c_uint32),
         ('datasize', c_uint32),
     ]
@@ -268,8 +262,7 @@ class MachoEncryptionInfo32Command(Structure):
     Definition found in <mach-o/loader.h>
     """
     _fields_ = [
-        ('cmd', c_uint32),
-        ('cmdsize', c_uint32),
+        *MachoLoadCommand._fields_,
         ('cryptoff', c_uint32),
         ('cryptsize', c_uint32),
         ('cryptid', c_uint32),
@@ -282,8 +275,7 @@ class MachoEncryptionInfo64Command(Structure):
     Definition found in <mach-o/loader.h>
     """
     _fields_ = [
-        ('cmd', c_uint32),
-        ('cmdsize', c_uint32),
+        *MachoLoadCommand._fields_,
         ('cryptoff', c_uint32),
         ('cryptsize', c_uint32),
         ('cryptid', c_uint32),
@@ -521,8 +513,7 @@ class DylibStruct(Structure):
 
 class DylibCommand(Structure):
     _fields_ = [
-        ('cmd', c_uint32),
-        ('cmdsize', c_uint32),
+        *MachoLoadCommand._fields_,
         ('dylib', DylibStruct),
     ]
 

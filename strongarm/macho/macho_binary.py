@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-from typing import List, Dict, Tuple, Any, Type, Optional
+from typing import List, Dict, Tuple, Any, Type, Optional, TypeVar
 from typing import TYPE_CHECKING
 
 from ctypes import c_uint64, c_uint32, sizeof
@@ -161,7 +161,7 @@ class MachoBinary:
         Specifically, this method parses the Mach-O header & header flags, CPU target,
         and all segment and section commands.
         """
-        self._header = MachoHeaderStruct(self, 0)
+        self._header = self.read_struct(0, MachoHeaderStruct)
 
         if self.header.cputype == MachArch.MH_CPU_TYPE_ARM: # type: ignore
             self.cpu_type = CPU_TYPE.ARMV7
@@ -204,11 +204,12 @@ class MachoBinary:
         self.load_dylib_commands = []
 
         for i in range(segment_count):
-            load_command = MachoLoadCommandStruct(self, offset)
+            load_command = self.read_struct(offset, MachoLoadCommandStruct)
 
             if load_command.cmd in [MachoLoadCommands.LC_SEGMENT,
                                     MachoLoadCommands.LC_SEGMENT_64]:
-                segment = MachoSegmentCommandStruct(self, offset)
+
+                segment = self.read_struct(offset, MachoSegmentCommandStruct)
                 # TODO(pt) handle byte swap of segment if necessary
                 self.segment_commands[segment.segname.decode('UTF8')] = segment
                 self._parse_sections_for_segment(segment, offset)
@@ -218,26 +219,42 @@ class MachoBinary:
             # if we want to interpret more commands in the future, this is the place to do it
             elif load_command.cmd in [MachoLoadCommands.LC_ENCRYPTION_INFO,
                                       MachoLoadCommands.LC_ENCRYPTION_INFO_64]:
-                self._encryption_info = MachoEncryptionInfoStruct(self, offset)
+                self._encryption_info = self.read_struct(offset, MachoEncryptionInfoStruct)
 
             elif load_command.cmd == MachoLoadCommands.LC_SYMTAB:
-                self._symtab = MachoSymtabCommandStruct(self, offset)
+                self._symtab = self.read_struct(offset, MachoSymtabCommandStruct)
 
             elif load_command.cmd == MachoLoadCommands.LC_DYSYMTAB:
-                self._dysymtab = MachoDysymtabCommandStruct(self, offset)
+                self._dysymtab = self.read_struct(offset, MachoDysymtabCommandStruct)
 
             elif load_command.cmd in [MachoLoadCommands.LC_DYLD_INFO, MachoLoadCommands.LC_DYLD_INFO_ONLY]:
-                self._dyld_info = MachoDyldInfoCommandStruct(self, offset)
+                self._dyld_info = self.read_struct(offset, MachoDyldInfoCommandStruct)
 
             elif load_command.cmd in [MachoLoadCommands.LC_LOAD_DYLIB, MachoLoadCommands.LC_LOAD_WEAK_DYLIB]:
-                dylib_load_command = DylibCommandStruct(self, offset)
+                dylib_load_command = self.read_struct(offset, DylibCommandStruct)
                 self.load_dylib_commands.append(dylib_load_command)
 
             elif load_command.cmd == MachoLoadCommands.LC_CODE_SIGNATURE:
-                self._code_signature_cmd = MachoLinkeditDataCommandStruct(self, offset)
+                self._code_signature_cmd = self.read_struct(offset, MachoLinkeditDataCommandStruct)
 
             # move to next load command in header
             offset += load_command.cmdsize
+
+    AIS = TypeVar("AIS", bound=ArchIndependentStructure)
+
+    def read_struct(self,
+                    binary_offset: int,
+                    struct_type: Type[AIS],
+                    virtual: bool = False) -> AIS:
+        """Given an binary offset, return the structure bytes.
+        """
+
+        size = struct_type.struct_size(self.is_64bit)
+        data = self.get_contents_from_address(address=binary_offset, size=size, is_virtual=virtual)
+        return struct_type(binary_offset, data, self.is_64bit)
+
+    # def write_struct(address: int, struct: ArchIndependentStructure) -> None:
+    # ...
 
     def section_name_for_address(self, virt_addr: int) -> Optional[str]:
         """Given an address in the virtual address space, return the name of the section which contains it.
@@ -312,7 +329,7 @@ class MachoBinary:
         for i in range(segment.nsects):
             # read section header from file
             # TODO(PT): handle byte swap of segment
-            section_command = MachoSectionRawStruct(self, section_offset)
+            section_command = self.read_struct(section_offset, MachoSectionRawStruct)
             # encapsulate header and content into one object, and store that
             section = MachoSection(self, section_command)
             # add to map with the key being the name of the section
@@ -392,7 +409,7 @@ class MachoBinary:
         # start reading from symoff and increment by one Nlist64 each iteration
         symoff = self.symtab.symoff
         for i in range(self.symtab.nsyms):
-            nlist = MachoNlistStruct(self, symoff)
+            nlist = self.read_struct(symoff, MachoNlistStruct)
             symtab.append(nlist)
             # go to next Nlist in file
             symoff += nlist.sizeof
@@ -497,7 +514,7 @@ class MachoBinary:
         # special case if this is a __cfstring entry
         if section_name == '__cfstring':
             # read bytes into CFString struct
-            cfstring_ent = CFStringStruct(self, address, virtual=True)
+            cfstring_ent = self.read_struct(address, CFStringStruct, virtual=True)
             # patch address to read string from to be the string literal address of this CFString
             address = cfstring_ent.literal
         return self.get_full_string_from_start_address(address)

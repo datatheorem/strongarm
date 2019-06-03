@@ -38,7 +38,7 @@ class ObjcCategory(ObjcClass):
     def __init__(self,
                  raw_struct: ObjcCategoryRawStruct,
                  base_class: str,
-                 name: str ,
+                 name: str,
                  selectors: List['ObjcSelector'],
                  protocols: List['ObjcProtocol'] = []) -> None:
         super(ObjcCategory, self).__init__(raw_struct, name, selectors, protocols)
@@ -64,6 +64,7 @@ class ObjcSelector:
         if self.implementation:
             imp_addr = hex(int(self.implementation))
         return f'<@selector({self.name}) at {imp_addr}>'
+
     __repr__ = __str__
 
 
@@ -257,13 +258,13 @@ class ObjcRuntimeDataParser:
     def read_selectors_from_methlist_ptr(self, methlist_ptr: int) -> List[ObjcSelector]:
         """Given the virtual address of a method list, return a List of ObjcSelectors encapsulating each method
         """
-        methlist = ObjcMethodListStruct(self.binary, methlist_ptr, virtual=True)
+        methlist = self.binary.read_struct(methlist_ptr, ObjcMethodListStruct, virtual=True)
         selectors: List[ObjcSelector] = []
         # parse every entry in method list
         # the first entry appears directly after the ObjcMethodListStruct
         method_entry_off = methlist_ptr + methlist.sizeof
         for i in range(methlist.methcount):
-            method_ent = ObjcMethodStruct(self.binary, method_entry_off, virtual=True)
+            method_ent = self.binary.read_struct(method_entry_off, ObjcMethodStruct, virtual=True)
             # byte-align IMP
             method_ent.implementation &= ~0x3
 
@@ -356,7 +357,7 @@ class ObjcRuntimeDataParser:
     def _protolist_ptr_to_protocol_ptr_list(self, protolist_ptr: int) -> List[int]:
         """Accepts the virtual address of an ObjcProtocolListStruct, and returns List of protocol pointers it refers to.
         """
-        protolist = ObjcProtocolListStruct(self.binary, protolist_ptr, virtual=True)
+        protolist = self.binary.read_struct(protolist_ptr, ObjcProtocolListStruct, virtual=True)
         protocol_pointers: List[int] = []
         # pointers start directly after the 'count' field
         addr = protolist.binary_offset + protolist.sizeof
@@ -398,19 +399,19 @@ class ObjcRuntimeDataParser:
     def _get_objc_category_from_catlist_pointer(self, category_struct_pointer: int) -> ObjcCategoryRawStruct:
         """Read a struct __objc_category from the location indicated by the provided __objc_catlist pointer
         """
-        category_entry = ObjcCategoryRawStruct(self.binary, category_struct_pointer, virtual=True)
+        category_entry = self.binary.read_struct(category_struct_pointer, ObjcCategoryRawStruct, virtual=True)
         return category_entry
 
     def _get_objc_protocol_from_pointer(self, protocol_struct_pointer: int) -> ObjcProtocolRawStruct:
         """Read a struct __objc_protocol from the location indicated by the provided struct objc_protocol_list pointer
         """
-        protocol_entry = ObjcProtocolRawStruct(self.binary, protocol_struct_pointer, virtual=True)
+        protocol_entry = self.binary.read_struct(protocol_struct_pointer, ObjcProtocolRawStruct, virtual=True)
         return protocol_entry
 
     def _get_objc_class_from_classlist_pointer(self, class_struct_pointer: int) -> ObjcClassRawStruct:
         """Read a struct __objc_class from the location indicated by the __objc_classlist pointer
         """
-        class_entry = ObjcClassRawStruct(self.binary, class_struct_pointer, virtual=True)
+        class_entry = self.binary.read_struct(class_struct_pointer, ObjcClassRawStruct, virtual=True)
 
         # sanitize class_entry
         # the least significant 2 bits are used for flags
@@ -423,7 +424,7 @@ class ObjcRuntimeDataParser:
         """Read a struct __objc_data from a provided struct __objc_class
         If the struct __objc_class describe invalid or no corresponding data, None will be returned.
         """
-        data_entry = ObjcDataRawStruct(self.binary, objc_class.data, virtual=True)
+        data_entry = self.binary.read_struct(objc_class.data, ObjcDataRawStruct, virtual=True)
         # ensure this is a valid entry
         if data_entry.name < self.binary.get_virtual_base():
             # TODO(PT): sometimes we'll get addresses passed to this method that are actually struct __objc_method

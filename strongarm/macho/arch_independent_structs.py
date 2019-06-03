@@ -74,23 +74,7 @@ class ArchIndependentStructure:
 
         return sizeof(struct_type)
 
-    def __init__(self, binary: 'MachoBinary', binary_offset: int, virtual: bool = False) -> None:
-        """Parse structure from 32bit or 64bit definition, depending on the active binary
-
-        Args:
-            binary: The Mach-O slice to read the struct from
-            binary_offset: The file offset or virtual address of the struct to read
-            virtual: False if the offset is a file offset, True if it is a virtual address
-        """
-        struct_size = self.__class__.struct_size(binary.is_64bit)
-
-        struct_bytes = binary.get_contents_from_address(binary_offset, struct_size, virtual)
-
-        self.sizeof = 0
-        self.binary_offset = 0
-        self.alt__init__(binary_offset, struct_bytes, binary.is_64bit)
-
-    def alt__init__(self, binary_offset: int, struct_bytes: bytearray, is_64bit: bool = True) -> None:
+    def __init__(self, binary_offset: int, struct_bytes: bytearray, is_64bit: bool = True) -> None:
         """Parse structure from 32bit or 64bit definition
 
         Args:
@@ -103,6 +87,7 @@ class ArchIndependentStructure:
             raise ValueError('Undefined struct_type')
 
         struct: ArchIndependentStructure = struct_type.from_buffer(struct_bytes)
+
         for field_name, _ in struct._fields_:
             # clone fields from struct to this class
             setattr(self, field_name, getattr(struct, field_name))

@@ -222,10 +222,9 @@ class ObjcFunctionAnalyzer(object):
 
         search_results: List[CodeSearchResult] = []
         for instruction in self.instructions:
-            for search_term in code_search.search_terms:
-                result = search_term.satisfied(self, instruction)
-                if result:
-                    search_results.append(result)
+            result = code_search.satisfied(self, instruction)
+            if result:
+                search_results.append(result)
         return search_results
 
     def get_local_branches(self) -> List[ObjcBranchInstruction]:

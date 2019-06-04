@@ -1,23 +1,24 @@
-# -*- coding: utf-8 -*-
 import logging
 from typing import TYPE_CHECKING
 from typing import List, Dict, Optional, Set
 from capstone import Cs, CsInsn, CS_ARCH_ARM64, CS_MODE_ARM
 
-from ctypes import create_string_buffer, sizeof
+from ctypes import sizeof
 
 from strongarm import DebugUtil
+from strongarm.macho.macho_definitions import VirtualMemoryPointer
+from strongarm.macho.arch_independent_structs import CFStringStruct, CFString32, CFString64
 from strongarm.macho.macho_binary import MachoBinary
 from strongarm.macho.macho_imp_stubs import MachoImpStubsParser
-from strongarm.macho.arch_independent_structs import CFStringStruct, CFString32, CFString64
 from strongarm.macho.dyld_info_parser import DyldInfoParser, DyldBoundSymbol
 from strongarm.macho.macho_string_table_helper import MachoStringTableHelper
+
 from strongarm.macho.objc_runtime_data_parser import (
-    ObjcRuntimeDataParser,
-    ObjcSelector,
     ObjcClass,
     ObjcCategory,
-    ObjcProtocol
+    ObjcProtocol,
+    ObjcSelector,
+    ObjcRuntimeDataParser,
 )
 
 if TYPE_CHECKING:
@@ -28,8 +29,6 @@ if TYPE_CHECKING:
 
 
 class MachoAnalyzer:
-    _BYTES_IN_INSTRUCTION = 4
-
     # keep map of binary -> analyzers as these do expensive one-time cross-referencing operations
     # XXX(PT): references to these will live to the end of the process, or until clear_cache() is called.
     _ACTIVE_ANALYZER_MAP: Dict[MachoBinary, 'MachoAnalyzer'] = {}
@@ -43,7 +42,7 @@ class MachoAnalyzer:
         self._dyld_info_parser: Optional[DyldInfoParser] = None
         # Each __stubs function calls a single dyld stub address, which has a corresponding DyldBoundSymbol.
         # Map of each __stub function to the associated name of the DyldBoundSymbol
-        self._imported_symbol_addresses_to_names: Dict[int, str] = {}
+        self._imported_symbol_addresses_to_names: Dict[VirtualMemoryPointer, str] = {}
 
         self.crossref_helper = MachoStringTableHelper(binary)
         self.imported_symbols = self.crossref_helper.imported_symbols
@@ -104,13 +103,13 @@ class MachoAnalyzer:
         return self._dyld_info_parser
 
     @property
-    def dyld_bound_symbols(self) -> Dict[int, DyldBoundSymbol]:
+    def dyld_bound_symbols(self) -> Dict[VirtualMemoryPointer, DyldBoundSymbol]:
         """Return a Dict of each imported dyld stub to the corresponding symbol to be bound at runtime.
         """
         return self.dyld_info_parser.dyld_stubs_to_symbols
 
     @property
-    def imp_stubs_to_symbol_names(self) -> Dict[int, str]:
+    def imp_stubs_to_symbol_names(self) -> Dict[VirtualMemoryPointer, str]:
         """Return a Dict of callable implementation stubs to the names of the imported symbols they correspond to.
         """
         if self._imported_symbol_addresses_to_names:
@@ -137,7 +136,7 @@ class MachoAnalyzer:
         return symbol_name_map
     
     @property
-    def imported_symbols_to_symbol_names(self) -> Dict[int, str]:
+    def imported_symbols_to_symbol_names(self) -> Dict[VirtualMemoryPointer, str]:
         """Return a Dict of imported symbol pointers to their names.
         These symbols are not necessarily callable, but may rather be imported classes, for example.
         Inverse of MachoAnalyzer.imported_symbol_names_to_pointers()
@@ -145,28 +144,28 @@ class MachoAnalyzer:
         return {addr: x.name for addr, x in self.dyld_bound_symbols.items()}
 
     @property
-    def imported_symbol_names_to_pointers(self) -> Dict[str, int]:
+    def imported_symbol_names_to_pointers(self) -> Dict[str, VirtualMemoryPointer]:
         """Return a Dict of imported symbol names to their pointers.
         These symbols are not necessarily callable.
         Inverse of MachoAnalyzer.imported_symbol_names_to_pointers()
         """
         return {x.name: addr for addr, x in self.dyld_bound_symbols.items()}
 
-    def symbol_name_for_branch_destination(self, branch_address: int) -> str:
+    def symbol_name_for_branch_destination(self, branch_address: VirtualMemoryPointer) -> str:
         """Get the associated symbol name for a given branch destination
         """
         if branch_address in self.imp_stubs_to_symbol_names:
             return self.imp_stubs_to_symbol_names[branch_address]
         raise RuntimeError(f'Unknown branch destination {hex(branch_address)}. Is this a local branch?')
 
-    def _disassemble_region(self, start_address: int, size: int) -> List[CsInsn]:
+    def _disassemble_region(self, start_address: VirtualMemoryPointer, size: int) -> List[CsInsn]:
         """Disassemble the executable code in a given region into a list of CsInsn objects
         """
         func_str = bytes(self.binary.get_content_from_virtual_address(virtual_address=start_address, size=size))
         instructions = [instr for instr in self.cs.disasm(func_str, start_address)]
         return instructions
 
-    def get_function_instructions(self, start_address: int) -> List[CsInsn]:
+    def get_function_instructions(self, start_address: VirtualMemoryPointer) -> List[CsInsn]:
         """Get a list of disassembled instructions for the function beginning at start_address
         """
         from strongarm.objc.dataflow import determine_function_boundary
@@ -185,16 +184,16 @@ class MachoAnalyzer:
         instructions = self._disassemble_region(start_address, end_address - start_address)
         return instructions
 
-    def imp_for_selref(self, selref_ptr: int) -> Optional[int]:
+    def imp_for_selref(self, selref_ptr: VirtualMemoryPointer) -> Optional[VirtualMemoryPointer]:
         selector = self.objc_helper.selector_for_selref(selref_ptr)
         if not selector:
             return None
         return selector.implementation
 
-    def selector_for_selref(self, selref_ptr: int) -> Optional[ObjcSelector]:
+    def selector_for_selref(self, selref_ptr: VirtualMemoryPointer) -> Optional[ObjcSelector]:
         return self.objc_helper.selector_for_selref(selref_ptr)
 
-    def get_method_imp_addresses(self, selector: str) -> List[int]:
+    def get_method_imp_addresses(self, selector: str) -> List[VirtualMemoryPointer]:
         """Given a selector, return a list of virtual addresses corresponding to the start of each IMP for that SEL
         """
         return self.objc_helper.get_method_imp_addresses(selector)
@@ -261,7 +260,7 @@ class MachoAnalyzer:
                 logging.info(f'binary code search {percent_complete}% complete')
         return search_results
 
-    def class_name_for_class_pointer(self, classref: int) -> Optional[str]:
+    def class_name_for_class_pointer(self, classref: VirtualMemoryPointer) -> Optional[str]:
         """Given a classref, return the name of the class.
         This method will handle classes implemented within the binary and imported classes.
         """
@@ -282,7 +281,7 @@ class MachoAnalyzer:
         # invalid classref
         return None
 
-    def classref_for_class_name(self, class_name: str) -> Optional[int]:
+    def classref_for_class_name(self, class_name: str) -> Optional[VirtualMemoryPointer]:
         """Given a class name, try to find a classref for it.
         """
         classrefs = [addr for addr, name in self.imported_symbols_to_symbol_names.items() if name == class_name]
@@ -297,7 +296,7 @@ class MachoAnalyzer:
         if not len(class_locations):
             # unknown class name
             return None
-        class_location = class_locations[0]
+        class_location = VirtualMemoryPointer(class_locations[0])
 
         if class_location not in classref_destinations:
             # unknown class name
@@ -306,7 +305,7 @@ class MachoAnalyzer:
         classref_index = classref_destinations.index(class_location)
         return classref_locations[classref_index]
 
-    def selref_for_selector_name(self, selector_name: str) -> Optional[int]:
+    def selref_for_selector_name(self, selector_name: str) -> Optional[VirtualMemoryPointer]:
         return self.objc_helper.selref_for_selector_name(selector_name)
 
     def strings(self) -> Set[str]:
@@ -326,7 +325,7 @@ class MachoAnalyzer:
         transformed_strings = MachoStringTableHelper.transform_string_section(string_table)
         return set((x.full_string for x in transformed_strings.values()))
 
-    def _stringref_for_cstring(self, string: str) -> Optional[int]:
+    def _stringref_for_cstring(self, string: str) -> Optional[VirtualMemoryPointer]:
         """Try to find the stringref in __cstrings for a provided C string.
         If the string is not present in the __cstrings section, this method returns None.
         """
@@ -353,7 +352,7 @@ class MachoAnalyzer:
         # didn't find the string the user requested
         return None
 
-    def _stringref_for_cfstring(self, string: str) -> Optional[int]:
+    def _stringref_for_cfstring(self, string: str) -> Optional[VirtualMemoryPointer]:
         """Try to find the stringref in __cfstrings for a provided Objective-C string literal.
         If the string is not present in the __cfstrings section, this method returns None.
         """
@@ -374,7 +373,7 @@ class MachoAnalyzer:
             # check if this is the string the user requested
             string_address = cfstring.literal
             if self.binary.read_string_at_address(string_address) == string:
-                return cfstring_addr
+                return VirtualMemoryPointer(cfstring_addr)
 
         return None
 

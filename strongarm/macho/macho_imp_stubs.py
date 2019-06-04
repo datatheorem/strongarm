@@ -1,8 +1,8 @@
-# -*- coding: utf-8 -*-
 from typing import List
 from capstone import Cs, CsInsn
 
 from strongarm.macho.macho_binary import MachoBinary
+from strongarm.macho.macho_definitions import VirtualMemoryPointer
 
 
 class MachoImpStub:
@@ -28,7 +28,7 @@ class MachoImpStub:
     This object contains the starting address of the stub (which will be the destination for branches),
     as well as the __la_symbol_ptr entry which is targeted by the stub.
     """
-    def __init__(self, address: int, destination: int) -> None:
+    def __init__(self, address: VirtualMemoryPointer, destination: VirtualMemoryPointer) -> None:
         self.address = address
         self.destination = destination
 
@@ -76,7 +76,7 @@ class MachoImpStubsParser:
             stub_dest_page = instr1.operands[1].value.imm
             stub_dest_pageoff = instr2.operands[1].mem.disp
             stub_dest = stub_dest_page + stub_dest_pageoff
-        stub = MachoImpStub(stub_addr, stub_dest)
+        stub = MachoImpStub(VirtualMemoryPointer(stub_addr), VirtualMemoryPointer(stub_dest))
         return stub
 
     def _parse_all_stubs(self) -> List[MachoImpStub]:

@@ -1,15 +1,15 @@
-# -*- coding: utf-8 -*-
 from typing import Optional, Union
 from typing import TYPE_CHECKING
 
 from capstone import CsInsn
 from capstone.arm64 import Arm64Op, ARM64_OP_REG, ARM64_OP_IMM, ARM64_OP_MEM
 
-import strongarm.macho.macho_analyzer
+from strongarm.macho.macho_definitions import VirtualMemoryPointer
+from strongarm.macho.objc_runtime_data_parser import ObjcSelref, ObjcSelector
+from strongarm.macho.macho_analyzer import MachoAnalyzer
 
 if TYPE_CHECKING:
-    from strongarm.objc import ObjcFunctionAnalyzer
-    from strongarm.macho.objc_runtime_data_parser import ObjcSelref, ObjcSelector
+    from .objc_analyzer import ObjcFunctionAnalyzer
 
 
 class ObjcInstruction:
@@ -64,7 +64,7 @@ class ObjcInstruction:
 
 
 class ObjcBranchInstruction(ObjcInstruction):
-    def __init__(self, instruction: CsInsn, destination_address: int) -> None:
+    def __init__(self, instruction: CsInsn, destination_address: VirtualMemoryPointer) -> None:
         super(ObjcBranchInstruction, self).__init__(instruction)
 
         self.destination_address = destination_address
@@ -135,7 +135,7 @@ class ObjcUnconditionalBranchInstruction(ObjcBranchInstruction):
         self.selref: Optional[ObjcSelref] = None
         self.selector: Optional[ObjcSelector] = None
 
-        macho_analyzer = strongarm.macho.macho_analyzer.MachoAnalyzer.get_analyzer(function_analyzer.binary)
+        macho_analyzer = MachoAnalyzer.get_analyzer(function_analyzer.binary)
         external_c_sym_map = macho_analyzer.imp_stubs_to_symbol_names
         if self.destination_address in external_c_sym_map:
             self.symbol = external_c_sym_map[self.destination_address]  # type: ignore
@@ -172,7 +172,7 @@ class ObjcUnconditionalBranchInstruction(ObjcBranchInstruction):
             # it is defined in a class outside this binary
             self.is_external_objc_call = selector.is_external_definition
 
-            self.destination_address = selector.implementation if selector.implementation else 0
+            self.destination_address = selector.implementation if selector.implementation else VirtualMemoryPointer(0)
             self.selref = selector.selref
             self.selector = selector
         except RuntimeError as e:
@@ -184,7 +184,7 @@ class ObjcUnconditionalBranchInstruction(ObjcBranchInstruction):
             # Nonetheless, this causes get_selref_ptr() to fail.
             # As a workaround, let's assign all the above fields to 'not found' values if this bug is hit
             self.is_external_objc_call = True
-            self.destination_address = 0
+            self.destination_address = VirtualMemoryPointer(0)
             # self.selref: ObjcSelref
             # self.selector: ObjcSelector
 

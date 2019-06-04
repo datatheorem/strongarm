@@ -1,4 +1,3 @@
-# -*- coding: utf-8 -*-
 from typing import List, Dict, Tuple, Any, Type, Optional, TypeVar
 from typing import TYPE_CHECKING
 
@@ -6,8 +5,15 @@ from ctypes import c_uint64, c_uint32, sizeof
 
 from strongarm.debug_util import DebugUtil
 
-from strongarm.macho.macho_definitions import MachArch, MachoFileType, CPU_TYPE, HEADER_FLAGS
-from strongarm.macho.macho_load_commands import MachoLoadCommands
+from strongarm.macho.macho_definitions import (
+    CPU_TYPE,
+    MachArch,
+    HEADER_FLAGS,
+    MachoFileType,
+    FILE_HEAD_PTR,
+    StaticFilePointer,
+    VirtualMemoryPointer
+)
 from strongarm.macho.arch_independent_structs import (
     ArchIndependentStructure,
     MachoHeaderStruct,
@@ -23,9 +29,12 @@ from strongarm.macho.arch_independent_structs import (
     MachoDyldInfoCommandStruct,
     MachoLinkeditDataCommandStruct,
 )
+from strongarm.macho.macho_load_commands import MachoLoadCommands
 
 if TYPE_CHECKING:
     from strongarm.macho.codesign import CodesignParser
+
+AIS = TypeVar("AIS", bound=ArchIndependentStructure)
 
 
 class BinaryEncryptedError(Exception):
@@ -59,7 +68,7 @@ class MachoBinary:
     SUPPORTED_MAG = _MAG_64 + _MAG_32
     BYTES_PER_INSTRUCTION = 4
 
-    def __init__(self, filename: bytes, offset_within_fat: int = 0) -> None:
+    def __init__(self, filename: bytes, offset_within_fat: StaticFilePointer = FILE_HEAD_PTR) -> None:
         from .codesign.codesign_parser import CodesignParser
         # info about this Mach-O's file representation
         self.filename = filename
@@ -113,8 +122,7 @@ class MachoBinary:
             False otherwise.
 
         """
-        DebugUtil.log(self,
-                      f'parsing Mach-O slice @ {hex(int(self._offset_within_fat))} in {self.filename.decode()}')
+        DebugUtil.log(self, f'parsing Mach-O slice @ {hex(int(self._offset_within_fat))} in {self.filename.decode()}')
 
         # preliminary Mach-O parsing
         if not self.verify_magic():
@@ -163,9 +171,9 @@ class MachoBinary:
         """
         self._header = self.read_struct(0, MachoHeaderStruct)
 
-        if self.header.cputype == MachArch.MH_CPU_TYPE_ARM: # type: ignore
+        if self.header.cputype == MachArch.MH_CPU_TYPE_ARM:  # type: ignore
             self.cpu_type = CPU_TYPE.ARMV7
-        elif self.header.cputype == MachArch.MH_CPU_TYPE_ARM64: # type: ignore
+        elif self.header.cputype == MachArch.MH_CPU_TYPE_ARM64:  # type: ignore
             self.cpu_type = CPU_TYPE.ARM64
         else:
             self.cpu_type = CPU_TYPE.UNKNOWN
@@ -191,7 +199,7 @@ class MachoBinary:
                 # mask is present in bitset, add to list of included flags
                 self.header_flags.append(mask)
 
-    def _parse_segment_commands(self, offset: int, segment_count: int) -> None:
+    def _parse_segment_commands(self, offset: StaticFilePointer, segment_count: int) -> None:
         """Parse Mach-O segment commands beginning at a given slice offset
 
         Args:
@@ -240,8 +248,6 @@ class MachoBinary:
             # move to next load command in header
             offset += load_command.cmdsize
 
-    AIS = TypeVar("AIS", bound=ArchIndependentStructure)
-
     def read_struct(self,
                     binary_offset: int,
                     struct_type: Type[AIS],
@@ -256,7 +262,7 @@ class MachoBinary:
     # def write_struct(address: int, struct: ArchIndependentStructure) -> None:
     # ...
 
-    def section_name_for_address(self, virt_addr: int) -> Optional[str]:
+    def section_name_for_address(self, virt_addr: VirtualMemoryPointer) -> Optional[str]:
         """Given an address in the virtual address space, return the name of the section which contains it.
         """
         section = self.section_for_address(virt_addr)
@@ -264,7 +270,7 @@ class MachoBinary:
             return None
         return section.name.decode('UTF8')
 
-    def section_for_address(self, virt_addr: int) -> Optional[MachoSection]:
+    def section_for_address(self, virt_addr: VirtualMemoryPointer) -> Optional[MachoSection]:
         # invalid address?
         if virt_addr < self.get_virtual_base():
             return None
@@ -291,7 +297,8 @@ class MachoBinary:
         # TODO(PT): store segment order in some way that doesn't rely on dicts being sorted by insertion order
         return [x for x in self.segment_commands.values()][segment_index]
 
-    def segment_for_address(self, virt_addr: int) -> Optional[MachoSegmentCommandStruct]:
+    def segment_for_address(self, virt_addr: VirtualMemoryPointer) -> Optional[MachoSegmentCommandStruct]:
+        # TODO(PT): add unit test for this method
         # invalid address?
         if virt_addr < self.get_virtual_base():
             return None
@@ -314,7 +321,9 @@ class MachoBinary:
         # guess by using the highest-addressed section we've seen
         return max_segment
 
-    def _parse_sections_for_segment(self, segment: MachoSegmentCommandStruct, segment_offset: int) -> None:
+    def _parse_sections_for_segment(self,
+                                    segment: MachoSegmentCommandStruct,
+                                    segment_offset: StaticFilePointer) -> None:
         """Parse all sections contained within a Mach-O segment, and add them to our list of sections
 
         Args:
@@ -338,7 +347,7 @@ class MachoBinary:
             # go to next section in list
             section_offset += section_command.sizeof
 
-    def get_virtual_base(self) -> int:
+    def get_virtual_base(self) -> VirtualMemoryPointer:
         """Retrieve the first virtual address of the Mach-O slice
 
         Returns:
@@ -346,9 +355,9 @@ class MachoBinary:
 
         """
         text_seg = self.segment_commands['__TEXT']
-        return text_seg.vmaddr
+        return VirtualMemoryPointer(text_seg.vmaddr)
 
-    def get_bytes(self, offset: int, size: int) -> bytearray:
+    def get_bytes(self, offset: StaticFilePointer, size: int) -> bytearray:
         """Retrieve bytes from Mach-O slice, taking into account that the slice could be at an offset within a FAT
 
         Args:
@@ -432,14 +441,14 @@ class MachoBinary:
             indirect_symtab_off += sizeof(c_uint32)
         return indirect_symtab
 
-    def file_offset_for_virtual_address(self, virtual_address: int) -> int:
+    def file_offset_for_virtual_address(self, virtual_address: VirtualMemoryPointer) -> StaticFilePointer:
         # if this address is within the initial Mach-O load commands, it must be handled seperately
         # this unslid virtual address is just a 'best guess' of the physical file address, and it'll be the correct
         # address if the virtual address was within the initial load commands
         # if the virtual address was in the section contents, however, we must use another method to translate addresses
         unslid_virtual_address = virtual_address - self.get_virtual_base()
         if unslid_virtual_address < self._load_commands_end_addr:
-            return unslid_virtual_address
+            return StaticFilePointer(unslid_virtual_address)
 
         section_for_address = self.section_for_address(virtual_address)
         if not section_for_address:
@@ -449,9 +458,9 @@ class MachoBinary:
         # use this formula to convert a virtual address within a section to the file offset:
         # https://reverseengineering.stackexchange.com/questions/8177/convert-mach-o-vm-address-to-file-offset
         binary_address = (virtual_address - section_for_address.address) + section_for_address.offset
-        return binary_address
+        return StaticFilePointer(binary_address)
 
-    def get_content_from_virtual_address(self, virtual_address: int, size: int) -> bytearray:
+    def get_content_from_virtual_address(self, virtual_address: VirtualMemoryPointer, size: int) -> bytearray:
         binary_address = self.file_offset_for_virtual_address(virtual_address)
         return self.get_bytes(binary_address, size)
 
@@ -462,9 +471,9 @@ class MachoBinary:
          (https://docs.python.org/3/library/functools.html?highlight=singledispatch#functools.singledispatch)
         """
         if is_virtual:
-            return self.get_content_from_virtual_address(address, size)
+            return self.get_content_from_virtual_address(VirtualMemoryPointer(address), size)
         else:
-            return self.get_bytes(address, size)
+            return self.get_bytes(StaticFilePointer(address), size)
 
     def get_full_string_from_start_address(self, start_address: int, virtual: bool = True) -> Optional[str]:
         """Return a string containing the bytes from start_address up to the next NULL character
@@ -476,9 +485,9 @@ class MachoBinary:
 
         while not found_null_terminator:
             if virtual:
-                name_bytes = self.get_content_from_virtual_address(virtual_address=start_address, size=max_len)
+                name_bytes = self.get_content_from_virtual_address(VirtualMemoryPointer(start_address), max_len)
             else:
-                name_bytes = self.get_bytes(start_address, max_len)
+                name_bytes = self.get_bytes(StaticFilePointer(start_address), max_len)
             # search for null terminator in this content
             for ch in name_bytes:
                 if ch == 0x00:
@@ -503,7 +512,7 @@ class MachoBinary:
                     return None
         return None
 
-    def read_string_at_address(self, address: int) -> Optional[str]:
+    def read_string_at_address(self, address: VirtualMemoryPointer) -> Optional[str]:
         """Read a string embedded in the binary at address
         This method will automatically parse a CFString and return the string literal if address points to one
         """
@@ -526,7 +535,7 @@ class MachoBinary:
             return False
         return self.encryption_info.cryptid != 0
 
-    def is_range_encrypted(self, offset: int, size: int) -> bool:
+    def is_range_encrypted(self, offset: StaticFilePointer, size: int) -> bool:
         """Returns whether the provided address range overlaps with the encrypted section of the binary.
         """
         if not self.is_encrypted():
@@ -570,7 +579,7 @@ class MachoBinary:
             source_name = '<unknown dylib>'
         return source_name
 
-    def read_pointer_section(self, section_name: str) -> Tuple[List[int], List[int]]:
+    def read_pointer_section(self, section_name: str) -> Tuple[List[VirtualMemoryPointer], List[VirtualMemoryPointer]]:
         """Read all the pointers in a section
 
         It is the caller's responsibility to only call this with a `section_name` which indicates a section which should
@@ -583,8 +592,8 @@ class MachoBinary:
         The indexes of these two lists are matched up; that is, list1[0] is the virtual address of the first pointer
         in the requested section, and list2[0] is the pointer value contained at that address.
         """
-        locations: List[int] = []
-        entries: List[int] = []
+        locations: List[VirtualMemoryPointer] = []
+        entries: List[VirtualMemoryPointer] = []
         if section_name not in self.sections:
             return locations, entries
 
@@ -598,11 +607,11 @@ class MachoBinary:
 
         for i in range(pointer_count):
             # convert section offset of entry to absolute virtual address
-            locations.append(section_base + pointer_off)
+            locations.append(VirtualMemoryPointer(section_base + pointer_off))
 
             data_end = pointer_off + sizeof(binary_word)
             val = binary_word.from_buffer(bytearray(section_data[pointer_off:data_end])).value
-            entries.append(val)
+            entries.append(VirtualMemoryPointer(val))
 
             pointer_off += sizeof(binary_word)
 
@@ -618,10 +627,9 @@ class MachoBinary:
             word_type = self.platform_word_type
 
         if virtual:
-            file_bytes = self.get_content_from_virtual_address(address, sizeof(word_type))
+            file_bytes = self.get_content_from_virtual_address(VirtualMemoryPointer(address), sizeof(word_type))
         else:
-            file_bytes = self.get_bytes(address, sizeof(word_type))
-
+            file_bytes = self.get_bytes(StaticFilePointer(address), sizeof(word_type))
         if not file_bytes:
             return None
 

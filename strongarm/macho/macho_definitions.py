@@ -1,8 +1,31 @@
-# -*- coding: utf-8 -*-
 import struct
 
 from enum import IntEnum
-from ctypes import Union, Structure, c_uint8, c_uint16, c_uint32, c_uint64, c_char, c_char_p, c_int16
+from ctypes import (
+    Union,
+    Structure,
+    c_char,
+    c_char_p,
+    c_int16,
+    c_uint8,
+    c_uint16,
+    c_uint32,
+    c_uint64,
+)
+
+
+class StaticFilePointer(int):
+    """A pointer analogous to a file offset within the Mach-O
+    """
+
+
+class VirtualMemoryPointer(int):
+    """A pointer representing a virtual memory location within the Mach-O
+    """
+
+
+NULL_PTR = StaticFilePointer(0)
+FILE_HEAD_PTR = StaticFilePointer(0)
 
 
 def swap32(i: int) -> int:

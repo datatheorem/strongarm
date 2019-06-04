@@ -1,5 +1,3 @@
-# -*- coding: utf-8 -*-
-
 import re
 from typing import List
 
@@ -11,22 +9,23 @@ from capstone.arm64 import (
     ARM64_OP_MEM
 )
 
-from strongarm.objc import ObjcMethodInfo
 from strongarm.macho import (
     CPU_TYPE,
-    MachoParser,
     MachoAnalyzer,
     MachoBinary,
-    ObjcCategory,
+    MachoParser,
     ObjcClass,
-    ObjcSelector
+    ObjcCategory,
+    ObjcSelector,
+    VirtualMemoryPointer,
 )
 from strongarm.objc import (
     RegisterContentsType,
     ObjcFunctionAnalyzer,
+    ObjcInstruction,
     ObjcBranchInstruction,
     ObjcBasicBlock,
-    ObjcInstruction
+    ObjcMethodInfo,
 )
 
 
@@ -221,7 +220,7 @@ def annotate_instruction(function_analyzer: ObjcFunctionAnalyzer, sel_args: List
 
 
 def disassemble_function(binary: MachoBinary,
-                         function_addr: int,
+                         function_addr: VirtualMemoryPointer,
                          prefix: List[str] = None,
                          sel_args: List[str] = []) -> str:
     if not prefix:

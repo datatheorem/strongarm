@@ -1,4 +1,3 @@
-# -*- coding: utf-8 -*-
 from enum import IntEnum
 from ctypes import BigEndianStructure, c_uint8, c_uint32
 

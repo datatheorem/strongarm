@@ -1,9 +1,9 @@
-# -*- coding: utf-8 -*-
 from typing import List
 
-from .objc_analyzer import ObjcFunctionAnalyzer
-from strongarm.debug_util import DebugUtil
 from capstone import CsInsn
+
+from strongarm.debug_util import DebugUtil
+from .objc_analyzer import ObjcFunctionAnalyzer
 
 
 class ObjcBasicBlock(object):

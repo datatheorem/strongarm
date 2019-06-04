@@ -1,4 +1,3 @@
-# -*- coding: utf-8 -*-
 from .register_contents import RegisterContents, RegisterContentsType
 
 from .objc_query import (
@@ -10,9 +9,9 @@ from .objc_query import (
     CodeSearchTermInstructionOperand,
     CodeSearchTermRegisterContents,
     CodeSearchTermFunctionCallWithArguments,
+    CodeSearchTermObjcCall,
     CodeSearchResult,
     CodeSearchResultFunctionCallWithArguments,
-    CodeSearchTermObjcCall
 )
 
 from .objc_analyzer import (

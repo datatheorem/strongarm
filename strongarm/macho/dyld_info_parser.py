@@ -1,4 +1,3 @@
-# -*- coding: utf-8 -*-
 import ctypes
 import logging
 
@@ -6,6 +5,7 @@ from typing import Dict, Tuple
 from enum import IntEnum
 
 from .macho_binary import MachoBinary
+from .macho_definitions import StaticFilePointer, VirtualMemoryPointer
 
 
 class BindOpcode(IntEnum):
@@ -27,7 +27,7 @@ class BindOpcode(IntEnum):
 class DyldBoundSymbol:
     def __init__(self,
                  binary: MachoBinary,
-                 stub_addr: int,
+                 stub_addr: VirtualMemoryPointer,
                  library_ordinal: int,
                  name: str) -> None:
         self.binary = binary
@@ -41,7 +41,7 @@ class DyldInfoParser:
     def __init__(self, binary: MachoBinary) -> None:
         self.binary = binary
         self.dyld_info_cmd = self.binary.dyld_info
-        self.dyld_stubs_to_symbols: Dict[int, DyldBoundSymbol] = {}
+        self.dyld_stubs_to_symbols: Dict[VirtualMemoryPointer, DyldBoundSymbol] = {}
         if self.dyld_info_cmd:
             self.parse_dyld_info()
 
@@ -84,7 +84,7 @@ class DyldInfoParser:
         self.parse_dyld_bytestream(self.dyld_info_cmd.bind_off, self.dyld_info_cmd.bind_size)
         self.parse_dyld_bytestream(self.dyld_info_cmd.lazy_bind_off, self.dyld_info_cmd.lazy_bind_size)
 
-    def parse_dyld_bytestream(self, file_offset: int, size: int) -> None:
+    def parse_dyld_bytestream(self, file_offset: StaticFilePointer, size: int) -> None:
         from ctypes import sizeof
         binding_info = self.binary.get_bytes(file_offset, size)
         pointer_size = sizeof(self.binary.platform_word_type)

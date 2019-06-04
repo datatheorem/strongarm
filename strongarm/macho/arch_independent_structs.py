@@ -1,4 +1,3 @@
-# -*- coding: utf-8 -*-
 from ctypes import sizeof
 
 from typing import Union, Type, Any, Optional
@@ -26,9 +25,8 @@ from strongarm.macho.macho_definitions import (
     DylibCommand,
 )
 
-
+# create type alias for the following classes that inherit from ArchIndependentStructure
 if TYPE_CHECKING:
-    from strongarm.macho.macho_binary import MachoBinary
     from .codesign.codesign_definitions import (
         CSBlobStruct,
         CSSuperblobStruct,

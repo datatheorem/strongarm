@@ -1,5 +1,3 @@
-# -*- coding: utf-8 -*-
-
 import sys
 import logging
 import argparse
@@ -9,7 +7,8 @@ from strongarm.debug_util import DebugUtil
 from strongarm.macho import (
     MachoParser,
     MachoBinary,
-    MachoAnalyzer
+    MachoAnalyzer,
+    VirtualMemoryPointer
 )
 from strongarm.cli.utils import (
     pick_macho_slice,
@@ -119,7 +118,7 @@ class StrongarmShell:
             print(f'Failed to interpret address: {e}')
             return err()
 
-        binary_data = self.binary.get_content_from_virtual_address(address, dump_size)
+        binary_data = self.binary.get_content_from_virtual_address(VirtualMemoryPointer(address), dump_size)
 
         # split to 16 byte regions
         region_size = 16
@@ -182,7 +181,7 @@ class StrongarmShell:
             print('Usage: disasm [sel]')
             return
 
-        disassembled_str = disassemble_function(self.binary, int(args[0], 16))
+        disassembled_str = disassemble_function(self.binary, VirtualMemoryPointer(args[0], 16))
         print(disassembled_str)
 
     def help(self, args: List[str]) -> None:

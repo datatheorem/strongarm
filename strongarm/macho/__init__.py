@@ -1,4 +1,3 @@
-# -*- coding: utf-8 -*-
 from .macho_definitions import (
     swap32,
     MachArch,
@@ -31,6 +30,7 @@ from .macho_definitions import (
     DylibStruct,
     DylibCommand,
     CFString32, CFString64,
+    StaticFilePointer, VirtualMemoryPointer,
 )
 
 from .arch_independent_structs import (

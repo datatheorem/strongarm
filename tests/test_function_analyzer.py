@@ -1,9 +1,17 @@
 import os
 import pytest
+from typing import List
 
-from strongarm.macho import MachoAnalyzer, MachoParser
+from strongarm.macho import MachoAnalyzer, MachoParser, StaticFilePointer, VirtualMemoryPointer
 from strongarm.objc import ObjcFunctionAnalyzer, ObjcInstruction
 from strongarm.objc import RegisterContentsType
+
+from strongarm.objc import (
+    CodeSearch,
+    ObjcUnconditionalBranchInstruction,
+    CodeSearchFunctionCallWithArguments,
+    CodeSearchResultFunctionCallWithArguments,
+)
 
 
 class TestFunctionAnalyzer:
@@ -56,49 +64,34 @@ class TestFunctionAnalyzer:
                     correct_sym_name = external_targets[target.destination_address]
                     assert target.symbol == correct_sym_name
 
-    def test_search_call_graph(self):
-        from strongarm.objc import CodeSearch, CodeSearchTermCallDestination
-        # external function
-        search = CodeSearch([
-            CodeSearchTermCallDestination(
-                self.binary,
-                invokes_address=TestFunctionAnalyzer.SEC_TRUST_EVALUATE_STUB_ADDR
-            )
-        ])
-        results = self.function_analyzer.search_call_graph(search)
-        assert len(results) == 1
-        assert results[0].found_instruction.address == 0x1000064a0
-
-        # local branch
-        search = CodeSearch(
-            [CodeSearchTermCallDestination(self.binary, invokes_address=0x100006518)]
-        )
-        results = self.function_analyzer.search_call_graph(search)
-        assert len(results) == 1
-        assert results[0].found_instruction.address == 0x100006500
-
-        # fake destination
-        search = CodeSearch(
-            [CodeSearchTermCallDestination(self.binary, invokes_address=0xdeadbeef)],
-        )
-        results = self.function_analyzer.search_call_graph(search)
-        assert len(results) == 0
-
     def test_search_selector(self):
-        from strongarm.objc import CodeSearch, CodeSearchTermCallDestination
-        query = CodeSearch(
-            [CodeSearchTermCallDestination(self.binary, invokes_selector='initWithFrame:')],
-        )
-        results = self.analyzer.search_code(query)
-        assert len(results) == 1
-        result = results[0]
-        assert result.found_instruction.address == 0x100006254
-        assert result.found_instruction.symbol == '_objc_msgSendSuper2'
-        assert result.found_instruction.selector.name == 'initWithFrame:'
-        assert result.found_instruction.selref.selector_literal == 'initWithFrame:'
-        assert result.found_instruction.selref.source_address == 0x100009070
+        selref = self.analyzer.selref_for_selector_name('initWithFrame:')
+        assert selref
 
-        assert result.found_function.start_address == 0x100006228
+        query = CodeSearchFunctionCallWithArguments(
+            self.binary,
+            ObjcUnconditionalBranchInstruction.OBJC_MSGSEND_FUNCTIONS,
+            {
+                # arg 1 will contain the selref being messaged
+                1: [selref]
+            }
+        )
+
+        def process_results(analyzer: MachoAnalyzer,
+                            search: CodeSearch,
+                            results: List[CodeSearchResultFunctionCallWithArguments]) -> None:
+            assert len(results) == 1
+            result = results[0]
+            assert result.found_instruction.address == 0x100006254
+            assert result.found_instruction.symbol == '_objc_msgSendSuper2'
+            assert result.found_instruction.selector.name == 'initWithFrame:'
+            assert result.found_instruction.selref.selector_literal == 'initWithFrame:'
+            assert result.found_instruction.selref.source_address == 0x100009070
+
+            assert result.found_function.start_address == 0x100006228
+
+        self.analyzer.search_code(query, process_results)
+        self.analyzer.search_all_code()
 
     def test_get_register_contents_at_instruction(self):
         from strongarm.objc import RegisterContentsType
@@ -128,7 +121,7 @@ class TestFunctionAnalyzer:
         )
         instruction = ObjcInstruction.parse_instruction(
             function_analyzer,
-            function_analyzer.get_instruction_at_address(0x100004290)
+            function_analyzer.get_instruction_at_address(VirtualMemoryPointer(0x100004290))
         )
         # If I ask for the contents of the register
         contents = function_analyzer.get_register_contents_at_instruction('x1', instruction)
@@ -142,7 +135,7 @@ class TestFunctionAnalyzer:
         # 0x0000000100004748    ldr        x8, [x8, #0x60]
         instruction = ObjcInstruction.parse_instruction(
             function_analyzer,
-            function_analyzer.get_instruction_at_address(0x100004748)
+            function_analyzer.get_instruction_at_address(VirtualMemoryPointer(0x100004748))
         )
         # If I ask for the contents of the register
         contents = function_analyzer.get_register_contents_at_instruction('x8', instruction)
@@ -188,8 +181,9 @@ class TestFunctionAnalyzer:
                                        'ThreeOpAddInstruction')
         binary = MachoParser(three_op_binary).get_arm64_slice()
         analyzer = MachoAnalyzer.get_analyzer(binary)
-        function_analyzer = ObjcFunctionAnalyzer(binary, analyzer.get_function_instructions(0x10000665c))
-        target_instr = function_analyzer.get_instruction_at_address(0x100006664)
+        function_analyzer = ObjcFunctionAnalyzer(binary,
+                                                 analyzer.get_function_instructions(VirtualMemoryPointer(0x10000665c)))
+        target_instr = function_analyzer.get_instruction_at_address(VirtualMemoryPointer(0x100006664))
         wrapped_instr = ObjcInstruction.parse_instruction(function_analyzer, target_instr)
         contents = function_analyzer.get_register_contents_at_instruction('x0', wrapped_instr)
         assert contents.type == RegisterContentsType.IMMEDIATE

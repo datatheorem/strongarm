@@ -23,3 +23,6 @@ pip-delete-this-directory.txt
 
 # eggs
 strongarm.egg-info/
+
+# mypy
+.mypy_cache/

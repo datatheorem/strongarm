@@ -1,3 +1,5 @@
+from typing import Optional
+
 from strongarm.debug_util import DebugUtil
 from strongarm.macho.macho_binary import MachoBinary
 from strongarm.macho.macho_definitions import StaticFilePointer
@@ -19,11 +21,11 @@ class CodesignParser:
     https://opensource.apple.com/source/Security/Security-57031.1.35/Security/libsecurity_codesigning/lib/CSCommonPriv.h
     """
 
-    def __init__(self, binary: MachoBinary):
+    def __init__(self, binary: MachoBinary) -> None:
         self.binary = binary
         self.entitlements: bytearray = bytearray(b'<plist></plist>')
-        self.signing_identifier: str = None
-        self.signing_team_id: str = None
+        self.signing_identifier: Optional[str] = None
+        self.signing_team_id: Optional[str] = None
 
         # If the binary does not have a code signature, we have nothing to do
         if not self.binary.code_signature_cmd:
@@ -62,32 +64,33 @@ class CodesignParser:
             # unknown magic
             DebugUtil.log(self, f'Unknown CodeSign blob magic @ {hex(file_offset)}: {hex(magic)}')
 
-    def parse_superblob(self, file_offset: StaticFilePointer):
+    def parse_superblob(self, file_offset: StaticFilePointer) -> None:
         """Parse a codesign 'superblob' at the provided file offset.
         This is a blob which embeds several child blobs.
         The superblob format is the superblob header, followed by several csblob_index structures describing
         the layout of the child blobs.
         """
-        superblob = CSSuperblob(self.binary, file_offset, virtual=False)
+        internal_file_offset = int(file_offset)
+        superblob = self.binary.read_struct(internal_file_offset, CSSuperblob)
         if superblob.magic != CodesignBlobTypeEnum.CSMAGIC_EMBEDDED_SIGNATURE:
             raise RuntimeError(f'Can blobs other than embedded signatures be superblobs? {hex(superblob.magic)}')
 
         # move past the superblob header to the first index struct entry
-        file_offset += StaticFilePointer(superblob.sizeof)
+        internal_file_offset += superblob.sizeof
 
         # parse each struct csblob_index following the superblob header
         for i in range(superblob.index_entry_count):
-            csblob_index = self.parse_csblob_index(file_offset)
+            csblob_index = self.parse_csblob_index(StaticFilePointer(internal_file_offset))
             csblob_file_offset = self._codesign_entry + csblob_index.offset
 
             # found a blob, now parse it
-            self.parse_codesign_blob(csblob_file_offset)
+            self.parse_codesign_blob(StaticFilePointer(csblob_file_offset))
 
             # iterate to the next blob index struct in list
-            file_offset += StaticFilePointer(csblob_index.sizeof)
+            internal_file_offset += csblob_index.sizeof
 
     @staticmethod
-    def get_index_blob_name(blob_index: CSBlobIndex):
+    def get_index_blob_name(blob_index: CSBlobIndex) -> str:
         """Get the human-readable blob type from the `type` field in a CSBlobIndex.
         """
         # cs_blobs.h
@@ -106,12 +109,13 @@ class CodesignParser:
         A csblob_index is a header structure describing the type/layout of a superblob's child blob.
         This method will parse and return the index header.
         """
-        return CSBlobIndex(self.binary, file_offset, virtual=False)
+        blob_index = self.binary.read_struct(file_offset, CSBlobIndex)
+        return blob_index
 
-    def parse_code_directory(self, file_offset: StaticFilePointer):
+    def parse_code_directory(self, file_offset: StaticFilePointer) -> None:
         """Parse a Code Directory at the file offset.
         """
-        code_directory = CSCodeDirectory(self.binary, file_offset, virtual=False)
+        code_directory = self.binary.read_struct(file_offset, CSCodeDirectory)
 
         identifier_address = code_directory.binary_offset + code_directory.identifier_offset
         identifier_string = self.binary.get_full_string_from_start_address(identifier_address, virtual=False)
@@ -146,7 +150,7 @@ class CodesignParser:
         """Parse the embedded entitlements blob at the file offset.
         Returns a bytearray of the embedded entitlements.
         """
-        entitlements_blob = CSBlob(self.binary, file_offset, virtual=False)
+        entitlements_blob = self.binary.read_struct(file_offset, CSBlob)
         if entitlements_blob.magic != CodesignBlobTypeEnum.CSMAGIC_EMBEDDED_ENTITLEMENTS:
             raise RuntimeError(f'incorrect magic for embedded entitlements: {hex(entitlements_blob.magic)}')
 

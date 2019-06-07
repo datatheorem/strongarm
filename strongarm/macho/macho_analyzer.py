@@ -7,25 +7,26 @@ from typing import TYPE_CHECKING
 from typing import Set, List, Dict, Optional, Callable
 from capstone import Cs, CsInsn, CS_ARCH_ARM64, CS_MODE_ARM
 
-from strongarm import DebugUtil
+from strongarm.macho.macho_definitions import VirtualMemoryPointer
+from strongarm.macho.arch_independent_structs import CFStringStruct, CFString32, CFString64
 from strongarm.macho.macho_binary import MachoBinary
 from strongarm.macho.macho_imp_stubs import MachoImpStubsParser
-from strongarm.macho.macho_definitions import VirtualMemoryPointer
 from strongarm.macho.dyld_info_parser import DyldInfoParser, DyldBoundSymbol
 from strongarm.macho.macho_string_table_helper import MachoStringTableHelper
-from strongarm.macho.arch_independent_structs import CFStringStruct, CFString32, CFString64
 
 from strongarm.macho.objc_runtime_data_parser import (
     ObjcClass,
+    ObjcCategory,
     ObjcProtocol,
     ObjcSelector,
-    ObjcCategory,
     ObjcRuntimeDataParser,
 )
 
-
 if TYPE_CHECKING:
-    from strongarm.objc import ObjcFunctionAnalyzer, ObjcMethodInfo  # type: ignore
+    from strongarm.objc import (
+        ObjcFunctionAnalyzer, ObjcMethodInfo,
+        CodeSearch, CodeSearchResult
+    )
 
 
 # Callback invoked when the results for a previously queued CodeSearch have been found.
@@ -49,18 +50,18 @@ class MachoAnalyzer:
         self.cs.detail = True
 
         # Worker to parse dyld bytecode stream and extract dyld stub addresses to the DyldBoundSymbol they represent
-        self._dyld_info_parser: DyldInfoParser = None
+        self._dyld_info_parser: Optional[DyldInfoParser] = None
         # Each __stubs function calls a single dyld stub address, which has a corresponding DyldBoundSymbol.
         # Map of each __stub function to the associated name of the DyldBoundSymbol
-        self._imported_symbol_addresses_to_names: Dict[VirtualMemoryPointer, str] = None
+        self._imported_symbol_addresses_to_names: Dict[VirtualMemoryPointer, str] = {}
 
         self.crossref_helper = MachoStringTableHelper(binary)
         self.imported_symbols = self.crossref_helper.imported_symbols
         self.exported_symbols = self.crossref_helper.exported_symbols
 
         self.imp_stubs = MachoImpStubsParser(binary, self.cs).imp_stubs
-        self._objc_helper: ObjcRuntimeDataParser = None
-        self._objc_method_list: List[ObjcMethodInfo] = None
+        self._objc_helper: Optional[ObjcRuntimeDataParser] = None
+        self._objc_method_list: List[ObjcMethodInfo] = []
 
         self._cached_function_boundaries: Dict[int, int] = {}
 
@@ -74,7 +75,7 @@ class MachoAnalyzer:
         MachoAnalyzer._ANALYZER_CACHE[binary] = self
 
     @classmethod
-    def clear_cache(cls):
+    def clear_cache(cls) -> None:
         """Delete cached MachoAnalyzer's
         This can be used when you are finished analyzing a binary set and don't want to retain the cached data in memory
         """
@@ -104,7 +105,7 @@ class MachoAnalyzer:
         """Return the List of categories implemented within the app
         """
         all_classes = self.objc_classes()
-        categories: List[ObjcCategory] = [c for c in all_classes if type(c) == ObjcCategory]
+        categories: List[ObjcCategory] = [c for c in all_classes if isinstance(c, ObjcCategory)]
         return categories
 
     def get_conformed_protocols(self) -> List[ObjcProtocol]:
@@ -114,9 +115,8 @@ class MachoAnalyzer:
 
     @property
     def dyld_info_parser(self) -> DyldInfoParser:
-        if self._dyld_info_parser:
-            return self._dyld_info_parser
-        self._dyld_info_parser = DyldInfoParser(self.binary)
+        if not self._dyld_info_parser:
+            self._dyld_info_parser = DyldInfoParser(self.binary)
         return self._dyld_info_parser
 
     @property
@@ -173,9 +173,7 @@ class MachoAnalyzer:
         """
         if branch_address in self.imp_stubs_to_symbol_names:
             return self.imp_stubs_to_symbol_names[branch_address]
-        raise RuntimeError('Unknown branch destination {}. Is this a local branch?'.format(
-            hex(branch_address)
-        ))
+        raise RuntimeError(f'Unknown branch destination {hex(branch_address)}. Is this a local branch?')
 
     def _disassemble_region(self, start_address: VirtualMemoryPointer, size: int) -> List[CsInsn]:
         """Disassemble the executable code in a given region into a list of CsInsn objects
@@ -251,7 +249,7 @@ class MachoAnalyzer:
         self._objc_method_list = method_list
         return self._objc_method_list
 
-    def queue_code_search(self, code_search: 'CodeSearch', callback: CodeSearchCallback):
+    def queue_code_search(self, code_search: 'CodeSearch', callback: CodeSearchCallback) -> None:
         """Enqueue a CodeSearch. It will be ran when `search_all_code` runs. `callback` will then be invoked.
         The search space is all known Objective-C entry points within the binary.
 
@@ -265,7 +263,7 @@ class MachoAnalyzer:
         logging.info(f'{binary_name} enqueuing CodeSearch {code_search}. Will invoke {callback}')
         self._queued_code_searches[code_search] = callback
 
-    def search_all_code(self):
+    def search_all_code(self) -> None:
         """Iterate every function in the binary, and run each pending CodeSearch over them.
         The search space is all known Objective-C entry points within the binary.
 
@@ -305,8 +303,6 @@ class MachoAnalyzer:
         # We've completed all of the waiting code searches. Drain the queue
         self._queued_code_searches.clear()
 
-        return search_results
-
     def class_name_for_class_pointer(self, classref: VirtualMemoryPointer) -> Optional[str]:
         """Given a classref, return the name of the class.
         This method will handle classes implemented within the binary and imported classes.
@@ -339,11 +335,11 @@ class MachoAnalyzer:
         classref_locations, classref_destinations = self.binary.read_pointer_section('__objc_classrefs')
 
         # is it a local class?
-        class_location = [x.raw_struct.binary_offset for x in self.objc_classes() if x.name == class_name]
-        if not len(class_location):
+        class_locations = [x.raw_struct.binary_offset for x in self.objc_classes() if x.name == class_name]
+        if not len(class_locations):
             # unknown class name
             return None
-        class_location = class_location[0]
+        class_location = VirtualMemoryPointer(class_locations[0])
 
         if class_location not in classref_destinations:
             # unknown class name
@@ -415,7 +411,7 @@ class MachoAnalyzer:
         cfstrings_count = int((cfstrings_section.end_address - cfstrings_section.address) / sizeof_cfstring)
         for i in range(cfstrings_count):
             cfstring_addr = cfstrings_base + (i * sizeof_cfstring)
-            cfstring = CFStringStruct(self.binary, cfstring_addr, virtual=True)
+            cfstring = self.binary.read_struct(cfstring_addr, CFStringStruct, virtual=True)
 
             # check if this is the string the user requested
             string_address = cfstring.literal

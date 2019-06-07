@@ -9,7 +9,6 @@ from strongarm.macho.macho_definitions import (
     MachArch,
     MachoFatArch,
     MachoFatHeader,
-
     FILE_HEAD_PTR,
     StaticFilePointer,
 )
@@ -43,8 +42,8 @@ class MachoParser:
     def __init__(self, filename: str) -> None:
         self.filename = filename.encode('utf-8')
 
-        self.header: MachoFatHeader = None
-        self.is_swapped: bool = None
+        self.header: Optional[MachoFatHeader] = None
+        self.is_swapped: bool = False
         self.slices: List[MachoBinary] = []
 
         self.parse()
@@ -90,9 +89,7 @@ class MachoParser:
         """
         # sanity check
         if not self._check_is_macho_header(fileoff):
-            raise RuntimeError('Parsing error: data at file offset {} was not a valid Mach-O slice!'.format(
-                hex(fileoff)
-            ))
+            raise RuntimeError(f'Parsing error: data at file offset {hex(int(fileoff))} was not a valid Mach-O slice!')
 
         attempt = MachoBinary(self.filename, fileoff)
         # if the MachoBinary does not have a header, there was a problem parsing it
@@ -109,17 +106,18 @@ class MachoParser:
             raise RuntimeError('Parsing error: Expected FAT header but found incorrect magic!')
 
         # start reading from the start of the file
-        read_off = StaticFilePointer(0)
-        self.header = MachoFatHeader.from_buffer(bytearray(self.get_bytes(read_off, sizeof(MachoFatHeader))))
+        read_off = 0
+        header_bytes = bytearray(self.get_bytes(StaticFilePointer(read_off), sizeof(MachoFatHeader)))
+        self.header = MachoFatHeader.from_buffer(header_bytes)
         # first fat_arch structure is directly after FAT header
-        read_off += StaticFilePointer(sizeof(MachoFatHeader))
+        read_off += sizeof(MachoFatHeader)
 
         # remember to swap fields if file contains non-native byte order
         if self.is_swapped:
             self.header.nfat_arch = swap32(self.header.nfat_arch)   # type: ignore
 
         for i in range(self.header.nfat_arch):  # type: ignore
-            arch_bytes = self.get_bytes(read_off, sizeof(MachoFatArch))
+            arch_bytes = self.get_bytes(StaticFilePointer(read_off), sizeof(MachoFatArch))
             fat_arch = MachoFatArch.from_buffer(bytearray(arch_bytes))
 
             # do we need to byte swap?
@@ -134,7 +132,7 @@ class MachoParser:
 
             self.parse_thin_header(StaticFilePointer(fat_arch.offset))
             # move to next fat_arch structure in file
-            read_off += StaticFilePointer(sizeof(MachoFatArch))
+            read_off += sizeof(MachoFatArch)
 
     def _check_is_macho_header(self, offset: StaticFilePointer) -> bool:
         """Check if the data located at a file offset represents a valid Mach-O header, based on the magic

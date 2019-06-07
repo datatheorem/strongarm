@@ -1,4 +1,0 @@
-typing
-enum34
-pytest
-capstone

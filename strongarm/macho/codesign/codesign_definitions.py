@@ -26,13 +26,15 @@ class CSBlobStruct(BigEndianStructure):
 
 
 class CSSuperblobStruct(BigEndianStructure):
-    _fields_ = CSBlobStruct._fields_ + [
+    _fields_ = [
+        *CSBlobStruct._fields_,
         ('index_entry_count', c_uint32)
     ]
 
 
 class CSCodeDirectoryStruct(BigEndianStructure):
-    _fields_ = CSBlobStruct._fields_ + [
+    _fields_ = [
+        *CSBlobStruct._fields_,
         ('version', c_uint32),
         ('flags', c_uint32),
         ('hash_offset', c_uint32),

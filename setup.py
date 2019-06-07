@@ -1,15 +1,6 @@
-from subprocess import call
-
 from setuptools import Extension, find_packages, setup
-from setuptools.command.build_ext import build_ext
 
 from strongarm import __version__
-
-
-class CapstoneBuild(build_ext):
-    def run(self):
-        call(['/bin/sh', './install_dependencies.sh'])
-        super(CapstoneBuild, self).run()
 
 
 dataflow_module = Extension('strongarm.objc.dataflow',
@@ -33,9 +24,6 @@ setup(
     url='https://bitbucket.org/datatheorem/strongarm',
     packages=find_packages(exclude=['tests']),
     ext_modules=[dataflow_module],
-    cmdclass={
-        'build_ext': CapstoneBuild,
-    },
     install_requires=[
         'typing',
         'capstone',

@@ -1,5 +1,7 @@
+from typing import List, Dict, Tuple, Any, Type, Optional, TypeVar
+from typing import TYPE_CHECKING
+
 from ctypes import c_uint64, c_uint32, sizeof
-from typing import List, Tuple, Optional, Dict, Union
 
 from strongarm.debug_util import DebugUtil
 
@@ -13,20 +15,26 @@ from strongarm.macho.macho_definitions import (
     VirtualMemoryPointer
 )
 from strongarm.macho.arch_independent_structs import (
-    CFStringStruct,
-    MachoNlistStruct,
+    ArchIndependentStructure,
     MachoHeaderStruct,
-    DylibCommandStruct,
+    MachoSegmentCommandStruct,
     MachoSectionRawStruct,
+    MachoEncryptionInfoStruct,
+    MachoNlistStruct,
+    CFStringStruct,
+    DylibCommandStruct,
     MachoLoadCommandStruct,
     MachoSymtabCommandStruct,
-    MachoEncryptionInfoStruct,
-    MachoSegmentCommandStruct,
     MachoDysymtabCommandStruct,
     MachoDyldInfoCommandStruct,
-    MachoLinkeditDataCommandStruct
+    MachoLinkeditDataCommandStruct,
 )
 from strongarm.macho.macho_load_commands import MachoLoadCommands
+
+if TYPE_CHECKING:
+    from strongarm.macho.codesign import CodesignParser
+
+AIS = TypeVar("AIS", bound=ArchIndependentStructure)
 
 
 class BinaryEncryptedError(Exception):
@@ -37,11 +45,11 @@ class MachoSection:
     def __init__(self, binary: 'MachoBinary', section_command: MachoSectionRawStruct) -> None:
         self.cmd = section_command
         # ignore these types due to dynamic attributes of associated types
-        self.content = binary.get_bytes(section_command.offset, section_command.size)   # type: ignore
-        self.name = section_command.sectname    # type: ignore
-        self.address = section_command.addr     # type: ignore
-        self.offset = section_command.offset    # type: ignore
-        self.end_address = self.address + section_command.size  # type: ignore
+        self.content = binary.get_bytes(section_command.offset, section_command.size)
+        self.name = section_command.sectname
+        self.address = section_command.addr
+        self.offset = section_command.offset
+        self.end_address = self.address + section_command.size
 
 
 class MachoBinary:
@@ -60,35 +68,35 @@ class MachoBinary:
     SUPPORTED_MAG = _MAG_64 + _MAG_32
     BYTES_PER_INSTRUCTION = 4
 
-    def __init__(self, filename: bytes, offset_within_fat=FILE_HEAD_PTR) -> None:
+    def __init__(self, filename: bytes, offset_within_fat: StaticFilePointer = FILE_HEAD_PTR) -> None:
         from .codesign.codesign_parser import CodesignParser
         # info about this Mach-O's file representation
         self.filename = filename
         self._offset_within_fat = offset_within_fat
 
         # generic Mach-O header info
-        self.is_64bit: bool = None
-        self.is_swap: bool = None
-        self.cpu_type: CPU_TYPE = None
-        self._load_commands_end_addr = None
+        self.is_64bit: bool = False
+        self.is_swap: bool = False
+        self.cpu_type: CPU_TYPE = CPU_TYPE.UNKNOWN
+        self._load_commands_end_addr = 0
 
         # Mach-O header data
-        self.header: MachoHeaderStruct = None
-        self.header_flags: List[int] = None
-        self.file_type: MachoFileType = None
+        self._header: Optional[MachoHeaderStruct] = None
+        self.header_flags: List[int] = []
+        self.file_type: MachoFileType = MachoFileType.MH_EXECUTE
 
         # segment and section commands from Mach-O header
-        self.segment_commands: Dict[str, MachoSegmentCommandStruct] = None
-        self.sections: Dict[str, MachoSection] = None
+        self.segment_commands: Dict[str, MachoSegmentCommandStruct] = {}
+        self.sections: Dict[str, MachoSection] = {}
         # also store specific interesting sections which are useful to us
-        self.dysymtab: MachoDysymtabCommandStruct = None
-        self.symtab: MachoSymtabCommandStruct = None
-        self.encryption_info: MachoEncryptionInfoStruct = None
-        self.dyld_info: MachoDyldInfoCommandStruct = None
-        self.load_dylib_commands: List[DylibCommandStruct] = None
-        self.code_signature_cmd: MachoLinkeditDataCommandStruct = None
+        self._dysymtab: Optional[MachoDysymtabCommandStruct] = None
+        self._symtab: Optional[MachoSymtabCommandStruct] = None
+        self._encryption_info: Optional[MachoEncryptionInfoStruct] = None
+        self._dyld_info: Optional[MachoDyldInfoCommandStruct] = None
+        self.load_dylib_commands: List[DylibCommandStruct] = []
+        self._code_signature_cmd: Optional[MachoLinkeditDataCommandStruct] = None
 
-        self.__codesign_parser: CodesignParser = None
+        self.__codesign_parser: Optional[CodesignParser] = None
 
         # cache to save work on calls to get_bytes()
         with open(self.filename, 'rb') as f:
@@ -101,7 +109,10 @@ class MachoBinary:
 
         self.platform_word_type = c_uint64 if self.is_64bit else c_uint32
         self.symtab_contents = self._get_symtab_contents()
-        DebugUtil.log(self, "parsed symtab, len = {}".format(len(self.symtab_contents)))
+        DebugUtil.log(self, f"parsed symtab, len = {len(self.symtab_contents)}")
+
+        # Internal use
+        self._last_segment_command: Optional[MachoSegmentCommandStruct] = None
 
     def parse(self) -> bool:
         """Attempt to parse the provided file info as a Mach-O slice
@@ -111,28 +122,29 @@ class MachoBinary:
             False otherwise.
 
         """
-        DebugUtil.log(self, 'parsing Mach-O slice @ {} in {}'.format(
-            hex(self._offset_within_fat),
-            self.filename.decode('utf-8')
-        ))
+        DebugUtil.log(self, f'parsing Mach-O slice @ {hex(int(self._offset_within_fat))} in {self.filename.decode()}')
 
         # preliminary Mach-O parsing
         if not self.verify_magic():
-            DebugUtil.log(self, 'unsupported magic {}'.format(hex(int(self.slice_magic))))
+            DebugUtil.log(self, f'unsupported magic {hex(self.slice_magic)}')
             return False
         self.is_swap = self.should_swap_bytes()
         self.is_64bit = self.magic_is_64()
 
         self.parse_header()
 
-        DebugUtil.log(self, 'header parsed. non-native endianness? {}. 64-bit? {}'.format(self.is_swap, self.is_64bit))
+        DebugUtil.log(self, f'header parsed. non-native endianness? {self.is_swap}. 64-bit? {self.is_64bit}')
         return True
 
     @property
-    def slice_magic(self) -> c_uint32:
+    def slice_magic(self) -> int:
         """Read magic number identifier from this Mach-O slice
         """
-        return self.read_word(0, virtual=False, word_type=c_uint32)
+        magic = self.read_word(0, virtual=False, word_type=c_uint32)
+        if magic:
+            return magic
+        else:
+            raise ValueError('Could not read magic value.')
 
     def verify_magic(self) -> bool:
         """Ensure magic at beginning of Mach-O slice indicates a supported format
@@ -157,7 +169,7 @@ class MachoBinary:
         Specifically, this method parses the Mach-O header & header flags, CPU target,
         and all segment and section commands.
         """
-        self.header = MachoHeaderStruct(self, 0)
+        self._header = self.read_struct(0, MachoHeaderStruct)
 
         if self.header.cputype == MachArch.MH_CPU_TYPE_ARM:  # type: ignore
             self.cpu_type = CPU_TYPE.ARMV7
@@ -200,40 +212,55 @@ class MachoBinary:
         self.load_dylib_commands = []
 
         for i in range(segment_count):
-            load_command = MachoLoadCommandStruct(self, offset)
+            load_command = self.read_struct(offset, MachoLoadCommandStruct)
 
             if load_command.cmd in [MachoLoadCommands.LC_SEGMENT,
                                     MachoLoadCommands.LC_SEGMENT_64]:
-                segment = MachoSegmentCommandStruct(self, offset)
+
+                segment = self.read_struct(offset, MachoSegmentCommandStruct)
                 # TODO(pt) handle byte swap of segment if necessary
                 self.segment_commands[segment.segname.decode('UTF8')] = segment
                 self._parse_sections_for_segment(segment, offset)
+                self._last_segment_command = segment
 
             # some commands have their own structure that we interpret separately from a normal load command
             # if we want to interpret more commands in the future, this is the place to do it
             elif load_command.cmd in [MachoLoadCommands.LC_ENCRYPTION_INFO,
                                       MachoLoadCommands.LC_ENCRYPTION_INFO_64]:
-                self.encryption_info = MachoEncryptionInfoStruct(self, offset)
+                self._encryption_info = self.read_struct(offset, MachoEncryptionInfoStruct)
 
             elif load_command.cmd == MachoLoadCommands.LC_SYMTAB:
-                self.symtab = MachoSymtabCommandStruct(self, offset)
+                self._symtab = self.read_struct(offset, MachoSymtabCommandStruct)
 
             elif load_command.cmd == MachoLoadCommands.LC_DYSYMTAB:
-                self.dysymtab = MachoDysymtabCommandStruct(self, offset)
+                self._dysymtab = self.read_struct(offset, MachoDysymtabCommandStruct)
 
             elif load_command.cmd in [MachoLoadCommands.LC_DYLD_INFO, MachoLoadCommands.LC_DYLD_INFO_ONLY]:
-                self.dyld_info = MachoDyldInfoCommandStruct(self, offset)
+                self._dyld_info = self.read_struct(offset, MachoDyldInfoCommandStruct)
 
             elif load_command.cmd in [MachoLoadCommands.LC_LOAD_DYLIB, MachoLoadCommands.LC_LOAD_WEAK_DYLIB]:
-                dylib_load_command = DylibCommandStruct(self, offset)
-                dylib_load_command.fileoff = offset
+                dylib_load_command = self.read_struct(offset, DylibCommandStruct)
                 self.load_dylib_commands.append(dylib_load_command)
 
             elif load_command.cmd == MachoLoadCommands.LC_CODE_SIGNATURE:
-                self.code_signature_cmd = MachoLinkeditDataCommandStruct(self, offset)
+                self._code_signature_cmd = self.read_struct(offset, MachoLinkeditDataCommandStruct)
 
             # move to next load command in header
             offset += load_command.cmdsize
+
+    def read_struct(self,
+                    binary_offset: int,
+                    struct_type: Type[AIS],
+                    virtual: bool = False) -> AIS:
+        """Given an binary offset, return the structure bytes.
+        """
+
+        size = struct_type.struct_size(self.is_64bit)
+        data = self.get_contents_from_address(address=binary_offset, size=size, is_virtual=virtual)
+        return struct_type(binary_offset, data, self.is_64bit)
+
+    # def write_struct(address: int, struct: ArchIndependentStructure) -> None:
+    # ...
 
     def section_name_for_address(self, virt_addr: VirtualMemoryPointer) -> Optional[str]:
         """Given an address in the virtual address space, return the name of the section which contains it.
@@ -277,8 +304,10 @@ class MachoBinary:
             return None
 
         # if the address given is past the last declared section, translate based on the last section
-        # so, we need to keep track of the last seen section
-        max_segment = self.segment_commands[0]
+        # so, we need to keep track of the last seen sectio
+        if not self._last_segment_command:
+            return None
+        max_segment = self._last_segment_command
 
         for segment_name in self.segment_commands:
             cmd = self.segment_commands[segment_name]
@@ -309,7 +338,7 @@ class MachoBinary:
         for i in range(segment.nsects):
             # read section header from file
             # TODO(PT): handle byte swap of segment
-            section_command = MachoSectionRawStruct(self, section_offset)
+            section_command = self.read_struct(section_offset, MachoSectionRawStruct)
             # encapsulate header and content into one object, and store that
             section = MachoSection(self, section_command)
             # add to map with the key being the name of the section
@@ -340,15 +369,14 @@ class MachoBinary:
 
         """
         if offset > 0x100000000:
-            raise RuntimeError('get_bytes() offset {} looks like a virtual address. Did you mean to use '
-                               'get_content_from_virtual_address?'.format(hex(offset)))
+            raise RuntimeError(f'get_bytes() offset {hex(offset)} looks like a virtual address.'
+                               f' Did you mean to use get_content_from_virtual_address?')
 
         # safeguard against reading from an encrypted segment of the binary
         if self.is_range_encrypted(offset, size):
-            raise BinaryEncryptedError('Cannot read encrypted range [{} to {}]'.format(
-                hex(int(self.encryption_info.cryptoff)),
-                hex(int(self.encryption_info.cryptsize))
-            ))
+            raise BinaryEncryptedError(f'Cannot read encrypted'
+                                       f' range [{hex(int(self.encryption_info.cryptoff))}'
+                                       f' to {hex(int(self.encryption_info.cryptsize))}]')
 
         return bytearray(self._cached_binary[offset:offset+size])
 
@@ -384,20 +412,20 @@ class MachoBinary:
             Array of Nlist64's representing binary's symbol table
 
         """
-        DebugUtil.log(self, 'parsing {} symtab entries'.format(self.symtab.nsyms))
+        DebugUtil.log(self, f'parsing {self.symtab.nsyms} symtab entries')
 
         symtab = []
         # start reading from symoff and increment by one Nlist64 each iteration
         symoff = self.symtab.symoff
         for i in range(self.symtab.nsyms):
-            nlist = MachoNlistStruct(self, symoff)
+            nlist = self.read_struct(symoff, MachoNlistStruct)
             symtab.append(nlist)
             # go to next Nlist in file
             symoff += nlist.sizeof
 
         return symtab
 
-    def get_indirect_symbol_table(self) -> List[c_uint32]:
+    def get_indirect_symbol_table(self) -> List[int]:
         indirect_symtab = []
         # dysymtab has fields that tell us the file offset of the indirect symbol table, as well as the number
         # of indirect symbols present in the mach-o
@@ -406,7 +434,9 @@ class MachoBinary:
         # indirect symtab is an array of uint32's
         for i in range(self.dysymtab.nindirectsyms):
             indirect_symtab_entry = self.read_word(indirect_symtab_off, virtual=False, word_type=c_uint32)
-            indirect_symtab.append(int(indirect_symtab_entry.value))
+            if not indirect_symtab_entry:
+                continue
+            indirect_symtab.append(int(indirect_symtab_entry))
             # traverse to next pointer
             indirect_symtab_off += sizeof(c_uint32)
         return indirect_symtab
@@ -422,7 +452,7 @@ class MachoBinary:
 
         section_for_address = self.section_for_address(virtual_address)
         if not section_for_address:
-            raise RuntimeError('Couldn\'t map virtual address {} to a section!'.format(hex(virtual_address)))
+            raise RuntimeError(f'Could not map virtual address {hex(int(virtual_address))} to a section!')
 
         # the virtual address is contained within a section's contents
         # use this formula to convert a virtual address within a section to the file offset:
@@ -434,7 +464,18 @@ class MachoBinary:
         binary_address = self.file_offset_for_virtual_address(virtual_address)
         return self.get_bytes(binary_address, size)
 
-    def get_full_string_from_start_address(self, start_address: int, virtual=True) -> Optional[str]:
+    def get_contents_from_address(self, address: int, size: int, is_virtual: bool = False) -> bytearray:
+        """Get a bytesarray from a specified address, size and virtualness
+        TODO(FS): change all methods that use addresses as ints to the VirtualAddress/StaticAddress class pair to better
+         express intent and facilitate the implementation by using @singledispatch
+         (https://docs.python.org/3/library/functools.html?highlight=singledispatch#functools.singledispatch)
+        """
+        if is_virtual:
+            return self.get_content_from_virtual_address(VirtualMemoryPointer(address), size)
+        else:
+            return self.get_bytes(StaticFilePointer(address), size)
+
+    def get_full_string_from_start_address(self, start_address: int, virtual: bool = True) -> Optional[str]:
         """Return a string containing the bytes from start_address up to the next NULL character
         This method will return None if the specified address does not point to a UTF-8 encoded string
         """
@@ -444,7 +485,7 @@ class MachoBinary:
 
         while not found_null_terminator:
             if virtual:
-                name_bytes = self.get_content_from_virtual_address(VirtualMemoryPointer(start_address), size=max_len)
+                name_bytes = self.get_content_from_virtual_address(VirtualMemoryPointer(start_address), max_len)
             else:
                 name_bytes = self.get_bytes(StaticFilePointer(start_address), max_len)
             # search for null terminator in this content
@@ -482,7 +523,7 @@ class MachoBinary:
         # special case if this is a __cfstring entry
         if section_name == '__cfstring':
             # read bytes into CFString struct
-            cfstring_ent = CFStringStruct(self, address, virtual=True)
+            cfstring_ent = self.read_struct(address, CFStringStruct, virtual=True)
             # patch address to read string from to be the string literal address of this CFString
             address = cfstring_ent.literal
         return self.get_full_string_from_start_address(address)
@@ -490,7 +531,7 @@ class MachoBinary:
     def is_encrypted(self) -> bool:
         """Returns True if the binary has an encrypted segment, False otherwise
         """
-        if not self.encryption_info:
+        if not self._encryption_info:
             return False
         return self.encryption_info.cryptid != 0
 
@@ -524,10 +565,12 @@ class MachoBinary:
         """
         source_dylib = self.dylib_for_library_ordinal(library_ordinal)
         if source_dylib:
-            source_name_addr = source_dylib.fileoff + \
+            source_name_addr = source_dylib.binary_offset + \
                                source_dylib.dylib.name.offset + \
                                self.get_virtual_base()
             source_name = self.get_full_string_from_start_address(source_name_addr)
+            if not source_name:
+                source_name = '<unknown dylib>'
         else:
             # we have encountered binaries where the n_desc indicates a nonexistent library ordinal
             # Netflix.app/frameworks/widevine_cdm_sdk_oemcrypto_release.framework/widevine_cdm_sdk_oemcrypto_release
@@ -576,38 +619,81 @@ class MachoBinary:
 
     def read_word(self,
                   address: int,
-                  virtual=True,
-                  word_type=None) -> Optional[Union[c_uint32, c_uint64]]:
+                  virtual: bool = True,
+                  word_type: Any = None) -> Optional[int]:
         """Attempt to read a word from the binary at a virtual address. Returns None if the address is invalid.
         """
         if not word_type:
             word_type = self.platform_word_type
+
         if virtual:
             file_bytes = self.get_content_from_virtual_address(VirtualMemoryPointer(address), sizeof(word_type))
         else:
             file_bytes = self.get_bytes(StaticFilePointer(address), sizeof(word_type))
         if not file_bytes:
             return None
+
         return word_type.from_buffer(bytearray(file_bytes)).value
 
     @property
+    def header(self) -> MachoHeaderStruct:
+        if self._header:
+            return self._header
+        else:
+            raise RuntimeError('Failed to parse Mach-O')
+
+    @property
+    def dysymtab(self) -> MachoDysymtabCommandStruct:
+        if self._dysymtab:
+            return self._dysymtab
+        else:
+            raise RuntimeError('Failed to parse Mach-O')
+
+    @property
+    def symtab(self) -> MachoSymtabCommandStruct:
+        if self._symtab:
+            return self._symtab
+        else:
+            raise RuntimeError('Failed to parse Mach-O')
+
+    @property
+    def encryption_info(self) -> MachoEncryptionInfoStruct:
+        if self._encryption_info:
+            return self._encryption_info
+        else:
+            raise RuntimeError('Failed to parse Mach-O')
+
+    @property
+    def dyld_info(self) -> MachoDyldInfoCommandStruct:
+        if self._dyld_info:
+            return self._dyld_info
+        else:
+            raise RuntimeError('Failed to parse Mach-O')
+
+    @property
+    def code_signature_cmd(self) -> MachoLinkeditDataCommandStruct:
+        if self._code_signature_cmd:
+            return self._code_signature_cmd
+        else:
+            raise RuntimeError('Failed to parse Mach-O')
+
+    @property
     def _codesign_parser(self) -> 'CodesignParser':
-        from strongarm.macho.codesign import CodesignParser
         if not self.__codesign_parser:
             self.__codesign_parser = CodesignParser(self)
         return self.__codesign_parser
 
-    def get_entitlements(self) -> bytearray:
+    def get_entitlements(self) -> Optional[bytearray]:
         """Read the entitlements the binary was signed with.
         """
         return self._codesign_parser.entitlements
 
-    def get_signing_identity(self) -> str:
+    def get_signing_identity(self) -> Optional[str]:
         """Read the bundle ID the binary was signed as.
         """
         return self._codesign_parser.signing_identifier
 
-    def get_team_id(self) -> str:
+    def get_team_id(self) -> Optional[str]:
         """Read the team ID the binary was signed with.
         """
         return self._codesign_parser.signing_team_id

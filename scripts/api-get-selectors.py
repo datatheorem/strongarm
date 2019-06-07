@@ -1,10 +1,12 @@
-from strongarm.macho import MachoParser
-from strongarm.macho import MachoAnalyzer
-from strongarm.macho import CPU_TYPE
+from strongarm.macho import (
+    MachoParser,
+    MachoAnalyzer,
+    CPU_TYPE
+)
 
 
 def find_selector_implementations(binary):
-    print('Analyzing Mach-O slice built for {}'.format(CPU_TYPE(binary.cpu_type).name))
+    print(f'Analyzing Mach-O slice built for {CPU_TYPE(binary.cpu_type).name}')
     analyzer = MachoAnalyzer(binary)
 
     desired_selector = 'URLSession:didReceiveChallenge:completionHandler:'
@@ -12,12 +14,9 @@ def find_selector_implementations(binary):
     for imp_function in implementations:
         instruction_size = 4
         instruction_count = int((imp_function.end_address - imp_function.start_address) / instruction_size)
-        print('Found implementation of @selector({}) at [{} - {}] ({} instructions)'.format(
-            desired_selector,
-            hex(imp_function.start_address),
-            hex(imp_function.end_address),
-            instruction_count
-        ))
+        print(f'Found implementation of @selector({desired_selector}) at [{hex(imp_function.start_address)}'
+              f' - {hex(imp_function.end_address)}] ({instruction_count} instructions)')
+
 
 parser = MachoParser('./tests/bin/GammaRayTestBad')
 binary_64 = parser.get_arm64_slice()

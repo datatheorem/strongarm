@@ -1,14 +1,15 @@
+from typing import Optional, Union
 from typing import TYPE_CHECKING
 
 from capstone import CsInsn
-from capstone.arm64 import ARM64_OP_REG, ARM64_OP_IMM, ARM64_OP_MEM
+from capstone.arm64 import Arm64Op, ARM64_OP_REG, ARM64_OP_IMM, ARM64_OP_MEM
 
-import strongarm.macho.macho_analyzer
 from strongarm.macho.macho_definitions import VirtualMemoryPointer
+from strongarm.macho.objc_runtime_data_parser import ObjcSelref, ObjcSelector
+from strongarm.macho.macho_analyzer import MachoAnalyzer
 
 if TYPE_CHECKING:
-    from strongarm.objc import ObjcFunctionAnalyzer
-    from strongarm.macho.objc_runtime_data_parser import ObjcSelref, ObjcSelector
+    from .objc_analyzer import ObjcFunctionAnalyzer
 
 
 class ObjcInstruction:
@@ -18,8 +19,8 @@ class ObjcInstruction:
         self.raw_instr = instruction
         self.address = self.raw_instr.address
 
-        self.is_msgSend_call: bool = None
-        self.symbol: str = None
+        self.is_msgSend_call: bool = False
+        self.symbol: str = ''
 
     @classmethod
     def is_vector_register(cls, reg_name: str) -> bool:
@@ -31,7 +32,7 @@ class ObjcInstruction:
         return False
 
     @classmethod
-    def _operand_uses_vector_registers(cls, instruction: CsInsn, operand) -> bool:
+    def _operand_uses_vector_registers(cls, instruction: CsInsn, operand: Arm64Op) -> bool:
         if operand.type == ARM64_OP_IMM:
             return False
 
@@ -68,38 +69,45 @@ class ObjcBranchInstruction(ObjcInstruction):
 
         self.destination_address = destination_address
 
-        self.symbol: str = None
-        self.selref: ObjcSelref = None
-        self.selector: ObjcSelector = None
+        self.symbol: str = ''
+        self.selref: Optional[ObjcSelref] = None
+        self.selector: Optional[ObjcSelector] = None
 
-        self.is_external_c_call: bool = None
-        self.is_external_objc_call: bool = None
+        self.is_external_c_call: bool = False
+        self.is_external_objc_call: bool = False
 
-        self.is_local_branch: bool = None
+        self.is_local_branch: bool = False
 
     @classmethod
     def parse_instruction(cls,
                           function_analyzer: 'ObjcFunctionAnalyzer',
-                          instruction: CsInsn) -> 'ObjcBranchInstruction':
+                          instruction: CsInsn) -> Union['ObjcUnconditionalBranchInstruction',
+                                                        'ObjcConditionalBranchInstruction']:
         """Read a branch instruction and encapsulate it in the appropriate ObjcBranchInstruction subclass
         """
         # use appropriate subclass
         if instruction.mnemonic in ObjcUnconditionalBranchInstruction.UNCONDITIONAL_BRANCH_MNEMONICS:
-            instr = ObjcUnconditionalBranchInstruction(function_analyzer, instruction)
-        elif instruction.mnemonic in ObjcConditionalBranchInstruction.CONDITIONAL_BRANCH_MNEMONICS:
-            instr = ObjcConditionalBranchInstruction(function_analyzer, instruction)
-        else:
-            raise ValueError('Unknown branch mnemonic {}'.format(instruction.mnemonic))
+            uncond_instr = ObjcUnconditionalBranchInstruction(function_analyzer, instruction)
+            uncond_instr.is_local_branch = function_analyzer.is_local_branch(uncond_instr)
+            return uncond_instr
 
-        instr.is_local_branch = function_analyzer.is_local_branch(instr)
-        return instr
+        elif instruction.mnemonic in ObjcConditionalBranchInstruction.CONDITIONAL_BRANCH_MNEMONICS:
+            cond_instr = ObjcConditionalBranchInstruction(function_analyzer, instruction)
+            cond_instr.is_local_branch = function_analyzer.is_local_branch(cond_instr)
+            return cond_instr
+
+        else:
+            raise ValueError(f'Unknown branch mnemonic {instruction.mnemonic}')
 
     @classmethod
     def is_branch_instruction(cls, instruction: CsInsn) -> bool:
         """Returns True if the CsInsn represents a branch instruction, False otherwise
         """
-        return instruction.mnemonic in ObjcUnconditionalBranchInstruction.UNCONDITIONAL_BRANCH_MNEMONICS \
-               or instruction.mnemonic in ObjcConditionalBranchInstruction.CONDITIONAL_BRANCH_MNEMONICS
+        # accepted_mnemonics = ObjcUnconditionalBranchInstruction.UNCONDITIONAL_BRANCH_MNEMONICS
+        # accepted_mnemonics += ObjcConditionalBranchInstruction.CONDITIONAL_BRANCH_MNEMONICS
+        # return instruction.mnemonic in accepted_mnemonics
+        return instruction.mnemonic in ObjcUnconditionalBranchInstruction.UNCONDITIONAL_BRANCH_MNEMONICS or \
+               instruction.mnemonic in ObjcConditionalBranchInstruction.CONDITIONAL_BRANCH_MNEMONICS
 
 
 class ObjcUnconditionalBranchInstruction(ObjcBranchInstruction):
@@ -108,8 +116,8 @@ class ObjcUnconditionalBranchInstruction(ObjcBranchInstruction):
                                       'bx',
                                       'blx',
                                       'bxj',
-                                      'b.eq', # TODO(PT): these b-suffix are not strictly unconditional branches, but
-                                              # they're functionally unconditional for what we care about
+                                      'b.eq',  # TODO(PT): these b-suffix are not strictly unconditional branches, but
+                                               # they're functionally unconditional for what we care about
                                       'b.ne',
                                       'b.lt',
                                       'b.gt'
@@ -118,13 +126,16 @@ class ObjcUnconditionalBranchInstruction(ObjcBranchInstruction):
 
     def __init__(self, function_analyzer: 'ObjcFunctionAnalyzer', instruction: CsInsn) -> None:
         if instruction.mnemonic not in ObjcUnconditionalBranchInstruction.UNCONDITIONAL_BRANCH_MNEMONICS:
-            raise ValueError('ObjcUnconditionalBranchInstruction instantiated with invalid mnemonic {}'.format(
-                instruction.mnemonic
-            ))
+            raise ValueError(f'ObjcUnconditionalBranchInstruction instantiated with'
+                             f' invalid mnemonic {instruction.mnemonic}')
         # an unconditional branch has the destination as the only operand
-        ObjcBranchInstruction.__init__(self, instruction, instruction.operands[0].value.imm)
+        super(ObjcUnconditionalBranchInstruction, self).__init__(instruction, instruction.operands[0].value.imm)
+        # ObjcBranchInstruction.__init__(self, instruction, instruction.operands[0].value.imm)
 
-        macho_analyzer = strongarm.macho.macho_analyzer.MachoAnalyzer.get_analyzer(function_analyzer.binary)
+        self.selref: Optional[ObjcSelref] = None
+        self.selector: Optional[ObjcSelector] = None
+
+        macho_analyzer = MachoAnalyzer.get_analyzer(function_analyzer.binary)
         external_c_sym_map = macho_analyzer.imp_stubs_to_symbol_names
         if self.destination_address in external_c_sym_map:
             self.symbol = external_c_sym_map[self.destination_address]  # type: ignore
@@ -141,13 +152,11 @@ class ObjcUnconditionalBranchInstruction(ObjcBranchInstruction):
         if not self.is_msgSend_call or \
            self.raw_instr.mnemonic not in ['bl', 'b'] or \
            self.symbol not in self.OBJC_MSGSEND_FUNCTIONS:
-            print('self.is_msgSend_call {} self.raw_instr.mnemonic {} self.symbol {}'.format(
-                self.is_msgSend_call,
-                self.raw_instr.mnemonic,
-                self.symbol,
-            ))
-            raise ValueError('cannot parse objc_msgSend destination on non-msgSend '
-                             'instruction {}'.format(function_analyzer.format_instruction(self.raw_instr)))
+            print(f'self.is_msgSend_call {self.is_msgSend_call}'
+                  f' self.raw_instr.mnemonic {self.raw_instr.mnemonic}'
+                  f' self.symbol {self.symbol}')
+            raise ValueError(f'cannot parse objc_msgSend destination on non-msgSend instruction'
+                             f' {function_analyzer.format_instruction(self.raw_instr)}')
         # if this is an objc_msgSend target, patch destination_address to be the address of the targeted IMP
         # note! this means destination_address is *not* the actual destination address of the instruction
         # the *real* destination will be a stub function corresponding to _objc_msgSend, but
@@ -158,12 +167,12 @@ class ObjcUnconditionalBranchInstruction(ObjcBranchInstruction):
             selref_ptr = function_analyzer.get_selref_ptr(self)
             selector = function_analyzer.macho_analyzer.selector_for_selref(selref_ptr)
             if not selector:
-                raise RuntimeError('Couldnt get sel for selref ptr {}'.format(selref_ptr))
+                raise RuntimeError(f'Couldn\'t get sel for selref ptr {selref_ptr}')
             # if we couldn't find an IMP for this selref,
             # it is defined in a class outside this binary
             self.is_external_objc_call = selector.is_external_definition
 
-            self.destination_address = selector.implementation
+            self.destination_address = selector.implementation if selector.implementation else VirtualMemoryPointer(0)
             self.selref = selector.selref
             self.selector = selector
         except RuntimeError as e:
@@ -175,9 +184,9 @@ class ObjcUnconditionalBranchInstruction(ObjcBranchInstruction):
             # Nonetheless, this causes get_selref_ptr() to fail.
             # As a workaround, let's assign all the above fields to 'not found' values if this bug is hit
             self.is_external_objc_call = True
-            self.destination_address = None
-            self.selref = None
-            self.selector = None
+            self.destination_address = VirtualMemoryPointer(0)
+            # self.selref: ObjcSelref
+            # self.selector: ObjcSelector
 
 
 class ObjcConditionalBranchInstruction(ObjcBranchInstruction):
@@ -190,17 +199,15 @@ class ObjcConditionalBranchInstruction(ObjcBranchInstruction):
 
     def __init__(self, function_analyzer: 'ObjcFunctionAnalyzer', instruction: CsInsn) -> None:
         if instruction.mnemonic not in ObjcConditionalBranchInstruction.CONDITIONAL_BRANCH_MNEMONICS:
-            raise ValueError('ObjcConditionalBranchInstruction instantiated with invalid mnemonic {}'.format(
-                instruction.mnemonic
-            ))
+            raise ValueError(f'ObjcConditionalBranchInstruction instantiated with'
+                             f' invalid mnemonic {instruction.mnemonic}')
 
         # a conditional branch will either hold the destination in first or second operand, depending on mnemonic
-        dest_op_idx = 1
         if instruction.mnemonic in ObjcConditionalBranchInstruction.SINGLE_OP_MNEMONICS:
             dest_op_idx = 1
         elif instruction.mnemonic in ObjcConditionalBranchInstruction.DOUBLE_OP_MNEMONICS:
             dest_op_idx = 2
         else:
-            raise ValueError('Unknown conditional mnemonic {}'.format(instruction.mnemonic))
+            raise ValueError(f'Unknown conditional mnemonic {instruction.mnemonic}')
 
         ObjcBranchInstruction.__init__(self, instruction, instruction.operands[dest_op_idx].value.imm)

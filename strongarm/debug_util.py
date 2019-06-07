@@ -2,6 +2,6 @@ class DebugUtil:
     debug = False
 
     @classmethod
-    def log(cls, obj, output):  # type: ignore
+    def log(cls, obj: object, output: str) -> None:
         if DebugUtil.debug:
-            print('{}: {}'.format(type(obj).__name__, output))
+            print(f'{type(obj).__name__}: {output}')

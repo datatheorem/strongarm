@@ -103,9 +103,7 @@ class ObjcBranchInstruction(ObjcInstruction):
     def is_branch_instruction(cls, instruction: CsInsn) -> bool:
         """Returns True if the CsInsn represents a branch instruction, False otherwise
         """
-        # accepted_mnemonics = ObjcUnconditionalBranchInstruction.UNCONDITIONAL_BRANCH_MNEMONICS
-        # accepted_mnemonics += ObjcConditionalBranchInstruction.CONDITIONAL_BRANCH_MNEMONICS
-        # return instruction.mnemonic in accepted_mnemonics
+        # TODO(FS): Merge subclasses into ObjcBranchInstruction and provide contextual information about each variant
         return instruction.mnemonic in ObjcUnconditionalBranchInstruction.UNCONDITIONAL_BRANCH_MNEMONICS or \
                instruction.mnemonic in ObjcConditionalBranchInstruction.CONDITIONAL_BRANCH_MNEMONICS
 
@@ -185,8 +183,6 @@ class ObjcUnconditionalBranchInstruction(ObjcBranchInstruction):
             # As a workaround, let's assign all the above fields to 'not found' values if this bug is hit
             self.is_external_objc_call = True
             self.destination_address = VirtualMemoryPointer(0)
-            # self.selref: ObjcSelref
-            # self.selector: ObjcSelector
 
 
 class ObjcConditionalBranchInstruction(ObjcBranchInstruction):

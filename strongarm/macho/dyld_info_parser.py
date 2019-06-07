@@ -64,22 +64,6 @@ class DyldInfoParser:
 
         return result, offset
 
-    @staticmethod
-    def get_uleb128(data: bytearray, offset: int) -> Tuple[int, int]:
-        value = 0
-        i = 0
-        tmp = 0
-        for x in range(0, 5):
-            i = x
-            tmp = data[offset+i] & 0x7f
-            value = tmp << (i * 7) | value
-            if (data[offset+i] & 0x80) != 0x80:
-                break
-        if i == 4 and (tmp & 0xf0) != 0:
-            print(f'parse error uleb128')
-            return -1, -1
-        return value, i + 1
-
     def parse_dyld_info(self) -> None:
         self.parse_dyld_bytestream(self.dyld_info_cmd.bind_off, self.dyld_info_cmd.bind_size)
         self.parse_dyld_bytestream(self.dyld_info_cmd.lazy_bind_off, self.dyld_info_cmd.lazy_bind_size)
@@ -97,8 +81,6 @@ class DyldInfoParser:
 
         def commit_stub() -> None:
             segment_command = self.binary.segment_for_index(segment_index)
-            if not segment_command:
-                return
             segment_start = segment_command.vmaddr
             stub_addr = segment_start + segment_offset
             name = name_bytes.decode('utf-8')

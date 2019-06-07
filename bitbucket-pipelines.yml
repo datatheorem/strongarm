@@ -1,4 +1,4 @@
-image: python:3.6-stretch
+image: python:3.7
 
 pipelines:
   default:

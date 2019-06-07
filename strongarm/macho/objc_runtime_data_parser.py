@@ -112,7 +112,7 @@ class ObjcRuntimeDataParser:
             string_file_address = symtab.stroff + strtab_idx
             symbol_name = self.binary.get_full_string_from_start_address(string_file_address, virtual=False)
             if not symbol_name:
-                raise ValueError(f'Could not find symbol_name at address {string_file_address}')
+                raise ValueError(f'Could not get symbol name at address {string_file_address}')
 
             library_ordinal = self._library_ordinal_from_n_desc(sym.n_desc)
             source_name = self.binary.dylib_name_for_library_ordinal(library_ordinal)
@@ -143,7 +143,6 @@ class ObjcRuntimeDataParser:
             raise RuntimeError('read invalid data from __objc_selrefs')
 
         for selref_ptr, selector_literal_ptr in zip(selref_pointers, selector_literal_pointers):
-
             # read selector string literal from selref pointer
             selector_string = self.binary.get_full_string_from_start_address(selector_literal_ptr)
             if not selector_string:
@@ -273,7 +272,7 @@ class ObjcRuntimeDataParser:
 
             symbol_name = self.binary.get_full_string_from_start_address(method_ent.name)
             if not symbol_name:
-                raise ValueError(f'Could not find symbol name for {methlist_ptr}')
+                raise ValueError(f'Could not get symbol name for {method_ent.name}')
             # attempt to find corresponding selref
             selref = self._selector_literal_ptr_to_selref_map.get(method_ent.name)
 
@@ -297,9 +296,9 @@ class ObjcRuntimeDataParser:
         return selectors
 
     def _parse_objc_protocol_entry(self, objc_protocol_struct: ObjcProtocolRawStruct) -> ObjcProtocol:
-        name = self.binary.get_full_string_from_start_address(objc_protocol_struct.name)
-        if not name:
-            name = '<unknown>'
+        symbol_name = self.binary.get_full_string_from_start_address(objc_protocol_struct.name)
+        if not symbol_name:
+            raise ValueError(f"Could not get symbol name for {objc_protocol_struct.name}")
 
         selectors: List[ObjcSelector] = []
         if objc_protocol_struct.required_instance_methods:
@@ -311,12 +310,12 @@ class ObjcRuntimeDataParser:
         if objc_protocol_struct.optional_class_methods:
             selectors += self.read_selectors_from_methlist_ptr(objc_protocol_struct.optional_class_methods)
 
-        return ObjcProtocol(objc_protocol_struct, name, selectors)
+        return ObjcProtocol(objc_protocol_struct, symbol_name, selectors)
 
     def _parse_objc_category_entry(self, objc_category_struct: ObjcCategoryRawStruct) -> ObjcCategory:
-        name = self.binary.get_full_string_from_start_address(objc_category_struct.name)
-        if not name:
-            name = '<unknown>'
+        symbol_name = self.binary.get_full_string_from_start_address(objc_category_struct.name)
+        if not symbol_name:
+            raise ValueError(f"Could not get symbol name for {objc_category_struct.name}")
 
         selectors: List[ObjcSelector] = []
         protocols: List[ObjcProtocol] = []
@@ -336,14 +335,14 @@ class ObjcRuntimeDataParser:
             protocol_pointers = self._protolist_ptr_to_protocol_ptr_list(objc_category_struct.base_protocols)
             protocols += self._parse_protocol_ptr_list(protocol_pointers)
 
-        return ObjcCategory(objc_category_struct, base_class, name, selectors, protocols)
+        return ObjcCategory(objc_category_struct, base_class, symbol_name, selectors, protocols)
 
     def _parse_objc_data_entry(self,
                                objc_class_struct: ObjcClassRawStruct,
                                objc_data_struct: ObjcDataRawStruct) -> ObjcClass:
-        name = self.binary.get_full_string_from_start_address(objc_data_struct.name)
-        if not name:
-            name = '<unknown>'
+        symbol_name = self.binary.get_full_string_from_start_address(objc_data_struct.name)
+        if not symbol_name:
+            raise ValueError(f"Could not get symbol name for {objc_data_struct.name}")
 
         selectors: List[ObjcSelector] = []
         protocols: List[ObjcProtocol] = []
@@ -355,7 +354,7 @@ class ObjcRuntimeDataParser:
             protocol_pointer_list = self._protolist_ptr_to_protocol_ptr_list(objc_data_struct.base_protocols)
             protocols += self._parse_protocol_ptr_list(protocol_pointer_list)
 
-        return ObjcClass(objc_class_struct, name, selectors, protocols)
+        return ObjcClass(objc_class_struct, symbol_name, selectors, protocols)
 
     def _protolist_ptr_to_protocol_ptr_list(self, protolist_ptr: VirtualMemoryPointer) -> List[VirtualMemoryPointer]:
         """Accepts the virtual address of an ObjcProtocolListStruct, and returns List of protocol pointers it refers to.
@@ -366,8 +365,7 @@ class ObjcRuntimeDataParser:
         addr = protolist.binary_offset + protolist.sizeof
         for i in range(protolist.count):
             pointer = self.binary.read_word(addr)
-            if pointer:
-                protocol_pointers.append(VirtualMemoryPointer(pointer))
+            protocol_pointers.append(VirtualMemoryPointer(pointer))
             # step to next protocol pointer in list
             addr += sizeof(self.binary.platform_word_type)
         return protocol_pointers

@@ -26,7 +26,7 @@ setup(
     ext_modules=[dataflow_module],
     install_requires=[
         'typing',
+        'invoke',
         'capstone',
-        'enum34',
     ],
 )

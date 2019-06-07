@@ -41,6 +41,10 @@ class BinaryEncryptedError(Exception):
     pass
 
 
+class LoadCommandMissingError(Exception):
+    pass
+
+
 class MachoSection:
     def __init__(self, binary: 'MachoBinary', section_command: MachoSectionRawStruct) -> None:
         self.cmd = section_command
@@ -140,11 +144,7 @@ class MachoBinary:
     def slice_magic(self) -> int:
         """Read magic number identifier from this Mach-O slice
         """
-        magic = self.read_word(0, virtual=False, word_type=c_uint32)
-        if magic:
-            return magic
-        else:
-            raise ValueError('Could not read magic value.')
+        return self.read_word(0, virtual=False, word_type=c_uint32)
 
     def verify_magic(self) -> bool:
         """Ensure magic at beginning of Mach-O slice indicates a supported format
@@ -252,15 +252,23 @@ class MachoBinary:
                     binary_offset: int,
                     struct_type: Type[AIS],
                     virtual: bool = False) -> AIS:
-        """Given an binary offset, return the structure bytes.
+        """Given an binary offset, return the structure ot describes.
+
+        Params:
+            binary_offset: Address from where to read the bytes.
+            struct_type: ArchIndependentStructure subclass.
+            virtual: Whether the address should be slid (virtual) or not.
+
+        Returns:
+            ArchIndependentStructure loaded from the pointed address.
         """
 
         size = struct_type.struct_size(self.is_64bit)
         data = self.get_contents_from_address(address=binary_offset, size=size, is_virtual=virtual)
         return struct_type(binary_offset, data, self.is_64bit)
 
-    # def write_struct(address: int, struct: ArchIndependentStructure) -> None:
-    # ...
+    def write_struct(self, address: int, struct: ArchIndependentStructure) -> None:
+        pass
 
     def section_name_for_address(self, virt_addr: VirtualMemoryPointer) -> Optional[str]:
         """Given an address in the virtual address space, return the name of the section which contains it.
@@ -291,9 +299,9 @@ class MachoBinary:
         # guess by using the highest-addressed section we've seen
         return max_section
 
-    def segment_for_index(self, segment_index: int) -> Optional[MachoSegmentCommandStruct]:
+    def segment_for_index(self, segment_index: int) -> MachoSegmentCommandStruct:
         if segment_index < 0 or segment_index >= len(self.segment_commands):
-            return None
+            raise ValueError(f"segment_index ({segment_index}) out of bounds ({len(self.segment_commands)}")
         # TODO(PT): store segment order in some way that doesn't rely on dicts being sorted by insertion order
         return [x for x in self.segment_commands.values()][segment_index]
 
@@ -304,7 +312,7 @@ class MachoBinary:
             return None
 
         # if the address given is past the last declared section, translate based on the last section
-        # so, we need to keep track of the last seen sectio
+        # so, we need to keep track of the last seen section
         if not self._last_segment_command:
             return None
         max_segment = self._last_segment_command
@@ -620,7 +628,7 @@ class MachoBinary:
     def read_word(self,
                   address: int,
                   virtual: bool = True,
-                  word_type: Any = None) -> Optional[int]:
+                  word_type: Any = None) -> int:
         """Attempt to read a word from the binary at a virtual address. Returns None if the address is invalid.
         """
         if not word_type:
@@ -630,8 +638,9 @@ class MachoBinary:
             file_bytes = self.get_content_from_virtual_address(VirtualMemoryPointer(address), sizeof(word_type))
         else:
             file_bytes = self.get_bytes(StaticFilePointer(address), sizeof(word_type))
+
         if not file_bytes:
-            return None
+            raise ValueError(f"Could not read word at address 0x{hex(address)}")
 
         return word_type.from_buffer(bytearray(file_bytes)).value
 
@@ -640,42 +649,39 @@ class MachoBinary:
         if self._header:
             return self._header
         else:
-            raise RuntimeError('Failed to parse Mach-O')
+            raise LoadCommandMissingError()
 
     @property
     def dysymtab(self) -> MachoDysymtabCommandStruct:
         if self._dysymtab:
             return self._dysymtab
         else:
-            raise RuntimeError('Failed to parse Mach-O')
+            raise LoadCommandMissingError()
 
     @property
     def symtab(self) -> MachoSymtabCommandStruct:
         if self._symtab:
             return self._symtab
         else:
-            raise RuntimeError('Failed to parse Mach-O')
+            raise LoadCommandMissingError()
 
     @property
     def encryption_info(self) -> MachoEncryptionInfoStruct:
         if self._encryption_info:
             return self._encryption_info
         else:
-            raise RuntimeError('Failed to parse Mach-O')
+            raise LoadCommandMissingError()
 
     @property
     def dyld_info(self) -> MachoDyldInfoCommandStruct:
         if self._dyld_info:
             return self._dyld_info
         else:
-            raise RuntimeError('Failed to parse Mach-O')
+            raise LoadCommandMissingError()
 
     @property
-    def code_signature_cmd(self) -> MachoLinkeditDataCommandStruct:
-        if self._code_signature_cmd:
-            return self._code_signature_cmd
-        else:
-            raise RuntimeError('Failed to parse Mach-O')
+    def code_signature_cmd(self) -> Optional[MachoLinkeditDataCommandStruct]:
+        return self._code_signature_cmd
 
     @property
     def _codesign_parser(self) -> 'CodesignParser':

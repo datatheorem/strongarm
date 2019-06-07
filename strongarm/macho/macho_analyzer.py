@@ -251,7 +251,7 @@ class MachoAnalyzer:
         self._objc_method_list = method_list
         return self._objc_method_list
 
-    def search_code(self, code_search: 'CodeSearch', callback: CodeSearchCallback):
+    def queue_code_search(self, code_search: 'CodeSearch', callback: CodeSearchCallback):
         """Enqueue a CodeSearch. It will be ran when `search_all_code` runs. `callback` will then be invoked.
         The search space is all known Objective-C entry points within the binary.
 

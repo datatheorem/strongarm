@@ -90,7 +90,7 @@ class TestFunctionAnalyzer:
 
             assert result.found_function.start_address == 0x100006228
 
-        self.analyzer.search_code(query, process_results)
+        self.analyzer.queue_code_search(query, process_results)
         self.analyzer.search_all_code()
 
     def test_get_register_contents_at_instruction(self):

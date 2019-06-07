@@ -1,9 +1,11 @@
 import logging
-from typing import TYPE_CHECKING
-from typing import List, Dict, Optional, Set
-from capstone import Cs, CsInsn, CS_ARCH_ARM64, CS_MODE_ARM
-
+from pathlib import Path
 from ctypes import sizeof
+from collections import defaultdict
+
+from typing import TYPE_CHECKING
+from typing import Set, List, Dict, Optional, Callable
+from capstone import Cs, CsInsn, CS_ARCH_ARM64, CS_MODE_ARM
 
 from strongarm import DebugUtil
 from strongarm.macho.macho_binary import MachoBinary
@@ -26,12 +28,22 @@ if TYPE_CHECKING:
     from strongarm.objc import ObjcFunctionAnalyzer, ObjcMethodInfo  # type: ignore
 
 
+# Callback invoked when the results for a previously queued CodeSearch have been found.
+# This will be dispatched some time after MachoAnalyzer.search_all_code() is called
+CodeSearchCallback = Callable[['MachoAnalyzer', 'CodeSearch', List['CodeSearchResult']], None]
+
+
 class MachoAnalyzer:
-    # keep map of binary -> analyzers as these do expensive one-time cross-referencing operations
-    # XXX(PT): references to these will live to the end of the process, or until clear_cache() is called.
-    _ACTIVE_ANALYZER_MAP: Dict[MachoBinary, 'MachoAnalyzer'] = {}
+    # This class does expensive one-time cross-referencing operations
+    # Therefore, we want only one instance to exist for any MachoBinary
+    # Thus, the preferred interface for getting an instance of this class is MachoAnalyzer.get_analyzer(binary),
+    # which utilizes this cache
+    # XXX(PT): These references live to process termination, or until clear_cache() is called
+    _ANALYZER_CACHE: Dict[MachoBinary, 'MachoAnalyzer'] = {}
 
     def __init__(self, binary: MachoBinary) -> None:
+        from strongarm.objc import CodeSearch
+
         self.binary = binary
         self.cs = Cs(CS_ARCH_ARM64, CS_MODE_ARM)
         self.cs.detail = True
@@ -52,15 +64,21 @@ class MachoAnalyzer:
 
         self._cached_function_boundaries: Dict[int, int] = {}
 
+        # For efficiency, API clients submit several CodeSearch's to be performed in a batch, instead of sequentially.
+        # Iterating the binary's code is an expensive operation, and this allows us to do it just once.
+        # This map is where we store the CodeSearch's that are waiting to be executed, and the
+        # callbacks which should be invoked once results are found.
+        self._queued_code_searches: Dict['CodeSearch', CodeSearchCallback] = {}
+
         # done setting up, store this analyzer in class cache
-        MachoAnalyzer._ACTIVE_ANALYZER_MAP[binary] = self
+        MachoAnalyzer._ANALYZER_CACHE[binary] = self
 
     @classmethod
     def clear_cache(cls):
         """Delete cached MachoAnalyzer's
         This can be used when you are finished analyzing a binary set and don't want to retain the cached data in memory
         """
-        cls._ACTIVE_ANALYZER_MAP = {}
+        cls._ANALYZER_CACHE.clear()
 
     @property
     def objc_helper(self) -> ObjcRuntimeDataParser:
@@ -69,13 +87,13 @@ class MachoAnalyzer:
         return self._objc_helper
 
     @classmethod
-    def get_analyzer(cls, bin: MachoBinary) -> 'MachoAnalyzer':
+    def get_analyzer(cls, binary: MachoBinary) -> 'MachoAnalyzer':
         """Get a cached analyzer for a given MachoBinary
         """
-        if bin in cls._ACTIVE_ANALYZER_MAP:
-            # use cached analyzer for this binary
-            return cls._ACTIVE_ANALYZER_MAP[bin]
-        return MachoAnalyzer(bin)
+        if binary in cls._ANALYZER_CACHE:
+            # There exists a MachoAnalyzer for this binary - use it instead of making a new one
+            return cls._ANALYZER_CACHE[binary]
+        return MachoAnalyzer(binary)
 
     def objc_classes(self) -> List[ObjcClass]:
         """Return the List of classes and categories implemented within the binary
@@ -199,10 +217,6 @@ class MachoAnalyzer:
         """
         return self.objc_helper.get_method_imp_addresses(selector)
 
-    if TYPE_CHECKING:   # noqa
-        from strongarm.objc import ObjcFunctionAnalyzer # type: ignore
-        from strongarm.objc import CodeSearch, CodeSearchResult # type: ignore
-
     def get_imps_for_sel(self, selector: str) -> List['ObjcFunctionAnalyzer']:
         """Retrieve a list of the disassembled function data for every implementation of a provided selector
         Args:
@@ -211,7 +225,7 @@ class MachoAnalyzer:
         Returns:
             A list of ObjcFunctionAnalyzers corresponding to each found implementation of the provided selector.
         """
-        from strongarm.objc import ObjcFunctionAnalyzer # type: ignore
+        from strongarm.objc import ObjcFunctionAnalyzer     # type: ignore
 
         implementation_analyzers = []
         imp_addresses = self.get_method_imp_addresses(selector)
@@ -237,36 +251,60 @@ class MachoAnalyzer:
         self._objc_method_list = method_list
         return self._objc_method_list
 
-    def search_code(self, code_search: 'CodeSearch') -> List['CodeSearchResult']:
-        """Given a CodeSearch object describing rules for matching code, return a List of CodeSearchResult's
-        encapsulating instructions which match the described set of conditions.
+    def queue_code_search(self, code_search: 'CodeSearch', callback: CodeSearchCallback):
+        """Enqueue a CodeSearch. It will be ran when `search_all_code` runs. `callback` will then be invoked.
+        The search space is all known Objective-C entry points within the binary.
 
-        The search space of this method includes all known functions within the binary.
+        A CodeSearch describes criteria for matching code. A CodeSearchResult encapsulates a CPU instruction and its
+        containing source function which matches the criteria of the search.
+
+        Once the CodeSearch has been run over the binary, the `callback` will be invoked, passing the relevant
+        info about the discovered code.
         """
-        from strongarm.objc import CodeSearchResult # type: ignore
-        from strongarm.objc import ObjcFunctionAnalyzer # type: ignore
+        binary_name = Path(self.binary.filename.decode()).name
+        logging.info(f'{binary_name} enqueuing CodeSearch {code_search}. Will invoke {callback}')
+        self._queued_code_searches[code_search] = callback
 
-        DebugUtil.log(self, 'Performing code search on binary with search description:\n{}'.format(
-            code_search
-        ))
+    def search_all_code(self):
+        """Iterate every function in the binary, and run each pending CodeSearch over them.
+        The search space is all known Objective-C entry points within the binary.
 
-        search_results: List[CodeSearchResult] = []
+        A CodeSearch describes criteria for matching code. A CodeSearchResult encapsulates a CPU instruction and its
+        containing source function which matches the criteria of the search.
+
+        For each search which is executed, this method will invoke the CodeSearchCallback provided when the search
+        was requested, with the List of CodeSearchResult's which were found.
+        """
+        from strongarm.objc import CodeSearch, CodeSearchResult     # type: ignore
+        from strongarm.objc import ObjcFunctionAnalyzer     # type: ignore
+
+        binary_name = Path(self.binary.filename.decode()).name
+        logging.info(f'Running {len(self._queued_code_searches.keys())} code searches on {binary_name}')
+
         entry_point_list = self.get_objc_methods()
-        for i, method_info in enumerate(entry_point_list):
-            DebugUtil.log(
-                self,
-                f'search_code: {hex(method_info.imp_addr)} -[{method_info.objc_class.name} {method_info.objc_sel.name}]'
-            )
-            try:
-                function_analyzer = ObjcFunctionAnalyzer.get_function_analyzer_for_method(self.binary, method_info)
-                search_results += function_analyzer.search_code(code_search)
-            except RuntimeError:
-                continue
+        search_results: Dict['CodeSearch', List[CodeSearchResult]] = defaultdict(list)
 
+        for i, method_info in enumerate(entry_point_list):
+            function_analyzer = ObjcFunctionAnalyzer.get_function_analyzer_for_method(self.binary, method_info)
+
+            # Run every code search on this function and record their respective results
+            for code_search, callback in self._queued_code_searches.items():
+                search_results[code_search] += function_analyzer.search_code(code_search)
+
+            # Searching a binary's code can be a time-consumptive operation, so log progress to help the user
             checkpoint_index = len(entry_point_list) // 10
             if checkpoint_index and i % checkpoint_index == 0:
                 percent_complete = int((i / len(entry_point_list) + 0.01) * 100)
-                logging.info(f'binary code search {percent_complete}% complete')
+                logging.info(f'{binary_name} code search {percent_complete}% complete')
+
+        # Invoke every callback with their respective search results
+        for search, results in search_results.items():
+            callback = self._queued_code_searches[search]
+            callback(self, search, results)
+
+        # We've completed all of the waiting code searches. Drain the queue
+        self._queued_code_searches.clear()
+
         return search_results
 
     def class_name_for_class_pointer(self, classref: VirtualMemoryPointer) -> Optional[str]:

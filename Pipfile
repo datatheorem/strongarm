@@ -4,13 +4,13 @@ verify_ssl = true
 name = "pypi"
 
 [packages]
-mypy = "*"
-invoke = "*"
 typing = "*"
 capstone = "*"
 "enum34" = "*"
 
 [dev-packages]
+mypy = "*"
+invoke = "*"
 pytest = "*"
 
 [requires]

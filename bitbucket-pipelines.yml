@@ -12,3 +12,7 @@ pipelines:
           - pipenv run invoke deps
           - pipenv run invoke install
           - pipenv run invoke test
+        script:
+          - pip install invoke
+          - python setup.py install
+          - invoke test

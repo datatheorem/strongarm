@@ -442,8 +442,6 @@ class MachoBinary:
         # indirect symtab is an array of uint32's
         for i in range(self.dysymtab.nindirectsyms):
             indirect_symtab_entry = self.read_word(indirect_symtab_off, virtual=False, word_type=c_uint32)
-            if not indirect_symtab_entry:
-                continue
             indirect_symtab.append(int(indirect_symtab_entry))
             # traverse to next pointer
             indirect_symtab_off += sizeof(c_uint32)

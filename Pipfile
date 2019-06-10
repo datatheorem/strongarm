@@ -5,12 +5,12 @@ name = "pypi"
 
 [packages]
 typing = "*"
-invoke = "*"
 capstone = "*"
 
 [dev-packages]
 mypy = "*"
 flake8 = "*"
+invoke = "*"
 pytest = "*"
 
 [requires]

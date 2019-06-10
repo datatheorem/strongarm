@@ -1,10 +1,10 @@
+# TODO(PT): This file is out of date
 from strongarm.macho import (
     MachoParser,
     MachoAnalyzer
 )
 from strongarm.objc import (
     CodeSearch,
-    CodeSearchTermCallDestination,
     RegisterContentsType
 )
 
@@ -16,7 +16,7 @@ log_search = CodeSearch([
         CodeSearchTermCallDestination(binary, invokes_symbol='_printf'),
         CodeSearchTermCallDestination(binary, invokes_symbol='_NSLog')
 ])
-search_results = analyzer.search_code(log_search)
+search_results = analyzer.queue_code_search(log_search)
 for search_result in search_results:
     function_containing_log_call = search_result.found_function
     method_info = function_containing_log_call.method_info

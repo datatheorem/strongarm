@@ -2,15 +2,11 @@ from .register_contents import RegisterContents, RegisterContentsType
 
 from .objc_query import (
     CodeSearch,
-    CodeSearchTerm,
-    CodeSearchTermCallDestination,
-    CodeSearchTermInstructionIndex,
-    CodeSearchTermInstructionMnemonic,
-    CodeSearchTermInstructionOperand,
-    CodeSearchTermRegisterContents,
-    CodeSearchTermFunctionCallWithArguments,
-    CodeSearchTermObjcCall,
     CodeSearchResult,
+    CodeSearchObjcCall,
+    CodeSearchRegisterContents,
+    CodeSearchInstructionMnemonic,
+    CodeSearchFunctionCallWithArguments,
     CodeSearchResultFunctionCallWithArguments,
 )
 

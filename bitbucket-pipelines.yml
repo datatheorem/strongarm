@@ -13,9 +13,10 @@ pipelines:
           - pipenv run invoke install
           - pipenv run invoke test
         script:
-          - pip install invoke pipenv
-          # XXX(PT): Does this break installing strongarm via pip on a fresh machine?
+          - pip install invoke pipenv pytest
+          - export PIP_PROCESS_DEPENDENCY_LINKS=1
+          # TODO(PT): It seems like Capstone won't be installed if strongarm is installed via setuptools
           # We might still need setup.py to install Capstone.
           - invoke deps
-          - python setup.py install
+          - invoke install
           - invoke test

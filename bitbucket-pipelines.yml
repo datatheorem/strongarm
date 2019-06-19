@@ -13,7 +13,7 @@ pipelines:
           - pipenv run invoke install
           - pipenv run invoke test
         script:
-          - pip install invoke
+          - pip install invoke pipenv
           # XXX(PT): Does this break installing strongarm via pip on a fresh machine?
           # We might still need setup.py to install Capstone.
           - invoke deps

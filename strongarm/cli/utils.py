@@ -267,7 +267,7 @@ def print_binary_load_commands(binary: MachoBinary) -> None:
     print('\nLoad commands:')
     load_commands = binary.load_dylib_commands
     for cmd in load_commands:
-        dylib_name_addr = binary.get_virtual_base() + cmd.fileoff + cmd.dylib.name.offset
+        dylib_name_addr = binary.get_virtual_base() + cmd.binary_offset + cmd.dylib.name.offset
         dylib_name = binary.read_string_at_address(dylib_name_addr)
         dylib_version = cmd.dylib.current_version
         print(f'\t{dylib_name} v.{hex(dylib_version)}')

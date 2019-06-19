@@ -35,18 +35,29 @@ from .macho_definitions import (
 
 from .arch_independent_structs import (
     ArchIndependentStructure,
+
     MachoHeaderStruct,
-    MachoSegmentCommandStruct,
     MachoSectionRawStruct,
+    MachoSegmentCommandStruct,
     MachoEncryptionInfoStruct,
-    MachoNlistStruct,
-    CFStringStruct,
+
     DylibCommandStruct,
     MachoLoadCommandStruct,
     MachoSymtabCommandStruct,
     MachoDysymtabCommandStruct,
     MachoDyldInfoCommandStruct,
     MachoLinkeditDataCommandStruct,
+
+    CFStringStruct,
+    MachoNlistStruct,
+
+    ObjcMethodStruct,
+    ObjcDataRawStruct,
+    ObjcClassRawStruct,
+    ObjcProtocolRawStruct,
+    ObjcCategoryRawStruct,
+    ObjcProtocolListStruct,
+    ObjcMethodListStruct,
 )
 
 from .macho_load_commands import (

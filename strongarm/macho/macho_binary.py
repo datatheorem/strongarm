@@ -45,6 +45,11 @@ class LoadCommandMissingError(Exception):
     pass
 
 
+class InvalidAddressError(Exception):
+    """Raised when a client asks for bytes at an address outside the binary
+    """
+
+
 class MachoSection:
     def __init__(self, binary: 'MachoBinary', section_command: MachoSectionRawStruct) -> None:
         self.cmd = section_command
@@ -377,8 +382,8 @@ class MachoBinary:
 
         """
         if offset > 0x100000000:
-            raise RuntimeError(f'get_bytes() offset {hex(offset)} looks like a virtual address.'
-                               f' Did you mean to use get_content_from_virtual_address?')
+            raise InvalidAddressError(f'get_bytes() offset {hex(offset)} looks like a virtual address.'
+                                      f' Did you mean to use get_content_from_virtual_address?')
 
         # safeguard against reading from an encrypted segment of the binary
         if self.is_range_encrypted(offset, size):

@@ -308,6 +308,8 @@ class MachoBinary:
         return self.segments[segment_index]
 
     def segment_with_name(self, desired_segment_name: str) -> Optional[MachoSegmentCommandStruct]:
+        """Returns the segment with the provided name. Returns None if there's no such segment in the binary.
+        """
         # TODO(PT): add unit test for this method
         for segment_cmd in self.segments:
             segment_name = segment_cmd.segname.decode()
@@ -316,16 +318,14 @@ class MachoBinary:
         return None
 
     def section_with_name(self, desired_section_name: str, parent_segment_name: str) -> Optional[MachoSection]:
-        # Sanity-check that a valid segment was provided
-        if not self.segment_with_name(parent_segment_name):
-            raise RuntimeError(f'No such segment: {parent_segment_name}')
-
-        # TODO(PT): add unit test for this method
+        """Retrieve the section with the provided name which is contained within the provided segment.
+        Returns None if no such section exists.
+        """
         for section in self.sections:
             section_name = section.name.decode()
             if section_name == desired_section_name:
                 if section.cmd.segname.decode() != parent_segment_name:
-                    print(f'skipping {section_name} because its not in correct segment')
+                    # Correct section name but wrong segment -- keep looking
                     continue
                 return section
         return None

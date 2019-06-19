@@ -275,16 +275,17 @@ def print_binary_load_commands(binary: MachoBinary) -> None:
 
 def print_binary_segments(binary: MachoBinary) -> None:
     print('\nSegments:')
-    for segment, cmd in binary.segment_commands.items():
+    for cmd in binary.segments:
         file_loc = f"[{format(cmd.fileoff, '#011x')} - {format(cmd.fileoff + cmd.filesize, '#011x')}]"
         virtual_loc = f"[{format(cmd.vmaddr, '#011x')} - {format(cmd.vmaddr + cmd.vmsize, '#011x')}]"
-        print(f'\t{virtual_loc} (file {file_loc}) {segment}')
+        print(f'\t{virtual_loc} (file {file_loc}) {cmd.segname}')
 
 
 def print_binary_sections(binary: MachoBinary) -> None:
     print('\nSections:')
-    for section, cmd in binary.sections.items():
-        print(f'\t[{hex(cmd.address)} - {hex(cmd.end_address)}] {section}')
+    for cmd in binary.sections:
+        section_name = cmd.name.decode()
+        print(f'\t[{hex(cmd.address)} - {hex(cmd.end_address)}] {section_name}')
 
 
 def print_analyzer_imported_symbols(analyzer: MachoAnalyzer) -> None:

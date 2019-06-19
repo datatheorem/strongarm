@@ -324,7 +324,7 @@ class MachoBinary:
         for section in self.sections:
             section_name = section.name.decode()
             if section_name == desired_section_name:
-                if section_name != parent_segment_name:
+                if section.cmd.segname.decode() != parent_segment_name:
                     print(f'skipping {section_name} because its not in correct segment')
                     continue
                 return section
@@ -604,10 +604,12 @@ class MachoBinary:
         """
         locations: List[VirtualMemoryPointer] = []
         entries: List[VirtualMemoryPointer] = []
-        if section_name not in self.sections:
+
+        # PT: Assume a pointer-list-section will always be in the __DATA segment. True as far as I know.
+        section = self.section_with_name(section_name, '__DATA')
+        if not section:
             return locations, entries
 
-        section = self.section_with_name(section_name, '__DATA')
         section_base = section.address
         section_data = section.content
 

@@ -690,6 +690,7 @@ class MachoBinary:
     @property
     def _codesign_parser(self) -> 'CodesignParser':
         if not self.__codesign_parser:
+            from strongarm.macho.codesign import CodesignParser
             self.__codesign_parser = CodesignParser(self)
         return self.__codesign_parser
 

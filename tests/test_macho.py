@@ -110,3 +110,21 @@ class TestMachoBinary:
             encrypted_binary.get_bytes(0x5000, 0x1000)
         # read from unencrypted section should not raise
         encrypted_binary.get_bytes(0x3000, 0x500)
+
+    def test_read_string_table(self):
+        # Given the binary's string table contains exactly these bytes:
+        correct_strings = b'\x00\x00\x00\x00__mh_execute_header\x00_NSClassFromString\x00_NSLog\x00_NSStringFrom' \
+                          b'CGRect\x00_NSStringFromClass\x00_OBJC_CLASS_$_NSObject\x00_OBJC_CLASS_$_NSURLCredential' \
+                          b'\x00_OBJC_CLASS_$_UIFont\x00_OBJC_CLASS_$_UILabel\x00_OBJC_CLASS_$_UIResponder\x00' \
+                          b'_OBJC_CLASS_$_UIViewController\x00_OBJC_METACLASS_$_NSObject\x00_OBJC_METACLASS_$_UILabel' \
+                          b'\x00_OBJC_METACLASS_$_UIResponder\x00_OBJC_METACLASS_$_UIViewController\x00' \
+                          b'_SecTrustEvaluate\x00_UIApplicationMain\x00' \
+                          b'___CFConstantStringClassReference\x00__objc_empty_cache\x00_dlopen\x00' \
+                          b'_objc_autoreleasePoolPop\x00_objc_autoreleasePoolPush\x00_objc_getClass\x00' \
+                          b'_objc_msgSend\x00_objc_msgSendSuper2\x00_objc_release\x00_objc_retain\x00' \
+                          b'_objc_retainAutoreleasedReturnValue\x00_objc_storeStrong\x00_rand\x00' \
+                          b'dyld_stub_binder\x00radr://5614542\x00\x00\x00\x00'
+        # If I ask strongarm to read the binary's strings
+        read_strings = bytes(self.binary.get_raw_string_table())
+        # Then I get the correct data out
+        assert read_strings == correct_strings

@@ -185,3 +185,19 @@ class TestMachoAnalyzer:
         assert self.analyzer.imp_for_selref(0xdeadbeef) is None
 
         # TODO(PT): handle checking selref which is defined outside binary
+
+    def test_read_imported_symbol_pointers(self):
+        # Given the binary's imported symbol pointers are the following values
+        # Given the binary contains imported symbol stubs with the following values
+        correct_imp_stub_address_to_sym_name = {
+            4294993712: '_NSClassFromString', 4294993724: '_NSLog', 4294993736: '_NSStringFromCGRect',
+            4294993748: '_NSStringFromClass', 4294993760: '_SecTrustEvaluate', 4294993772: '_UIApplicationMain',
+            4294993784: '_dlopen', 4294993796: '_objc_autoreleasePoolPop', 4294993808: '_objc_autoreleasePoolPush',
+            4294993820: '_objc_getClass', 4294993832: '_objc_msgSend', 4294993844: '_objc_msgSendSuper2',
+            4294993856: '_objc_release', 4294993868: '_objc_retain', 4294993880: '_objc_retainAutoreleasedReturnValue',
+            4294993892: '_objc_storeStrong', 4294993904: '_rand'
+        }
+        # If I ask strongarm to retrieve the map of stubs to imported symbol names
+        found_imp_stub_to_sym_name = self.analyzer.imp_stubs_to_symbol_names
+        # Then I find the correct data
+        assert found_imp_stub_to_sym_name == correct_imp_stub_address_to_sym_name

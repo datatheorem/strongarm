@@ -80,10 +80,9 @@ class MachoImpStubsParser:
         return stub
 
     def _parse_all_stubs(self) -> List[MachoImpStub]:
-        if '__stubs' not in self.binary.sections:
+        stubs_section = self.binary.section_with_name('__stubs', '__TEXT')
+        if not stubs_section:
             return []
-
-        stubs_section = self.binary.sections['__stubs']
 
         func_str = bytes(self.binary.get_bytes(stubs_section.cmd.offset, stubs_section.cmd.size))
         instructions = [instr for instr in self._cs.disasm(

@@ -1,5 +1,6 @@
 import os
 import pytest
+import pathlib
 
 from strongarm.macho.macho_definitions import *
 from strongarm.macho import MachoParser
@@ -9,6 +10,8 @@ from strongarm.macho import BinaryEncryptedError
 class TestMachoBinary:
     FAT_PATH = os.path.join(os.path.dirname(__file__), 'bin', 'StrongarmTarget')
     ENCRYPTED_PATH = os.path.join(os.path.dirname(__file__), 'bin', 'RxTest')
+    # Found within this app: https://pythia.sourcetheorem.com/mobile_app_scans/5196911454191616
+    MULTIPLE_CONST_SECTIONS = pathlib.Path(__file__).parent / 'bin' / 'BroadSoftDialpadFramework'
 
     def setup_method(self):
         self.parser = MachoParser(TestMachoBinary.FAT_PATH)
@@ -44,11 +47,13 @@ class TestMachoBinary:
         assert self.binary.cpu_type == CPU_TYPE.ARM64
 
     def test_finds_segments(self):
-        # ensure standard segments are present
-        assert self.binary.segment_commands['__PAGEZERO'] is not None
-        assert self.binary.segment_commands['__TEXT'] is not None
-        assert self.binary.segment_commands['__DATA'] is not None
-        assert self.binary.segment_commands['__LINKEDIT'] is not None
+        # Ensure standard segments are present
+        assert self.binary.segment_with_name('__PAGEZERO') is not None
+        assert self.binary.segment_with_name('__TEXT') is not None
+        assert self.binary.segment_with_name('__DATA') is not None
+        assert self.binary.segment_with_name('__LINKEDIT') is not None
+        # Ensure a fake segment isn't found
+        assert self.binary.segment_with_name('FAKE_SEGMENT') is None
 
     def test_find_symtabs(self):
         # did we find symtab command and dysymtab command?
@@ -56,17 +61,32 @@ class TestMachoBinary:
         assert self.binary.dysymtab is not None
 
     def test_find_sections(self):
-        # try a few sections from different segment
+        # try a few sections from different segments
         # from __TEXT:
-        assert self.binary.sections['__text'] is not None
-        assert self.binary.sections['__stubs'] is not None
-        assert self.binary.sections['__objc_methname'] is not None
-        assert self.binary.sections['__objc_classname'] is not None
-        assert self.binary.sections['__cstring'] is not None
+        assert self.binary.section_with_name('__text', '__TEXT') is not None
+        assert self.binary.section_with_name('__stubs', '__TEXT') is not None
+        assert self.binary.section_with_name('__objc_methname', '__TEXT') is not None
+        assert self.binary.section_with_name('__objc_classname', '__TEXT') is not None
+        assert self.binary.section_with_name('__cstring', '__TEXT') is not None
+        assert self.binary.section_with_name('fake_section', '__TEXT') is None
         # from __DATA:
-        assert self.binary.sections['__const'] is not None
-        assert self.binary.sections['__objc_classlist'] is not None
-        assert self.binary.sections['__data'] is not None
+        assert self.binary.section_with_name('__la_symbol_ptr', '__DATA') is not None
+        assert self.binary.section_with_name('__objc_classlist', '__DATA') is not None
+        assert self.binary.section_with_name('__data', '__DATA') is not None
+        assert self.binary.section_with_name('fake_section', '__DATA') is None
+
+    def test_section_name_collision(self):
+        # Given I provide a binary which has two sections with the same name
+        binary = MachoParser(self.MULTIPLE_CONST_SECTIONS.as_posix()).get_arm64_slice()
+        # If I read the two sections
+        text_const = binary.section_with_name('__const', '__TEXT')
+        data_const = binary.section_with_name('__const', '__DATA')
+        # Then I get two sections
+        assert text_const is not None
+        assert data_const is not None
+        # And each section contains the correct information
+        assert text_const.address == 0x1a0d0
+        assert data_const.address == 0x1c458
 
     def test_header_flags(self):
         # this binary is known to have masks 1, 4, 128, 2097152

@@ -354,10 +354,10 @@ class MachoAnalyzer:
         # TODO(PT): This is SLOW and WASTEFUL!!!
         # These transformations should be done ONCE on initial analysis!
         # This method should cache its result.
-        if '__cstring' not in self.binary.sections:
+        strings_section = self.binary.section_with_name('__cstring', '__TEXT')
+        if not strings_section:
             return set()
 
-        strings_section = self.binary.sections['__cstring']
         strings_content = strings_section.content
 
         # split into characters (string table is packed and each entry is terminated by a null character)
@@ -371,12 +371,12 @@ class MachoAnalyzer:
         """
         # TODO(PT): This is SLOW and WASTEFUL!!!
         # These transformations should be done ONCE on initial analysis!
-        if '__cstring' not in self.binary.sections:
+        strings_section = self.binary.section_with_name('__cstring', '__TEXT')
+        if not strings_section:
             return None
-        strings_section = self.binary.sections['__cstring']
 
         strings_base = strings_section.address
-        strings_content = self.binary.sections['__cstring'].content
+        strings_content = strings_section.content
 
         # split into characters (string table is packed and each entry is terminated by a null character)
         string_table = list(strings_content)
@@ -398,11 +398,11 @@ class MachoAnalyzer:
         """
         # TODO(PT): This is SLOW and WASTEFUL!!!
         # These transformations should be done ONCE on initial analysis!
-        if '__cfstring' not in self.binary.sections:
+        cfstrings_section = self.binary.section_with_name('__cfstring', '__DATA')
+        if not cfstrings_section:
             return None
 
         sizeof_cfstring = sizeof(CFString64) if self.binary.is_64bit else sizeof(CFString32)
-        cfstrings_section = self.binary.sections['__cfstring']
         cfstrings_base = cfstrings_section.address
 
         cfstrings_count = int((cfstrings_section.end_address - cfstrings_section.address) / sizeof_cfstring)

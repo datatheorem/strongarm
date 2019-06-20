@@ -95,8 +95,8 @@ class MachoBinary:
         self.file_type: MachoFileType = MachoFileType.MH_EXECUTE
 
         # segment and section commands from Mach-O header
-        self.segment_commands: Dict[str, MachoSegmentCommandStruct] = {}
-        self.sections: Dict[str, MachoSection] = {}
+        self.segments: List[MachoSegmentCommandStruct] = []
+        self.sections: List[MachoSection] = []
         # also store specific interesting sections which are useful to us
         self._dysymtab: Optional[MachoDysymtabCommandStruct] = None
         self._symtab: Optional[MachoSymtabCommandStruct] = None
@@ -212,8 +212,6 @@ class MachoBinary:
             segment_count: Number of segments to parse, as declared by the header's ncmds field
 
         """
-        self.segment_commands = {}
-        self.sections = {}
         self.load_dylib_commands = []
 
         for i in range(segment_count):
@@ -224,7 +222,7 @@ class MachoBinary:
 
                 segment = self.read_struct(offset, MachoSegmentCommandStruct)
                 # TODO(pt) handle byte swap of segment if necessary
-                self.segment_commands[segment.segname.decode('UTF8')] = segment
+                self.segments.append(segment)
                 self._parse_sections_for_segment(segment, offset)
                 self._last_segment_command = segment
 
@@ -290,49 +288,47 @@ class MachoBinary:
 
         # if the address given is past the last declared section, translate based on the last section
         # so, we need to keep track of the last seen section
-        max_section = next(iter(self.sections.values()))
+        max_section = next(iter(self.sections))
 
-        for section_name in self.sections:
-            section = self.sections[section_name]
+        for idx, section in enumerate(self.sections):
             # update highest section
             if section.address > max_section.address:
                 max_section = section
 
             if section.address <= virt_addr < section.end_address:
-                return self.sections[section_name]
+                return section
         # we looked through all sections and didn't find one explicitly containing this address
         # guess by using the highest-addressed section we've seen
         return max_section
 
     def segment_for_index(self, segment_index: int) -> MachoSegmentCommandStruct:
-        if segment_index < 0 or segment_index >= len(self.segment_commands):
-            raise ValueError(f"segment_index ({segment_index}) out of bounds ({len(self.segment_commands)}")
-        # TODO(PT): store segment order in some way that doesn't rely on dicts being sorted by insertion order
-        return [x for x in self.segment_commands.values()][segment_index]
+        if segment_index < 0 or segment_index >= len(self.segments):
+            raise ValueError(f"segment_index ({segment_index}) out of bounds ({len(self.segments)}")
+        # PT: Segments are guaranteed to be sorted in the order they appear in the Mach-O header
+        return self.segments[segment_index]
 
-    def segment_for_address(self, virt_addr: VirtualMemoryPointer) -> Optional[MachoSegmentCommandStruct]:
+    def segment_with_name(self, desired_segment_name: str) -> Optional[MachoSegmentCommandStruct]:
+        """Returns the segment with the provided name. Returns None if there's no such segment in the binary.
+        """
         # TODO(PT): add unit test for this method
-        # invalid address?
-        if virt_addr < self.get_virtual_base():
-            return None
+        for segment_cmd in self.segments:
+            segment_name = segment_cmd.segname.decode()
+            if segment_name == desired_segment_name:
+                return segment_cmd
+        return None
 
-        # if the address given is past the last declared section, translate based on the last section
-        # so, we need to keep track of the last seen section
-        if not self._last_segment_command:
-            return None
-        max_segment = self._last_segment_command
-
-        for segment_name in self.segment_commands:
-            cmd = self.segment_commands[segment_name]
-            # update highest section
-            if cmd.vmaddr > max_segment.vmaddr:
-                max_segment = cmd
-
-            if cmd.vmaddr <= virt_addr < cmd.vmaddr + cmd.vmsize:
-                return cmd
-        # we looked through all sections and didn't find one explicitly containing this address
-        # guess by using the highest-addressed section we've seen
-        return max_segment
+    def section_with_name(self, desired_section_name: str, parent_segment_name: str) -> Optional[MachoSection]:
+        """Retrieve the section with the provided name which is contained within the provided segment.
+        Returns None if no such section exists.
+        """
+        for section in self.sections:
+            section_name = section.name.decode()
+            if section_name == desired_section_name:
+                if section.cmd.segname.decode() != parent_segment_name:
+                    # Correct section name but wrong segment -- keep looking
+                    continue
+                return section
+        return None
 
     def _parse_sections_for_segment(self,
                                     segment: MachoSegmentCommandStruct,
@@ -346,18 +342,18 @@ class MachoBinary:
         if not segment.nsects:
             return
 
-        # the first section of this segment begins directly after the segment
+        # The first section of this segment begins directly after the segment
         section_offset = segment_offset + segment.sizeof
         for i in range(segment.nsects):
-            # read section header from file
+            # Read section header from file
             # TODO(PT): handle byte swap of segment
             section_command = self.read_struct(section_offset, MachoSectionRawStruct)
-            # encapsulate header and content into one object, and store that
+            # Encapsulate header and content into one object, and store that
             section = MachoSection(self, section_command)
-            # add to map with the key being the name of the section
-            self.sections[section_command.sectname.decode('UTF8')] = section
+            # Add to list of sections within the Mach-O
+            self.sections.append(section)
 
-            # go to next section in list
+            # Iterate to next section in list
             section_offset += section_command.sizeof
 
     def get_virtual_base(self) -> VirtualMemoryPointer:
@@ -367,7 +363,10 @@ class MachoBinary:
             int containing the virtual memory space address that the Mach-O slice requests to begin at
 
         """
-        text_seg = self.segment_commands['__TEXT']
+        # TODO(PT): Perhaps this should be cached. Finding the segment by name is now O(n) on segment count
+        text_seg = self.segment_with_name('__TEXT')
+        if not text_seg:
+            raise RuntimeError(f'Could not find virtual base because binary has no __TEXT segment.')
         return VirtualMemoryPointer(text_seg.vmaddr)
 
     def get_bytes(self, offset: StaticFilePointer, size: int) -> bytearray:
@@ -605,10 +604,12 @@ class MachoBinary:
         """
         locations: List[VirtualMemoryPointer] = []
         entries: List[VirtualMemoryPointer] = []
-        if section_name not in self.sections:
+
+        # PT: Assume a pointer-list-section will always be in the __DATA segment. True as far as I know.
+        section = self.section_with_name(section_name, '__DATA')
+        if not section:
             return locations, entries
 
-        section = self.sections[section_name]
         section_base = section.address
         section_data = section.content
 
@@ -689,6 +690,7 @@ class MachoBinary:
     @property
     def _codesign_parser(self) -> 'CodesignParser':
         if not self.__codesign_parser:
+            from strongarm.macho.codesign import CodesignParser
             self.__codesign_parser = CodesignParser(self)
         return self.__codesign_parser
 

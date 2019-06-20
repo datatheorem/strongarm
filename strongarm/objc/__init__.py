@@ -8,6 +8,8 @@ from .objc_query import (
     CodeSearchInstructionMnemonic,
     CodeSearchFunctionCallWithArguments,
     CodeSearchResultFunctionCallWithArguments,
+
+    CFunctionArgAnyValue,
 )
 
 from .objc_analyzer import (

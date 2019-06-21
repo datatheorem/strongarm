@@ -32,6 +32,11 @@ class OperandIsNotStorage(Exception):
     pass
 
 
+class EndOfFunction(Exception):
+    """Raised when you try to step() past the end of a source function
+    """
+
+
 class InstructionIndex(int):
     pass
 
@@ -102,7 +107,7 @@ class UninitializedValue(MemoryContents):
         return '[not set]'
 
     def format(self, execution: 'Execution' = None) -> str:
-        return 'not set'
+        return '[not set]'
 
     def __repr__(self):
         return '[not set]'
@@ -312,14 +317,9 @@ class Execution:
 
 
 class FunctionInterpreter:
-    def __init__(self,
-                 function_analyzer: ObjcFunctionAnalyzer,
-                 target_instruction: ObjcInstruction) -> None:
+    def __init__(self, function_analyzer: ObjcFunctionAnalyzer) -> None:
         self.function_analyzer = function_analyzer
-        self.target_instruction = target_instruction
         self.execution = Execution(function_analyzer)
-        self._interpret_function_until_target()
-        self.execution.print()
 
     def _find_function_prologue_end(self) -> InstructionIndex:
         prologue_end_idx = -1
@@ -498,53 +498,53 @@ class FunctionInterpreter:
         self.execution.set_contents(self.execution.storage_from_reg_name('x0'), return_value)
         print(f'{return_value} = {msg_send_description}')
 
-    def _interpret_function_until_target(self) -> None:
-        for idx, instr in enumerate(self.function_analyzer.instructions):
-            if instr.address >= self.target_instruction.address:
-                break
+    def run_until_address(self, address: VirtualMemoryPointer) -> None:
+        while self.execution.instruction_pointer_addr < address:
+            self.step()
 
-            print(f'RUN INSTRUCTION:\t\t {self.function_analyzer.format_instruction(instr)}')
-            if instr.mnemonic == 'nop':
-                continue
+    def run_past_address(self, address: VirtualMemoryPointer) -> None:
+        self.run_until_address(address)
+        self.step()
 
-            if instr == self.target_instruction.raw_instr:
-                print(f'Got target instr')
-                return
+    def step(self) -> None:
+        instr = self.function_analyzer.get_instruction_at_address(self.execution.instruction_pointer_addr)
+        self.execution.instruction_pointer_addr += self.execution.INSTRUCTION_SIZE
 
-            # Load memory values
-            if instr.mnemonic in ['ldr']:
-                self._ldr(instr)
-            elif instr.mnemonic == 'adrp':
-                pass
-                # self._adrp(instr)
-            # Stack storage
-            elif instr.mnemonic == 'str':
-                pass
-                # self._str(instr)
-            elif instr.mnemonic == 'stp':
-                self._stp(instr)
-            # Moving data
-            elif instr.mnemonic == 'mov':
-                pass
-                # self._mov(instr)
-            # Manipulating registers
-            elif instr.mnemonic == 'orr':
-                pass
-                # self._orr(instr)
-            elif instr.mnemonic == 'add':
-                self._add(instr)
-            elif instr.mnemonic == 'sub':
-                self._sub(instr)
-            # Branching
-            elif instr.mnemonic in ['bl', 'b']:
-                pass
-                # self._branch(instr)
-            # Other
-            elif False and instr.mnemonic == 'ldp':
-                # Might be epilogue?
-                break
+        print(f'RUN INSTRUCTION:\t\t {self.function_analyzer.format_instruction(instr)}')
 
-            self.execution.print()
+        if instr.mnemonic == 'nop':
+            return
+
+        # Load memory values
+        if instr.mnemonic in ['ldr']:
+            self._ldr(instr)
+        elif instr.mnemonic == 'adrp':
+            self._adrp(instr)
+        # Stack storage
+        elif instr.mnemonic == 'str':
+            self._str(instr)
+        elif instr.mnemonic == 'stp':
+            self._stp(instr)
+        # Moving data
+        elif instr.mnemonic == 'mov':
+            self._mov(instr)
+        # Manipulating registers
+        elif instr.mnemonic == 'orr':
+            pass
+            # self._orr(instr)
+        elif instr.mnemonic == 'add':
+            self._add(instr)
+        elif instr.mnemonic == 'sub':
+            self._sub(instr)
+        # Branching
+        elif instr.mnemonic in ['bl', 'b']:
+            self._branch(instr)
+        # Other
+        elif False and instr.mnemonic == 'ldp':
+            # Might be epilogue?
+            raise EndOfFunction()
+
+        self.execution.print()
 
 
 if __name__ == '__main__':

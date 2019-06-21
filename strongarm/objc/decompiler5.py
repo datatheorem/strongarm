@@ -408,9 +408,9 @@ class FunctionInterpreter:
         self.execution.copy_value(source, dest)
 
     def _str(self, instr: CsInsn) -> None:
-        register_to_save = self.execution.op0_storage(instr, expected_type=RegisterStorage)
-        stack_destination = self.execution.op1_storage(instr, expected_type=StackStorage)
-        self.execution.set_contents(stack_destination, StorageLoad(register_to_save))
+        source = self.execution.op0_storage(instr, expected_type=RegisterStorage)
+        dest = self.execution.op1_storage(instr, expected_type=StackStorage)
+        self.execution.set_contents(dest, source.contents)
 
     def _stp(self, instr: CsInsn) -> None:
         # stp        d9, d8, [sp, #0x60]

@@ -145,6 +145,26 @@ class VariableStorage:
         self.contents: MemoryContents = UninitializedValue()
 
 
+class NSDictionary(Object):
+    CLS_NAME = '_OBJC_CLASS_$_NSDictionary'
+    CONSTRUCTOR_SEL = 'dictionaryWithObjects:forKeys:count:'
+
+    def __init__(self, class_name: str, selector_name: str, machine_state: 'Execution') -> None:
+        if class_name != self.CLS_NAME or selector_name != self.CONSTRUCTOR_SEL:
+            raise RuntimeError(f'Unexpected NSDictionary initializer: -[{class_name} {selector_name}]')
+        super().__init__(class_name, selector_name)
+
+        self._construct_from_machine_state(machine_state)
+
+    def _construct_from_machine_state(self, machine_state: 'Execution') -> None:
+        objects = machine_state.get_reg_contents('x2')
+        keys = machine_state.get_reg_contents('x3')
+        count = machine_state.get_reg_contents('x4')
+        print(f'\tobjects: {objects} {hex(objects.get_value(machine_state))}')
+        print(f'\tkeys:    {keys} {hex(keys.get_value(machine_state))}')
+        print(f'\tcount:   {count}')
+
+
 # PT: Insight. Everything is either a constant value or a set of pointers that ends in a value
 # Or heap memory.
 

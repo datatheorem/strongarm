@@ -126,6 +126,17 @@ class NonLocalValue(MemoryContents):
         return '[non-local]'
 
 
+class FunctionArgument(MemoryContents):
+    def get_value(self, execution: 'Execution' = None) -> str:
+        return '[function arg]'
+
+    def format(self, execution: 'Execution' = None) -> str:
+        return '[function arg]'
+
+    def __repr__(self) -> str:
+        return '[function arg]'
+
+
 class VariableStorage:
     """A register or stack word
     """
@@ -176,6 +187,14 @@ class StackStorage(VariableStorage):
 class Execution:
     """A state-machine representing the processor as it executes a function.
     """
+    # Instructions are 4 bytes on ARM64
+    INSTRUCTION_SIZE = 4
+    # Words are 8 bytes on ARM64
+    WORD_SIZE = 8
+
+    # Arbitrary address used as the base of the interpreted program stack
+    VIRTUAL_STACK_BASE = VirtualMemoryPointer(0x8ffffffff)
+
     _ZERO_REGISTER = ZeroRegister()
 
     def __init__(self, function_analyzer: ObjcFunctionAnalyzer) -> None:
@@ -184,13 +203,22 @@ class Execution:
             self._ZERO_REGISTER.name: self._ZERO_REGISTER,
         }
 
+        # Set the instruction pointer to the start of the function
+        self.instruction_pointer_addr: VirtualMemoryPointer = self.function_analyzer.start_address
         # Give the machine a fake stack frame
-        self.stack_pointer_addr = 0x100000000
+        # We want to use an address which is unlikely to collide with any of the binary data, so make it high
+        self.stack_pointer_addr = self.VIRTUAL_STACK_BASE
 
         # Set up frame pointer (x29)
         self.set_contents(self.storage_from_reg_name('x29'), NonLocalValue())
         # Set up link register (x30)
         self.set_contents(self.storage_from_reg_name('x30'), NonLocalValue())
+
+        # Set up argument registers (x0-x7)
+        # TODO(PT): we should be smarter about this by reading the arg count from the selector / signature
+        for i in range(0, 8):
+            reg_name = f'x{i}'
+            self.set_contents(self.storage_from_reg_name(reg_name), FunctionArgument())
 
         # Set up the callee-saved registers (x19-x28, d8-d15)
         for i in range(19, 29):

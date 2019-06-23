@@ -70,7 +70,9 @@ class StorageLoad(MemoryContents):
 class Object(MemoryContents):
     """A symbolic variable initialized at runtime
     """
-    def __init__(self, class_name: str = None, selector_name: str = None) -> None:
+    GENERIC_CLASS = 'id'
+
+    def __init__(self, class_name: str = GENERIC_CLASS, selector_name: str = None) -> None:
         self.class_name: Optional[str] = class_name
         self.selector_name: Optional[str] = selector_name
 
@@ -94,10 +96,10 @@ class ConstantValue(MemoryContents):
         return self.value
 
     def format(self, execution: 'Execution' = None) -> str:
-        return f'[{self.value}]'
+        return f'[{hex(self.value)}]'
 
     def __repr__(self) -> str:
-        return f'[{self.value}]'
+        return f'[{hex(self.value)}]'
 
 
 class UninitializedValue(MemoryContents):
@@ -448,12 +450,12 @@ class FunctionInterpreter:
 
         offset = dest_memory.value.mem.disp
         dest_storage_word1 = self.execution.storage_from_stack_offset(offset)
-        # TODO(PT): move to Execution?
-        WORD_SIZE = 8
-        dest_storage_word2 = self.execution.storage_from_stack_offset(offset + WORD_SIZE)
+        dest_storage_word2 = self.execution.storage_from_stack_offset(offset + Execution.WORD_SIZE)
 
         self.execution.copy_value(reg1, dest_storage_word1)
         self.execution.copy_value(reg2, dest_storage_word2)
+
+        print(f'store {reg1}, {reg2} -> {dest_storage_word1}, {dest_storage_word2}')
 
     def _orr(self, instr: CsInsn) -> None:
         # orr        w4, wzr, #0x2
@@ -538,7 +540,7 @@ class FunctionInterpreter:
             self.execution.print()
             assert type(receiver) == Object, f'{hex(instr.address)} ObjC receiver is not an Object: {type(x0.contents)}'
 
-            return_value = Object(class_name='id', selector_name=selector.name)
+            return_value = Object(selector_name=selector.name)
             self.execution.set_contents(x0, return_value)
 
             msg_send_description = f'-[{receiver.class_name} {selector.name}]'

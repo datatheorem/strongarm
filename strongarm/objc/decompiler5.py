@@ -156,12 +156,32 @@ class NSDictionary(Object):
         self._construct_from_machine_state(machine_state)
 
     def _construct_from_machine_state(self, machine_state: 'Execution') -> None:
-        objects = machine_state.get_reg_contents('x2')
-        keys = machine_state.get_reg_contents('x3')
-        count = machine_state.get_reg_contents('x4')
-        print(f'\tobjects: {objects} {hex(objects.get_value(machine_state))}')
-        print(f'\tkeys:    {keys} {hex(keys.get_value(machine_state))}')
-        print(f'\tcount:   {count}')
+        objects_stack_ptr = machine_state.get_reg_contents('x2').get_value(machine_state)
+        keys_stack_ptr = machine_state.get_reg_contents('x3').get_value(machine_state)
+        assert isinstance(objects_stack_ptr, int)
+        assert isinstance(keys_stack_ptr, int)
+        count = 2
+
+        for kv_pair in range(count):
+            # Read the key and object from the machine's stack
+            object_storage = machine_state.storage_from_stack_address(VirtualMemoryPointer(objects_stack_ptr))
+            key_storage = machine_state.storage_from_stack_address(VirtualMemoryPointer(keys_stack_ptr))
+
+            # Save the key/value pair to our representation of the dictionary
+            object = object_storage.contents.get_value(machine_state)
+            key = key_storage.contents.get_value(machine_state)
+            self.storage[key] = object
+
+            # Iterate stack pointers to the next key/value pair
+            objects_stack_ptr += Execution.WORD_SIZE
+            keys_stack_ptr += Execution.WORD_SIZE
+
+        print('**** \n'
+              'Parsed NSDictionary: {')
+        for key, value in self.storage.items():
+            print(f'\t{hex(key)}: {value},')
+        print('}')
+        print(f'****')
 
 
 # PT: Insight. Everything is either a constant value or a set of pointers that ends in a value

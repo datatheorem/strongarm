@@ -604,6 +604,10 @@ class FunctionInterpreter:
                 return_value = NSDictionary(class_name=class_name,
                                             selector_name=selector.name,
                                             machine_state=self.execution)
+            elif class_name == NSNumber.CLS_NAME and selector.name == NSNumber.CONSTRUCTOR_SEL:
+                return_value = NSNumber(class_name=class_name,
+                                        selector_name=selector.name,
+                                        machine_state=self.execution)
             else:
                 # Generic object creation
                 return_value = Object(class_name=class_name, selector_name=selector.name)
@@ -612,8 +616,8 @@ class FunctionInterpreter:
             # Object created by calling a method on another object
             # Type information would be helpful here. At the very least, knowing when a method returns void.
             x0 = self.execution.storage_from_reg_name('x0')
-            self.execution.print()
-            assert type(receiver) == Object, f'{hex(instr.address)} ObjC receiver is not an Object: {type(x0.contents)}'
+            # self.execution.print()
+            assert issubclass(type(receiver), Object), f'{hex(instr.address)} ObjC receiver is not an Object: {type(x0.contents)}'
 
             return_value = Object(selector_name=selector.name)
             self.execution.set_contents(x0, return_value)

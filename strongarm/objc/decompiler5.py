@@ -476,13 +476,21 @@ class FunctionInterpreter:
             print(f'Can\'t handle ldr from {source.type} to register')
 
     def _adrp(self, instr: CsInsn) -> None:
+        # XXX(PT): Can we unify the implementations of _adrp and _adr?
         dest = self.execution.op0_storage(instr)
         source = instr.operands[1]
         if source.type == ARM64_OP_IMM:
             self.execution.set_imm(dest, source.imm)
         else:
-            print(f'Can\'t handle adrp from {source.type} to register')
-        pass
+            raise RuntimeError(f'Can\'t handle adrp from {source.type} to register')
+
+    def _adr(self, instr: CsInsn) -> None:
+        dest = self.execution.op0_storage(instr)
+        source = instr.operands[1]
+        if source.type == ARM64_OP_IMM:
+            self.execution.set_imm(dest, source.imm)
+        else:
+            raise RuntimeError(f'Can\'t handle adrp from {source.type} to register')
 
     def _mov(self, instr: CsInsn) -> None:
         dest = self.execution.op0_storage(instr)
@@ -546,8 +554,12 @@ class FunctionInterpreter:
         assert stack_offset_op.type == ARM64_OP_IMM
         stack_offset = stack_offset_op.value.imm
 
-        new_value = self.execution.stack_pointer_addr + stack_offset
-        self.execution.set_imm(dest, new_value)
+        if self.execution.storage_is_stack_pointer(dest):
+            print(f'adding stack pointer to itself')
+            self.execution.stack_pointer_addr += stack_offset
+        else:
+            new_value = self.execution.stack_pointer_addr + stack_offset
+            self.execution.set_imm(dest, new_value)
 
     def _sub(self, instr: CsInsn) -> None:
         # sub        sp, sp, #0xd0
@@ -629,10 +641,12 @@ class FunctionInterpreter:
             return
 
         # Load memory values
-        if instr.mnemonic in ['ldr']:
+        if instr.mnemonic == 'ldr':
             self._ldr(instr)
         elif instr.mnemonic == 'adrp':
             self._adrp(instr)
+        elif instr.mnemonic == 'adr':
+            self._adr(instr)
         # Stack storage
         elif instr.mnemonic == 'str':
             self._str(instr)
@@ -644,7 +658,7 @@ class FunctionInterpreter:
         # Manipulating registers
         elif instr.mnemonic == 'orr':
             pass
-            # self._orr(instr)
+            self._orr(instr)
         elif instr.mnemonic == 'add':
             self._add(instr)
         elif instr.mnemonic == 'sub':
@@ -656,8 +670,10 @@ class FunctionInterpreter:
         elif False and instr.mnemonic == 'ldp':
             # Might be epilogue?
             raise EndOfFunction()
+        else:
+            print(f'Unknown mnemonic {instr.mnemonic}')
 
-        self.execution.print()
+        # self.execution.print()
 
 
 if __name__ == '__main__':

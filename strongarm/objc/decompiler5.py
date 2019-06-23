@@ -128,15 +128,12 @@ class NonLocalValue(MemoryContents):
         return '[non-local]'
 
 
-class FunctionArgument(MemoryContents):
-    def get_value(self, execution: 'Execution' = None) -> str:
-        return '[function arg]'
-
+class FunctionArgumentObject(Object):
     def format(self, execution: 'Execution' = None) -> str:
-        return '[function arg]'
+        return f'[function arg {super().format(execution)}]'
 
     def __repr__(self) -> str:
-        return '[function arg]'
+        return f'[function arg {super().__repr__()}]'
 
 
 class VariableStorage:
@@ -237,10 +234,20 @@ class Execution:
         self.set_contents(self.storage_from_reg_name('x30'), NonLocalValue())
 
         # Set up argument registers (x0-x7)
+        # TODO(PT): test machine state on interpreter startup
+        # In an Objective-C method call, x0 always contains self
+        self_arg = FunctionArgumentObject(class_name=function_analyzer.method_info.objc_class.name)
+        self.set_contents(self.storage_from_reg_name('x0'), self_arg)
+        # And x1 always contains the selref, but we won't necessarily know this value
+        # This is because a selref is only added to _objc_selrefs if the selector is invoked within the binary
+        # Thus, make it an unknown value
+        self.set_contents(self.storage_from_reg_name('x1'), NonLocalValue())
+        # And x2-x7 will contain method arguments
         # TODO(PT): we should be smarter about this by reading the arg count from the selector / signature
-        for i in range(0, 8):
+        for i in range(2, 8):
             reg_name = f'x{i}'
-            self.set_contents(self.storage_from_reg_name(reg_name), FunctionArgument())
+            object = FunctionArgumentObject()
+            self.set_contents(self.storage_from_reg_name(reg_name), FunctionArgumentObject())
 
         # Set up the callee-saved registers (x19-x28, d8-d15)
         for i in range(19, 29):
@@ -250,7 +257,7 @@ class Execution:
             reg_name = f'd{i}'
             self.set_contents(self.storage_from_reg_name(reg_name), NonLocalValue())
 
-        self.print()
+        # self.print()
 
     def storage_from_reg_name(self, name: str) -> RegisterStorage:
         if 'zr' in name:

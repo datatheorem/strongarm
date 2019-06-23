@@ -185,6 +185,7 @@ class NSDictionary(Object):
             raise RuntimeError(f'Unexpected NSDictionary initializer: -[{class_name} {selector_name}]')
         super().__init__(class_name, selector_name)
 
+        self.storage = {}
         self._construct_from_machine_state(machine_state)
 
     def _construct_from_machine_state(self, machine_state: 'Execution') -> None:
@@ -327,7 +328,10 @@ class Execution:
         return reg.contents
 
     def storage_from_stack_offset(self, offset: int) -> StackStorage:
-        storage_addr = self.stack_pointer_addr - offset
+        storage_addr = self.stack_pointer_addr + offset
+        return self.storage_from_stack_address(VirtualMemoryPointer(storage_addr))
+
+    def storage_from_stack_address(self, storage_addr: VirtualMemoryPointer) -> StackStorage:
         label = StackStorage.get_label(storage_addr)
 
         if label not in self._variables:

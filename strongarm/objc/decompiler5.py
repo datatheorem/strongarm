@@ -144,6 +144,38 @@ class VariableStorage:
         self.contents: MemoryContents = UninitializedValue()
 
 
+class NSNumber(Object):
+    CLS_NAME = '_OBJC_CLASS_$_NSNumber'
+    CONSTRUCTOR_SEL = 'numberWithBool:'
+
+    @classmethod
+    def numberWithBool(cls, value: int) -> 'NSNumber':
+        number = NSNumber(NSNumber.CLS_NAME, NSNumber.CONSTRUCTOR_SEL)
+        number.value = value
+        return number
+
+    def __eq__(self, other):
+        return self.value == other.value
+
+    def __init__(self, class_name: str, selector_name: str, machine_state: 'Execution' = None) -> None:
+        if class_name != self.CLS_NAME or selector_name != self.CONSTRUCTOR_SEL:
+            raise RuntimeError(f'Unexpected NSNumber initializer: -[{class_name} {selector_name}]')
+        super().__init__(class_name, selector_name)
+
+        self.value: Optional[int] = None
+        if machine_state:
+            self._construct_from_machine_state(machine_state)
+
+    def _construct_from_machine_state(self, machine_state: 'Execution') -> None:
+        self.value = machine_state.get_reg_contents('x2').get_value(machine_state)
+
+    def format(self, execution: 'Execution' = None) -> str:
+        return f'[nsnumber instance {self.value}]'
+
+    def __repr__(self):
+        return f'[nsnumber instance {self.value}]'
+
+
 class NSDictionary(Object):
     CLS_NAME = '_OBJC_CLASS_$_NSDictionary'
     CONSTRUCTOR_SEL = 'dictionaryWithObjects:forKeys:count:'

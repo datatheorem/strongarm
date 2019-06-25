@@ -288,15 +288,14 @@ class ObjcRuntimeDataParser:
             class_name = self.binary.get_full_string_from_start_address(ivar_struct.type)
             field_offset = self.binary.read_word(ivar_struct.offset_ptr, word_type=c_uint32)
 
-            if not ivar_name or not class_name or not field_offset:
+            # class_name and field_offset can be falsey ('' and 0), so don't include them in this sanity check
+            if not ivar_name:
                 raise ValueError(f'Failed to read ivar data for ivar entry @ {hex(ivar_struct_ptr)}')
 
             ivar = ObjcIvar(ivar_name, class_name, field_offset)
             ivars.append(ivar)
 
             ivar_struct_ptr += ivar_struct.sizeof
-        from pprint import pprint
-        pprint(ivars)
         return ivars
 
     def read_selectors_from_methlist_ptr(self, methlist_ptr: VirtualMemoryPointer) -> List[ObjcSelector]:

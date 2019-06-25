@@ -276,6 +276,10 @@ class MachoAnalyzer:
         from strongarm.objc import CodeSearch, CodeSearchResult     # type: ignore
         from strongarm.objc import ObjcFunctionAnalyzer     # type: ignore
 
+        # If there are no queued code searches, we have nothing to do
+        if not len(self._queued_code_searches):
+            return
+
         binary_name = Path(self.binary.filename.decode()).name
         logging.info(f'Running {len(self._queued_code_searches.keys())} code searches on {binary_name}')
 

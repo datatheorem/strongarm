@@ -18,6 +18,8 @@ from strongarm.macho.macho_definitions import (
     ObjcClassRaw32, ObjcClassRaw64,
     ObjcMethod32, ObjcMethod64,
     ObjcMethodList,
+    ObjcIvar32, ObjcIvar64,
+    ObjcIvarList,
     ObjcCategoryRaw32, ObjcCategoryRaw64,
     ObjcProtocolRaw32, ObjcProtocolRaw64,
     ObjcProtocolList32, ObjcProtocolList64,
@@ -165,6 +167,11 @@ class ObjcMethodStruct(ArchIndependentStructure):
     _64_BIT_STRUCT = ObjcMethod64
 
 
+class ObjcIvarStruct(ArchIndependentStructure):
+    _32_BIT_STRUCT = ObjcIvar32
+    _64_BIT_STRUCT = ObjcIvar64
+
+
 class CFStringStruct(ArchIndependentStructure):
     _32_BIT_STRUCT = CFString32
     _64_BIT_STRUCT = CFString64
@@ -173,6 +180,11 @@ class CFStringStruct(ArchIndependentStructure):
 class ObjcMethodListStruct(ArchIndependentStructure):
     _32_BIT_STRUCT = ObjcMethodList
     _64_BIT_STRUCT = ObjcMethodList
+
+
+class ObjcIvarListStruct(ArchIndependentStructure):
+    _32_BIT_STRUCT = ObjcIvarList
+    _64_BIT_STRUCT = ObjcIvarList
 
 
 class DylibCommandStruct(ArchIndependentStructure):

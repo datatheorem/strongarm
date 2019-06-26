@@ -1,4 +1,4 @@
-from ctypes import sizeof
+from ctypes import sizeof, c_uint32
 from typing import List, Optional, Dict
 
 from strongarm.macho.macho_definitions import VirtualMemoryPointer
@@ -7,6 +7,8 @@ from strongarm.macho.arch_independent_structs import (
     ObjcDataRawStruct,
     ObjcMethodStruct,
     ObjcMethodListStruct,
+    ObjcIvarStruct,
+    ObjcIvarListStruct,
     ObjcCategoryRawStruct,
     ObjcProtocolRawStruct,
     ObjcProtocolListStruct,
@@ -17,31 +19,32 @@ from strongarm.macho.macho_binary import MachoBinary
 
 
 class ObjcClass:
-    __slots__ = ['raw_struct', 'name', 'selectors', 'protocols']
+    __slots__ = ['raw_struct', 'name', 'selectors', 'ivars', 'protocols']
 
     def __init__(self,
                  raw_struct: ArchIndependentStructure,
                  name: str,
                  selectors: List['ObjcSelector'],
-                 protocols: List['ObjcProtocol'] = []) -> None:
+                 ivars: List['ObjcIvar'] = None,
+                 protocols: List['ObjcProtocol'] = None) -> None:
         self.name = name
         self.selectors = selectors
         self.raw_struct = raw_struct
-        self.protocols = protocols
-        if not self.protocols:
-            self.protocols = []
+        self.ivars = ivars if ivars else []
+        self.protocols = protocols if protocols else []
 
 
 class ObjcCategory(ObjcClass):
-    __slots__ = ['raw_struct', 'name', 'base_class', 'selectors', 'protocols']
+    __slots__ = ['raw_struct', 'name', 'base_class', 'selectors', 'ivars', 'protocols']
 
     def __init__(self,
                  raw_struct: ObjcCategoryRawStruct,
                  base_class: str,
                  name: str,
                  selectors: List['ObjcSelector'],
-                 protocols: List['ObjcProtocol'] = []) -> None:
-        super(ObjcCategory, self).__init__(raw_struct, name, selectors, protocols)
+                 ivars: List['ObjcIvar'] = None,
+                 protocols: List['ObjcProtocol'] = None) -> None:
+        super().__init__(raw_struct, name, selectors, ivars, protocols)
         self.base_class = base_class
 
 
@@ -64,6 +67,20 @@ class ObjcSelector:
         if self.implementation:
             imp_addr = hex(int(self.implementation))
         return f'<@selector({self.name}) at {imp_addr}>'
+
+    __repr__ = __str__
+
+
+class ObjcIvar:
+    __slots__ = ['name', 'class_name', 'field_offset']
+
+    def __init__(self, name: str, class_name: str, offset: int):
+        self.name = name
+        self.class_name = class_name
+        self.field_offset = offset
+
+    def __str__(self) -> str:
+        return f'<@ivar {self.class_name}* {self.name}, off @ {self.field_offset}>'
 
     __repr__ = __str__
 
@@ -257,6 +274,30 @@ class ObjcRuntimeDataParser:
         protocol_pointers = self._get_protolist_pointers()
         return self._parse_protocol_ptr_list(protocol_pointers)
 
+    def read_ivars_from_ivarlist_ptr(self, ivarlist_ptr: VirtualMemoryPointer) -> List[ObjcIvar]:
+        """Given the virtual address of an ivar list, return a List of each encoded ObjcIvar
+        """
+        ivarlist = self.binary.read_struct(ivarlist_ptr, ObjcIvarListStruct, virtual=True)
+        ivars: List[ObjcIvar] = []
+        # Parse each ivar struct which follows the ivarlist
+        ivar_struct_ptr = ivarlist_ptr + ivarlist.sizeof
+        for _ in range(ivarlist.count):
+            ivar_struct = self.binary.read_struct(ivar_struct_ptr, ObjcIvarStruct, virtual=True)
+
+            ivar_name = self.binary.get_full_string_from_start_address(ivar_struct.name)
+            class_name = self.binary.get_full_string_from_start_address(ivar_struct.type)
+            field_offset = self.binary.read_word(ivar_struct.offset_ptr, word_type=c_uint32)
+
+            # class_name and field_offset can be falsey ('' and 0), so don't include them in this sanity check
+            if not ivar_name:
+                raise ValueError(f'Failed to read ivar data for ivar entry @ {hex(ivar_struct_ptr)}')
+
+            ivar = ObjcIvar(ivar_name, class_name, field_offset) # type: ignore
+            ivars.append(ivar)
+
+            ivar_struct_ptr += ivar_struct.sizeof
+        return ivars
+
     def read_selectors_from_methlist_ptr(self, methlist_ptr: VirtualMemoryPointer) -> List[ObjcSelector]:
         """Given the virtual address of a method list, return a List of ObjcSelectors encapsulating each method
         """
@@ -335,7 +376,7 @@ class ObjcRuntimeDataParser:
             protocol_pointers = self._protolist_ptr_to_protocol_ptr_list(objc_category_struct.base_protocols)
             protocols += self._parse_protocol_ptr_list(protocol_pointers)
 
-        return ObjcCategory(objc_category_struct, base_class, symbol_name, selectors, protocols)
+        return ObjcCategory(objc_category_struct, base_class, symbol_name, selectors, protocols=protocols)
 
     def _parse_objc_data_entry(self,
                                objc_class_struct: ObjcClassRawStruct,
@@ -346,6 +387,7 @@ class ObjcRuntimeDataParser:
 
         selectors: List[ObjcSelector] = []
         protocols: List[ObjcProtocol] = []
+        ivars: List[ObjcIvar] = []
         # if the class implements no methods, base_methods will be the null pointer
         if objc_data_struct.base_methods:
             selectors += self.read_selectors_from_methlist_ptr(objc_data_struct.base_methods)
@@ -353,8 +395,11 @@ class ObjcRuntimeDataParser:
         if objc_data_struct.base_protocols:
             protocol_pointer_list = self._protolist_ptr_to_protocol_ptr_list(objc_data_struct.base_protocols)
             protocols += self._parse_protocol_ptr_list(protocol_pointer_list)
+        # Parse ivar list
+        if objc_data_struct.ivars:
+            ivars += self.read_ivars_from_ivarlist_ptr(objc_data_struct.ivars)
 
-        return ObjcClass(objc_class_struct, symbol_name, selectors, protocols)
+        return ObjcClass(objc_class_struct, symbol_name, selectors, ivars, protocols)
 
     def _protolist_ptr_to_protocol_ptr_list(self, protolist_ptr: VirtualMemoryPointer) -> List[VirtualMemoryPointer]:
         """Accepts the virtual address of an ObjcProtocolListStruct, and returns List of protocol pointers it refers to.

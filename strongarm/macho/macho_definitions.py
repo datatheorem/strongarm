@@ -490,6 +490,13 @@ class ObjcMethodList(Structure):
     ]
 
 
+class ObjcIvarList(Structure):
+    _fields_ = [
+        ('entsize', c_uint32),
+        ('count', c_uint32),
+    ]
+
+
 class ObjcProtocolList32(Structure):
     _fields_ = [
         ('count', c_uint32)
@@ -515,6 +522,26 @@ class ObjcMethod64(Structure):
         ('name', c_uint64),
         ('signature', c_uint64),
         ('implementation', c_uint64)
+    ]
+
+
+class ObjcIvar32(Structure):
+    _fields_ = [
+        ('offset_ptr', c_uint32),
+        ('name', c_uint32),
+        ('type', c_uint32),
+        ('unknown', c_uint32),
+        ('size', c_uint32),
+    ]
+
+
+class ObjcIvar64(Structure):
+    _fields_ = [
+        ('offset_ptr', c_uint64),
+        ('name', c_uint64),
+        ('type', c_uint64),
+        ('unknown', c_uint32),
+        ('size', c_uint32),
     ]
 
 

@@ -62,6 +62,27 @@ class TestObjcRuntimeDataParser:
         assert selector.name == 'allowsAnyHTTPSCertificateForHost:'
         assert selector.implementation == 0x100005028
 
+    def test_parse_ivars(self):
+        parser = MachoParser(TestObjcRuntimeDataParser.CATEGORY_PATH)
+        binary = parser.get_arm64_slice()
+        objc_parser = ObjcRuntimeDataParser(binary)
+
+        # Given I read a class with a known ivar layout
+        cls = [x for x in objc_parser.classes if x.name == 'AamvaPDF417'][0]
+        # If I read its parsed ivar layout
+        parsed_ivars = [(ivar.name, ivar.class_name, ivar.field_offset) for ivar in cls.ivars]
+        correct_ivar_layout = [
+            ('_fields', '@"NSMutableDictionary"', 8), ('fields_desc', '@"NSDictionary"', 16),
+            ('found_bar_codes', '@"NSDictionary"', 24), ('source', '@"NSString"', 32),
+            ('data_element_separator', 'S', 40), ('record_separator', 'S', 42), ('segment_terminator', 'S', 44),
+            ('file_type', '@"NSString"', 48), ('number_of_entries', 'i', 56), ('header_length', 'i', 60),
+            ('aamva_version_number', 'i', 64), ('jurisdiction_version_number', 'i', 68),
+            ('mandatory', '@"NSDictionary"', 72), ('optional', '@"NSDictionary"', 80),
+            ('_failed', '@"NSMutableArray"', 88)
+        ]
+        # Then the correct data is provided
+        assert sorted(parsed_ivars) == sorted(correct_ivar_layout)
+
     def test_find_protocols(self):
         parser = MachoParser(TestObjcRuntimeDataParser.FAT_PATH)
         binary = parser.get_arm64_slice()

@@ -81,7 +81,7 @@ class ObjcFunctionAnalyzer(object):
         This method will return None if the address is not contained within the analyzed function.
         """
         index = self._get_instruction_index_of_address(address)
-        if not index:
+        if index is None:
             return None
         return self.get_instruction_at_index(index)
 

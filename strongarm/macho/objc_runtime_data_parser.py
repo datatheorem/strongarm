@@ -292,7 +292,7 @@ class ObjcRuntimeDataParser:
             if not ivar_name:
                 raise ValueError(f'Failed to read ivar data for ivar entry @ {hex(ivar_struct_ptr)}')
 
-            ivar = ObjcIvar(ivar_name, class_name, field_offset)
+            ivar = ObjcIvar(ivar_name, class_name, field_offset) # type: ignore
             ivars.append(ivar)
 
             ivar_struct_ptr += ivar_struct.sizeof
@@ -376,7 +376,7 @@ class ObjcRuntimeDataParser:
             protocol_pointers = self._protolist_ptr_to_protocol_ptr_list(objc_category_struct.base_protocols)
             protocols += self._parse_protocol_ptr_list(protocol_pointers)
 
-        return ObjcCategory(objc_category_struct, base_class, symbol_name, selectors, protocols)
+        return ObjcCategory(objc_category_struct, base_class, symbol_name, selectors, protocols=protocols)
 
     def _parse_objc_data_entry(self,
                                objc_class_struct: ObjcClassRawStruct,

@@ -41,19 +41,19 @@ _32_BIT_STRUCT_ALIAS = Union[Type[MachoHeader32], Type[MachoSegmentCommand32], T
                              Type[MachoEncryptionInfo32Command], Type[MachoNlist32], Type[MachoLoadCommand],
                              Type[MachoSymtabCommand], Type[MachoDysymtabCommand], Type[MachoDyldInfoCommand],
                              Type[MachoLinkeditDataCommand], Type[ObjcDataRaw32], Type[ObjcClassRaw32],
-                             Type[ObjcMethod32], Type[ObjcMethodList], Type[ObjcCategoryRaw32],
+                             Type[ObjcMethod32], Type[ObjcIvar32], Type[ObjcMethodList], Type[ObjcCategoryRaw32],
                              Type[ObjcProtocolRaw32], Type[ObjcProtocolList32], Type[CFString32],
                              Type[DylibCommand], Type['CSBlobStruct'], Type['CSSuperblobStruct'],
-                             Type['CSCodeDirectoryStruct'], Type['CSBlobIndexStruct']]
+                             Type['CSCodeDirectoryStruct'], Type['CSBlobIndexStruct'], Type['ObjcIvarList']]
 
 _64_BIT_STRUCT_ALIAS = Union[Type[MachoHeader64], Type[MachoSegmentCommand64], Type[MachoSection64Raw],
                              Type[MachoEncryptionInfo64Command], Type[MachoNlist64], Type[MachoLoadCommand],
                              Type[MachoSymtabCommand], Type[MachoDysymtabCommand], Type[MachoDyldInfoCommand],
                              Type[MachoLinkeditDataCommand], Type[ObjcDataRaw64], Type[ObjcClassRaw64],
-                             Type[ObjcMethod64], Type[ObjcMethodList], Type[ObjcCategoryRaw64],
+                             Type[ObjcMethod64], Type[ObjcIvar64], Type[ObjcMethodList], Type[ObjcCategoryRaw64],
                              Type[ObjcProtocolRaw64], Type[ObjcProtocolList64], Type[CFString64],
                              Type[DylibCommand], Type['CSBlobStruct'], Type['CSSuperblobStruct'],
-                             Type['CSCodeDirectoryStruct'], Type['CSBlobIndexStruct']]
+                             Type['CSCodeDirectoryStruct'], Type['CSBlobIndexStruct'], Type['ObjcIvarList']]
 
 
 class ArchIndependentStructure:

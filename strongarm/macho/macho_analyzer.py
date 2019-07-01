@@ -37,7 +37,6 @@ CodeSearchCallback = Callable[['MachoAnalyzer', 'CodeSearch', List['CodeSearchRe
 class DisassemblyFailedError(Exception):
     """Raised when Capstone fails to disassemble a bytecode sequence.
     """
-    pass
 
 
 class MachoAnalyzer:
@@ -328,7 +327,11 @@ class MachoAnalyzer:
             return self.imported_symbols_to_symbol_names[classref]
 
         # otherwise, the class is implemented within a binary and we have an ObjcClass for it
-        class_location = self.binary.read_word(classref)
+        try:
+            class_location = self.binary.read_word(classref)
+        except InvalidAddressError:
+            # invalid classref
+            return None
 
         local_class = [x for x in self.objc_classes() if x.raw_struct.binary_offset == class_location]
         if len(local_class):

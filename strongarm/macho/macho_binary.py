@@ -384,7 +384,7 @@ class MachoBinary:
             raise InvalidAddressError(f'get_bytes() offset {hex(offset)} looks like a virtual address.'
                                       f' Did you mean to use get_content_from_virtual_address?')
         if offset < 0:
-            raise InvalidAddressError(f'get_bytes() asked to find bytes at negative address: {hex(offset)}')
+            raise InvalidAddressError(f'get_bytes() passed negative offset: {hex(offset)}')
 
         # safeguard against reading from an encrypted segment of the binary
         if self.is_range_encrypted(offset, size):

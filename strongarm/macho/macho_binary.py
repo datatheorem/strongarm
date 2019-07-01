@@ -383,6 +383,8 @@ class MachoBinary:
         if offset > 0x100000000:
             raise InvalidAddressError(f'get_bytes() offset {hex(offset)} looks like a virtual address.'
                                       f' Did you mean to use get_content_from_virtual_address?')
+        if offset < 0:
+            raise InvalidAddressError(f'get_bytes() passed negative offset: {hex(offset)}')
 
         # safeguard against reading from an encrypted segment of the binary
         if self.is_range_encrypted(offset, size):
@@ -477,8 +479,7 @@ class MachoBinary:
     def get_contents_from_address(self, address: int, size: int, is_virtual: bool = False) -> bytearray:
         """Get a bytesarray from a specified address, size and virtualness
         TODO(FS): change all methods that use addresses as ints to the VirtualAddress/StaticAddress class pair to better
-         express intent and facilitate the implementation by using @singledispatch
-         (https://docs.python.org/3/library/functools.html?highlight=singledispatch#functools.singledispatch)
+         express intent
         """
         if is_virtual:
             return self.get_content_from_virtual_address(VirtualMemoryPointer(address), size)
@@ -633,7 +634,7 @@ class MachoBinary:
                   address: int,
                   virtual: bool = True,
                   word_type: Any = None) -> int:
-        """Attempt to read a word from the binary at a virtual address. Returns None if the address is invalid.
+        """Attempt to read a word from the binary at a virtual address.
         """
         if not word_type:
             word_type = self.platform_word_type
@@ -644,7 +645,7 @@ class MachoBinary:
             file_bytes = self.get_bytes(StaticFilePointer(address), sizeof(word_type))
 
         if not file_bytes:
-            raise ValueError(f"Could not read word at address 0x{hex(address)}")
+            raise InvalidAddressError(f'Could not read word at address {hex(address)}')
 
         return word_type.from_buffer(bytearray(file_bytes)).value
 

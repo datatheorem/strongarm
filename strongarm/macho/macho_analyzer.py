@@ -9,8 +9,8 @@ from capstone import Cs, CsInsn, CS_ARCH_ARM64, CS_MODE_ARM
 
 from strongarm.macho.macho_definitions import VirtualMemoryPointer
 from strongarm.macho.arch_independent_structs import CFStringStruct, CFString32, CFString64
-from strongarm.macho.macho_binary import MachoBinary
 from strongarm.macho.macho_imp_stubs import MachoImpStubsParser
+from strongarm.macho.macho_binary import MachoBinary, InvalidAddressError
 from strongarm.macho.dyld_info_parser import DyldInfoParser, DyldBoundSymbol
 from strongarm.macho.macho_string_table_helper import MachoStringTableHelper
 
@@ -32,6 +32,11 @@ if TYPE_CHECKING:
 # Callback invoked when the results for a previously queued CodeSearch have been found.
 # This will be dispatched some time after MachoAnalyzer.search_all_code() is called
 CodeSearchCallback = Callable[['MachoAnalyzer', 'CodeSearch', List['CodeSearchResult']], None]
+
+
+class DisassemblyFailedError(Exception):
+    """Raised when Capstone fails to disassemble a bytecode sequence.
+    """
 
 
 class MachoAnalyzer:
@@ -180,6 +185,8 @@ class MachoAnalyzer:
         """
         func_str = bytes(self.binary.get_content_from_virtual_address(virtual_address=start_address, size=size))
         instructions = [instr for instr in self.cs.disasm(func_str, start_address)]
+        if not len(instructions):
+            raise DisassemblyFailedError(f'Failed to disassemble code at {hex(start_address)}:{hex(size)}')
         return instructions
 
     def get_function_instructions(self, start_address: VirtualMemoryPointer) -> List[CsInsn]:
@@ -287,7 +294,11 @@ class MachoAnalyzer:
         search_results: Dict['CodeSearch', List[CodeSearchResult]] = defaultdict(list)
 
         for i, method_info in enumerate(entry_point_list):
-            function_analyzer = ObjcFunctionAnalyzer.get_function_analyzer_for_method(self.binary, method_info)
+            try:
+                function_analyzer = ObjcFunctionAnalyzer.get_function_analyzer_for_method(self.binary, method_info)
+            except DisassemblyFailedError as e:
+                logging.error(f'Failed to disassemble {method_info}: {str(e)}')
+                continue
 
             # Run every code search on this function and record their respective results
             for code_search, callback in self._queued_code_searches.items():
@@ -316,7 +327,11 @@ class MachoAnalyzer:
             return self.imported_symbols_to_symbol_names[classref]
 
         # otherwise, the class is implemented within a binary and we have an ObjcClass for it
-        class_location = self.binary.read_word(classref)
+        try:
+            class_location = self.binary.read_word(classref)
+        except InvalidAddressError:
+            # invalid classref
+            return None
 
         local_class = [x for x in self.objc_classes() if x.raw_struct.binary_offset == class_location]
         if len(local_class):

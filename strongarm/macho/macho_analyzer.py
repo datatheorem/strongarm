@@ -34,6 +34,12 @@ if TYPE_CHECKING:
 CodeSearchCallback = Callable[['MachoAnalyzer', 'CodeSearch', List['CodeSearchResult']], None]
 
 
+class DisassemblyFailedError(Exception):
+    """Raised when Capstone fails to disassemble a bytecode sequence.
+    """
+    pass
+
+
 class MachoAnalyzer:
     # This class does expensive one-time cross-referencing operations
     # Therefore, we want only one instance to exist for any MachoBinary
@@ -180,6 +186,8 @@ class MachoAnalyzer:
         """
         func_str = bytes(self.binary.get_content_from_virtual_address(virtual_address=start_address, size=size))
         instructions = [instr for instr in self.cs.disasm(func_str, start_address)]
+        if not len(instructions):
+            raise DisassemblyFailedError(f'Failed to disassemble code at {hex(start_address)}:{hex(size)}')
         return instructions
 
     def get_function_instructions(self, start_address: VirtualMemoryPointer) -> List[CsInsn]:
@@ -287,7 +295,11 @@ class MachoAnalyzer:
         search_results: Dict['CodeSearch', List[CodeSearchResult]] = defaultdict(list)
 
         for i, method_info in enumerate(entry_point_list):
-            function_analyzer = ObjcFunctionAnalyzer.get_function_analyzer_for_method(self.binary, method_info)
+            try:
+                function_analyzer = ObjcFunctionAnalyzer.get_function_analyzer_for_method(self.binary, method_info)
+            except DisassemblyFailedError as e:
+                logging.error(f'Failed to disassemble {method_info}: {str(e)}')
+                continue
 
             # Run every code search on this function and record their respective results
             for code_search, callback in self._queued_code_searches.items():

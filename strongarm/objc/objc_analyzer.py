@@ -143,8 +143,6 @@ class ObjcFunctionAnalyzer(object):
         from strongarm.macho.macho_analyzer import MachoAnalyzer
         analyzer = MachoAnalyzer.get_analyzer(binary)
         instructions = analyzer.get_function_instructions(method_info.imp_addr)
-        if not instructions:
-            raise ValueError(f'Could not get function instructions for {method_info}')
         return ObjcFunctionAnalyzer(binary, instructions, method_info=method_info)
 
     @classmethod

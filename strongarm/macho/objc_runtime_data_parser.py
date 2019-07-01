@@ -1,3 +1,4 @@
+import logging
 from ctypes import sizeof, c_uint32
 from typing import List, Optional, Dict
 
@@ -129,7 +130,8 @@ class ObjcRuntimeDataParser:
             string_file_address = symtab.stroff + strtab_idx
             symbol_name = self.binary.get_full_string_from_start_address(string_file_address, virtual=False)
             if not symbol_name:
-                raise ValueError(f'Could not get symbol name at address {string_file_address}')
+                logging.error(f'Could not get symbol name at address {string_file_address}')
+                continue
 
             library_ordinal = self._library_ordinal_from_n_desc(sym.n_desc)
             source_name = self.binary.dylib_name_for_library_ordinal(library_ordinal)

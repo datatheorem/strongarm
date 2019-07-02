@@ -606,9 +606,13 @@ class MachoBinary:
         locations: List[VirtualMemoryPointer] = []
         entries: List[VirtualMemoryPointer] = []
 
-        # PT: Assume a pointer-list-section will always be in the __DATA segment. True as far as I know.
-        section = self.section_with_name(section_name, '__DATA')
-        if not section:
+        # PT: Assume a pointer-list-section will always be in __DATA or __DATA_CONST. True as far as I know.
+        for segment in ['__DATA', '__DATA_CONST']:
+            section = self.section_with_name(section_name, segment)
+            if section:
+                break
+        else:
+            # Couldn't find the desired section
             return locations, entries
 
         section_base = section.address

@@ -12,6 +12,8 @@ class TestMachoBinary:
     ENCRYPTED_PATH = os.path.join(os.path.dirname(__file__), 'bin', 'RxTest')
     # Found within this app: https://pythia.sourcetheorem.com/mobile_app_scans/5196911454191616
     MULTIPLE_CONST_SECTIONS = pathlib.Path(__file__).parent / 'bin' / 'BroadSoftDialpadFramework'
+    # Test binary from Eric for the secure enclave check
+    CLASSLIST_DATA_CONST = os.path.join(os.path.dirname(__file__), 'bin', 'CKTest2')
 
     def setup_method(self):
         self.parser = MachoParser(TestMachoBinary.FAT_PATH)
@@ -128,3 +130,29 @@ class TestMachoBinary:
         read_strings = bytes(self.binary.get_raw_string_table())
         # Then I get the correct data out
         assert read_strings == correct_strings
+
+    def test_read_classlist_data_segment(self):
+        # Given a binary which stores the __objc_classlist section in the __DATA segment
+        binary_with_data_classlist = MachoParser(TestMachoBinary.FAT_PATH).get_arm64_slice()
+
+        # If I read the __objc_classlist pointer section
+        locations, entries = binary_with_data_classlist.read_pointer_section('__objc_classlist')
+        correct_locations = [0x100008178,0x100008180,0x100008188,0x100008190]
+        correct_entries = [0x100009120,0x100009170,0x1000091e8,0x100009238]
+
+        # Then I get the correct data
+        assert sorted(locations) == sorted(correct_locations)
+        assert sorted(entries) == sorted(correct_entries)
+
+    def test_read_classlist_data_const_segment(self):
+        # Given a binary which stores the __objc_classlist section in the __DATA_CONST segment
+        binary_with_data_classlist = MachoParser(TestMachoBinary.CLASSLIST_DATA_CONST).get_arm64_slice()
+
+        # If I read the __objc_classlist pointer section
+        locations, entries = binary_with_data_classlist.read_pointer_section('__objc_classlist')
+        correct_locations = [0x100008098, 0x1000080a0, 0x1000080a8]
+        correct_entries = [0x10000d3c0, 0x10000d438, 0x10000d488]
+
+        # Then I get the correct data
+        assert sorted(locations) == sorted(correct_locations)
+        assert sorted(entries) == sorted(correct_entries)

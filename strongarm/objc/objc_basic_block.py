@@ -1,36 +1,31 @@
 from typing import List
 
-from capstone import CsInsn
-
-from strongarm.debug_util import DebugUtil
-from .objc_analyzer import ObjcFunctionAnalyzer
+from strongarm.macho import VirtualMemoryPointer, MachoBinary
 
 
-class ObjcBasicBlock(object):
-    def __init__(self, function_analyzer: ObjcFunctionAnalyzer) -> None:
-        self._function_analyzer = function_analyzer
+class ObjcBasicBlockLocation(object):
+    def __init__(self,
+                 function_analyzer: 'ObjcFunctionAnalyzer',
+                 start_address: VirtualMemoryPointer,
+                 end_address: VirtualMemoryPointer) -> None:
+        self.start_address = start_address
+        self.start_instr_idx = (start_address - function_analyzer.start_address) / MachoBinary.BYTES_PER_INSTRUCTION
+
+        self.end_address = end_address
+        self.end_instr_idx = (end_address - function_analyzer.start_address) / MachoBinary.BYTES_PER_INSTRUCTION
 
     @classmethod
-    def get_basic_blocks(cls, function_analyzer: ObjcFunctionAnalyzer) -> List[List[CsInsn]]:
-        # TODO(PT): is there something more elegant we can return than a list of lists of instructions?
+    def find_basic_blocks(cls, function_analyzer: 'ObjcFunctionAnalyzer') -> List['ObjcBasicBlockLocation']:
+        from .objc_analyzer import ObjcFunctionAnalyzer
         local_branch_instructions = function_analyzer.get_local_branches()
 
-        # TODO(PT): make it more efficient to get the start indexes of local branches
         # first basic block is at index 0
         basic_block_start_indexes = [0]
         # last basic block ends at the last instruction in the function
         basic_block_end_indexes = [len(function_analyzer.instructions)+1]
 
         for branch in local_branch_instructions:
-            # TODO(PT): use instruction address offset from start_address to get instr index
-            # this is a constant-time way to get an instruction index from an instruction
-
-            # TODO(PT): this is O(n^2) on the size of the analyzed function! bad bad bad
-            instruction_index = 0
-            for instr in function_analyzer.instructions:
-                if instr.address == branch.destination_address:
-                    break
-                instruction_index += 1
+            instruction_index = (function_analyzer.start_address - branch.address) / MachoBinary.BYTES_PER_INSTRUCTION
 
             # a basic block begins at the branch destination
             basic_block_start_indexes.append(instruction_index)
@@ -53,17 +48,11 @@ class ObjcBasicBlock(object):
             if start == end:
                 basic_block_indexes.remove((start, end))
 
-        DebugUtil.log(cls, f'local branch indexes: {basic_block_indexes}')
-
         basic_blocks = []
         for start_idx, end_idx in basic_block_indexes:
-            basic_blocks.append(function_analyzer.instructions[start_idx:end_idx])
-
-        DebugUtil.log(cls, f'Basic blocks for function @ {hex(int(function_analyzer.start_address))}')
-        for idx, block in enumerate(basic_blocks):
-            DebugUtil.log(cls, f'Basic Block #{idx}:')
-            for instr in block:
-                DebugUtil.log(cls, ObjcFunctionAnalyzer.format_instruction(instr))
+            start_address = function_analyzer.start_address + (start_idx * MachoBinary.BYTES_PER_INSTRUCTION)
+            end_address = function_analyzer.start_address + (end_idx * MachoBinary.BYTES_PER_INSTRUCTION)
+            bb = ObjcBasicBlockLocation(function_analyzer, start_address, end_address)
+            basic_blocks.append(bb)
 
         return basic_blocks
-

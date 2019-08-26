@@ -150,9 +150,6 @@ class ObjcUnconditionalBranchInstruction(ObjcBranchInstruction):
         if not self.is_msgSend_call or \
            self.raw_instr.mnemonic not in ['bl', 'b'] or \
            self.symbol not in self.OBJC_MSGSEND_FUNCTIONS:
-            print(f'self.is_msgSend_call {self.is_msgSend_call}'
-                  f' self.raw_instr.mnemonic {self.raw_instr.mnemonic}'
-                  f' self.symbol {self.symbol}')
             raise ValueError(f'cannot parse objc_msgSend destination on non-msgSend instruction'
                              f' {function_analyzer.format_instruction(self.raw_instr)}')
         # if this is an objc_msgSend target, patch destination_address to be the address of the targeted IMP

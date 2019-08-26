@@ -185,18 +185,17 @@ class ObjcFunctionAnalyzer(object):
 
         while True:
             # grab the next branch in front of the last one we visited
-            # TODO(PT): this should use a mnemonic and instruction index search predicate
-            next_branch = self.next_branch_after_instruction_index(last_branch_idx)
-            if not next_branch:
+            next_branch_idx = self.next_branch_idx_after_instr_idx(last_branch_idx)
+            if not next_branch_idx:
                 # parsed every branch in this function
                 break
 
+            next_branch = ObjcBranchInstruction.parse_instruction(self, self.instructions[next_branch_idx])
             targets.append(next_branch)
             # record that we checked this branch
-            last_branch_idx = self.instructions.index(next_branch.raw_instr)
             # add 1 to last branch so on the next loop iteration,
             # we start searching for branches following this instruction which is known to have a branch
-            last_branch_idx += 1
+            last_branch_idx = next_branch_idx + 1
 
         self._call_targets = targets
         return targets
@@ -353,10 +352,8 @@ class ObjcFunctionAnalyzer(object):
             if bb.start_address <= instruction.address < bb.end_address:
                 # Found the basic block containing the instruction; reduce dataflow analysis space to its head
                 dataflow_space_start = bb.start_address
-                print(f'found bb')
                 break
         else:
-            print(f'no bb: {self.basic_blocks}')
             # We are in the process of computing basic blocks, so we can't query them. Use the whole function for DFA
             dataflow_space_start = self.start_address
 

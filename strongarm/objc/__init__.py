@@ -27,7 +27,7 @@ from .objc_instruction import (
 )
 
 from .objc_basic_block import (
-    ObjcBasicBlock
+    ObjcBasicBlockLocation
 )
 
 from .dataflow import get_register_contents_at_instruction_fast

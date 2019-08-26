@@ -24,7 +24,7 @@ from strongarm.objc import (
     ObjcFunctionAnalyzer,
     ObjcInstruction,
     ObjcBranchInstruction,
-    ObjcBasicBlock,
+    ObjcBasicBlockLocation,
     ObjcMethodInfo,
 )
 
@@ -135,7 +135,7 @@ def disassemble_method(binary: MachoBinary, method: ObjcMethodInfo) -> str:
     sel_args = args_from_sel_name(method.objc_sel.name)
 
     argument_list = ', '.join(sel_args)
-    signature = f'\n\n-[{method.objc_class.name} {method.objc_sel.name}]({argument_list});'
+    signature = f'\n-[{method.objc_class.name} {method.objc_sel.name}]({argument_list});'
     disassembled_text.append(signature)
 
     if not method.imp_addr:
@@ -222,9 +222,12 @@ def annotate_instruction(function_analyzer: ObjcFunctionAnalyzer, sel_args: List
 def disassemble_function(binary: MachoBinary,
                          function_addr: VirtualMemoryPointer,
                          prefix: List[str] = None,
-                         sel_args: List[str] = []) -> str:
+                         sel_args: List[str] = None) -> str:
     if not prefix:
         prefix = []
+    if not sel_args:
+        sel_args = []
+
     disassembled_text = prefix
     function_analyzer = ObjcFunctionAnalyzer.get_function_analyzer(binary, function_addr)
 
@@ -245,7 +248,7 @@ def disassemble_function(binary: MachoBinary,
             )
 
         instruction_string += f'\t{StringPalette.ADDRESS(hex(instr.address))}\t' \
-            f'\t{StringPalette.MNEMONIC(instr.mnemonic)}'
+            f'\t{StringPalette.MNEMONIC(instr.mnemonic)} '
 
         # Add each arg to the string
         instruction_string += ', '.join([format_instruction_arg(instr, x) for x in instr.operands])

@@ -17,6 +17,7 @@ from .objc_query import (
     CodeSearchResult
 )
 
+from .objc_basic_block import ObjcBasicBlockLocation
 from .register_contents import RegisterContents, RegisterContentsType
 from .dataflow import get_register_contents_at_instruction_fast
 
@@ -56,7 +57,13 @@ class ObjcFunctionAnalyzer(object):
         self.instructions = instructions
         self.method_info = method_info
 
-        self._call_targets: List[ObjcBranchInstruction] = []
+        self._call_targets: Optional[List[CsInsn]] = None
+
+        # Find basic-block-boundaries upfront
+        # This will eventually invoke code which accesses `self.basic_blocks` in get_register_contents_for_instruction,
+        # so create the attribute before starting.
+        self.basic_blocks: List[ObjcBasicBlockLocation] = []
+        self.basic_blocks = ObjcBasicBlockLocation.find_basic_blocks(self)
 
     def _get_instruction_index_of_address(self, address: VirtualMemoryPointer) -> Optional[int]:
         """Return the index of an instruction with a provided address within the internal list of instructions
@@ -273,22 +280,13 @@ class ObjcFunctionAnalyzer(object):
         """
         return f'{hex(int(instr.address))}:\t{instr.mnemonic}\t{instr.op_str}'
 
-    # TODO(PT): this should return the branch and the instruction index for caller convenience
-    def next_branch_after_instruction_index(self, start_index: int) -> Optional[ObjcBranchInstruction]:
+    def next_branch_idx_after_instr_idx(self, start_index: int) -> Optional[int]:
+        """Returns the index of the next branch instruction in the source function, starting from the specified index.
+        """
         for idx, instr in enumerate(self.instructions[start_index::]):
             if ObjcBranchInstruction.is_branch_instruction(instr):
                 # found next branch!
-                # wrap in ObjcBranchInstruction object
-                branch_instr = ObjcBranchInstruction.parse_instruction(self, instr)
-
-                # were we able to resolve the destination of this call?
-                # some objc_msgSend calls are too difficult to be parsed, for example if they depend on addresses
-                # in the stack. detect this fail case
-                if branch_instr.is_msgSend_call and not branch_instr.destination_address:
-                    instr_idx = start_index + idx
-                    self.debug_print(instr_idx, 'bl <objc_msgSend> target cannot be determined statically')
-
-                return ObjcBranchInstruction.parse_instruction(self, instr)
+                return start_index + idx
         return None
 
     def is_local_branch(self, branch_instruction: ObjcBranchInstruction) -> bool:
@@ -349,4 +347,17 @@ class ObjcFunctionAnalyzer(object):
 
     @functools.lru_cache(maxsize=100)
     def get_register_contents_at_instruction(self, register: str, instruction: ObjcInstruction) -> RegisterContents:
-        return get_register_contents_at_instruction_fast(register, self, instruction)
+        # If basic-block analysis has been done, reduce the dataflow analysis space to the instruction's basic-block
+        # Otherwise, use the entire source function as the search space
+        for bb in self.basic_blocks:
+            if bb.start_address <= instruction.address < bb.end_address:
+                # Found the basic block containing the instruction; reduce dataflow analysis space to its head
+                dataflow_space_start = bb.start_address
+                print(f'found bb')
+                break
+        else:
+            print(f'no bb: {self.basic_blocks}')
+            # We are in the process of computing basic blocks, so we can't query them. Use the whole function for DFA
+            dataflow_space_start = self.start_address
+
+        return get_register_contents_at_instruction_fast(register, self, instruction, dataflow_space_start)

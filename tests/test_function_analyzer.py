@@ -2,7 +2,7 @@ import os
 import pytest
 from typing import List
 
-from strongarm.macho import MachoAnalyzer, MachoParser, StaticFilePointer, VirtualMemoryPointer
+from strongarm.macho import MachoAnalyzer, MachoParser, VirtualMemoryPointer
 from strongarm.objc import ObjcFunctionAnalyzer, ObjcInstruction
 from strongarm.objc import RegisterContentsType
 
@@ -154,7 +154,9 @@ class TestFunctionAnalyzer:
 
     def test_find_next_branch(self):
         # find first branch
-        branch = self.function_analyzer.next_branch_after_instruction_index(0)
+        next_branch_idx = self.function_analyzer.next_branch_idx_after_instr_idx(0)
+        raw_branch = self.function_analyzer.get_instruction_at_index(next_branch_idx)
+        branch = ObjcUnconditionalBranchInstruction.parse_instruction(self.function_analyzer, raw_branch)
         assert branch is not None
         assert not branch.is_msgSend_call
         assert not branch.is_external_objc_call
@@ -163,14 +165,16 @@ class TestFunctionAnalyzer:
         assert branch.destination_address == TestFunctionAnalyzer.OBJC_RETAIN_STUB_ADDR
 
         # find branch in middle of function
-        branch = self.function_analyzer.next_branch_after_instruction_index(25)
+        next_branch_idx = self.function_analyzer.next_branch_idx_after_instr_idx(25)
+        raw_branch = self.function_analyzer.get_instruction_at_index(next_branch_idx)
+        branch = ObjcUnconditionalBranchInstruction.parse_instruction(self.function_analyzer, raw_branch)
         assert branch is not None
         assert branch.is_msgSend_call
         assert branch.selref is not None
 
         # there's only 68 instructions, there's no way there could be another branch after this index
-        branch = self.function_analyzer.next_branch_after_instruction_index(68)
-        assert branch is None
+        next_branch_idx = self.function_analyzer.next_branch_idx_after_instr_idx(68)
+        assert next_branch_idx is None
 
     def test_three_op_add(self):
         # 0x000000010000665c         adrp       x0, #0x102a41000

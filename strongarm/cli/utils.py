@@ -231,9 +231,9 @@ def disassemble_function(binary: MachoBinary,
     disassembled_text = prefix
     function_analyzer = ObjcFunctionAnalyzer.get_function_analyzer(binary, function_addr)
 
-    basic_blocks = ObjcBasicBlock.get_basic_blocks(function_analyzer)
+    basic_blocks = ObjcBasicBlockLocation.find_basic_blocks(function_analyzer)
     # Transform basic blocks into tuples of (basic block start addr, basic block end addr)
-    basic_block_boundaries = [[block[0].address, block[-1].address] for block in basic_blocks]
+    basic_block_boundaries = [[block.start_address, block.end_address] for block in basic_blocks]
     # Flatten basic_block_boundaries into one-dimensional list
     basic_block_boundaries = [x for boundaries in basic_block_boundaries for x in boundaries]
     # Remove duplicate boundaries

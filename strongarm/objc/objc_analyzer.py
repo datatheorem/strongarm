@@ -17,7 +17,6 @@ from .objc_query import (
     CodeSearchResult
 )
 
-from .objc_basic_block import ObjcBasicBlockLocation
 from .register_contents import RegisterContents, RegisterContentsType
 from .dataflow import get_register_contents_at_instruction_fast
 
@@ -35,7 +34,21 @@ class ObjcMethodInfo:
         return f'-[{self.objc_class.name} {self.objc_sel.name}]'
 
 
-class ObjcFunctionAnalyzer(object):
+class ObjcBasicBlock:
+    def __init__(self, start_address: VirtualMemoryPointer, end_address: VirtualMemoryPointer) -> None:
+        """Represents a basic-block of assembly code.
+
+        A 'basic block' is a unit of assembly code with no branching except for the last instruction.
+        In other words, it is the smallest unit of callable code - a subroutine.
+        There is a single entry point, and single exit point.
+
+        The start and end addresses are inclusive.
+        """
+        self.start_address = start_address
+        self.end_address = end_address
+
+
+class ObjcFunctionAnalyzer:
     """Provides utility functions for introspecting on a set of instructions which represent a function body.
     As Objective-C is a strict superset of C, ObjcFunctionAnalyzer can also be used on pure C functions.
     """
@@ -62,8 +75,8 @@ class ObjcFunctionAnalyzer(object):
         # Find basic-block-boundaries upfront
         # This will eventually invoke code which accesses `self.basic_blocks` in get_register_contents_for_instruction,
         # so create the attribute before starting.
-        self.basic_blocks: List[ObjcBasicBlockLocation] = []
-        self.basic_blocks = ObjcBasicBlockLocation.find_basic_blocks(self)
+        self.basic_blocks: List[ObjcBasicBlock] = []
+        self.basic_blocks = self._find_basic_blocks()
 
     def _get_instruction_index_of_address(self, address: VirtualMemoryPointer) -> Optional[int]:
         """Return the index of an instruction with a provided address within the internal list of instructions
@@ -358,3 +371,51 @@ class ObjcFunctionAnalyzer(object):
             dataflow_space_start = self.start_address
 
         return get_register_contents_at_instruction_fast(register, self, instruction, dataflow_space_start)
+
+    def _find_basic_blocks(self) -> List['ObjcBasicBlock']:
+        """Locate the basic-block-boundaries within the source function.
+        A 'basic block' is a unit of assembly code with no branching except for the last instruction.
+        In other words, it is the smallest unit of callable code - a subroutine.
+        There is a single entry point, and single exit point.
+
+        Returns a List of objects encapsulating the basic block boundaries.
+        """
+        # First basic block begins at the first instruction in the function
+        basic_block_start_indexes = [0]
+        # Last basic block ends at the last instruction in the function
+        basic_block_end_indexes = [len(self.instructions) - 1]
+
+        # Iterate all of the internal-branching within the function to record the basic blocks
+        for branch in self.get_local_branches():
+            branch_idx = self._get_instruction_index_of_address(branch.address)
+            branch_destination_idx = self._get_instruction_index_of_address(branch.destination_address)
+            if not branch_idx or not branch_destination_idx:
+                # We somehow were given a branch that isn't function-local - move on
+                DebugUtil.debug(self, f'Consistency check failed: {branch.address} is not a local branch of {self}')
+                continue
+
+            # A basic block ends at this branch
+            basic_block_end_indexes.append(branch_idx)
+            # A different basic block begins just after this branch
+            basic_block_start_indexes.append(branch_idx + 1)
+
+            # A basic block begins at the branch destination
+            basic_block_start_indexes.append(branch_destination_idx)
+            # A basic block ends just before the branch destination
+            basic_block_end_indexes.append(branch_destination_idx - 1)
+
+        # Sort arrays of basic block start/end addresses so we can zip them together into basic block ranges
+        # Also, remove duplicate entries
+        basic_block_start_indexes = sorted(set(basic_block_start_indexes))
+        basic_block_end_indexes = sorted(set(basic_block_end_indexes))
+        basic_block_indexes = list(zip(basic_block_start_indexes, basic_block_end_indexes))
+
+        # Convert to ObjcBasicBlockLocation objects
+        basic_blocks = []
+        for start_idx, end_idx in basic_block_indexes:
+            start_address = self.start_address + (start_idx * MachoBinary.BYTES_PER_INSTRUCTION)
+            end_address = self.start_address + (end_idx * MachoBinary.BYTES_PER_INSTRUCTION)
+            bb = ObjcBasicBlock(VirtualMemoryPointer(self.start_address), start_address, end_address)
+            basic_blocks.append(bb)
+
+        return basic_blocks

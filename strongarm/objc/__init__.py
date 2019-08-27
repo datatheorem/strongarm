@@ -16,7 +16,8 @@ from .objc_analyzer import (
     ObjcFunctionAnalyzer,
     RegisterContentsType,
     RegisterContents,
-    ObjcMethodInfo
+    ObjcMethodInfo,
+    ObjcBasicBlock
 )
 
 from .objc_instruction import (
@@ -24,10 +25,6 @@ from .objc_instruction import (
     ObjcUnconditionalBranchInstruction,
     ObjcConditionalBranchInstruction,
     ObjcInstruction
-)
-
-from .objc_basic_block import (
-    ObjcBasicBlockLocation
 )
 
 from .dataflow import get_register_contents_at_instruction_fast

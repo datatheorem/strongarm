@@ -24,7 +24,7 @@ from strongarm.objc import (
     ObjcFunctionAnalyzer,
     ObjcInstruction,
     ObjcBranchInstruction,
-    ObjcBasicBlockLocation,
+    ObjcBasicBlock,
     ObjcMethodInfo,
 )
 
@@ -182,12 +182,10 @@ def annotate_instruction(function_analyzer: ObjcFunctionAnalyzer, sel_args: List
                     method_arg = function_analyzer.get_register_contents_at_instruction(register, wrapped_branch_instr)
 
                     method_arg_string = ', '
-                    if method_arg.type == RegisterContentsType.UNKNOWN:
-                        method_arg_string += '<?>'
-                    elif method_arg.type == RegisterContentsType.FUNCTION_ARG:
-                        method_arg_string += sel_args[method_arg.value]
-                    elif method_arg.type == RegisterContentsType.IMMEDIATE:
+                    if method_arg.type == RegisterContentsType.IMMEDIATE:
                         method_arg_string += hex(method_arg.value)
+                    else:
+                        method_arg_string += '<?>'
 
                     annotation += StringPalette.STRING(method_arg_string)
                 annotation += ');'
@@ -211,11 +209,23 @@ def annotate_instruction(function_analyzer: ObjcFunctionAnalyzer, sel_args: List
                 annotation += ', '
             annotation += ');'
     else:
-        if len(instr.operands) == 2 and instr.operands[1].type == ARM64_OP_IMM:
-            # Try reading a string
-            binary_str = function_analyzer.binary.read_string_at_address(instr.operands[1].value.imm)
-            if binary_str:
-                annotation += StringPalette.STRING(f'#\t"{binary_str}"')
+        # Try to annotate string loads
+        # This code taken from Ethan's potential passwords check
+        if instr.mnemonic in ['ldr', 'adr', 'adrp', 'add']:
+            # Only care about general purpose registers that are being written into
+            if not ObjcInstruction.instruction_uses_vector_registers(instr):
+                _, instr_mutated_regs = instr.regs_access()
+                if len(instr_mutated_regs):
+                    # Get the contents of the register (an address)
+                    register = instr.reg_name(instr_mutated_regs[0])
+                    wrapped_instr = ObjcInstruction.parse_instruction(function_analyzer, instr)
+                    register_contents = function_analyzer.get_register_contents_at_instruction(register, wrapped_instr)
+                    if register_contents.type == RegisterContentsType.IMMEDIATE:
+                        # Try reading a string
+                        binary_str = function_analyzer.binary.read_string_at_address(register_contents.value)
+                        if binary_str:
+                            annotation += StringPalette.STRING(f'#\t"{binary_str}"')
+
     return annotation
 
 
@@ -231,9 +241,8 @@ def disassemble_function(binary: MachoBinary,
     disassembled_text = prefix
     function_analyzer = ObjcFunctionAnalyzer.get_function_analyzer(binary, function_addr)
 
-    basic_blocks = ObjcBasicBlockLocation.find_basic_blocks(function_analyzer)
     # Transform basic blocks into tuples of (basic block start addr, basic block end addr)
-    basic_block_boundaries = [[block.start_address, block.end_address] for block in basic_blocks]
+    basic_block_boundaries = [[block.start_address, block.end_address] for block in function_analyzer.basic_blocks]
     # Flatten basic_block_boundaries into one-dimensional list
     basic_block_boundaries = [x for boundaries in basic_block_boundaries for x in boundaries]
     # Remove duplicate boundaries

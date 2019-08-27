@@ -415,7 +415,7 @@ class ObjcFunctionAnalyzer:
         for start_idx, end_idx in basic_block_indexes:
             start_address = self.start_address + (start_idx * MachoBinary.BYTES_PER_INSTRUCTION)
             end_address = self.start_address + (end_idx * MachoBinary.BYTES_PER_INSTRUCTION)
-            bb = ObjcBasicBlock(VirtualMemoryPointer(self.start_address), start_address, end_address)
+            bb = ObjcBasicBlock(start_address, end_address)
             basic_blocks.append(bb)
 
         return basic_blocks

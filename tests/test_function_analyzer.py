@@ -97,8 +97,7 @@ class TestFunctionAnalyzer:
         from strongarm.objc import RegisterContentsType
         first_instr = self.function_analyzer.get_instruction_at_index(0)
         contents = self.function_analyzer.get_register_contents_at_instruction('x4', first_instr)
-        assert contents.type == RegisterContentsType.FUNCTION_ARG
-        assert contents.value == 4
+        assert contents.type == RegisterContentsType.UNKNOWN
 
         another_instr = self.function_analyzer.get_instruction_at_index(16)
         contents = self.function_analyzer.get_register_contents_at_instruction('x1', another_instr)

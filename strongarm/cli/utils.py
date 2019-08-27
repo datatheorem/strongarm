@@ -198,12 +198,10 @@ def annotate_instruction(function_analyzer: ObjcFunctionAnalyzer, sel_args: List
                 method_arg = function_analyzer.get_register_contents_at_instruction(register, wrapped_instr)
 
                 method_arg_string = f'{register}: '
-                if method_arg.type == RegisterContentsType.UNKNOWN:
-                    method_arg_string += '<?>'
-                elif method_arg.type == RegisterContentsType.FUNCTION_ARG:
-                    method_arg_string += f'func arg {method_arg.value}'
-                elif method_arg.type == RegisterContentsType.IMMEDIATE:
+                if method_arg.type == RegisterContentsType.IMMEDIATE:
                     method_arg_string += hex(method_arg.value)
+                else:
+                    method_arg_string += '<?>'
 
                 annotation += StringPalette.ANNOTATION_ARGS(method_arg_string)
                 annotation += ', '

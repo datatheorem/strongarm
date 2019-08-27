@@ -2,9 +2,8 @@ from enum import Enum
 
 
 class RegisterContentsType(Enum):
-    FUNCTION_ARG = 0
-    IMMEDIATE = 1
-    UNKNOWN = 2
+    IMMEDIATE = 0
+    UNKNOWN = 1
 
 
 class RegisterContents:

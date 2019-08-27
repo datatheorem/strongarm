@@ -1,5 +1,5 @@
 import functools
-from typing import List, Optional
+from typing import List, Union, Optional
 
 from capstone.arm64 import ARM64_OP_IMM, ARM64_OP_MEM
 from capstone import CsInsn
@@ -10,6 +10,7 @@ from strongarm.macho import MachoBinary, VirtualMemoryPointer
 from .objc_instruction import (
     ObjcInstruction,
     ObjcBranchInstruction,
+    ObjcConditionalBranchInstruction,
     ObjcUnconditionalBranchInstruction
 )
 from .objc_query import (
@@ -70,7 +71,7 @@ class ObjcFunctionAnalyzer:
         self.instructions = instructions
         self.method_info = method_info
 
-        self._call_targets: Optional[List[CsInsn]] = None
+        self._call_targets: Optional[List[ObjcBranchInstruction]] = None
 
         # Find basic-block-boundaries upfront
         # This will eventually invoke code which accesses `self.basic_blocks` in get_register_contents_for_instruction,
@@ -203,7 +204,9 @@ class ObjcFunctionAnalyzer:
                 # parsed every branch in this function
                 break
 
-            next_branch = ObjcBranchInstruction.parse_instruction(self, self.instructions[next_branch_idx])
+            next_branch: ObjcBranchInstruction = ObjcBranchInstruction.parse_instruction(
+                self, self.instructions[next_branch_idx]
+            )
             targets.append(next_branch)
             # record that we checked this branch
             # add 1 to last branch so on the next loop iteration,
@@ -391,7 +394,7 @@ class ObjcFunctionAnalyzer:
             branch_destination_idx = self._get_instruction_index_of_address(branch.destination_address)
             if not branch_idx or not branch_destination_idx:
                 # We somehow were given a branch that isn't function-local - move on
-                DebugUtil.debug(self, f'Consistency check failed: {branch.address} is not a local branch of {self}')
+                DebugUtil.log(self, f'Consistency check failed: {branch.address} is not a local branch of {self}')
                 continue
 
             # A basic block ends at this branch

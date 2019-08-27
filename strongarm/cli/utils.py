@@ -220,7 +220,9 @@ def annotate_instruction(function_analyzer: ObjcFunctionAnalyzer, sel_args: List
                     register_contents = function_analyzer.get_register_contents_at_instruction(register, wrapped_instr)
                     if register_contents.type == RegisterContentsType.IMMEDIATE:
                         # Try reading a string
-                        binary_str = function_analyzer.binary.read_string_at_address(register_contents.value)
+                        binary_str = function_analyzer.binary.read_string_at_address(
+                            VirtualMemoryPointer(register_contents.value)
+                        )
                         if binary_str:
                             annotation += StringPalette.STRING(f'#\t"{binary_str}"')
 
@@ -242,9 +244,9 @@ def disassemble_function(binary: MachoBinary,
     # Transform basic blocks into tuples of (basic block start addr, basic block end addr)
     basic_block_boundaries = [[block.start_address, block.end_address] for block in function_analyzer.basic_blocks]
     # Flatten basic_block_boundaries into one-dimensional list
-    basic_block_boundaries = [x for boundaries in basic_block_boundaries for x in boundaries]
+    basic_block_boundaries_flat = [x for boundaries in basic_block_boundaries for x in boundaries]
     # Remove duplicate boundaries
-    basic_block_boundaries_set = set(basic_block_boundaries)
+    basic_block_boundaries_set = set(basic_block_boundaries_flat)
 
     for instr in function_analyzer.instructions:
         instruction_string = ''

@@ -74,8 +74,8 @@ class ObjcFunctionAnalyzer:
         self._call_targets: Optional[List[ObjcBranchInstruction]] = None
 
         # Find basic-block-boundaries upfront
-        # This will eventually invoke code which accesses `self.basic_blocks` in get_register_contents_for_instruction,
-        # so create the attribute before starting.
+        # This call will eventually access `self.basic_blocks` in get_register_contents_for_instruction,
+        # so set the attribute before calling
         self.basic_blocks: List[ObjcBasicBlock] = []
         self.basic_blocks = self._find_basic_blocks()
 

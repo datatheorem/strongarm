@@ -151,30 +151,6 @@ class TestFunctionAnalyzer:
         with pytest.raises(ValueError):
             self.function_analyzer.get_selref_ptr(non_branch_instruction)
 
-    def test_find_next_branch(self):
-        # find first branch
-        next_branch_idx = self.function_analyzer.next_branch_idx_after_instr_idx(0)
-        raw_branch = self.function_analyzer.get_instruction_at_index(next_branch_idx)
-        branch = ObjcUnconditionalBranchInstruction.parse_instruction(self.function_analyzer, raw_branch)
-        assert branch is not None
-        assert not branch.is_msgSend_call
-        assert not branch.is_external_objc_call
-        assert branch.is_external_c_call
-        assert branch.symbol == '_objc_retain'
-        assert branch.destination_address == TestFunctionAnalyzer.OBJC_RETAIN_STUB_ADDR
-
-        # find branch in middle of function
-        next_branch_idx = self.function_analyzer.next_branch_idx_after_instr_idx(25)
-        raw_branch = self.function_analyzer.get_instruction_at_index(next_branch_idx)
-        branch = ObjcUnconditionalBranchInstruction.parse_instruction(self.function_analyzer, raw_branch)
-        assert branch is not None
-        assert branch.is_msgSend_call
-        assert branch.selref is not None
-
-        # there's only 68 instructions, there's no way there could be another branch after this index
-        next_branch_idx = self.function_analyzer.next_branch_idx_after_instr_idx(68)
-        assert next_branch_idx is None
-
     def test_three_op_add(self):
         # 0x000000010000665c         adrp       x0, #0x102a41000
         # 0x0000000100006660         add        x0, x0, #0x458

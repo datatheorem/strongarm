@@ -184,37 +184,20 @@ class ObjcFunctionAnalyzer:
 
     @property
     def call_targets(self) -> List[ObjcBranchInstruction]:
-        """Find a List of all branch destinations reachable from the source function
-
-        Returns:
-            A list of objects encapsulating info about the branch destinations from self.instructions
+        """Return the List of all branch instructions within the source function.
         """
-        # use cached list if available
+        # Use cached list if available
         if self._call_targets is not None:
             return self._call_targets
 
-        targets = []
-        # keep track of the index of the last branch destination we saw
-        last_branch_idx = 0
+        # Extract the list of branch instructions in the function
+        branches_in_function = []
+        for idx, instr in enumerate(self.instructions):
+            if ObjcBranchInstruction.is_branch_instruction(instr):
+                branches_in_function.append(ObjcBranchInstruction.parse_instruction(self, instr))
 
-        while True:
-            # grab the next branch in front of the last one we visited
-            next_branch_idx = self.next_branch_idx_after_instr_idx(last_branch_idx)
-            if not next_branch_idx:
-                # parsed every branch in this function
-                break
-
-            next_branch: ObjcBranchInstruction = ObjcBranchInstruction.parse_instruction(
-                self, self.instructions[next_branch_idx]
-            )
-            targets.append(next_branch)
-            # record that we checked this branch
-            # add 1 to last branch so on the next loop iteration,
-            # we start searching for branches following this instruction which is known to have a branch
-            last_branch_idx = next_branch_idx + 1
-
-        self._call_targets = targets
-        return targets
+        self._call_targets = branches_in_function
+        return self._call_targets
 
     @property
     def function_call_targets(self) -> List['ObjcFunctionAnalyzer']:
@@ -294,15 +277,6 @@ class ObjcFunctionAnalyzer:
             Formatted string representing instruction
         """
         return f'{hex(int(instr.address))}:\t{instr.mnemonic}\t{instr.op_str}'
-
-    def next_branch_idx_after_instr_idx(self, start_index: int) -> Optional[int]:
-        """Returns the index of the next branch instruction in the source function, starting from the specified index.
-        """
-        for idx, instr in enumerate(self.instructions[start_index::]):
-            if ObjcBranchInstruction.is_branch_instruction(instr):
-                # found next branch!
-                return start_index + idx
-        return None
 
     def is_local_branch(self, branch_instruction: ObjcBranchInstruction) -> bool:
         # if there's no destination address, the destination is outside the binary, and it couldn't possible be local

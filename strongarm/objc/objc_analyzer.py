@@ -191,7 +191,7 @@ class ObjcFunctionAnalyzer:
             return self._call_targets
 
         # Extract the list of branch instructions in the function
-        branches_in_function = []
+        branches_in_function: List[ObjcBranchInstruction] = []
         for idx, instr in enumerate(self.instructions):
             if ObjcBranchInstruction.is_branch_instruction(instr):
                 branches_in_function.append(ObjcBranchInstruction.parse_instruction(self, instr))

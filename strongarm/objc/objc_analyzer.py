@@ -1,5 +1,5 @@
 import functools
-from typing import List, Optional
+from typing import List, Union, Optional
 
 from capstone.arm64 import ARM64_OP_IMM, ARM64_OP_MEM
 from capstone import CsInsn
@@ -10,6 +10,7 @@ from strongarm.macho import MachoBinary, VirtualMemoryPointer
 from .objc_instruction import (
     ObjcInstruction,
     ObjcBranchInstruction,
+    ObjcConditionalBranchInstruction,
     ObjcUnconditionalBranchInstruction
 )
 from .objc_query import (
@@ -34,7 +35,21 @@ class ObjcMethodInfo:
         return f'-[{self.objc_class.name} {self.objc_sel.name}]'
 
 
-class ObjcFunctionAnalyzer(object):
+class BasicBlock:
+    def __init__(self, start_address: VirtualMemoryPointer, end_address: VirtualMemoryPointer) -> None:
+        """Represents a basic-block of assembly code.
+
+        A 'basic block' is a unit of assembly code with no branching except for the last instruction.
+        In other words, it is the smallest unit of callable code - a subroutine.
+        There is a single entry point, and single exit point.
+
+        The start and end addresses are inclusive.
+        """
+        self.start_address = start_address
+        self.end_address = end_address
+
+
+class ObjcFunctionAnalyzer:
     """Provides utility functions for introspecting on a set of instructions which represent a function body.
     As Objective-C is a strict superset of C, ObjcFunctionAnalyzer can also be used on pure C functions.
     """
@@ -56,7 +71,13 @@ class ObjcFunctionAnalyzer(object):
         self.instructions = instructions
         self.method_info = method_info
 
-        self._call_targets: List[ObjcBranchInstruction] = []
+        self._call_targets: Optional[List[ObjcBranchInstruction]] = None
+
+        # Find basic-block-boundaries upfront
+        # This call will eventually access `self.basic_blocks` in get_register_contents_for_instruction,
+        # so set the attribute before calling
+        self.basic_blocks: List[BasicBlock] = []
+        self.basic_blocks = self._find_basic_blocks()
 
     def _get_instruction_index_of_address(self, address: VirtualMemoryPointer) -> Optional[int]:
         """Return the index of an instruction with a provided address within the internal list of instructions
@@ -163,36 +184,20 @@ class ObjcFunctionAnalyzer(object):
 
     @property
     def call_targets(self) -> List[ObjcBranchInstruction]:
-        """Find a List of all branch destinations reachable from the source function
-
-        Returns:
-            A list of objects encapsulating info about the branch destinations from self.instructions
+        """Return the List of all branch instructions within the source function.
         """
-        # use cached list if available
+        # Use cached list if available
         if self._call_targets is not None:
             return self._call_targets
 
-        targets = []
-        # keep track of the index of the last branch destination we saw
-        last_branch_idx = 0
+        # Extract the list of branch instructions in the function
+        branches_in_function: List[ObjcBranchInstruction] = []
+        for idx, instr in enumerate(self.instructions):
+            if ObjcBranchInstruction.is_branch_instruction(instr):
+                branches_in_function.append(ObjcBranchInstruction.parse_instruction(self, instr))
 
-        while True:
-            # grab the next branch in front of the last one we visited
-            # TODO(PT): this should use a mnemonic and instruction index search predicate
-            next_branch = self.next_branch_after_instruction_index(last_branch_idx)
-            if not next_branch:
-                # parsed every branch in this function
-                break
-
-            targets.append(next_branch)
-            # record that we checked this branch
-            last_branch_idx = self.instructions.index(next_branch.raw_instr)
-            # add 1 to last branch so on the next loop iteration,
-            # we start searching for branches following this instruction which is known to have a branch
-            last_branch_idx += 1
-
-        self._call_targets = targets
-        return targets
+        self._call_targets = branches_in_function
+        return self._call_targets
 
     @property
     def function_call_targets(self) -> List['ObjcFunctionAnalyzer']:
@@ -273,24 +278,6 @@ class ObjcFunctionAnalyzer(object):
         """
         return f'{hex(int(instr.address))}:\t{instr.mnemonic}\t{instr.op_str}'
 
-    # TODO(PT): this should return the branch and the instruction index for caller convenience
-    def next_branch_after_instruction_index(self, start_index: int) -> Optional[ObjcBranchInstruction]:
-        for idx, instr in enumerate(self.instructions[start_index::]):
-            if ObjcBranchInstruction.is_branch_instruction(instr):
-                # found next branch!
-                # wrap in ObjcBranchInstruction object
-                branch_instr = ObjcBranchInstruction.parse_instruction(self, instr)
-
-                # were we able to resolve the destination of this call?
-                # some objc_msgSend calls are too difficult to be parsed, for example if they depend on addresses
-                # in the stack. detect this fail case
-                if branch_instr.is_msgSend_call and not branch_instr.destination_address:
-                    instr_idx = start_index + idx
-                    self.debug_print(instr_idx, 'bl <objc_msgSend> target cannot be determined statically')
-
-                return ObjcBranchInstruction.parse_instruction(self, instr)
-        return None
-
     def is_local_branch(self, branch_instruction: ObjcBranchInstruction) -> bool:
         # if there's no destination address, the destination is outside the binary, and it couldn't possible be local
         if not branch_instruction.destination_address:
@@ -349,4 +336,63 @@ class ObjcFunctionAnalyzer(object):
 
     @functools.lru_cache(maxsize=100)
     def get_register_contents_at_instruction(self, register: str, instruction: ObjcInstruction) -> RegisterContents:
-        return get_register_contents_at_instruction_fast(register, self, instruction)
+        # If basic-block analysis has been done, reduce the dataflow analysis space to the instruction's basic-block
+        # Otherwise, use the entire source function as the search space
+        for bb in self.basic_blocks:
+            if bb.start_address <= instruction.address < bb.end_address:
+                # Found the basic block containing the instruction; reduce dataflow analysis space to its head
+                dataflow_space_start = bb.start_address
+                break
+        else:
+            # We are in the process of computing basic blocks, so we can't query them. Use the whole function for DFA
+            dataflow_space_start = self.start_address
+
+        return get_register_contents_at_instruction_fast(register, self, instruction, dataflow_space_start)
+
+    def _find_basic_blocks(self) -> List['BasicBlock']:
+        """Locate the basic-block-boundaries within the source function.
+        A 'basic block' is a unit of assembly code with no branching except for the last instruction.
+        In other words, it is the smallest unit of callable code - a subroutine.
+        There is a single entry point, and single exit point.
+
+        Returns a List of objects encapsulating the basic block boundaries.
+        """
+        # First basic block begins at the first instruction in the function
+        basic_block_start_indexes = [0]
+        # Last basic block ends at the last instruction in the function
+        basic_block_end_indexes = [len(self.instructions) - 1]
+
+        # Iterate all of the internal-branching within the function to record the basic blocks
+        for branch in self.get_local_branches():
+            branch_idx = self._get_instruction_index_of_address(branch.address)
+            branch_destination_idx = self._get_instruction_index_of_address(branch.destination_address)
+            if not branch_idx or not branch_destination_idx:
+                # We somehow were given a branch that isn't function-local - move on
+                DebugUtil.log(self, f'Consistency check failed: {branch.address} is not a local branch of {self}')
+                continue
+
+            # A basic block ends at this branch
+            basic_block_end_indexes.append(branch_idx)
+            # A different basic block begins just after this branch
+            basic_block_start_indexes.append(branch_idx + 1)
+
+            # A basic block begins at the branch destination
+            basic_block_start_indexes.append(branch_destination_idx)
+            # A basic block ends just before the branch destination
+            basic_block_end_indexes.append(branch_destination_idx - 1)
+
+        # Sort arrays of basic block start/end addresses so we can zip them together into basic block ranges
+        # Also, remove duplicate entries
+        basic_block_start_indexes = sorted(set(basic_block_start_indexes))
+        basic_block_end_indexes = sorted(set(basic_block_end_indexes))
+        basic_block_indexes = list(zip(basic_block_start_indexes, basic_block_end_indexes))
+
+        # Convert to ObjcBasicBlockLocation objects
+        basic_blocks = []
+        for start_idx, end_idx in basic_block_indexes:
+            start_address = self.start_address + (start_idx * MachoBinary.BYTES_PER_INSTRUCTION)
+            end_address = self.start_address + (end_idx * MachoBinary.BYTES_PER_INSTRUCTION)
+            bb = BasicBlock(start_address, end_address)
+            basic_blocks.append(bb)
+
+        return basic_blocks

@@ -20,7 +20,7 @@ class ObjcInstruction:
         self.address = self.raw_instr.address
 
         self.is_msgSend_call: bool = False
-        self.symbol: str = ''
+        self.symbol: Optional[str] = None
 
     @classmethod
     def is_vector_register(cls, reg_name: str) -> bool:
@@ -69,7 +69,6 @@ class ObjcBranchInstruction(ObjcInstruction):
 
         self.destination_address = destination_address
 
-        self.symbol: str = ''
         self.selref: Optional[ObjcSelref] = None
         self.selector: Optional[ObjcSelector] = None
 
@@ -127,8 +126,7 @@ class ObjcUnconditionalBranchInstruction(ObjcBranchInstruction):
             raise ValueError(f'ObjcUnconditionalBranchInstruction instantiated with'
                              f' invalid mnemonic {instruction.mnemonic}')
         # an unconditional branch has the destination as the only operand
-        super(ObjcUnconditionalBranchInstruction, self).__init__(instruction, instruction.operands[0].value.imm)
-        # ObjcBranchInstruction.__init__(self, instruction, instruction.operands[0].value.imm)
+        super().__init__(instruction, instruction.operands[0].value.imm)
 
         self.selref: Optional[ObjcSelref] = None
         self.selector: Optional[ObjcSelector] = None
@@ -150,9 +148,6 @@ class ObjcUnconditionalBranchInstruction(ObjcBranchInstruction):
         if not self.is_msgSend_call or \
            self.raw_instr.mnemonic not in ['bl', 'b'] or \
            self.symbol not in self.OBJC_MSGSEND_FUNCTIONS:
-            print(f'self.is_msgSend_call {self.is_msgSend_call}'
-                  f' self.raw_instr.mnemonic {self.raw_instr.mnemonic}'
-                  f' self.symbol {self.symbol}')
             raise ValueError(f'cannot parse objc_msgSend destination on non-msgSend instruction'
                              f' {function_analyzer.format_instruction(self.raw_instr)}')
         # if this is an objc_msgSend target, patch destination_address to be the address of the targeted IMP

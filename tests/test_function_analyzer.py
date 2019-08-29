@@ -2,7 +2,7 @@ import os
 import pytest
 from typing import List
 
-from strongarm.macho import MachoAnalyzer, MachoParser, StaticFilePointer, VirtualMemoryPointer
+from strongarm.macho import MachoAnalyzer, MachoParser, VirtualMemoryPointer
 from strongarm.objc import ObjcFunctionAnalyzer, ObjcInstruction
 from strongarm.objc import RegisterContentsType
 
@@ -97,8 +97,7 @@ class TestFunctionAnalyzer:
         from strongarm.objc import RegisterContentsType
         first_instr = self.function_analyzer.get_instruction_at_index(0)
         contents = self.function_analyzer.get_register_contents_at_instruction('x4', first_instr)
-        assert contents.type == RegisterContentsType.FUNCTION_ARG
-        assert contents.value == 4
+        assert contents.type == RegisterContentsType.UNKNOWN
 
         another_instr = self.function_analyzer.get_instruction_at_index(16)
         contents = self.function_analyzer.get_register_contents_at_instruction('x1', another_instr)
@@ -151,26 +150,6 @@ class TestFunctionAnalyzer:
         non_branch_instruction = ObjcInstruction.parse_instruction(self.function_analyzer, self.instructions[15])
         with pytest.raises(ValueError):
             self.function_analyzer.get_selref_ptr(non_branch_instruction)
-
-    def test_find_next_branch(self):
-        # find first branch
-        branch = self.function_analyzer.next_branch_after_instruction_index(0)
-        assert branch is not None
-        assert not branch.is_msgSend_call
-        assert not branch.is_external_objc_call
-        assert branch.is_external_c_call
-        assert branch.symbol == '_objc_retain'
-        assert branch.destination_address == TestFunctionAnalyzer.OBJC_RETAIN_STUB_ADDR
-
-        # find branch in middle of function
-        branch = self.function_analyzer.next_branch_after_instruction_index(25)
-        assert branch is not None
-        assert branch.is_msgSend_call
-        assert branch.selref is not None
-
-        # there's only 68 instructions, there's no way there could be another branch after this index
-        branch = self.function_analyzer.next_branch_after_instruction_index(68)
-        assert branch is None
 
     def test_three_op_add(self):
         # 0x000000010000665c         adrp       x0, #0x102a41000

@@ -35,7 +35,7 @@ class ObjcMethodInfo:
         return f'-[{self.objc_class.name} {self.objc_sel.name}]'
 
 
-class ObjcBasicBlock:
+class BasicBlock:
     def __init__(self, start_address: VirtualMemoryPointer, end_address: VirtualMemoryPointer) -> None:
         """Represents a basic-block of assembly code.
 
@@ -76,7 +76,7 @@ class ObjcFunctionAnalyzer:
         # Find basic-block-boundaries upfront
         # This call will eventually access `self.basic_blocks` in get_register_contents_for_instruction,
         # so set the attribute before calling
-        self.basic_blocks: List[ObjcBasicBlock] = []
+        self.basic_blocks: List[BasicBlock] = []
         self.basic_blocks = self._find_basic_blocks()
 
     def _get_instruction_index_of_address(self, address: VirtualMemoryPointer) -> Optional[int]:
@@ -375,7 +375,7 @@ class ObjcFunctionAnalyzer:
 
         return get_register_contents_at_instruction_fast(register, self, instruction, dataflow_space_start)
 
-    def _find_basic_blocks(self) -> List['ObjcBasicBlock']:
+    def _find_basic_blocks(self) -> List['BasicBlock']:
         """Locate the basic-block-boundaries within the source function.
         A 'basic block' is a unit of assembly code with no branching except for the last instruction.
         In other words, it is the smallest unit of callable code - a subroutine.
@@ -418,7 +418,7 @@ class ObjcFunctionAnalyzer:
         for start_idx, end_idx in basic_block_indexes:
             start_address = self.start_address + (start_idx * MachoBinary.BYTES_PER_INSTRUCTION)
             end_address = self.start_address + (end_idx * MachoBinary.BYTES_PER_INSTRUCTION)
-            bb = ObjcBasicBlock(start_address, end_address)
+            bb = BasicBlock(start_address, end_address)
             basic_blocks.append(bb)
 
         return basic_blocks

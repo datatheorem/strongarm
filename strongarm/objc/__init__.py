@@ -17,7 +17,7 @@ from .objc_analyzer import (
     RegisterContentsType,
     RegisterContents,
     ObjcMethodInfo,
-    ObjcBasicBlock
+    BasicBlock
 )
 
 from .objc_instruction import (

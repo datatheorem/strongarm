@@ -24,7 +24,7 @@ from strongarm.objc import (
     ObjcFunctionAnalyzer,
     ObjcInstruction,
     ObjcBranchInstruction,
-    ObjcBasicBlock,
+    BasicBlock,
     ObjcMethodInfo,
 )
 

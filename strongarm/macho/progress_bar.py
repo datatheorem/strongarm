@@ -6,6 +6,7 @@ import sys
 import time
 import threading
 from typing import Optional
+from types import TracebackType
 
 
 class ConsoleProgressBar:
@@ -14,17 +15,19 @@ class ConsoleProgressBar:
         """
         self.progress = progress
 
-    def __init__(self, prefix: str = None, bar_width=40, update_interval=0.5):
-        self.update_interval = update_interval
-        self.bar_width = bar_width
-        self.progress = 0
+    def __init__(self, prefix: str = None, bar_width: int = 40, update_interval: float = 0.5) -> None:
         self.prefix = ''
         if prefix:
             self.prefix = f'{prefix}\t'
-        self._in_context_manager = False
-        self.start_time: Optional[float] = None
 
-    def _update_bar(self):
+        self.progress = 0
+        self.bar_width = bar_width
+        self.update_interval = update_interval
+
+        self.start_time = 0.0
+        self._in_context_manager = False
+
+    def _update_bar(self) -> None:
         while self._in_context_manager:
             elapsed_seconds = time.time() - self.start_time
             elapsed_time = f'{(elapsed_seconds // 60) % 60:02.0f}:{elapsed_seconds % 60:02.0f}'
@@ -41,14 +44,15 @@ class ConsoleProgressBar:
             sys.stdout.write('\b' * len(progress_str))
             sys.stdout.flush()
 
-    def __enter__(self):
+    def __enter__(self) -> 'ConsoleProgressBar':
         self._in_context_manager = True
         self.start_time = time.time()
         threading.Thread(target=self._update_bar).start()
         return self
 
-    def __exit__(self, exception, value, tb):
+    def __exit__(self,
+                 exc_type: Optional[BaseException],
+                 exc_val: Optional[Exception],
+                 exc_tb: TracebackType) -> None:
         self._in_context_manager = False
         time.sleep(self.update_interval)
-        if exception is not None:
-            return False

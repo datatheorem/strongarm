@@ -53,10 +53,14 @@ class TestObjcRuntimeDataParser:
 
         # extract category list
         category_classes = [x for x in objc_parser.classes if isinstance(x, ObjcCategory)]
+        print(category_classes)
+        print([x.name for x in category_classes])
         assert len(category_classes) == 9
 
         # look at one category
-        category = [x for x in category_classes if x.name == 'DataController'][0]
+        category = [x for x in category_classes if x.name == '$_Unknown_Class (DataController)'][0]
+        assert category.base_class == '$_Unknown_Class'
+        assert category.category_name == 'DataController'
         assert len(category.selectors) == 1
         selector = category.selectors[0]
         assert selector.name == 'allowsAnyHTTPSCertificateForHost:'

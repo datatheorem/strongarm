@@ -1,5 +1,4 @@
-import io
-
+import os
 from typing import Optional, List
 from ctypes import sizeof, c_uint32
 
@@ -77,21 +76,22 @@ class MachoParser:
         if self.is_fat:
             self.parse_fat_header()
         else:
-            self.parse_thin_header(FILE_HEAD_PTR)
+            file_size = os.stat(self.filename).st_size
+            self.parse_thin_header(FILE_HEAD_PTR, file_size)
 
-    def parse_thin_header(self, fileoff: StaticFilePointer) -> None:
+    def parse_thin_header(self, fileoff: StaticFilePointer, slice_size: int) -> None:
         """Parse a known Mach-O header at a given file offset, and add it to self.slices
         This method will throw an Exception if the data at fileoff is not a valid Mach-O header
 
         Args:
             fileoff: byte index into file to interpret Mach-O header at
-
+            slice_size: Byte-count of the Mach-O slice in the file
         """
         # sanity check
         if not self._check_is_macho_header(fileoff):
             raise RuntimeError(f'Parsing error: data at file offset {hex(int(fileoff))} was not a valid Mach-O slice!')
 
-        attempt = MachoBinary(self.filename, fileoff)
+        attempt = MachoBinary(self.filename, slice_size, fileoff)
         # if the MachoBinary does not have a header, there was a problem parsing it
         if not attempt.header:
             raise RuntimeError('parsed MachoBinary missing Mach-O header field')
@@ -130,7 +130,7 @@ class MachoParser:
                 fat_arch.size = swap32(int(fat_arch.size))
                 fat_arch.align = swap32(int(fat_arch.align))
 
-            self.parse_thin_header(StaticFilePointer(fat_arch.offset))
+            self.parse_thin_header(StaticFilePointer(fat_arch.offset), fat_arch.size)
             # move to next fat_arch structure in file
             read_off += sizeof(MachoFatArch)
 
@@ -198,6 +198,6 @@ class MachoParser:
             Byte list representing contents of file at provided address
 
         """
-        with io.open(self.filename, 'rb') as binary_file:
+        with open(self.filename, 'rb') as binary_file:
             binary_file.seek(offset)
             return binary_file.read(size)

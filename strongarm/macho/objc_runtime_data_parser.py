@@ -45,6 +45,9 @@ class ObjcCategory(ObjcClass):
                  selectors: List['ObjcSelector'],
                  ivars: List['ObjcIvar'] = None,
                  protocols: List['ObjcProtocol'] = None) -> None:
+        # ObjcCategory.name includes the base class + the cat-name
+        # That way, callers don't need to check the ObjcClass instance type to get the 'right' value
+        name = f'{base_class} ({name})'
         super().__init__(raw_struct, name, selectors, ivars, protocols)
         self.base_class = base_class
 

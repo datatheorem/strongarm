@@ -13,6 +13,7 @@ from strongarm.macho.macho_imp_stubs import MachoImpStubsParser
 from strongarm.macho.macho_binary import MachoBinary, InvalidAddressError
 from strongarm.macho.dyld_info_parser import DyldInfoParser, DyldBoundSymbol
 from strongarm.macho.macho_string_table_helper import MachoStringTableHelper
+from strongarm.macho.progress_bar import ConsoleProgressBar
 
 from strongarm.macho.objc_runtime_data_parser import (
     ObjcClass,
@@ -293,22 +294,22 @@ class MachoAnalyzer:
         entry_point_list = self.get_objc_methods()
         search_results: Dict['CodeSearch', List[CodeSearchResult]] = defaultdict(list)
 
-        for i, method_info in enumerate(entry_point_list):
-            try:
-                function_analyzer = ObjcFunctionAnalyzer.get_function_analyzer_for_method(self.binary, method_info)
-            except DisassemblyFailedError as e:
-                logging.error(f'Failed to disassemble {method_info}: {str(e)}')
-                continue
+        # Searching all code can be a time-consumptive operation. Provide UI feedback on the progress.
+        # This displays a progress bar to stdout. The progress bar will be erased when the context manager exits.
+        code_size = self.binary.slice_filesize / 1024 / 1024
+        with ConsoleProgressBar(prefix=f'CodeSearch {int(code_size)}mb') as progress_bar:
+            for i, method_info in enumerate(entry_point_list):
+                try:
+                    function_analyzer = ObjcFunctionAnalyzer.get_function_analyzer_for_method(self.binary, method_info)
+                except DisassemblyFailedError as e:
+                    logging.error(f'Failed to disassemble {method_info}: {str(e)}')
+                    continue
 
-            # Run every code search on this function and record their respective results
-            for code_search, callback in self._queued_code_searches.items():
-                search_results[code_search] += function_analyzer.search_code(code_search)
+                # Run every code search on this function and record their respective results
+                for code_search, callback in self._queued_code_searches.items():
+                    search_results[code_search] += function_analyzer.search_code(code_search)
 
-            # Searching a binary's code can be a time-consumptive operation, so log progress to help the user
-            checkpoint_index = len(entry_point_list) // 10
-            if checkpoint_index and i % checkpoint_index == 0:
-                percent_complete = int((i / len(entry_point_list) + 0.01) * 100)
-                logging.info(f'{binary_name} code search {percent_complete}% complete')
+                progress_bar.set_progress(i / len(entry_point_list))
 
         # Invoke every callback with their respective search results
         for search, results in search_results.items():

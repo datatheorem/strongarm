@@ -77,10 +77,11 @@ class MachoBinary:
     SUPPORTED_MAG = _MAG_64 + _MAG_32
     BYTES_PER_INSTRUCTION = 4
 
-    def __init__(self, filename: bytes, offset_within_fat: StaticFilePointer = FILE_HEAD_PTR) -> None:
+    def __init__(self, filename: bytes, slice_size: int, offset_within_fat: StaticFilePointer = FILE_HEAD_PTR) -> None:
         from .codesign.codesign_parser import CodesignParser
         # info about this Mach-O's file representation
         self.filename = filename
+        self.slice_filesize = slice_size
         self._offset_within_fat = offset_within_fat
 
         # generic Mach-O header info

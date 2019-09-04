@@ -36,17 +36,22 @@ class ObjcClass:
 
 
 class ObjcCategory(ObjcClass):
-    __slots__ = ['raw_struct', 'name', 'base_class', 'selectors', 'ivars', 'protocols']
+    __slots__ = ['raw_struct', 'name', 'base_class', 'category_name', 'selectors', 'ivars', 'protocols']
 
     def __init__(self,
                  raw_struct: ObjcCategoryRawStruct,
                  base_class: str,
-                 name: str,
+                 category_name: str,
                  selectors: List['ObjcSelector'],
                  ivars: List['ObjcIvar'] = None,
                  protocols: List['ObjcProtocol'] = None) -> None:
-        super().__init__(raw_struct, name, selectors, ivars, protocols)
         self.base_class = base_class
+        self.category_name = category_name
+
+        # ObjcCategory.name includes the base class + the cat-name
+        # That way, callers don't need to check the ObjcClass instance type to get the 'right' value
+        full_name = f'{base_class} ({category_name})'
+        super().__init__(raw_struct, full_name, selectors, ivars, protocols)
 
 
 class ObjcProtocol(ObjcClass):

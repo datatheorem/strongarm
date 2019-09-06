@@ -757,7 +757,8 @@ class MachoBinary:
         dylib_path_bytes = bytes(dylib_path, 'utf8')
         load_cmd.cmdsize = sizeof_loadcmd + max(len(dylib_path_bytes), 0x20)
         # Align the size on an 8-byte boundary
-        load_cmd.cmdsize = (load_cmd.cmdsize + 8) & ~(8-1)
+        if load_cmd.cmdsize % 8:
+            load_cmd.cmdsize = (load_cmd.cmdsize + 8) & ~(8-1)
 
         load_cmd.dylib = DylibStruct()
         dylib_name = LcStrUnion()

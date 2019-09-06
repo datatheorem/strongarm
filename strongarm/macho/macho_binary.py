@@ -1,18 +1,21 @@
-from typing import List, Dict, Tuple, Any, Type, Optional, TypeVar
-from typing import TYPE_CHECKING
+from _ctypes import Structure
+from pathlib import Path
+from typing import List, Tuple, Any, Type, Optional, TypeVar, TYPE_CHECKING
 
 from ctypes import c_uint64, c_uint32, sizeof
 
 from strongarm.debug_util import DebugUtil
-
 from strongarm.macho.macho_definitions import (
     CPU_TYPE,
     MachArch,
     HEADER_FLAGS,
     MachoFileType,
-    FILE_HEAD_PTR,
     StaticFilePointer,
-    VirtualMemoryPointer
+    VirtualMemoryPointer,
+    # XXX(PT): For load-dylib-command insertion. Should binary-modification helpers be refactored into their own module?
+    LcStrUnion,
+    DylibStruct,
+    DylibCommand,
 )
 from strongarm.macho.arch_independent_structs import (
     ArchIndependentStructure,
@@ -43,6 +46,11 @@ class BinaryEncryptedError(Exception):
 
 class LoadCommandMissingError(Exception):
     pass
+
+
+class NoEmptySpaceForLoadCommandError(Exception):
+    """Raised when we fail to insert a load command because there's not enough empty space left in the Mach-O header.
+    """
 
 
 class InvalidAddressError(Exception):
@@ -77,14 +85,13 @@ class MachoBinary:
     SUPPORTED_MAG = _MAG_64 + _MAG_32
     BYTES_PER_INSTRUCTION = 4
 
-    def __init__(self, filename: bytes, slice_size: int, offset_within_fat: StaticFilePointer = FILE_HEAD_PTR) -> None:
+    def __init__(self, path: Path, binary_data: bytes) -> None:
         from .codesign.codesign_parser import CodesignParser
-        # info about this Mach-O's file representation
-        self.filename = filename
-        self.slice_filesize = slice_size
-        self._offset_within_fat = offset_within_fat
 
-        # generic Mach-O header info
+        self._cached_binary = binary_data
+
+        # Basic Mach-O header info
+        self.path = path
         self.is_64bit: bool = False
         self.is_swap: bool = False
         self.cpu_type: CPU_TYPE = CPU_TYPE.UNKNOWN
@@ -93,12 +100,12 @@ class MachoBinary:
         # Mach-O header data
         self._header: Optional[MachoHeaderStruct] = None
         self.header_flags: List[int] = []
-        self.file_type: MachoFileType = MachoFileType.MH_EXECUTE
+        self.file_type: MachoFileType = MachoFileType.MH_EXECUTE    # This is overwritten later in the parse
 
-        # segment and section commands from Mach-O header
+        # Segment and section commands from Mach-O header
         self.segments: List[MachoSegmentCommandStruct] = []
         self.sections: List[MachoSection] = []
-        # also store specific interesting sections which are useful to us
+        # Interesting Mach-O sections
         self._dysymtab: Optional[MachoDysymtabCommandStruct] = None
         self._symtab: Optional[MachoSymtabCommandStruct] = None
         self._encryption_info: Optional[MachoEncryptionInfoStruct] = None
@@ -108,21 +115,13 @@ class MachoBinary:
 
         self.__codesign_parser: Optional[CodesignParser] = None
 
-        # cache to save work on calls to get_bytes()
-        with open(self.filename, 'rb') as f:
-            # TODO(PT): this should only read to the end of our FAT slice!
-            self._cached_binary = f.read()[offset_within_fat:]
-
-        # kickoff for parsing this slice
+        # This kicks off the parse of the binary
         if not self.parse():
             raise RuntimeError('Failed to parse Mach-O')
 
         self.platform_word_type = c_uint64 if self.is_64bit else c_uint32
         self.symtab_contents = self._get_symtab_contents()
         DebugUtil.log(self, f"parsed symtab, len = {len(self.symtab_contents)}")
-
-        # Internal use
-        self._last_segment_command: Optional[MachoSegmentCommandStruct] = None
 
     def parse(self) -> bool:
         """Attempt to parse the provided file info as a Mach-O slice
@@ -132,9 +131,9 @@ class MachoBinary:
             False otherwise.
 
         """
-        DebugUtil.log(self, f'parsing Mach-O slice @ {hex(int(self._offset_within_fat))} in {self.filename.decode()}')
+        DebugUtil.log(self, f'parsing Mach-O slice in {self.path}')
 
-        # preliminary Mach-O parsing
+        # Preliminary Mach-O parsing
         if not self.verify_magic():
             DebugUtil.log(self, f'unsupported magic {hex(self.slice_magic)}')
             return False
@@ -191,7 +190,7 @@ class MachoBinary:
         load_commands_off = self.header.sizeof
 
         self._load_commands_end_addr = load_commands_off + self.header.sizeofcmds   # type: ignore
-        self._parse_segment_commands(load_commands_off, self.header.ncmds)  # type: ignore
+        self._parse_load_commands(load_commands_off, self.header.ncmds)  # type: ignore
 
     def _parse_header_flags(self) -> None:
         """Interpret binary's header bitset and populate self.header_flags
@@ -205,27 +204,25 @@ class MachoBinary:
                 # mask is present in bitset, add to list of included flags
                 self.header_flags.append(mask)
 
-    def _parse_segment_commands(self, offset: StaticFilePointer, segment_count: int) -> None:
+    def _parse_load_commands(self, offset: StaticFilePointer, ncmds: int) -> None:
         """Parse Mach-O segment commands beginning at a given slice offset
 
         Args:
             offset: Slice offset to first segment command
-            segment_count: Number of segments to parse, as declared by the header's ncmds field
-
+            ncmds: Number of load commands to parse, as declared by the header's ncmds field
         """
         self.load_dylib_commands = []
 
-        for i in range(segment_count):
+        for i in range(ncmds):
             load_command = self.read_struct(offset, MachoLoadCommandStruct)
 
             if load_command.cmd in [MachoLoadCommands.LC_SEGMENT,
                                     MachoLoadCommands.LC_SEGMENT_64]:
 
                 segment = self.read_struct(offset, MachoSegmentCommandStruct)
-                # TODO(pt) handle byte swap of segment if necessary
+                # TODO(PT) handle byte swap of segment if necessary
                 self.segments.append(segment)
                 self._parse_sections_for_segment(segment, offset)
-                self._last_segment_command = segment
 
             # some commands have their own structure that we interpret separately from a normal load command
             # if we want to interpret more commands in the future, this is the place to do it
@@ -271,18 +268,17 @@ class MachoBinary:
         data = self.get_contents_from_address(address=binary_offset, size=size, is_virtual=virtual)
         return struct_type(binary_offset, data, self.is_64bit)
 
-    def write_struct(self, address: int, struct: ArchIndependentStructure) -> None:
-        pass
-
     def section_name_for_address(self, virt_addr: VirtualMemoryPointer) -> Optional[str]:
         """Given an address in the virtual address space, return the name of the section which contains it.
         """
         section = self.section_for_address(virt_addr)
         if not section:
             return None
-        return section.name.decode('UTF8')
+        return section.name.decode()
 
     def section_for_address(self, virt_addr: VirtualMemoryPointer) -> Optional[MachoSection]:
+        """Given an address in the virtual address space, return the section which contains it.
+        """
         # invalid address?
         if virt_addr < self.get_virtual_base():
             return None
@@ -714,3 +710,160 @@ class MachoBinary:
         """Read the team ID the binary was signed with.
         """
         return self._codesign_parser.signing_team_id
+
+    def write_bytes(self, data: bytes, address: int, virtual=False) -> 'MachoBinary':
+        """Overwrite the data in the current binary with the provided data, returning a new modified binary.
+        Note: This will invalidate the binary's code signature, if present.
+        """
+        # Ensure there is valid data in this address region by trying to read from it
+        self.get_contents_from_address(address, len(data), virtual)
+
+        # If the above did not throw an exception, the provided address range is valid.
+        file_offset = address
+        if virtual:
+            file_offset = self.file_offset_for_virtual_address(VirtualMemoryPointer(address))
+
+        # Create a new binary with the overwritten data
+        new_binary_data = bytearray(len(self._cached_binary))
+        new_binary_data[:] = self._cached_binary
+        new_binary_data[file_offset:file_offset+len(data)] = data
+
+        return MachoBinary(self.path, new_binary_data)
+
+    def write_struct(self, struct: Structure, address: int, virtual=False) -> 'MachoBinary':
+        """Serialize and write the provided structure the Mach-O slice, returning a new modified binary.
+        Note: This will invalidate the binary's code signature, if present.
+        """
+        # Write the structure bytes to the binary
+        # TODO(PT): byte order?
+        return self.write_bytes(bytes(struct), address, virtual)
+
+    def insert_load_dylib_cmd(self, dylib_path: str) -> 'MachoBinary':
+        """Add a load command of the provided dylib path to the Mach-O header, returning a modified binary.
+        This will increase mh_header->ncmds by 1, and mh_header->sizeofcmds by the size of the new load command,
+        including the pathname.
+        Raises NoEmptySpaceForLoadCommandError() if there's not enough space in the Mach-O header to add a new command.
+        Note: This will invalidate the binary's code signature, if present.
+        """
+        if not self.is_64bit:
+            raise RuntimeError(f'Inserting load commands is only support on 64-bit binaries')
+        if self.is_swap:
+            raise RuntimeError(f'Unsupported endianness')
+
+        load_cmd = DylibCommand()
+        load_cmd.cmd = MachoLoadCommands.LC_LOAD_DYLIB
+        sizeof_loadcmd = 0x18
+        # XXX(PT): The size of the command should be 0x18 + max(len(dylib_path), 0x20). Found experimentally.
+        dylib_path_bytes = bytes(dylib_path, 'utf8')
+        load_cmd.cmdsize = sizeof_loadcmd + max(len(dylib_path_bytes), 0x20)
+
+        load_cmd.dylib = DylibStruct()
+        dylib_name = LcStrUnion()
+        # The name starts after the size of the load command struct, which is 0x18 bytes
+        dylib_name.offset = sizeof_loadcmd
+        load_cmd.dylib.name = dylib_name
+        # These values are copied from a UIKit load command
+        load_cmd.dylib.timestamp = 0x2
+        load_cmd.dylib.current_version = 0xee480000
+        load_cmd.dylib.compatibility_version = 0x10000
+
+        # TODO(PT): It'd be nice to get a modified MachoBinary with a context manager.
+        # This way, all the modifications can be performed on the same binary, without creating a copy
+        # for each change.
+        # TODO(PT): Alternatively, assignments like `self.header.ncmds += 1` should update the backing binary.
+        # This would also make binary modifications easier.
+
+        # Check that there is enough emtpy space before the start of __text to insert a load command
+        load_commands_end = self.header.sizeof + self.header.sizeofcmds
+        string_end = load_commands_end + load_cmd.cmdsize
+        if string_end >= self.section_with_name('__text', '__TEXT').offset:
+            raise NoEmptySpaceForLoadCommandError()
+
+        # Add the load command to the end of the Mach-O header
+        modified_binary = self.write_struct(load_cmd, load_commands_end)
+        # Write the dylib path directly after the load cmd
+        modified_binary = modified_binary.write_bytes(dylib_path_bytes, load_commands_end + sizeof_loadcmd)
+
+        # Increase mh_header->ncmds by 1
+        bumped_ncmds = self.header.ncmds + 1
+        # This field is a 32-bit little-endian encoded int
+        bumped_ncmds_bytes = bumped_ncmds.to_bytes(4, "little")
+        # The ncmds field is located at the binary head, plus the offset of the field into the mh_header structure
+        ncmds_address = MachoHeaderStruct._64_BIT_STRUCT.ncmds.offset
+        modified_binary = modified_binary.write_bytes(bumped_ncmds_bytes, ncmds_address)
+
+        # Increase mh_header->sizeofcmds by the size of the new load command
+        bumped_sizeofcmds = self.header.sizeofcmds + load_cmd.cmdsize
+        # This field is a 32-bit little-endian encoded int
+        bumped_sizeofcmds_bytes = bumped_sizeofcmds.to_bytes(4, "little")
+        # The sizeofcmds field is located at the binary head, plus the offset of the field into the mh_header structure
+        sizeofcmds_address = MachoHeaderStruct._64_BIT_STRUCT.sizeofcmds.offset
+        modified_binary = modified_binary.write_bytes(bumped_sizeofcmds_bytes, sizeofcmds_address)
+
+        # All done
+        return modified_binary
+
+    def write_binary(self, path: Path) -> None:
+        """Write the in-memory Mach-O slice to the provided path.
+        """
+        # Pass 'x' so the call will throw an exception if the path already exists
+        with open(path.as_posix(), 'xb') as out_file:
+            out_file.write(self._cached_binary)
+
+    @staticmethod
+    def write_fat(slices: List['MachoBinary'], path: Path) -> None:
+        """Write a list of Mach-O slices into a FAT file at the provided path.
+        """
+        from strongarm.macho.macho_definitions import MachoFatHeader, MachoFatArch, MachArch, swap32
+
+        if any(x.is_swap for x in slices):
+            raise RuntimeError(f'Unsupported endianness')
+
+        # Write the FAT header
+        fat_header = MachoFatHeader()
+        fat_header.magic = MachArch.FAT_MAGIC.value
+        fat_header.nfat_arch = len(slices)
+        file_data = bytearray(bytes(fat_header))
+
+        # Write a fat-arch structure for each binary slice
+        arch_to_binaries: List[Tuple[MachoFatArch, 'MachoBinary']] = []
+        page_size = 0x4000
+        for binary in slices:
+            arch = MachoFatArch()
+            arch.cputype = binary.header.cputype
+            arch.cpusubtype = binary.header.cpusubtype
+            arch.size = len(binary._cached_binary)
+            # Experimentally, in a FAT with an armv7 and arm64 slice, the align for both arch's was 0x4000
+            arch.align = page_size
+            arch_to_binaries.append((arch, binary))
+
+        # Figure out where to place each binary in the file
+        speculative_data_end = len(file_data) + (sizeof(MachoFatArch) * len(arch_to_binaries))
+        for arch, binary in arch_to_binaries:
+            # Find the nearest page boundary
+            speculative_data_end = (speculative_data_end + page_size) & ~(page_size - 1)
+            # Assign this file offset to the slice
+            arch.offset = speculative_data_end
+            # Add the size of the binary to the data-size marker
+            speculative_data_end += arch.size
+            # Write this arch entry to the file data
+            file_data += bytearray(bytes(arch))
+
+        # Change the endianess of the FAT header from big to little
+        # The FAT header is a list of 32-bit ints
+        for idx in range(len(file_data))[::4]:
+            # Revere the bytes of this int
+            file_data[idx:idx+4] = bytearray(reversed(file_data[idx:idx+4]))
+
+        # We now know the final file size, and where each slice should be placed
+        # Zero-fill the rest of the file, and copy in each slice
+        # Page-align the file-end
+        speculative_data_end = (speculative_data_end + page_size) & ~(page_size - 1)
+        file_data += bytearray(speculative_data_end - len(file_data))
+        for arch, binary in arch_to_binaries:
+            file_data[arch.offset:arch.offset+arch.size] = binary._cached_binary
+
+        # The output file has been constructed. Write it to disk
+        # Pass 'x' so the call will throw an exception if the path already exists
+        with open(path.as_posix(), 'xb') as out_file:
+            out_file.write(file_data)

@@ -72,6 +72,7 @@ from .macho_binary import (
     InvalidAddressError,
     BinaryEncryptedError,
     LoadCommandMissingError,
+    NoEmptySpaceForLoadCommandError
 )
 
 from .dyld_info_parser import (

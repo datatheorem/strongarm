@@ -42,6 +42,22 @@ for slice in parser.slices:
     # slice.symtab, etc
 ```
 
+Modifying Mach-O's
+--------------
+
+To make edits to a MachoBinary, use the functions provided by `MachoWriter`.
+
+```python
+# Write raw bytes or Mach-O structures to a binary
+MachoBinary.write_bytes(self, data: bytes, address: int, virtual=False) -> None
+MachoBinary.write_struct(self, struct: Structure, address: int, virtual=False) -> None
+
+# Flushing a modified slice to a thin Mach-O file, or a list of slices to a FAT Mach-O file:
+MachoBinary.write_binary(self, path: pathlib.Path) -> None
+@staticmethod
+MachoBinary.write_fat(slices: List['MachoBinary'], path: pathlib.Path) -> None
+```
+
 How it works
 --------------
 

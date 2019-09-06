@@ -711,7 +711,7 @@ class MachoBinary:
         """
         return self._codesign_parser.signing_team_id
 
-    def write_bytes(self, data: bytes, address: int, virtual=False) -> 'MachoBinary':
+    def write_bytes(self, data: bytes, address: int, virtual: bool = False) -> 'MachoBinary':
         """Overwrite the data in the current binary with the provided data, returning a new modified binary.
         Note: This will invalidate the binary's code signature, if present.
         """
@@ -730,7 +730,7 @@ class MachoBinary:
 
         return MachoBinary(self.path, new_binary_data)
 
-    def write_struct(self, struct: Structure, address: int, virtual=False) -> 'MachoBinary':
+    def write_struct(self, struct: Structure, address: int, virtual: bool = False) -> 'MachoBinary':
         """Serialize and write the provided structure the Mach-O slice, returning a new modified binary.
         Note: This will invalidate the binary's code signature, if present.
         """
@@ -776,7 +776,8 @@ class MachoBinary:
         # Check that there is enough emtpy space before the start of __text to insert a load command
         load_commands_end = self.header.sizeof + self.header.sizeofcmds
         string_end = load_commands_end + load_cmd.cmdsize
-        if string_end >= self.section_with_name('__text', '__TEXT').offset:
+        text_section = self.section_with_name('__text', '__TEXT')
+        if text_section and string_end >= text_section.offset:
             raise NoEmptySpaceForLoadCommandError()
 
         # Add the load command to the end of the Mach-O header

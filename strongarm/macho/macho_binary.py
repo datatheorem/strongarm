@@ -756,6 +756,8 @@ class MachoBinary:
         # XXX(PT): The size of the command should be 0x18 + max(len(dylib_path), 0x20). Found experimentally.
         dylib_path_bytes = bytes(dylib_path, 'utf8')
         load_cmd.cmdsize = sizeof_loadcmd + max(len(dylib_path_bytes), 0x20)
+        # Align the size on an 8-byte boundary
+        load_cmd.cmdsize = (load_cmd.cmdsize + 8) & ~(8-1)
 
         load_cmd.dylib = DylibStruct()
         dylib_name = LcStrUnion()

@@ -1,13 +1,13 @@
-import os
+import pathlib
 from typing import List
 
 from strongarm.macho import MachoParser, ObjcRuntimeDataParser, ObjcCategory
 
 
 class TestObjcRuntimeDataParser:
-    FAT_PATH = os.path.join(os.path.dirname(__file__), 'bin', 'StrongarmTarget')
-    CATEGORY_PATH = os.path.join(os.path.dirname(__file__), 'bin', 'DigitalAdvisorySolutions')
-    PROTOCOL_32BIT_PATH = os.path.join(os.path.dirname(__file__), 'bin', 'USPossibilities')
+    FAT_PATH = pathlib.Path(__file__).parent / 'bin' / 'StrongarmTarget'
+    CATEGORY_PATH = pathlib.Path(__file__).parent / 'bin' / 'DigitalAdvisorySolutions'
+    PROTOCOL_32BIT_PATH = pathlib.Path(__file__).parent / 'bin' / 'USPossibilities'
 
     def test_path_for_external_symbol(self):
         parser = MachoParser(TestObjcRuntimeDataParser.FAT_PATH)

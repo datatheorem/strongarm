@@ -1,11 +1,11 @@
-import os
+import pathlib
 
 from strongarm.macho.macho_parse import MachoParser
 
 
 class TestFatMachO:
-    THIN_BIN_PATH = os.path.join(os.path.dirname(__file__), 'bin', 'StrongarmTarget')
-    FAT_BIN_PATH = os.path.join(os.path.dirname(__file__), 'bin', 'GammaRayTestBad')
+    THIN_BIN_PATH = pathlib.Path(__file__).parent / 'bin' / 'StrongarmTarget'
+    FAT_BIN_PATH = pathlib.Path(__file__).parent / 'bin' / 'GammaRayTestBad'
 
     def setup_method(self):
         self.thin_parser = MachoParser(TestFatMachO.THIN_BIN_PATH)
@@ -26,4 +26,3 @@ class TestFatMachO:
         for slice in self.fat_parser.slices:
             magic = slice.header.magic
             assert magic in MachoParser.SUPPORTED_MAG
-            assert self.fat_parser._check_is_macho_header(slice._offset_within_fat)

@@ -90,17 +90,17 @@ class MachoBinary:
 
         self._cached_binary = binary_data
 
-        # Basic Mach-O header info
         self.path = path
         self.is_64bit: bool = False
         self.is_swap: bool = False
-        self.cpu_type: CPU_TYPE = CPU_TYPE.UNKNOWN
+        self.slice_filesize = len(binary_data)
         self._load_commands_end_addr = 0
 
         # Mach-O header data
+        self.cpu_type: CPU_TYPE = CPU_TYPE.UNKNOWN      # Overwritten later in the parse
         self._header: Optional[MachoHeaderStruct] = None
         self.header_flags: List[int] = []
-        self.file_type: MachoFileType = MachoFileType.MH_EXECUTE    # This is overwritten later in the parse
+        self.file_type: MachoFileType = MachoFileType.MH_EXECUTE    # Overwritten later in the parse
 
         # Segment and section commands from Mach-O header
         self.segments: List[MachoSegmentCommandStruct] = []

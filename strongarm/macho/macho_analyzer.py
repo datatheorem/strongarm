@@ -267,8 +267,7 @@ class MachoAnalyzer:
         Once the CodeSearch has been run over the binary, the `callback` will be invoked, passing the relevant
         info about the discovered code.
         """
-        binary_name = Path(self.binary.filename.decode()).name
-        logging.info(f'{binary_name} enqueuing CodeSearch {code_search}. Will invoke {callback}')
+        logging.info(f'{self.binary.path.name} enqueuing CodeSearch {code_search}. Will invoke {callback}')
         self._queued_code_searches[code_search] = callback
 
     def search_all_code(self) -> None:
@@ -288,8 +287,7 @@ class MachoAnalyzer:
         if not len(self._queued_code_searches):
             return
 
-        binary_name = Path(self.binary.filename.decode()).name
-        logging.info(f'Running {len(self._queued_code_searches.keys())} code searches on {binary_name}')
+        logging.info(f'Running {len(self._queued_code_searches.keys())} code searches on {self.binary.path.name}')
 
         entry_point_list = self.get_objc_methods()
         search_results: Dict['CodeSearch', List[CodeSearchResult]] = defaultdict(list)

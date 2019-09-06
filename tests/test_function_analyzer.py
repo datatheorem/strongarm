@@ -1,5 +1,5 @@
-import os
 import pytest
+import pathlib
 from typing import List
 
 from strongarm.macho import MachoAnalyzer, MachoParser, VirtualMemoryPointer
@@ -15,8 +15,8 @@ from strongarm.objc import (
 
 
 class TestFunctionAnalyzer:
-    FAT_PATH = os.path.join(os.path.dirname(__file__), 'bin', 'StrongarmTarget')
-    DIGITAL_ADVISORY_PATH = os.path.join(os.path.dirname(__file__), 'bin', 'DigitalAdvisorySolutions')
+    FAT_PATH = pathlib.Path(__file__).parent / 'bin' / 'StrongarmTarget'
+    DIGITAL_ADVISORY_PATH = pathlib.Path(__file__).parent / 'bin' / 'DigitalAdvisorySolutions'
 
     OBJC_RETAIN_STUB_ADDR = 0x1000067cc
     SEC_TRUST_EVALUATE_STUB_ADDR = 0x100006760
@@ -155,9 +155,7 @@ class TestFunctionAnalyzer:
         # 0x000000010000665c         adrp       x0, #0x102a41000
         # 0x0000000100006660         add        x0, x0, #0x458
         # 0x0000000100006664         bl         0x101f8600c
-        three_op_binary = os.path.join(os.path.dirname(__file__),
-                                       'bin',
-                                       'ThreeOpAddInstruction')
+        three_op_binary = pathlib.Path(__file__).parent / 'bin' / 'ThreeOpAddInstruction'
         binary = MachoParser(three_op_binary).get_arm64_slice()
         analyzer = MachoAnalyzer.get_analyzer(binary)
         function_analyzer = ObjcFunctionAnalyzer(binary,

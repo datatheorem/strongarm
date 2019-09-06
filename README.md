@@ -45,14 +45,20 @@ for slice in parser.slices:
 Modifying Mach-O's
 --------------
 
-To make edits to a MachoBinary, use the functions provided by `MachoWriter`.
+`MachoBinary` provides several functions to faciliate binary modifications.
+
+As modifying a `MachoBinary` may invalidate its public attributes, these APIs return a new `MachoBinary` object,
+which is re-parsed with the edits.
 
 ```python
 # Write raw bytes or Mach-O structures to a binary
-MachoBinary.write_bytes(self, data: bytes, address: int, virtual=False) -> None
-MachoBinary.write_struct(self, struct: Structure, address: int, virtual=False) -> None
+MachoBinary.write_bytes(self, data: bytes, address: int, virtual=False) -> 'MachoBinary'
+MachoBinary.write_struct(self, struct: Structure, address: int, virtual=False) -> 'MachoBinary'
 
-# Flushing a modified slice to a thin Mach-O file, or a list of slices to a FAT Mach-O file:
+# Insert a load command
+MachoBinary.insert_load_dylib_cmd(dylib_path: str) -> 'MachoBinary'
+
+# Flush a modified slice to a thin Mach-O file, or a list of slices to a FAT Mach-O file:
 MachoBinary.write_binary(self, path: pathlib.Path) -> None
 @staticmethod
 MachoBinary.write_fat(slices: List['MachoBinary'], path: pathlib.Path) -> None

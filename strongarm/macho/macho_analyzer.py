@@ -68,7 +68,7 @@ class MachoAnalyzer:
         self.imp_stubs = MachoImpStubsParser(binary, self.cs).imp_stubs
         self._objc_helper: Optional[ObjcRuntimeDataParser] = None
         self._objc_method_list: List[ObjcMethodInfo] = []
-        self._functions_list: List[str] = []
+        self._functions_list: Optional[List[VirtualMemoryPointer]] = None
 
         self._cached_function_boundaries: Dict[int, int] = {}
 
@@ -258,20 +258,27 @@ class MachoAnalyzer:
         self._objc_method_list = method_list
         return self._objc_method_list
 
-    def get_functions(self) -> List['ObjcMethodInfo']:
-        """Get a list of FunctionInfo's representing all c functions implemented in the Macho-O.
+    def get_functions(self) -> List[VirtualMemoryPointer]:
+        """Get a list of the function entry points defined in LC_FUNCTION_STARTS
+        
+        Returns: A list of VirtualMemoryPointers corresponding to each function's entry point.
         """
         from strongarm.objc import ObjcMethodInfo 
         from strongarm.macho.macho_definitions import ObjcClassRaw64
         if self._functions_list:
             return self._functions_list
+
+        # Cannot do anything without LC_FUNCTIONS_START
+        if not self.binary._function_starts_cmd:
+            return []
+        
         functions_list = []
 
         fs_start = self.binary._function_starts_cmd.dataoff
         fs_size = self.binary._function_starts_cmd.datasize
         fs_uleb = self.binary.get_contents_from_address(fs_start, fs_size)
         
-        address = self.binary.get_virtual_base()
+        address = int(self.binary.get_virtual_base())
 
         idx = 0
         while idx < fs_size:

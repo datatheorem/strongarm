@@ -105,6 +105,8 @@ class MachoBinary:
         self._dyld_info: Optional[MachoDyldInfoCommandStruct] = None
         self.load_dylib_commands: List[DylibCommandStruct] = []
         self._code_signature_cmd: Optional[MachoLinkeditDataCommandStruct] = None
+        self._function_starts_cmd: Optional[MachoLinkeditDataCommandStruct] = None
+
 
         self.__codesign_parser: Optional[CodesignParser] = None
 
@@ -248,6 +250,9 @@ class MachoBinary:
 
             elif load_command.cmd == MachoLoadCommands.LC_CODE_SIGNATURE:
                 self._code_signature_cmd = self.read_struct(offset, MachoLinkeditDataCommandStruct)
+            
+            elif load_command.cmd == MachoLoadCommands.LC_FUNCTION_STARTS:
+                self._function_starts_cmd = self.read_struct(offset, MachoLinkeditDataCommandStruct)
 
             # move to next load command in header
             offset += load_command.cmdsize

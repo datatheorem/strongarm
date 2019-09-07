@@ -68,6 +68,7 @@ class MachoAnalyzer:
         self.imp_stubs = MachoImpStubsParser(binary, self.cs).imp_stubs
         self._objc_helper: Optional[ObjcRuntimeDataParser] = None
         self._objc_method_list: List[ObjcMethodInfo] = []
+        self._functions_list: List[str] = []
 
         self._cached_function_boundaries: Dict[int, int] = {}
 
@@ -257,6 +258,32 @@ class MachoAnalyzer:
         self._objc_method_list = method_list
         return self._objc_method_list
 
+    def get_functions(self) -> List['ObjcMethodInfo']:
+        """Get a list of FunctionInfo's representing all c functions implemented in the Macho-O.
+        """
+        from strongarm.objc import ObjcMethodInfo 
+        from strongarm.macho.macho_definitions import ObjcClassRaw64
+        if self._functions_list:
+            return self._functions_list
+        functions_list = []
+
+        fs_start = self.binary._function_starts_cmd.dataoff
+        fs_size = self.binary._function_starts_cmd.datasize
+        fs_uleb = self.binary.get_contents_from_address(fs_start, fs_size)
+        
+        address = self.binary.get_virtual_base()
+
+        idx = 0
+        while idx < fs_size:
+            address_delta, idx = self.dyld_info_parser.read_uleb(fs_uleb, idx)
+
+            address += address_delta
+            func_entry = VirtualMemoryPointer(address)
+            functions_list.append(func_entry)
+
+        self._functions_list = functions_list
+        return self._functions_list
+        
     def queue_code_search(self, code_search: 'CodeSearch', callback: CodeSearchCallback) -> None:
         """Enqueue a CodeSearch. It will be ran when `search_all_code` runs. `callback` will then be invoked.
         The search space is all known Objective-C entry points within the binary.
@@ -291,25 +318,38 @@ class MachoAnalyzer:
         binary_name = Path(self.binary.filename.decode()).name
         logging.info(f'Running {len(self._queued_code_searches.keys())} code searches on {binary_name}')
 
-        entry_point_list = self.get_objc_methods()
+        function_analyzers = []
         search_results: Dict['CodeSearch', List[CodeSearchResult]] = defaultdict(list)
 
         # Searching all code can be a time-consumptive operation. Provide UI feedback on the progress.
         # This displays a progress bar to stdout. The progress bar will be erased when the context manager exits.
         code_size = self.binary.slice_filesize / 1024 / 1024
         with ConsoleProgressBar(prefix=f'CodeSearch {int(code_size)}mb') as progress_bar:
-            for i, method_info in enumerate(entry_point_list):
+
+            # Build analyzers for objc method entry points
+            for method_info in self.get_objc_methods():
                 try:
                     function_analyzer = ObjcFunctionAnalyzer.get_function_analyzer_for_method(self.binary, method_info)
+                    function_analyzers.append(function_analyzer)
                 except DisassemblyFailedError as e:
-                    logging.error(f'Failed to disassemble {method_info}: {str(e)}')
+                    logging.error(f'Failed to disassemble objc method {method_info}: {str(e)}')
                     continue
 
+            # Build analyzers for function entry points
+            for func_address in self.get_functions():
+                try:
+                    function_analyzer = ObjcFunctionAnalyzer.get_function_analyzer(self.binary, func_address)
+                    function_analyzers.append(function_analyzer)
+                except DisassemblyFailedError as e:
+                    logging.error(f'Failed to disassemble function {hex(func_address)}: {str(e)}')
+                    continue
+
+            for i, function_analyzer in enumerate(function_analyzers):
                 # Run every code search on this function and record their respective results
                 for code_search, callback in self._queued_code_searches.items():
                     search_results[code_search] += function_analyzer.search_code(code_search)
 
-                progress_bar.set_progress(i / len(entry_point_list))
+                progress_bar.set_progress(i / len(function_analyzers))
 
         # Invoke every callback with their respective search results
         for search, results in search_results.items():

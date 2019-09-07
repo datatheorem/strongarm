@@ -263,8 +263,6 @@ class MachoAnalyzer:
         
         Returns: A list of VirtualMemoryPointers corresponding to each function's entry point.
         """
-        from strongarm.objc import ObjcMethodInfo 
-        from strongarm.macho.macho_definitions import ObjcClassRaw64
         if self._functions_list:
             return self._functions_list
 

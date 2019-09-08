@@ -158,7 +158,7 @@ class MachoAnalyzer:
 
         self._imported_symbol_addresses_to_names = symbol_name_map
         return symbol_name_map
-    
+
     @property
     def imported_symbols_to_symbol_names(self) -> Dict[VirtualMemoryPointer, str]:
         """Return a Dict of imported symbol pointers to their names.
@@ -260,7 +260,7 @@ class MachoAnalyzer:
 
     def get_functions(self) -> List[VirtualMemoryPointer]:
         """Get a list of the function entry points defined in LC_FUNCTION_STARTS. This includes objective-c methods.
-        
+
         Returns: A list of VirtualMemoryPointers corresponding to each function's entry point.
         """
         if self._functions_list:
@@ -269,13 +269,13 @@ class MachoAnalyzer:
         # Cannot do anything without LC_FUNCTIONS_START
         if not self.binary._function_starts_cmd:
             return []
-        
+
         functions_list = []
 
         fs_start = self.binary._function_starts_cmd.dataoff
         fs_size = self.binary._function_starts_cmd.datasize
         fs_uleb = self.binary.get_contents_from_address(fs_start, fs_size)
-        
+
         address = int(self.binary.get_virtual_base())
 
         idx = 0
@@ -288,7 +288,7 @@ class MachoAnalyzer:
 
         self._functions_list = functions_list
         return self._functions_list
-        
+
     def queue_code_search(self, code_search: 'CodeSearch', callback: CodeSearchCallback) -> None:
         """Enqueue a CodeSearch. It will be ran when `search_all_code` runs. `callback` will then be invoked.
         The search space is all known Objective-C entry points within the binary.
@@ -347,7 +347,7 @@ class MachoAnalyzer:
                 except DisassemblyFailedError as e:
                     logging.error(f'Failed to disassemble function {hex(entry_address)}: {str(e)}')
                     continue
-                
+
                 # Run every code search on this function and record their respective results
                 for code_search, callback in self._queued_code_searches.items():
                     search_results[code_search] += function_analyzer.search_code(code_search)

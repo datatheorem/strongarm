@@ -259,7 +259,7 @@ class MachoAnalyzer:
         return self._objc_method_list
 
     def get_functions(self) -> List[VirtualMemoryPointer]:
-        """Get a list of the function entry points defined in LC_FUNCTION_STARTS
+        """Get a list of the function entry points defined in LC_FUNCTION_STARTS. This includes objective-c methods.
         
         Returns: A list of VirtualMemoryPointers corresponding to each function's entry point.
         """
@@ -323,7 +323,7 @@ class MachoAnalyzer:
         binary_name = Path(self.binary.filename.decode()).name
         logging.info(f'Running {len(self._queued_code_searches.keys())} code searches on {binary_name}')
 
-        function_analyzers = []
+        entry_point_list = self.get_functions()
         search_results: Dict['CodeSearch', List[CodeSearchResult]] = defaultdict(list)
 
         # Searching all code can be a time-consumptive operation. Provide UI feedback on the progress.
@@ -331,30 +331,28 @@ class MachoAnalyzer:
         code_size = self.binary.slice_filesize / 1024 / 1024
         with ConsoleProgressBar(prefix=f'CodeSearch {int(code_size)}mb') as progress_bar:
 
-            # Build analyzers for objc method entry points
-            for method_info in self.get_objc_methods():
+            # Build analyzers for function entry points.
+            for i, entry_address in enumerate(entry_point_list):
                 try:
-                    function_analyzer = ObjcFunctionAnalyzer.get_function_analyzer_for_method(self.binary, method_info)
-                    function_analyzers.append(function_analyzer)
+                    # Try to find an objcmethodinfo with matching address
+                    matched_method_info = None
+                    for method_info in self.get_objc_methods():
+                        if method_info.imp_addr == entry_address:
+                            matched_method_info = method_info
+                            break
+                    if matched_method_info:
+                        function_analyzer = ObjcFunctionAnalyzer.get_function_analyzer_for_method(self.binary, matched_method_info)
+                    else:
+                        function_analyzer = ObjcFunctionAnalyzer.get_function_analyzer(self.binary, entry_address)
                 except DisassemblyFailedError as e:
-                    logging.error(f'Failed to disassemble objc method {method_info}: {str(e)}')
+                    logging.error(f'Failed to disassemble function {hex(entry_address)}: {str(e)}')
                     continue
-
-            # Build analyzers for function entry points
-            for func_address in self.get_functions():
-                try:
-                    function_analyzer = ObjcFunctionAnalyzer.get_function_analyzer(self.binary, func_address)
-                    function_analyzers.append(function_analyzer)
-                except DisassemblyFailedError as e:
-                    logging.error(f'Failed to disassemble function {hex(func_address)}: {str(e)}')
-                    continue
-
-            for i, function_analyzer in enumerate(function_analyzers):
+                
                 # Run every code search on this function and record their respective results
                 for code_search, callback in self._queued_code_searches.items():
                     search_results[code_search] += function_analyzer.search_code(code_search)
 
-                progress_bar.set_progress(i / len(function_analyzers))
+                progress_bar.set_progress(i / len(entry_point_list))
 
         # Invoke every callback with their respective search results
         for search, results in search_results.items():

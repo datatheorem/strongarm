@@ -1,4 +1,4 @@
-import os
+from pathlib import Path
 from typing import Optional, List
 from ctypes import sizeof, c_uint32
 
@@ -8,7 +8,6 @@ from strongarm.macho.macho_definitions import (
     MachArch,
     MachoFatArch,
     MachoFatHeader,
-    FILE_HEAD_PTR,
     StaticFilePointer,
 )
 
@@ -38,8 +37,8 @@ class MachoParser:
 
     SUPPORTED_MAG = _FAT_MAGIC + _SUPPORTED_SLICE_MAG
 
-    def __init__(self, filename: str) -> None:
-        self.filename = filename.encode('utf-8')
+    def __init__(self, path: Path) -> None:
+        self.path = path
 
         self.header: Optional[MachoFatHeader] = None
         self.is_swapped: bool = False
@@ -76,8 +75,8 @@ class MachoParser:
         if self.is_fat:
             self.parse_fat_header()
         else:
-            file_size = os.stat(self.filename).st_size
-            self.parse_thin_header(FILE_HEAD_PTR, file_size)
+            file_size = self.path.stat().st_size
+            self.parse_thin_header(StaticFilePointer(0), file_size)
 
     def parse_thin_header(self, fileoff: StaticFilePointer, slice_size: int) -> None:
         """Parse a known Mach-O header at a given file offset, and add it to self.slices
@@ -91,7 +90,9 @@ class MachoParser:
         if not self._check_is_macho_header(fileoff):
             raise RuntimeError(f'Parsing error: data at file offset {hex(int(fileoff))} was not a valid Mach-O slice!')
 
-        attempt = MachoBinary(self.filename, slice_size, fileoff)
+        slice_data = self.get_bytes(fileoff, slice_size)
+        attempt = MachoBinary(self.path, slice_data)
+
         # if the MachoBinary does not have a header, there was a problem parsing it
         if not attempt.header:
             raise RuntimeError('parsed MachoBinary missing Mach-O header field')
@@ -163,7 +164,7 @@ class MachoParser:
     @property
     def file_magic(self) -> int:
         """Read file magic"""
-        return c_uint32.from_buffer(bytearray(self.get_bytes(FILE_HEAD_PTR, sizeof(c_uint32)))).value
+        return c_uint32.from_buffer(bytearray(self.get_bytes(StaticFilePointer(0), sizeof(c_uint32)))).value
 
     @property
     def is_fat(self) -> bool:
@@ -198,6 +199,6 @@ class MachoParser:
             Byte list representing contents of file at provided address
 
         """
-        with open(self.filename, 'rb') as binary_file:
+        with open(self.path, 'rb') as binary_file:
             binary_file.seek(offset)
             return binary_file.read(size)

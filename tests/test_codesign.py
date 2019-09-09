@@ -1,11 +1,11 @@
-import os
+import pathlib
 
 from strongarm.macho import MachoParser
 from strongarm.macho.codesign import CodesignParser
 
 
 class TestCodeSignParser:
-    TARGET_PATH = os.path.join(os.path.dirname(__file__), 'bin', 'DigitalAdvisorySolutions')
+    TARGET_PATH = pathlib.Path(__file__).parent / 'bin' / 'DigitalAdvisorySolutions'
 
     def setup_method(self):
         parser = MachoParser(TestCodeSignParser.TARGET_PATH)

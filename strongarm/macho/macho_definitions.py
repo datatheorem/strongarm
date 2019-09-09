@@ -24,10 +24,6 @@ class VirtualMemoryPointer(int):
     """
 
 
-NULL_PTR = StaticFilePointer(0)
-FILE_HEAD_PTR = StaticFilePointer(0)
-
-
 def swap32(i: int) -> int:
     """Reverse the bytes of a little-endian integer representation ie (3) -> 50331648"""
     return struct.unpack("<I", struct.pack(">I", i))[0]

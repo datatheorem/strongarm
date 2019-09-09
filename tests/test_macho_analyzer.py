@@ -1,13 +1,12 @@
-import os
 import pytest
+import pathlib
 
 from strongarm.macho.macho_parse import MachoParser
 from strongarm.macho.macho_analyzer import MachoAnalyzer
-from strongarm.objc.dataflow import determine_function_boundary
 
 
 class TestMachoAnalyzer:
-    FAT_PATH = os.path.join(os.path.dirname(__file__), 'bin', 'StrongarmTarget')
+    FAT_PATH = pathlib.Path(__file__).parent / 'bin' / 'StrongarmTarget'
 
     def setup_method(self):
         parser = MachoParser(TestMachoAnalyzer.FAT_PATH)

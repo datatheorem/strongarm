@@ -1,12 +1,12 @@
-import os
+import pathlib
 
 from strongarm.macho.macho_analyzer import MachoAnalyzer
 from strongarm.macho.macho_parse import MachoParser
 
 
 class TestDyldInfoParser:
-    BINARY1_PATH = os.path.join(os.path.dirname(__file__), 'bin', 'StrongarmTarget')
-    BINARY2_PATH = os.path.join(os.path.dirname(__file__), 'bin', 'GammaRayTestBad')
+    BINARY1_PATH = pathlib.Path(__file__).parent / 'bin' / 'StrongarmTarget'
+    BINARY2_PATH = pathlib.Path(__file__).parent / 'bin' / 'GammaRayTestBad'
 
     def test_identify_imported_symbols_1(self):
         parser = MachoParser(TestDyldInfoParser.BINARY1_PATH)

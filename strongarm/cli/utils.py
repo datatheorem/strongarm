@@ -70,7 +70,7 @@ def pick_macho_slice(parser: MachoParser) -> MachoBinary:
 
     # Sanity checks (an empty list is falsey)
     if not binary_slices:
-        raise ValueError(f'Could not parse {parser.filename} as a Mach-O or FAT')
+        raise ValueError(f'Could not parse {parser.path.name} as a Mach-O or FAT')
 
     parsed_binary = binary_slices[0]
     # Return 64 bit slice if there is one

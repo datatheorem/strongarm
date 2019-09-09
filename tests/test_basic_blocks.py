@@ -1,13 +1,12 @@
-import os
+import pathlib
 
 from strongarm.macho.macho_analyzer import MachoAnalyzer, VirtualMemoryPointer
 from strongarm.macho.macho_parse import MachoParser
 from strongarm.objc.objc_analyzer import ObjcFunctionAnalyzer
-from strongarm.debug_util import DebugUtil
 
 
 class TestBasicBlocks:
-    TARGET_PATH = os.path.join(os.path.dirname(__file__), 'bin', 'StrongarmControlFlowTarget')
+    TARGET_PATH = pathlib.Path(__file__).parent / 'bin' / 'StrongarmControlFlowTarget'
 
     def setup_method(self):
         parser = MachoParser(TestBasicBlocks.TARGET_PATH)

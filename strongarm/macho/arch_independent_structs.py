@@ -106,7 +106,7 @@ class ArchIndependentStructure:
         data: Any = None
 
     def __repr__(self) -> str:
-        attributes = '\t'.join([f'{x}: {hex(getattr(self, x))}' for x in self.__dict__.keys()])
+        attributes = '\t'.join([f'{x}: {getattr(self, x)}' for x in self.__dict__.keys()])
         rep = f'{self.__class__.__name__} ({attributes})'
         return rep
 

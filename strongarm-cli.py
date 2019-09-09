@@ -1,4 +1,5 @@
 import sys
+import pathlib
 import logging
 import argparse
 from typing import Text, List
@@ -257,12 +258,12 @@ def main() -> None:
 
     print_header(args)
 
-    parser = MachoParser(args.binary_path)
+    parser = MachoParser(pathlib.Path(args.binary_path))
 
     # print slice info
     print('Slices:')
     for macho_slice in parser.slices:
-        print('\t{} Mach-O slice @ {}'.format(macho_slice.cpu_type.name, hex(macho_slice._offset_within_fat)))
+        print(f'\t{macho_slice.cpu_type.name} Mach-O slice')
 
     binary = pick_macho_slice(parser)
     print('Reading {} slice\n\n'.format(binary.cpu_type.name))

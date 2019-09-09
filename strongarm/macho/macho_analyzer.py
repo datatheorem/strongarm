@@ -303,7 +303,7 @@ class MachoAnalyzer:
         logging.info(f'{binary_name} enqueuing CodeSearch {code_search}. Will invoke {callback}')
         self._queued_code_searches[code_search] = callback
 
-    def search_all_code(self) -> None:
+    def search_all_code(self, display_progress: bool = True) -> None:
         """Iterate every function in the binary, and run each pending CodeSearch over them.
         The search space is all known Objective-C entry points within the binary.
 
@@ -329,7 +329,7 @@ class MachoAnalyzer:
         # Searching all code can be a time-consumptive operation. Provide UI feedback on the progress.
         # This displays a progress bar to stdout. The progress bar will be erased when the context manager exits.
         code_size = self.binary.slice_filesize / 1024 / 1024
-        with ConsoleProgressBar(prefix=f'CodeSearch {int(code_size)}mb') as progress_bar:
+        with ConsoleProgressBar(prefix=f'CodeSearch {int(code_size)}mb', enabled=display_progress) as progress_bar:
 
             # Build analyzers for function entry points.
             for i, entry_address in enumerate(entry_point_list):

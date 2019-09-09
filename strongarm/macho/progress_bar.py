@@ -15,7 +15,11 @@ class ConsoleProgressBar:
         """
         self.progress = progress
 
-    def __init__(self, prefix: str = None, bar_width: int = 40, update_interval: float = 0.5) -> None:
+    def __init__(self,
+                 prefix: str = None,
+                 bar_width: int = 40,
+                 update_interval: float = 0.5,
+                 enabled: bool = True) -> None:
         self.prefix = ''
         if prefix:
             self.prefix = f'{prefix}\t'
@@ -26,9 +30,14 @@ class ConsoleProgressBar:
 
         self.start_time = 0.0
         self._in_context_manager = False
+        self.enabled = enabled
 
     def _update_bar(self) -> None:
         while self._in_context_manager:
+            if not self.enabled:
+                time.sleep(self.update_interval)
+                continue
+
             elapsed_seconds = time.time() - self.start_time
             elapsed_time = f'{(elapsed_seconds // 60) % 60:02.0f}:{elapsed_seconds % 60:02.0f}'
 
@@ -41,7 +50,7 @@ class ConsoleProgressBar:
             sys.stdout.write(progress_str)
             sys.stdout.flush()
             time.sleep(self.update_interval)
-            sys.stdout.write('\b' * len(progress_str))
+            sys.stdout.write('\r')
             sys.stdout.flush()
 
     def __enter__(self) -> 'ConsoleProgressBar':

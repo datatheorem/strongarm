@@ -2,8 +2,8 @@ import os
 import pytest
 from typing import List
 
-from strongarm.macho import MachoAnalyzer, MachoParser, VirtualMemoryPointer
-from strongarm.objc import ObjcFunctionAnalyzer, ObjcInstruction
+from strongarm.macho import MachoAnalyzer, MachoParser, VirtualMemoryPointer, ObjcClass, ObjcSelector, ObjcClassRaw64, ObjcSelref
+from strongarm.objc import ObjcFunctionAnalyzer, ObjcInstruction, ObjcMethodInfo
 from strongarm.objc import RegisterContentsType
 
 from strongarm.objc import (
@@ -227,3 +227,12 @@ class TestFunctionAnalyzer:
             "0x100006708",
         ]
         assert set([hex(f.imp_addr) for f in found_methods]) == set(expected_addresses)
+
+    def test_get_symbol_name_objc(self):
+
+        sel = ObjcSelector("testMethod:", ObjcSelref(0, 0, "testMethod:"), 0)
+        method_info = ObjcMethodInfo(ObjcClass({}, "TestClass", [sel]), sel, 0)
+        analyzer = ObjcFunctionAnalyzer(self.binary, self.instructions, method_info)
+
+        symbol_name = analyzer.get_symbol_name()
+        assert symbol_name == "-[TestClass testMethod:]"

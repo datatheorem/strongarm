@@ -1,4 +1,3 @@
-import os
 from pathlib import Path
 from typing import Optional, List
 from ctypes import sizeof, c_uint32
@@ -76,7 +75,7 @@ class MachoParser:
         if self.is_fat:
             self.parse_fat_header()
         else:
-            file_size = os.stat(self.path.as_posix()).st_size
+            file_size = self.path.stat().st_size
             self.parse_thin_header(StaticFilePointer(0), file_size)
 
     def parse_thin_header(self, fileoff: StaticFilePointer, slice_size: int) -> None:
@@ -200,6 +199,6 @@ class MachoParser:
             Byte list representing contents of file at provided address
 
         """
-        with open(self.path.as_posix(), 'rb') as binary_file:
+        with open(self.path, 'rb') as binary_file:
             binary_file.seek(offset)
             return binary_file.read(size)

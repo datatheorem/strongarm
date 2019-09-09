@@ -810,7 +810,7 @@ class MachoBinary:
         """Write the in-memory Mach-O slice to the provided path.
         """
         # Pass 'x' so the call will throw an exception if the path already exists
-        with open(path.as_posix(), 'xb') as out_file:
+        with open(path, 'xb') as out_file:
             out_file.write(self._cached_binary)
 
     @staticmethod
@@ -868,5 +868,5 @@ class MachoBinary:
 
         # The output file has been constructed. Write it to disk
         # Pass 'x' so the call will throw an exception if the path already exists
-        with open(path.as_posix(), 'xb') as out_file:
+        with open(path, 'xb') as out_file:
             out_file.write(file_data)

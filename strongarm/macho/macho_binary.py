@@ -765,10 +765,9 @@ class MachoBinary:
         # The name starts after the size of the load command struct, which is 0x18 bytes
         dylib_name.offset = sizeof_loadcmd
         load_cmd.dylib.name = dylib_name
-        # These values are copied from a UIKit load command
-        load_cmd.dylib.timestamp = 0x2
-        load_cmd.dylib.current_version = 0xee480000
-        load_cmd.dylib.compatibility_version = 0x10000
+        load_cmd.dylib.timestamp = 0x0
+        load_cmd.dylib.current_version = 0x0
+        load_cmd.dylib.compatibility_version = 0x0
 
         # TODO(PT): It'd be nice to get a modified MachoBinary with a context manager.
         # This way, all the modifications can be performed on the same binary, without creating a copy

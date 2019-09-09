@@ -120,6 +120,21 @@ class ObjcFunctionAnalyzer:
             instruction_address = func_base + (idx * MachoBinary.BYTES_PER_INSTRUCTION)
             DebugUtil.log(self, f'func({hex(int(instruction_address))}) {output}')
 
+    def get_symbol_name(self) -> str:
+        """Return a objective-c class/method, c function, or sub_address-style string representing the name of
+            this block of code.
+        """
+        if self.method_info:
+            return f'-[{self.method_info.objc_class.name} {self.method_info.objc_sel.name}]'
+        else:
+            # Not objc. try to find a symbol name that matches the address
+            strtbl_sym_name = self.macho_analyzer.crossref_helper.get_symbol_name_for_address(self.start_address)
+            if strtbl_sym_name:
+                return strtbl_sym_name
+        # Fallback
+        func_address = str(hex(self.start_address))
+        return f'sub_{func_address}'
+
     @classmethod
     def get_function_analyzer(cls, binary: MachoBinary, start_address: VirtualMemoryPointer) -> 'ObjcFunctionAnalyzer':
         """Get the shared analyzer for the function at start_address in the binary.

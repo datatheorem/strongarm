@@ -2,8 +2,8 @@ import os
 import pytest
 from typing import List
 
-from strongarm.macho import MachoAnalyzer, MachoParser, VirtualMemoryPointer
-from strongarm.objc import ObjcFunctionAnalyzer, ObjcInstruction
+from strongarm.macho import MachoAnalyzer, MachoParser, VirtualMemoryPointer, ObjcClass, ObjcSelector, ObjcClassRaw64, ObjcSelref
+from strongarm.objc import ObjcFunctionAnalyzer, ObjcInstruction, ObjcMethodInfo
 from strongarm.objc import RegisterContentsType
 
 from strongarm.objc import (
@@ -167,3 +167,72 @@ class TestFunctionAnalyzer:
         contents = function_analyzer.get_register_contents_at_instruction('x0', wrapped_instr)
         assert contents.type == RegisterContentsType.IMMEDIATE
         assert contents.value == 0x102a41458
+
+    def test_get_functions(self):
+        # Given the list of functions in an analyzed binary
+        found_functions = self.analyzer.get_functions()
+        # The list contains all of the expected addresses
+        expected_addresses = [
+            "0x100006228",
+            "0x100006284",
+            "0x100006308",
+            "0x1000063b0",
+            "0x1000063e8",
+            "0x100006420",
+            "0x100006534",
+            "0x100006590",
+            "0x1000065ec",
+            "0x10000665c",
+            "0x1000066dc",
+            "0x1000066e4",
+            "0x1000066e8",
+            "0x1000066ec",
+            "0x1000066f0",
+            "0x1000066f4",
+            "0x1000066f8",
+            "0x100006708",
+            "0x10000671c",
+            "0x10000671c",
+            "0x10000671c",
+            "0x10000671c",
+            "0x10000671c",
+            "0x10000671c",
+            "0x10000671c",
+            "0x10000671c",
+        ]
+        assert set([hex(f) for f in found_functions]) == set(expected_addresses)
+
+    def test_get_objc_methods(self):
+        # Given the list of objective-c methods in an analyzed binary
+        found_methods = self.analyzer.get_objc_methods()
+        # The list contains all of the expected addresses
+        expected_addresses = [
+            "0x100006228",
+            "0x100006284",
+            "0x100006308",
+            "0x1000063b0",
+            "0x1000063e8",
+            "0x100006420",
+            "0x100006534",
+            "0x100006590",
+            "0x1000065ec",
+            "0x1000066dc",
+            "0x1000066e4",
+            "0x1000066e8",
+            "0x1000066ec",
+            "0x1000066f0",
+            "0x1000066f4",
+            "0x10000671c",
+            "0x1000066f8",
+            "0x100006708",
+        ]
+        assert set([hex(f.imp_addr) for f in found_methods]) == set(expected_addresses)
+
+    def test_get_symbol_name_objc(self):
+
+        sel = ObjcSelector("testMethod:", ObjcSelref(0, 0, "testMethod:"), 0)
+        method_info = ObjcMethodInfo(ObjcClass({}, "TestClass", [sel]), sel, 0)
+        analyzer = ObjcFunctionAnalyzer(self.binary, self.instructions, method_info)
+
+        symbol_name = analyzer.get_symbol_name()
+        assert symbol_name == "-[TestClass testMethod:]"

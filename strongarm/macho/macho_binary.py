@@ -855,7 +855,7 @@ class MachoBinary:
         # Change the endianess of the FAT header from big to little
         # The FAT header is a list of 32-bit ints
         for idx in range(len(file_data))[::4]:
-            # Revere the bytes of this int
+            # Reverse the bytes of this int
             file_data[idx:idx+4] = bytearray(reversed(file_data[idx:idx+4]))
 
         # We now know the final file size, and where each slice should be placed

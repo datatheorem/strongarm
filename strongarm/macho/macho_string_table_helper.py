@@ -26,6 +26,7 @@ class MachoStringTableHelper:
         self.string_table_entries = MachoStringTableHelper.transform_string_section(self.binary.get_raw_string_table())
         self.imported_symbols: List[str] = []
         self.exported_symbols: List[str] = []
+        self._address_to_exported_symbol: Dict[int, str] = {}
         self.parse_sym_lists()
 
     @classmethod
@@ -109,4 +110,12 @@ class MachoStringTableHelper:
                     continue
                 self.imported_symbols.append(symbol_str)
             elif symbol_type == NTYPE_VALUES.N_SECT:
+                self._address_to_exported_symbol[sym.n_value] = symbol_str
                 self.exported_symbols.append(symbol_str)
+
+    def get_symbol_name_for_address(self, address: int) -> Optional[str]:
+        """ For an address of a function entrypoint, return the function's symbol name
+        """
+        if address in self._address_to_exported_symbol:
+            return self._address_to_exported_symbol[address]
+        return None

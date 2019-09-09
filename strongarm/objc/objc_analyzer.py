@@ -128,8 +128,10 @@ class ObjcFunctionAnalyzer:
             return f'-[{self.method_info.objc_class.name} {self.method_info.objc_sel.name}]'
         else:
             # Not objc. try to find a symbol name that matches the address
-            if self.start_address in self.macho_analyzer.imp_stubs_to_symbol_names:
-                return self.macho_analyzer.imp_stubs_to_symbol_names[self.start_address]
+            strtbl_sym_name = self.macho_analyzer.crossref_helper.get_symbol_name_for_address(self.start_address)
+            if strtbl_sym_name:
+                return strtbl_sym_name
+        # Fallback
         func_address = str(hex(self.start_address))
         return f'sub_{func_address}'
 

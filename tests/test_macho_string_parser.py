@@ -1,12 +1,11 @@
-import os
+import pathlib
 
-import pytest
 from strongarm.macho import MachoStringTableHelper
 from strongarm.macho.macho_parse import MachoParser
 
 
 class TestMachoStringParser:
-    FAT_PATH = os.path.join(os.path.dirname(__file__), "bin", "StrongarmTarget")
+    FAT_PATH = pathlib.Path(__file__).parent / "bin" / "StrongarmTarget"
 
     def setup_method(self):
         parser = MachoParser(self.FAT_PATH)

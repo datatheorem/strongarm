@@ -156,3 +156,16 @@ class TestMachoBinary:
         # Then I get the correct data
         assert sorted(locations) == sorted(correct_locations)
         assert sorted(entries) == sorted(correct_entries)
+
+    def test_function_starts_command(self):
+        # Given a binary that contains functions
+        binary_with_functions = MachoParser(TestMachoBinary.CLASSLIST_DATA_CONST).get_arm64_slice()
+        # And I get the function starts command
+        function_starts = binary_with_functions._function_starts_cmd
+        # The command has the expected attributes
+        assert function_starts.cmd == 0x26
+        assert function_starts.cmdsize == 0x10
+        assert function_starts.dataoff == 0x10680
+        assert function_starts.datasize == 0x18
+        assert function_starts.sizeof == 0x10
+        assert function_starts.binary_offset == 0xb38

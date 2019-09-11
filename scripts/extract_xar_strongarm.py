@@ -14,21 +14,29 @@ def main():
         'binary_path', metavar='binary_path', type=str, help=
         'Path to Bitcode binary'
     )
-    arg_parser.add_argument(
-        'output_path', metavar='output_path', type=str, help=
-        'Path to output the extracted XAR containing LLVM bitcode'
-    )
     args = arg_parser.parse_args()
 
-    binary = MachoParser(pathlib.Path(args.binary_path)).get_arm64_slice()
-    # Dump the contents of the __LLVM segment to the output file
-    bitcode_segment = binary.segment_with_name('__LLVM')
-    if not bitcode_segment:
-        raise ValueError(f'The provided Mach-O does not contain Bitcode.')
+    parser = MachoParser(pathlib.Path(args.binary_path))
 
-    xar_data = binary.get_bytes(bitcode_segment.fileoff, bitcode_segment.filesize)
-    with open(args.output_path, 'xb') as f:
-        f.write(xar_data)
+    print(f'Reading {len(parser.slices)} Mach-O slices...')
+    for binary in parser.slices:
+        # Does the slice contain a Bitcode archive?
+        bitcode_segment = binary.segment_with_name('__LLVM')
+        if not bitcode_segment:
+            continue
+
+        # Dump the Bitcode  adjacent to this file, named <arch>.xar
+        bitcode_segment = binary.segment_with_name('__LLVM')
+        if not bitcode_segment:
+            raise ValueError(f'The provided Mach-O does not contain Bitcode.')
+        xar_data = binary.get_bytes(bitcode_segment.fileoff, bitcode_segment.filesize)
+
+        # Place the bitcode adjacent to this file, named <arch>.xar
+        output_path = pathlib.Path(__file__).parent / f'{binary.cpu_type.name.lower()}.xar'
+        with open(output_path, 'xb') as f:
+            f.write(xar_data)
+
+        print(f'Dumped {binary.cpu_type.name.lower()} Bitcode XAR to {output_path}')
 
 
 if __name__ == '__main__':

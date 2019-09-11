@@ -320,7 +320,7 @@ class ObjcFunctionAnalyzer:
 
         # try fast path to identify selref
         msgsend_idx = self._get_instruction_index_of_address(msgsend_instr.address)
-        if not msgsend_idx:
+        if msgsend_idx is False:
             raise ValueError(f'instruction index not found for address {msgsend_instr.address}')
 
         search_space_start_idx = msgsend_idx - 3

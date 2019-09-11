@@ -11,7 +11,7 @@ def main():
     arg_parser = argparse.ArgumentParser(description='strings clone')
     arg_parser.add_argument(
         'binary_path', metavar='binary_path', type=str, help=
-        'Path to binary to analyze'
+        'Path to binary whose strings should be printed'
     )
     args = arg_parser.parse_args()
 

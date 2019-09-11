@@ -53,7 +53,7 @@ def main():
     arg_parser = argparse.ArgumentParser(description='nm clone')
     arg_parser.add_argument(
         'binary_path', metavar='binary_path', type=str, help=
-        'Path to binary to analyze'
+        'Path to binary whose symbol table should be output'
     )
     arg_parser.add_argument(
         '-m', action='store_true', help=

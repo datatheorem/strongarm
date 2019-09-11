@@ -299,51 +299,15 @@ class ObjcFunctionAnalyzer:
             return False
         return self.start_address <= branch_instruction.destination_address <= self.end_address
 
-    def get_selref_ptr(self, msgsend_instr: ObjcUnconditionalBranchInstruction) -> VirtualMemoryPointer:
-        """Retrieve contents of x1 register when control is at provided instruction
-
-        Args:
-              msgsend_instr: Instruction at which data in x1 should be found
-
-        Returns:
-              Data stored in x1 at execution of msgsend_instr
-
-        Raises:
-            ValueError: - get_selref_ptr() called on non-branch instruction
-                        - wrong type passed to get_selref_ptr()
-                        - instruction index not found for address
+    def get_objc_selref(self, msgsend_instr: ObjcUnconditionalBranchInstruction) -> VirtualMemoryPointer:
+        """Returns the selref pointer at an _objc_msgSend call site.
+        When _objc_msgSend is called, x1 contains the selref being messaged.
+        The caller is responsible for ensuring this is called at an _objc_msgSend call site.
         """
         if msgsend_instr.raw_instr.mnemonic not in ObjcUnconditionalBranchInstruction.UNCONDITIONAL_BRANCH_MNEMONICS:
-            raise ValueError('get_selref_ptr() called on non-branch instruction')
-        if not isinstance(msgsend_instr, ObjcInstruction):
-            raise ValueError('wrong type passed to get_selref_ptr()')
+            raise ValueError('get_objc_selref() called on non-branch instruction')
 
-        # try fast path to identify selref
-        msgsend_idx = self._get_instruction_index_of_address(msgsend_instr.address)
-        if msgsend_idx is None:
-            raise ValueError(f'instruction index not found for address {msgsend_instr.address}')
-
-        search_space_start_idx = msgsend_idx - 3
-        search_space_start_idx = max(0, search_space_start_idx)
-        adrp_ptr = None
-        ldr_val = None
-        for instr in self.instructions[search_space_start_idx:msgsend_idx]:
-            if instr.mnemonic == 'adrp':
-                adrp_ptr = instr.operands[1].value.imm
-            elif instr.mnemonic == 'ldr':
-                src = instr.operands[1]
-                if src.type == ARM64_OP_IMM:
-                    ldr_val = src.value.imm
-                    break
-                elif src.type == ARM64_OP_MEM:
-                    ldr_val = src.value.mem.disp
-                    break
-
-        if adrp_ptr and ldr_val:
-            selref_ptr = adrp_ptr + ldr_val
-            return selref_ptr
-
-        # retrieve whatever data is in x1 at this msgSend call
+        # at an _objc_msgSend call site, the selref is in x1
         contents = self.get_register_contents_at_instruction('x1', msgsend_instr)
         if contents.type != RegisterContentsType.IMMEDIATE:
             raise RuntimeError(f'could not determine selref ptr, origates in function arg (type {contents.type.name})')

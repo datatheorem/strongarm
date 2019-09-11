@@ -157,7 +157,7 @@ class ObjcUnconditionalBranchInstruction(ObjcBranchInstruction):
         # which function the selector passed to objc_msgSend corresponds to.
         # therefore, replace the 'real' destination address with the requested IMP
         try:
-            selref_ptr = function_analyzer.get_selref_ptr(self)
+            selref_ptr = function_analyzer.get_objc_selref(self)
             selector = function_analyzer.macho_analyzer.selector_for_selref(selref_ptr)
             if not selector:
                 raise RuntimeError(f'Couldn\'t get sel for selref ptr {selref_ptr}')
@@ -169,12 +169,12 @@ class ObjcUnconditionalBranchInstruction(ObjcBranchInstruction):
             self.selref = selector.selref
             self.selector = selector
         except RuntimeError as e:
-            # GammaRayTestBad @ 0x10007ed10 causes get_selref_ptr() to fail.
+            # GammaRayTestBad @ 0x10007ed10 causes get_objc_selref() to fail.
             # This is because x1 has a data dependency on x20.
             # At the beginning of the function, there's a basic block to return early if imageView is nil.
             # This basic block includes a stack unwind, which tricks get_register_contents_at_instruction() into
             # thinking that there's a data dependency on x0, which there *isn't*
-            # Nonetheless, this causes get_selref_ptr() to fail.
+            # Nonetheless, this causes get_objc_selref() to fail.
             # As a workaround, let's assign all the above fields to 'not found' values if this bug is hit
             self.is_external_objc_call = True
             self.destination_address = VirtualMemoryPointer(0)

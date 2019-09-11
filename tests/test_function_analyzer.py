@@ -144,12 +144,12 @@ class TestFunctionAnalyzer:
 
     def test_get_selref(self):
         objc_msgSendInstr = ObjcInstruction.parse_instruction(self.function_analyzer, self.instructions[16])
-        selref = self.function_analyzer.get_selref_ptr(objc_msgSendInstr)
+        selref = self.function_analyzer.get_objc_selref(objc_msgSendInstr)
         assert selref == 0x1000090c0
 
         non_branch_instruction = ObjcInstruction.parse_instruction(self.function_analyzer, self.instructions[15])
         with pytest.raises(ValueError):
-            self.function_analyzer.get_selref_ptr(non_branch_instruction)
+            self.function_analyzer.get_objc_selref(non_branch_instruction)
 
     def test_three_op_add(self):
         # 0x000000010000665c         adrp       x0, #0x102a41000

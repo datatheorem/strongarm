@@ -1,7 +1,6 @@
 import functools
-from typing import List, Union, Optional
+from typing import List, Optional
 
-from capstone.arm64 import ARM64_OP_IMM, ARM64_OP_MEM
 from capstone import CsInsn
 
 from strongarm.debug_util import DebugUtil
@@ -10,7 +9,6 @@ from strongarm.macho import MachoBinary, VirtualMemoryPointer
 from .objc_instruction import (
     ObjcInstruction,
     ObjcBranchInstruction,
-    ObjcConditionalBranchInstruction,
     ObjcUnconditionalBranchInstruction
 )
 from .objc_query import (
@@ -128,7 +126,7 @@ class ObjcFunctionAnalyzer:
             return f'-[{self.method_info.objc_class.name} {self.method_info.objc_sel.name}]'
         else:
             # Not objc. try to find a symbol name that matches the address
-            strtbl_sym_name = self.macho_analyzer.crossref_helper.get_symbol_name_for_address(self.start_address)
+            strtbl_sym_name = self.macho_analyzer.crossref_helper.get_symbol_name_for_address(VirtualMemoryPointer(self.start_address))
             if strtbl_sym_name:
                 return strtbl_sym_name
         # Fallback

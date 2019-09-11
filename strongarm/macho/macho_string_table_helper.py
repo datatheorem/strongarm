@@ -1,6 +1,6 @@
 from typing import Optional, Dict, List
 
-from strongarm.macho.macho_binary import MachoBinary
+from strongarm.macho.macho_binary import MachoBinary, VirtualMemoryPointer
 from strongarm.macho.macho_definitions import NLIST_NTYPE, NTYPE_VALUES
 
 
@@ -25,8 +25,7 @@ class MachoStringTableHelper:
         self.binary = binary
         self.string_table_entries = MachoStringTableHelper.transform_string_section(self.binary.get_raw_string_table())
         self.imported_symbols: List[str] = []
-        self.exported_symbols: List[str] = []
-        self._address_to_exported_symbol: Dict[int, str] = {}
+        self.exported_symbols: Dict[VirtualMemoryPointer, str] = {}
         self.parse_sym_lists()
 
     @classmethod
@@ -88,7 +87,6 @@ class MachoStringTableHelper:
         """
 
         self.imported_symbols = []
-        self.exported_symbols = []
 
         symtab = self.binary.symtab_contents
         for idx, sym in enumerate(symtab):
@@ -110,12 +108,11 @@ class MachoStringTableHelper:
                     continue
                 self.imported_symbols.append(symbol_str)
             elif symbol_type == NTYPE_VALUES.N_SECT:
-                self._address_to_exported_symbol[sym.n_value] = symbol_str
-                self.exported_symbols.append(symbol_str)
+                self.exported_symbols[sym.n_value] = symbol_str
 
-    def get_symbol_name_for_address(self, address: int) -> Optional[str]:
+    def get_symbol_name_for_address(self, address: VirtualMemoryPointer) -> Optional[str]:
         """ For an address of a function entrypoint, return the function's symbol name
         """
-        if address in self._address_to_exported_symbol:
-            return self._address_to_exported_symbol[address]
+        if address in self.exported_symbols:
+            return self.exported_symbols[address]
         return None

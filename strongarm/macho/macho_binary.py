@@ -843,8 +843,8 @@ class MachoBinary:
             arch.cputype = binary.header.cputype
             arch.cpusubtype = binary.header.cpusubtype
             arch.size = len(binary._cached_binary)
-            # Experimentally, in a FAT with an armv7 and arm64 slice, the align for both arch's was 0x4000
-            arch.align = page_size
+            # Experimentally, in a FAT with an armv7 and arm64 slice, the align for both arch's was log2(0x4000)
+            arch.align = int(math.log2(page_size))
             arch_to_binaries.append((arch, binary))
 
         # Figure out where to place each binary in the file

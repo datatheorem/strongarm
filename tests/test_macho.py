@@ -287,9 +287,9 @@ class TestMachoBinary:
         binary = MachoParser(self.THIN_PATH).get_arm64_slice()
 
         dylib_path = '@rpath/load_cmd_with_32_chrcters'
-        # If I have a dylib load command which will take up `0x18 + len(dylib_path) = 0x38` bytes
-        # Then I should be able to add this load command exactly 394 times before the binary runs out of space
-        for _ in range(393):
+        # If I have a dylib load command which will take up `0x20 + len(dylib_path) = 0x38` bytes
+        # Then I should be able to add this load command exactly 344 times before the binary runs out of space
+        for _ in range(344):
             binary = binary.insert_load_dylib_cmd(dylib_path)
         with pytest.raises(NoEmptySpaceForLoadCommandError):
             binary.insert_load_dylib_cmd(dylib_path)

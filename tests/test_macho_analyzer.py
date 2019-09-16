@@ -74,15 +74,8 @@ class TestMachoAnalyzer:
         assert sorted(found_imported_symbols) == sorted(correct_imported_symbols)
 
     def test_find_exported_symbols(self):
-        # TODO(PT): figure out how to export symbols ourselves so we can write a better test for this
-        # simply defining a function in C code does not work, and simply delcaring an ObjC class does not
-        # automatically export it either. We should try making a framework, a hunch says they'd have lots of
-        # exported symbols :}
-        correct_exported_symbols = ['__mh_execute_header']
-        found_exported_symbols = self.analyzer.exported_symbols
-        # we don't want the test to fail if the arrays contain the same elements but in a different order
-        # so, sort the arrays before comparing them
-        assert sorted(found_exported_symbols) == sorted(correct_exported_symbols)
+        assert self.analyzer.exported_symbol_pointers_to_names == {4294967296: '__mh_execute_header'}
+        assert self.analyzer.exported_symbol_names_to_pointers == {'__mh_execute_header': 4294967296}
 
     def test_cached_analyzer(self):
         # there should only be one MachoAnalyzer for a given MachoBinary

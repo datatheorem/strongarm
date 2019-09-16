@@ -1,3 +1,4 @@
+import math
 from _ctypes import Structure
 from pathlib import Path
 from typing import List, Tuple, Any, Type, Optional, TypeVar, TYPE_CHECKING
@@ -757,18 +758,19 @@ class MachoBinary:
 
         load_cmd = DylibCommand()
         load_cmd.cmd = MachoLoadCommands.LC_LOAD_DYLIB
-        sizeof_loadcmd = 0x18
-        # XXX(PT): The size of the command should be 0x18 + max(len(dylib_path), 0x20). Found experimentally.
+        sizeof_dylib_struct = sizeof(DylibStruct())
+        sizeof_load_cmd = sizeof(load_cmd)
+        # XXX(PT): The size of the command should be 0x20 + max(len(dylib_path), 0x20). Found experimentally.
         dylib_path_bytes = bytes(dylib_path, 'utf8')
-        load_cmd.cmdsize = sizeof_loadcmd + max(len(dylib_path_bytes), 0x20)
+        load_cmd.cmdsize = sizeof_load_cmd + max(len(dylib_path_bytes), 0x20)
         # Align the size on an 8-byte boundary
         if load_cmd.cmdsize % 8:
             load_cmd.cmdsize = (load_cmd.cmdsize + 8) & ~(8-1)
 
         load_cmd.dylib = DylibStruct()
         dylib_name = LcStrUnion()
-        # The name starts after the size of the load command struct, which is 0x18 bytes
-        dylib_name.offset = sizeof_loadcmd
+        # The name starts after the size of the LC_LOAD_DYLIB struct, which is 0x18 bytes
+        dylib_name.offset = sizeof_dylib_struct
         load_cmd.dylib.name = dylib_name
         load_cmd.dylib.timestamp = 0x0
         load_cmd.dylib.current_version = 0x0
@@ -790,7 +792,7 @@ class MachoBinary:
         # Add the load command to the end of the Mach-O header
         modified_binary = self.write_struct(load_cmd, load_commands_end)
         # Write the dylib path directly after the load cmd
-        modified_binary = modified_binary.write_bytes(dylib_path_bytes, load_commands_end + sizeof_loadcmd)
+        modified_binary = modified_binary.write_bytes(dylib_path_bytes, load_commands_end + sizeof_dylib_struct)
 
         # Increase mh_header->ncmds by 1
         bumped_ncmds = self.header.ncmds + 1
@@ -841,8 +843,8 @@ class MachoBinary:
             arch.cputype = binary.header.cputype
             arch.cpusubtype = binary.header.cpusubtype
             arch.size = len(binary._cached_binary)
-            # Experimentally, in a FAT with an armv7 and arm64 slice, the align for both arch's was 0x4000
-            arch.align = page_size
+            # Experimentally, in a FAT with an armv7 and arm64 slice, the align for both arch's was log2(0x4000)
+            arch.align = int(math.log2(page_size))
             arch_to_binaries.append((arch, binary))
 
         # Figure out where to place each binary in the file

@@ -1,5 +1,4 @@
 import logging
-from pathlib import Path
 from ctypes import sizeof
 from collections import defaultdict
 
@@ -63,7 +62,6 @@ class MachoAnalyzer:
 
         self.crossref_helper = MachoStringTableHelper(binary)
         self.imported_symbols = self.crossref_helper.imported_symbols
-        self.exported_symbols = self.crossref_helper.exported_symbols
 
         self.imp_stubs = MachoImpStubsParser(binary, self.cs).imp_stubs
         self._objc_helper: Optional[ObjcRuntimeDataParser] = None
@@ -174,6 +172,27 @@ class MachoAnalyzer:
         Inverse of MachoAnalyzer.imported_symbol_names_to_pointers()
         """
         return {x.name: addr for addr, x in self.dyld_bound_symbols.items()}
+
+    @property
+    def exported_symbol_pointers_to_names(self) -> Dict[VirtualMemoryPointer, str]:
+        """Return a Dict of pointers to exported symbol definitions to their symbol names.
+        Inverse of MachoAnalyzer.exported_symbol_names_to_pointers()
+        """
+        return self.crossref_helper.exported_symbols
+
+    @property
+    def exported_symbol_names_to_pointers(self) -> Dict[str, VirtualMemoryPointer]:
+        """Return a Dict of exported symbol names to pointers to their definitions.
+        Inverse of MachoAnalyzer.exported_symbols_to_symbol_names()
+        """
+        return {y: x for x, y in self.exported_symbol_pointers_to_names.items()}
+
+    def exported_symbol_name_for_address(self, address: VirtualMemoryPointer) -> Optional[str]:
+        """Return the symbol name for the provided address, or None if the address is not a named exported symbol.
+        """
+        if address in self.exported_symbol_pointers_to_names:
+            return self.exported_symbol_pointers_to_names[address]
+        return None
 
     def symbol_name_for_branch_destination(self, branch_address: VirtualMemoryPointer) -> str:
         """Get the associated symbol name for a given branch destination

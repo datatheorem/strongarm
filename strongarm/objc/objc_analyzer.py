@@ -34,7 +34,7 @@ def _demangle_cpp_symbol(cpp_symbol: str) -> str:
         return cpp_symbol
 
     # If demangling fails, allow the exception to propagate up. This can alert us to scanner issues.
-    demangled_symbol = check_output(f'c++filt "{cpp_symbol}"', shell=True).decode().strip()
+    demangled_symbol = check_output(f'c++filt -n {cpp_symbol}', shell=True).decode().strip()
     return demangled_symbol
 
 

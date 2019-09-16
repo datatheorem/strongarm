@@ -271,3 +271,9 @@ class TestFunctionAnalyzer:
                                      'E16DefaultAllocatorE3hasERKS0_') == \
                'Map<StringName, Ref<GDScript>, Comparator<StringName>, ' \
                'DefaultAllocator>::has(StringName const&) const'
+
+    def test_cppfilt(self):
+        import subprocess
+        p = subprocess.run(f'c++filt -n "__Z4doitPKcb"', shell=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+        p2 = subprocess.run(f'c++filt -n "__Z4doitPKcb"', shell=False, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+        raise RuntimeError(p.stdout,p.stderr, p.returncode, p2.stdout, p2.stderr, p2.returncode)

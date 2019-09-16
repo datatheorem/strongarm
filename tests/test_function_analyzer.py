@@ -274,6 +274,8 @@ class TestFunctionAnalyzer:
 
     def test_cppfilt(self):
         import subprocess
-        p = subprocess.run(f'c++filt -n "__Z4doitPKcb"', shell=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
-        p2 = subprocess.run(['c++filt', '-n', '"_Z4doitPKcb"'], shell=False, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
-        raise RuntimeError(p.stdout,p.stderr, p.returncode, p2.stdout, p2.stderr, p2.returncode)
+        # p = subprocess.run(f'c++filt -n "__Z4doitPKcb"', shell=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+        # p2 = subprocess.run(['c++filt', '-n', '"_Z4doitPKcb"'], shell=False, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+        # raise RuntimeError(p.stdout,p.stderr, p.returncode, p2.stdout, p2.stderr, p2.returncode)
+        import cxxfilt
+        raise RuntimeError(cxxfilt.demangle('__Z4doitPKcb'))

@@ -37,6 +37,7 @@ setup(
     },
     install_requires=[
         'mock',
+        'cxxfilt',
         'typing',
         'invoke',
         'capstone',

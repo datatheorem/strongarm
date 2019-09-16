@@ -278,4 +278,4 @@ class TestFunctionAnalyzer:
         # p2 = subprocess.run(['c++filt', '-n', '"_Z4doitPKcb"'], shell=False, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
         # raise RuntimeError(p.stdout,p.stderr, p.returncode, p2.stdout, p2.stderr, p2.returncode)
         import cxxfilt
-        raise RuntimeError(cxxfilt.demangle('__Z4doitPKcb'))
+        raise RuntimeError(cxxfilt.demangle('_Z4doitPKcb'))

@@ -185,7 +185,7 @@ class MachoAnalyzer:
         """Return a Dict of exported symbol names to pointers to their definitions.
         Inverse of MachoAnalyzer.exported_symbols_to_symbol_names()
         """
-        return {x: y for x, y in self.exported_symbol_pointers_to_names}
+        return {y: x for x, y in self.exported_symbol_pointers_to_names.items()}
 
     def exported_symbol_name_for_address(self, address: VirtualMemoryPointer) -> Optional[str]:
         """Return the symbol name for the provided address, or None if the address is not a named exported symbol.

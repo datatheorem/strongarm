@@ -315,7 +315,7 @@ def print_analyzer_imported_symbols(analyzer: MachoAnalyzer) -> None:
 
 def print_analyzer_exported_symbols(analyzer: MachoAnalyzer) -> None:
     print('\tExported symbols:')
-    for exported_sym in analyzer.exported_symbols:
+    for exported_sym in analyzer.exported_symbol_names_to_pointers.keys():
         print(f'\t\t{exported_sym}')
 
 

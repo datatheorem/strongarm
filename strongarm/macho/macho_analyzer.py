@@ -174,14 +174,14 @@ class MachoAnalyzer:
         return {x.name: addr for addr, x in self.dyld_bound_symbols.items()}
 
     @property
-    def exported_symbol_pointers_to_names(self):
+    def exported_symbol_pointers_to_names(self) -> Dict[VirtualMemoryPointer, str]:
         """Return a Dict of pointers to exported symbol definitions to their symbol names.
         Inverse of MachoAnalyzer.exported_symbol_names_to_pointers()
         """
         return self.crossref_helper.exported_symbols
 
     @property
-    def exported_symbol_names_to_pointers(self):
+    def exported_symbol_names_to_pointers(self) -> Dict[str, VirtualMemoryPointer]:
         """Return a Dict of exported symbol names to pointers to their definitions.
         Inverse of MachoAnalyzer.exported_symbols_to_symbol_names()
         """

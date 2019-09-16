@@ -15,9 +15,8 @@ class TestMachoStringParser:
     def test_exposed_symbol_list(self):
         # The exported symbols from the binary
         found_exported = self.string_helper.exported_symbols
-
         # Matches the expected value
-        expected = ["__mh_execute_header"]
+        expected = {4294967296: '__mh_execute_header'}
         assert found_exported == expected
 
     def test_imported_symbol_list(self):
@@ -58,14 +57,6 @@ class TestMachoStringParser:
             "dyld_stub_binder",
         ]
         assert set(found_imported) == set(expected)
-
-    def test_address_to_symbol_parsing(self):
-        # The mapping of function addresses to symbol names
-        symbol_table = self.string_helper._address_to_exported_symbol
-
-        # Matches the expected value
-        expected = {4294967296: "__mh_execute_header"}
-        assert symbol_table == expected
 
     def test_get_symbol_for_address(self):
         # Given the address of a function

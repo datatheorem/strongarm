@@ -14,6 +14,8 @@ from strongarm.objc import (
     CodeSearchResultFunctionCallWithArguments,
 )
 
+from strongarm.objc.objc_analyzer import _is_mangled_cpp_symbol, _demangle_cpp_symbol
+
 
 class TestFunctionAnalyzer:
     FAT_PATH = pathlib.Path(__file__).parent / 'bin' / 'StrongarmTarget'
@@ -258,3 +260,14 @@ class TestFunctionAnalyzer:
             assert self.function_analyzer.get_symbol_name() == \
                    'Map<StringName, Ref<GDScript>, Comparator<StringName>, ' \
                    'DefaultAllocator>::has(StringName const&) const'
+
+    def test_identify_mangled_cpp_symbol(self):
+        assert _is_mangled_cpp_symbol('__ZNK3MapI10StringName3RefI8GDScriptE10ComparatorIS0_'
+                                     'E16DefaultAllocatorE3hasERKS0_')
+        assert not _is_mangled_cpp_symbol('_strlen')
+
+    def test_demangle_cpp_symbol(self):
+        assert _demangle_cpp_symbol('__ZNK3MapI10StringName3RefI8GDScriptE10ComparatorIS0_'
+                                     'E16DefaultAllocatorE3hasERKS0_') == \
+               'Map<StringName, Ref<GDScript>, Comparator<StringName>, ' \
+               'DefaultAllocator>::has(StringName const&) const'

@@ -1,5 +1,5 @@
-"""Example implementation of `extract_xar` using strongarm.
-`extract_xar` is a utility to extract the XAR containing LLVM embedded in a 'Bitcode' Mach-O
+"""Example implementation of `bitcode_retriever` using strongarm.
+`bitcode_retriever` is a utility to extract the XAR containing LLVM embedded in a 'Bitcode' Mach-O
 This implementation isn't feature-complete, but serves as an example of real API use.
 """
 import pathlib
@@ -9,7 +9,7 @@ from strongarm.macho import MachoParser
 
 
 def main():
-    arg_parser = argparse.ArgumentParser(description='extract_xar clone')
+    arg_parser = argparse.ArgumentParser(description='bitcode_retriever clone')
     arg_parser.add_argument(
         'binary_path', metavar='binary_path', type=str, help=
         'Path to Bitcode binary'

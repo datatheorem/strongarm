@@ -289,3 +289,10 @@ class TestFunctionAnalyzer:
                         return_value='___Z5test1v_block_invoke2'):
             # Then the code location returns the properly formatted symbol name
             assert self.function_analyzer.get_symbol_name() == 'block 2 in test1()'
+
+    def test_demangle_misleading_symbol(self):
+        # Given a function analyzer which represents a symbol which looks like a mangled C++ symbol, but isn't one
+        with mock.patch('strongarm.macho.MachoStringTableHelper.get_symbol_name_for_address',
+                        return_value='__ZappBrannigan'):
+            # Then the code location is reported as the original symbol name
+            assert self.function_analyzer.get_symbol_name() == '__ZappBrannigan'

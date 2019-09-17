@@ -1,5 +1,6 @@
 import functools
 from typing import List, Optional
+from subprocess import check_output
 
 from capstone import CsInsn
 
@@ -18,6 +19,51 @@ from .objc_query import (
 
 from .register_contents import RegisterContents, RegisterContentsType
 from .dataflow import get_register_contents_at_instruction_fast
+
+
+def _is_mangled_cpp_symbol(symbol_name: str) -> bool:
+    """Return whether a symbol name appears to be a mangled C++ symbol.
+    """
+    return any(symbol_name.startswith(prefix) for prefix in ['_Z', '__Z', '___Z'])
+
+
+def _demangle_cpp_symbol(cpp_symbol: str) -> str:
+    """Call into c++filt to demangle the provided mangled C++ symbol name.
+    """
+    if not _is_mangled_cpp_symbol(cpp_symbol):
+        return cpp_symbol
+
+    original_symbol = cpp_symbol
+
+    # Linux's c++filt doesn't like the clang-specific "_block_invoke" which is tacked onto ObjC++ blocks.
+    # Trim this off and add it back after demangling the symbol
+    is_block = False
+    block_index = ''
+    if '_block_invoke' in cpp_symbol:
+        is_block = True
+        cpp_symbol, block_index_str = cpp_symbol.split('_block_invoke')
+        # Some blocks have an index
+        if block_index_str.isnumeric():
+            block_index = f' {int(block_index_str)}'
+
+    # XXX(PT): We observe that c++filt doesn't work if there are too many leading underscores
+    # Try demangling multiple times, trimming a leading underscore each time until success (up to 3 times)
+    for _ in range(3):
+        # If demangling fails, allow the exception to propagate up. This can alert us to scanner issues.
+        demangled_symbol = check_output(f'c++filt -_ {cpp_symbol}', shell=True).decode().strip()
+        # Was the symbol demangled?
+        if demangled_symbol != cpp_symbol:
+            if is_block:
+                demangled_symbol = f'block{block_index} in {demangled_symbol}'
+            return demangled_symbol
+        else:
+            # Trim an underscore and try again if possible
+            if not cpp_symbol.startswith('_'):
+                break
+            cpp_symbol = cpp_symbol[1:]
+
+    # Failed to demangle, return the original symbol name
+    return original_symbol
 
 
 class ObjcMethodInfo:
@@ -125,13 +171,22 @@ class ObjcFunctionAnalyzer:
         if self.method_info:
             return f'-[{self.method_info.objc_class.name} {self.method_info.objc_sel.name}]'
         else:
-            # Not objc. try to find a symbol name that matches the address
-            strtbl_sym_name = self.macho_analyzer.crossref_helper.get_symbol_name_for_address(VirtualMemoryPointer(self.start_address))
+            # Not an Objective-C method. Try to find a symbol name that matches the address
+            strtbl_sym_name = self.macho_analyzer.crossref_helper.get_symbol_name_for_address(
+                VirtualMemoryPointer(self.start_address)
+            )
+
             if strtbl_sym_name:
+                # Demangle C++ symbols when applicable
+                if _is_mangled_cpp_symbol(strtbl_sym_name):
+                    strtbl_sym_name = _demangle_cpp_symbol(strtbl_sym_name)
+
                 return strtbl_sym_name
+
         # Fallback
-        func_address = str(hex(self.start_address))
-        return f'sub_{func_address}'
+        # We don't want to format the procedure as sub_<address>, because we use the output of this method to
+        # report code locations, and the address of the same procedure might change between subsequent binary builds.
+        return '_unsymbolicated_function'
 
     @classmethod
     def get_function_analyzer(cls, binary: MachoBinary, start_address: VirtualMemoryPointer) -> 'ObjcFunctionAnalyzer':

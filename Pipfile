@@ -12,6 +12,7 @@ mypy = "*"
 flake8 = "*"
 invoke = "*"
 pytest = "*"
+mock = "*"
 
 [requires]
 python_version = "3.7"

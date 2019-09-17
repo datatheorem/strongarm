@@ -1,8 +1,9 @@
+import mock
 import pytest
 import pathlib
 from typing import List
 
-from strongarm.macho import MachoAnalyzer, MachoParser, VirtualMemoryPointer, ObjcClass, ObjcSelector, ObjcClassRaw64, ObjcSelref
+from strongarm.macho import MachoAnalyzer, MachoParser, VirtualMemoryPointer, ObjcClass, ObjcSelector, ObjcSelref
 from strongarm.objc import ObjcFunctionAnalyzer, ObjcInstruction, ObjcMethodInfo
 from strongarm.objc import RegisterContentsType
 
@@ -12,6 +13,8 @@ from strongarm.objc import (
     CodeSearchFunctionCallWithArguments,
     CodeSearchResultFunctionCallWithArguments,
 )
+
+from strongarm.objc.objc_analyzer import _is_mangled_cpp_symbol, _demangle_cpp_symbol
 
 
 class TestFunctionAnalyzer:
@@ -227,10 +230,69 @@ class TestFunctionAnalyzer:
         assert set([hex(f.imp_addr) for f in found_methods]) == set(expected_addresses)
 
     def test_get_symbol_name_objc(self):
-
         sel = ObjcSelector("testMethod:", ObjcSelref(0, 0, "testMethod:"), 0)
         method_info = ObjcMethodInfo(ObjcClass({}, "TestClass", [sel]), sel, 0)
         analyzer = ObjcFunctionAnalyzer(self.binary, self.instructions, method_info)
 
         symbol_name = analyzer.get_symbol_name()
         assert symbol_name == "-[TestClass testMethod:]"
+
+    def test_get_symbol_name_exported_c_function(self):
+        # Given a function analyzer which is associated with an exported symbol name
+        with mock.patch('strongarm.macho.MachoStringTableHelper.get_symbol_name_for_address',
+                        return_value='_strlen'):
+            # Then I read the correct C symbol name
+            assert self.function_analyzer.get_symbol_name() == '_strlen'
+
+    def test_get_symbol_name_anonymous_c_function(self):
+        # Given a function analyzer which does not have an associated symbol name
+        with mock.patch('strongarm.macho.MachoStringTableHelper.get_symbol_name_for_address',
+                        return_value=None):
+            # Then the code location is reported as "_unsymbolicated_function"
+            assert self.function_analyzer.get_symbol_name() == '_unsymbolicated_function'
+
+    def test_get_symbol_name_cpp_function(self):
+        # Given a function analyzer which is given a mangled C++ symbol name
+        with mock.patch('strongarm.macho.MachoStringTableHelper.get_symbol_name_for_address',
+                        return_value='__ZNK3MapI10StringName3RefI8GDScriptE10ComparatorIS0_'
+                                     'E16DefaultAllocatorE3hasERKS0_'):
+            # Then the code location is reported as the demangled symbol name
+            assert self.function_analyzer.get_symbol_name() == \
+                   'Map<StringName, Ref<GDScript>, Comparator<StringName>, ' \
+                   'DefaultAllocator>::has(StringName const&) const'
+
+    def test_identify_mangled_cpp_symbol(self):
+        # Check identification of C++ mangled symbols
+        assert _is_mangled_cpp_symbol('__ZNK3MapI10StringName3RefI8GDScriptE10ComparatorIS0_'
+                                     'E16DefaultAllocatorE3hasERKS0_')
+        assert _is_mangled_cpp_symbol('___Z5test1v_block_invoke')
+        assert not _is_mangled_cpp_symbol('_strlen')
+
+    def test_demangle_cpp_symbol(self):
+        # Check expected demangling of mangled C++ symbols
+        assert _demangle_cpp_symbol('__ZNK3MapI10StringName3RefI8GDScriptE10ComparatorIS0_'
+                                     'E16DefaultAllocatorE3hasERKS0_') == \
+               'Map<StringName, Ref<GDScript>, Comparator<StringName>, ' \
+               'DefaultAllocator>::has(StringName const&) const'
+
+    def test_demangle_cpp_block(self):
+        # Given a function analyzer which represents an Objective-C block within a C++ source function
+        # This symbol also has 3 leading underscores
+        with mock.patch('strongarm.macho.MachoStringTableHelper.get_symbol_name_for_address',
+                        return_value='___Z5test1v_block_invoke'):
+            # Then the code location returns the properly formatted symbol name
+            assert self.function_analyzer.get_symbol_name() == 'block in test1()'
+
+    def test_demangle_numbered_cpp_block(self):
+        # Given a function analyzer which represents a numbered Objective-C block within a C++ source function
+        with mock.patch('strongarm.macho.MachoStringTableHelper.get_symbol_name_for_address',
+                        return_value='___Z5test1v_block_invoke2'):
+            # Then the code location returns the properly formatted symbol name
+            assert self.function_analyzer.get_symbol_name() == 'block 2 in test1()'
+
+    def test_demangle_misleading_symbol(self):
+        # Given a function analyzer which represents a symbol which looks like a mangled C++ symbol, but isn't one
+        with mock.patch('strongarm.macho.MachoStringTableHelper.get_symbol_name_for_address',
+                        return_value='__ZappBrannigan'):
+            # Then the code location is reported as the original symbol name
+            assert self.function_analyzer.get_symbol_name() == '__ZappBrannigan'

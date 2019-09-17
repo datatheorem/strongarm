@@ -262,15 +262,24 @@ class TestFunctionAnalyzer:
                    'DefaultAllocator>::has(StringName const&) const'
 
     def test_identify_mangled_cpp_symbol(self):
+        # Check identification of C++ mangled symbols
         assert _is_mangled_cpp_symbol('__ZNK3MapI10StringName3RefI8GDScriptE10ComparatorIS0_'
                                      'E16DefaultAllocatorE3hasERKS0_')
         assert not _is_mangled_cpp_symbol('_strlen')
 
     def test_demangle_cpp_symbol(self):
+        # Check expected demangling of mangled C++ symbols
         assert _demangle_cpp_symbol('__ZNK3MapI10StringName3RefI8GDScriptE10ComparatorIS0_'
                                      'E16DefaultAllocatorE3hasERKS0_') == \
                'Map<StringName, Ref<GDScript>, Comparator<StringName>, ' \
                'DefaultAllocator>::has(StringName const&) const'
+
+    def test_demangle_cpp_block(self):
+        # Given a function analyzer which represents an Objective-C block within a C++ source function
+        with mock.patch('strongarm.macho.MachoStringTableHelper.get_symbol_name_for_address',
+                        return_value='___Z5test1v_block_invoke'):
+            # Then the code location returns the properly formatted symbol name
+            assert self.function_analyzer.get_symbol_name() == '_test1()_block_invoke'
 
     def test_cppfilt(self):
         import subprocess
@@ -280,5 +289,5 @@ class TestFunctionAnalyzer:
         #import cxxfilt
         #raise RuntimeError(cxxfilt.demangle('_Z4doitPKcb'))
         # p = subprocess.run(f'c++filt "__ZNK3MapI10StringName3RefI8GDScriptE10ComparatorIS0_E16DefaultAllocatorE3hasERKS0_" -_', shell=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
-        p = subprocess.run(f'c++filt "___Z5test1v_block_invoke" -_', shell=Tru, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+        p = subprocess.run(f'c++filt "___Z5test1v_block_invoke" -_', shell=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
         raise RuntimeError(p.stdout, p.stderr, p.returncode)

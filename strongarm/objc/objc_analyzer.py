@@ -171,7 +171,7 @@ class ObjcFunctionAnalyzer:
         if self.method_info:
             return f'-[{self.method_info.objc_class.name} {self.method_info.objc_sel.name}]'
         else:
-            # Not an Objective-C . Try to find a symbol name that matches the address
+            # Not an Objective-C method. Try to find a symbol name that matches the address
             strtbl_sym_name = self.macho_analyzer.crossref_helper.get_symbol_name_for_address(
                 VirtualMemoryPointer(self.start_address)
             )

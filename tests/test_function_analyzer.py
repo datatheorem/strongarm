@@ -1,7 +1,7 @@
-import mock
 import pytest
 import pathlib
 from typing import List
+from unittest import mock
 
 from strongarm.macho import MachoAnalyzer, MachoParser, VirtualMemoryPointer, ObjcClass, ObjcSelector, ObjcSelref
 from strongarm.objc import ObjcFunctionAnalyzer, ObjcInstruction, ObjcMethodInfo

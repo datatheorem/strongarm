@@ -6,7 +6,6 @@ name = "pypi"
 [packages]
 typing = "*"
 capstone = "*"
-cxxfilt = "*"
 
 [dev-packages]
 mypy = "*"

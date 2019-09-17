@@ -36,8 +36,6 @@ setup(
         'build_ext': CapstoneBuild,
     },
     install_requires=[
-        'typing',
-        'invoke',
         'capstone',
     ],
 )

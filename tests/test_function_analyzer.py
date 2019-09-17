@@ -265,6 +265,7 @@ class TestFunctionAnalyzer:
         # Check identification of C++ mangled symbols
         assert _is_mangled_cpp_symbol('__ZNK3MapI10StringName3RefI8GDScriptE10ComparatorIS0_'
                                      'E16DefaultAllocatorE3hasERKS0_')
+        assert _is_mangled_cpp_symbol('___Z5test1v_block_invoke')
         assert not _is_mangled_cpp_symbol('_strlen')
 
     def test_demangle_cpp_symbol(self):
@@ -276,18 +277,8 @@ class TestFunctionAnalyzer:
 
     def test_demangle_cpp_block(self):
         # Given a function analyzer which represents an Objective-C block within a C++ source function
+        # This symbol also has 3 leading underscores
         with mock.patch('strongarm.macho.MachoStringTableHelper.get_symbol_name_for_address',
                         return_value='___Z5test1v_block_invoke'):
             # Then the code location returns the properly formatted symbol name
-            assert self.function_analyzer.get_symbol_name() == '_test1()_block_invoke'
-
-    def test_cppfilt(self):
-        import subprocess
-        # p = subprocess.run(f'c++filt -n "__Z4doitPKcb"', shell=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
-        # p2 = subprocess.run(['c++filt', '-n', '"_Z4doitPKcb"'], shell=False, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
-        # raise RuntimeError(p.stdout,p.stderr, p.returncode, p2.stdout, p2.stderr, p2.returncode)
-        #import cxxfilt
-        #raise RuntimeError(cxxfilt.demangle('_Z4doitPKcb'))
-        # p = subprocess.run(f'c++filt "__ZNK3MapI10StringName3RefI8GDScriptE10ComparatorIS0_E16DefaultAllocatorE3hasERKS0_" -_', shell=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
-        p = subprocess.run(f'c++filt "__Z5test1v" -_', shell=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
-        raise RuntimeError(p.stdout, p.stderr, p.returncode)
+            assert self.function_analyzer.get_symbol_name() == 'block in test1()'

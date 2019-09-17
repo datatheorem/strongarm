@@ -24,7 +24,7 @@ from .dataflow import get_register_contents_at_instruction_fast
 def _is_mangled_cpp_symbol(symbol_name: str) -> bool:
     """Return whether a symbol name appears to be a mangled C++ symbol.
     """
-    return any(symbol_name.startswith(prefix) for prefix in ['_Z', '__Z'])
+    return any(symbol_name.startswith(prefix) for prefix in ['_Z', '__Z', '___Z'])
 
 
 def _demangle_cpp_symbol(cpp_symbol: str) -> str:
@@ -33,13 +33,33 @@ def _demangle_cpp_symbol(cpp_symbol: str) -> str:
     if not _is_mangled_cpp_symbol(cpp_symbol):
         return cpp_symbol
 
-    # If demangling fails, allow the exception to propagate up. This can alert us to scanner issues.
-    # demangled_symbol = check_output(f'echo {cpp_symbol} | c++filt -n', shell=True).decode().strip()
-    demangled_symbol = check_output(f'~/.cargo/bin/cppfilt {cpp_symbol}', shell=True).decode().strip()
-    # import cxxfilt
-    # demangled_symbol = cxxfilt.demangle(cpp_symbol)
+    original_symbol = cpp_symbol
 
-    return demangled_symbol
+    # Linux's c++filt doesn't like the clang-specific "_block_invoke" which is tacked onto ObjC++ blocks.
+    # Trim this off and add it back after demangling the symbol
+    is_block = False
+    if '_block_invoke' in cpp_symbol:
+        is_block = True
+        cpp_symbol = cpp_symbol.split('_block_invoke')[0]
+
+    # XXX(PT): We observe that c++filt doesn't work if there are too many leading underscores
+    # Try demangling multiple times, trimming a leading underscore each time until success (up to 3 times)
+    for _ in range(3):
+        # If demangling fails, allow the exception to propagate up. This can alert us to scanner issues.
+        demangled_symbol = check_output(f'c++filt -_ {cpp_symbol}', shell=True).decode().strip()
+        # Was the symbol demangled?
+        if demangled_symbol != cpp_symbol:
+            if is_block:
+                demangled_symbol = f'block in {demangled_symbol}'
+            return demangled_symbol
+        else:
+            # Trim an underscore and try again if possible
+            if not cpp_symbol.startswith('_'):
+                break
+            cpp_symbol = cpp_symbol[1:]
+
+    # Failed to demangle, return the original symbol name
+    return original_symbol
 
 
 class ObjcMethodInfo:

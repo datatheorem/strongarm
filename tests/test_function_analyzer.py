@@ -282,3 +282,10 @@ class TestFunctionAnalyzer:
                         return_value='___Z5test1v_block_invoke'):
             # Then the code location returns the properly formatted symbol name
             assert self.function_analyzer.get_symbol_name() == 'block in test1()'
+
+    def test_demangle_numbered_cpp_block(self):
+        # Given a function analyzer which represents a numbered Objective-C block within a C++ source function
+        with mock.patch('strongarm.macho.MachoStringTableHelper.get_symbol_name_for_address',
+                        return_value='___Z5test1v_block_invoke2'):
+            # Then the code location returns the properly formatted symbol name
+            assert self.function_analyzer.get_symbol_name() == 'block 2 in test1()'

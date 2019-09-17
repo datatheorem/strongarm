@@ -38,9 +38,13 @@ def _demangle_cpp_symbol(cpp_symbol: str) -> str:
     # Linux's c++filt doesn't like the clang-specific "_block_invoke" which is tacked onto ObjC++ blocks.
     # Trim this off and add it back after demangling the symbol
     is_block = False
+    block_index = ''
     if '_block_invoke' in cpp_symbol:
         is_block = True
-        cpp_symbol = cpp_symbol.split('_block_invoke')[0]
+        cpp_symbol, block_index_str = cpp_symbol.split('_block_invoke')
+        # Some blocks have an index
+        if block_index_str.isnumeric():
+            block_index = f' {int(block_index_str)}'
 
     # XXX(PT): We observe that c++filt doesn't work if there are too many leading underscores
     # Try demangling multiple times, trimming a leading underscore each time until success (up to 3 times)
@@ -50,7 +54,7 @@ def _demangle_cpp_symbol(cpp_symbol: str) -> str:
         # Was the symbol demangled?
         if demangled_symbol != cpp_symbol:
             if is_block:
-                demangled_symbol = f'block in {demangled_symbol}'
+                demangled_symbol = f'block{block_index} in {demangled_symbol}'
             return demangled_symbol
         else:
             # Trim an underscore and try again if possible

@@ -289,5 +289,5 @@ class TestFunctionAnalyzer:
         #import cxxfilt
         #raise RuntimeError(cxxfilt.demangle('_Z4doitPKcb'))
         # p = subprocess.run(f'c++filt "__ZNK3MapI10StringName3RefI8GDScriptE10ComparatorIS0_E16DefaultAllocatorE3hasERKS0_" -_', shell=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
-        p = subprocess.run(f'c++filt "___Z5test1v" -_', shell=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+        p = subprocess.run(f'c++filt "__Z5test1v" -_', shell=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
         raise RuntimeError(p.stdout, p.stderr, p.returncode)

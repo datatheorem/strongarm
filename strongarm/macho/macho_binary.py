@@ -115,7 +115,6 @@ class MachoBinary:
         self._code_signature_cmd: Optional[MachoLinkeditDataCommandStruct] = None
         self._function_starts_cmd: Optional[MachoLinkeditDataCommandStruct] = None
 
-
         self.__codesign_parser: Optional[CodesignParser] = None
 
         # This kicks off the parse of the binary

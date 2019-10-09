@@ -323,7 +323,7 @@ class MachoAnalyzer:
 
     def search_all_code(self, display_progress: bool = True) -> None:
         """Iterate every function in the binary, and run each pending CodeSearch over them.
-        The search space is all known Objective-C entry points within the binary.
+        The search space is all known entry points within the binary.
 
         A CodeSearch describes criteria for matching code. A CodeSearchResult encapsulates a CPU instruction and its
         containing source function which matches the criteria of the search.

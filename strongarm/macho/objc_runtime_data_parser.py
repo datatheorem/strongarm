@@ -78,12 +78,13 @@ class ObjcSelector:
 
 
 class ObjcIvar:
-    __slots__ = ['name', 'class_name', 'field_offset']
+    __slots__ = ['name', 'class_name', 'field_offset', 'field_offset_addr']
 
-    def __init__(self, name: str, class_name: str, offset: int):
+    def __init__(self, name: str, class_name: str, offset: int, field_offset_addr: VirtualMemoryPointer):
         self.name = name
         self.class_name = class_name
         self.field_offset = offset
+        self.field_offset_addr = field_offset_addr
 
     def __str__(self) -> str:
         return f'<@ivar {self.class_name}* {self.name}, off @ {self.field_offset}>'
@@ -294,12 +295,13 @@ class ObjcRuntimeDataParser:
             ivar_name = self.binary.get_full_string_from_start_address(ivar_struct.name)
             class_name = self.binary.get_full_string_from_start_address(ivar_struct.type)
             field_offset = self.binary.read_word(ivar_struct.offset_ptr, word_type=c_uint32)
+            field_offset_addr = ivar_struct.offset_ptr
 
             # class_name and field_offset can be falsey ('' and 0), so don't include them in this sanity check
             if not ivar_name:
                 raise ValueError(f'Failed to read ivar data for ivar entry @ {hex(ivar_struct_ptr)}')
 
-            ivar = ObjcIvar(ivar_name, class_name, field_offset) # type: ignore
+            ivar = ObjcIvar(ivar_name, class_name, field_offset, field_offset_addr) # type: ignore
             ivars.append(ivar)
 
             ivar_struct_ptr += ivar_struct.sizeof

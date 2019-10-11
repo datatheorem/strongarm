@@ -12,6 +12,9 @@ pipelines:
           - pipenv run invoke deps
           - pipenv run invoke install
           - pipenv run invoke test
+    - step:
+        caches:
+          - pip
         script:
           - pip install invoke pipenv pytest mypy flake8
           - python setup.py install

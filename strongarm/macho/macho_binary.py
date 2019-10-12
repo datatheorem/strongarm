@@ -102,6 +102,7 @@ class MachoBinary:
         self._header: Optional[MachoHeaderStruct] = None
         self.header_flags: List[int] = []
         self.file_type: MachoFileType = MachoFileType.MH_EXECUTE    # Overwritten later in the parse
+        self._virtual_base: Optional[VirtualMemoryPointer] = None
 
         # Segment and section commands from Mach-O header
         self.segments: List[MachoSegmentCommandStruct] = []
@@ -365,11 +366,13 @@ class MachoBinary:
             int containing the virtual memory space address that the Mach-O slice requests to begin at
 
         """
-        # TODO(PT): Perhaps this should be cached. Finding the segment by name is now O(n) on segment count
-        text_seg = self.segment_with_name('__TEXT')
-        if not text_seg:
-            raise RuntimeError(f'Could not find virtual base because binary has no __TEXT segment.')
-        return VirtualMemoryPointer(text_seg.vmaddr)
+        if not self._virtual_base:
+            text_seg = self.segment_with_name('__TEXT')
+            if not text_seg:
+                raise RuntimeError(f'Could not find virtual base because binary has no __TEXT segment.')
+            self._virtual_base = VirtualMemoryPointer(text_seg.vmaddr)
+
+        return self._virtual_base
 
     def get_bytes(self, offset: StaticFilePointer, size: int) -> bytearray:
         """Retrieve bytes from Mach-O slice, taking into account that the slice could be at an offset within a FAT

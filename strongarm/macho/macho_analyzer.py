@@ -170,6 +170,10 @@ class MachoAnalyzer:
         """Return a Dict of imported symbol names to their pointers.
         These symbols are not necessarily callable.
         Inverse of MachoAnalyzer.imported_symbol_names_to_pointers()
+
+        NOTE: This API can lose information! A bound symbol of the same name may be bound to multiple locations,
+        and this API only retains one of those locations. For example, ___CFConstantStringClassReference is bound to
+        the first field of every CFStringStruct in the binary. This API probably shouldn't be used for this reason...
         """
         return {x.name: addr for addr, x in self.dyld_bound_symbols.items()}
 

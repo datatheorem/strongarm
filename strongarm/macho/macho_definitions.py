@@ -14,14 +14,49 @@ from ctypes import (
 )
 
 
-class StaticFilePointer(int):
+class _BasePointer(int):
+    def __add__(self, other):
+        return self.__class__(super().__add__(other))
+
+    def __sub__(self, other):
+        return self.__class__(super().__sub__(other))
+
+    def __mul__(self, other):
+        return self.__class__(super().__mul__(other))
+
+    def __truediv__(self, other):
+        return self.__class__(super().__truediv__(other))
+
+    def __floordiv__(self, other):
+        return self.__class__(super().__truediv__(other))
+
+    def __str__(self):
+        return hex(self)
+
+    def __repr__(self):
+        return hex(self)
+
+
+class StaticFilePointer(_BasePointer):
     """A pointer analogous to a file offset within the Mach-O
     """
 
+    def __str__(self):
+        return f'Phys[{super().__str__()}]'
 
-class VirtualMemoryPointer(int):
+    def __repr__(self):
+        return f'Phys[{super().__repr__()}]'
+
+
+class VirtualMemoryPointer(_BasePointer):
     """A pointer representing a virtual memory location within the Mach-O
     """
+
+    def __str__(self):
+        return f'Virt[{super().__str__()}]'
+
+    def __repr__(self):
+        return f'Virt[{super().__repr__()}]'
 
 
 def swap32(i: int) -> int:

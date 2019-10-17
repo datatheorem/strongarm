@@ -466,7 +466,6 @@ class MachoAnalyzer:
         string_table = list(strings_content)
         transformed_strings = MachoStringTableHelper.transform_string_section(string_table)
         for idx, entry in transformed_strings.items():
-            print(f'{hex(strings_base+idx)}: {entry.full_string}')
             if entry.full_string == string:
                 # found the string we're looking for
                 # the address is the base of __cstring plus the index of the entry

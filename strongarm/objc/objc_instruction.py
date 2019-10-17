@@ -132,16 +132,16 @@ class ObjcUnconditionalBranchInstruction(ObjcBranchInstruction):
         self.selector: Optional[ObjcSelector] = None
 
         macho_analyzer = MachoAnalyzer.get_analyzer(function_analyzer.binary)
-        external_c_sym_map = macho_analyzer.imp_stubs_to_symbol_names
-        if self.destination_address in external_c_sym_map:
-            self.symbol = external_c_sym_map[self.destination_address]  # type: ignore
+        imported_symbols = macho_analyzer.imported_symbols_to_symbol_names
+        exported_symbols = macho_analyzer.exported_symbol_pointers_to_names
+
+        if self.destination_address in imported_symbols:
+            self.symbol = imported_symbols[self.destination_address]
             if self.symbol in self.OBJC_MSGSEND_FUNCTIONS:
                 self.is_msgSend_call = True
                 self._patch_msgSend_destination(function_analyzer)
-            else:
-                self.is_msgSend_call = False
-
-        self.is_external_c_call = self.symbol is not None
+        elif self.destination_address in exported_symbols:
+            self.symbol = exported_symbols[self.destination_address]
 
     def _patch_msgSend_destination(self, function_analyzer: 'ObjcFunctionAnalyzer') -> None:
         # validate instruction

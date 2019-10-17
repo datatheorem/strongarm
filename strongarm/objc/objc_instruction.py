@@ -132,7 +132,7 @@ class ObjcUnconditionalBranchInstruction(ObjcBranchInstruction):
         self.selector: Optional[ObjcSelector] = None
 
         macho_analyzer = MachoAnalyzer.get_analyzer(function_analyzer.binary)
-        imported_symbols = macho_analyzer.imported_symbols_to_symbol_names
+        imported_symbols = macho_analyzer.imp_stubs_to_symbol_names
         exported_symbols = macho_analyzer.exported_symbol_pointers_to_names
 
         if self.destination_address in imported_symbols:

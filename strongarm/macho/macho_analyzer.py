@@ -1,8 +1,9 @@
 import logging
 from ctypes import sizeof
+from dataclasses import dataclass
 from collections import defaultdict
 
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Tuple
 from typing import Set, List, Dict, Optional, Callable
 from capstone import Cs, CsInsn, CS_ARCH_ARM64, CS_MODE_ARM
 
@@ -66,7 +67,7 @@ class MachoAnalyzer:
         self.imp_stubs = MachoImpStubsParser(binary, self.cs).imp_stubs
         self._objc_helper: Optional[ObjcRuntimeDataParser] = None
         self._objc_method_list: List[ObjcMethodInfo] = []
-        self._functions_list: Optional[List[VirtualMemoryPointer]] = None
+        self._functions_list: Optional[Set[VirtualMemoryPointer]] = None
 
         self._cached_function_boundaries: Dict[int, int] = {}
 
@@ -281,7 +282,7 @@ class MachoAnalyzer:
         self._objc_method_list = method_list
         return self._objc_method_list
 
-    def get_functions(self) -> List[VirtualMemoryPointer]:
+    def get_functions(self) -> Set[VirtualMemoryPointer]:
         """Get a list of the function entry points defined in LC_FUNCTION_STARTS. This includes objective-c methods.
 
         Returns: A list of VirtualMemoryPointers corresponding to each function's entry point.
@@ -291,9 +292,9 @@ class MachoAnalyzer:
 
         # Cannot do anything without LC_FUNCTIONS_START
         if not self.binary._function_starts_cmd:
-            return []
+            return set()
 
-        functions_list = []
+        functions_list = set()
 
         fs_start = self.binary._function_starts_cmd.dataoff
         fs_size = self.binary._function_starts_cmd.datasize
@@ -307,7 +308,7 @@ class MachoAnalyzer:
 
             address += address_delta
             func_entry = VirtualMemoryPointer(address)
-            functions_list.append(func_entry)
+            functions_list.add(func_entry)
 
         self._functions_list = functions_list
         return self._functions_list

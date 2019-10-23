@@ -40,6 +40,17 @@ class DisassemblyFailedError(Exception):
     """
 
 
+class XRefsRequireCodeSearchError(Exception):
+    """Raised when an XRef is queried before MachoAnalyzer.search_all_code() is invoked.
+    """
+
+
+@dataclass
+class CallerXRef:
+    caller_func: 'ObjcFunctionAnalyzer'
+    caller_addr: VirtualMemoryPointer
+
+
 @dataclass
 class CodeSearchRequest:
     search: 'CodeSearch'
@@ -85,6 +96,37 @@ class MachoAnalyzer:
 
         # done setting up, store this analyzer in class cache
         MachoAnalyzer._ANALYZER_CACHE[binary] = self
+
+        # When we initialize a MachoAnalyzer, queue a CodeSearch to mark branch XRefs
+        # This is meant to support simulation across function boundaries. The decompiler begins with a call site, and
+        # may also need to visit the callers of that call site.
+        self._has_computed_xrefs = False
+        self._branch_xrefs: Dict[VirtualMemoryPointer, List[CallerXRef]] = defaultdict(list)
+        self._find_branch_xrefs()
+
+    def xrefs_to(self, address: VirtualMemoryPointer) -> List[CallerXRef]:
+        if not self._has_computed_xrefs:
+            raise XRefsRequireCodeSearchError(f'XRefs are unavailable until MachoAnalyzer.search_all_code() is called.')
+        return self._branch_xrefs[address]
+
+    def _find_branch_xrefs(self):
+        from strongarm.objc import ObjcUnconditionalBranchInstruction
+        from strongarm.objc import CodeSearch, CodeSearchResult, CodeSearchInstructionMnemonic
+
+        def _process_branch_xrefs(analyzer: MachoAnalyzer, search: CodeSearch, results: List[CodeSearchResult]):
+            for r in results:
+                # Record that the branch receiver has an XRef from this instruction
+                xref = CallerXRef(r.found_function, r.found_instruction.address)
+                self._branch_xrefs[r.found_instruction.destination_address].append(xref)
+
+            self._has_computed_xrefs = True
+
+        find_branch_xrefs = CodeSearchInstructionMnemonic(
+            self.binary,
+            allow_mnemonics=ObjcUnconditionalBranchInstruction.UNCONDITIONAL_BRANCH_MNEMONICS
+        )
+        logging.debug(f'Queuing branch-XRef search...')
+        self.queue_code_search(find_branch_xrefs, _process_branch_xrefs)
 
     @classmethod
     def clear_cache(cls) -> None:

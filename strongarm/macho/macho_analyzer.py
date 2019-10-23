@@ -40,6 +40,12 @@ class DisassemblyFailedError(Exception):
     """
 
 
+@dataclass
+class CodeSearchRequest:
+    search: 'CodeSearch'
+    callback: CodeSearchCallback
+
+
 class MachoAnalyzer:
     # This class does expensive one-time cross-referencing operations
     # Therefore, we want only one instance to exist for any MachoBinary
@@ -75,7 +81,7 @@ class MachoAnalyzer:
         # Iterating the binary's code is an expensive operation, and this allows us to do it just once.
         # This map is where we store the CodeSearch's that are waiting to be executed, and the
         # callbacks which should be invoked once results are found.
-        self._queued_code_searches: Dict['CodeSearch', CodeSearchCallback] = {}
+        self._queued_code_searches: List[CodeSearchRequest] = []
 
         # done setting up, store this analyzer in class cache
         MachoAnalyzer._ANALYZER_CACHE[binary] = self
@@ -324,7 +330,7 @@ class MachoAnalyzer:
         info about the discovered code.
         """
         logging.info(f'{self.binary.path.name} enqueuing CodeSearch {code_search}. Will invoke {callback}')
-        self._queued_code_searches[code_search] = callback
+        self._queued_code_searches.append(CodeSearchRequest(code_search, callback))
 
     def search_all_code(self, display_progress: bool = True) -> None:
         """Iterate every function in the binary, and run each pending CodeSearch over them.
@@ -336,17 +342,17 @@ class MachoAnalyzer:
         For each search which is executed, this method will invoke the CodeSearchCallback provided when the search
         was requested, with the List of CodeSearchResult's which were found.
         """
-        from strongarm.objc import CodeSearch, CodeSearchResult     # type: ignore
         from strongarm.objc import ObjcFunctionAnalyzer     # type: ignore
 
         # If there are no queued code searches, we have nothing to do
-        if not len(self._queued_code_searches):
+        queued_searches = self._queued_code_searches
+        if not len(queued_searches):
             return
 
-        logging.info(f'Running {len(self._queued_code_searches.keys())} code searches on {self.binary.path.name}')
+        logging.info(f'Running {len(queued_searches)} code searches on {self.binary.path.name}')
 
         entry_point_list = self.get_functions()
-        search_results: Dict['CodeSearch', List[CodeSearchResult]] = defaultdict(list)
+        search_results: List[List[CodeSearchResult]] = [[] for _ in range(len(queued_searches))]
 
         # Searching all code can be a time-consumptive operation. Provide UI feedback on the progress.
         # This displays a progress bar to stdout. The progress bar will be erased when the context manager exits.
@@ -356,7 +362,7 @@ class MachoAnalyzer:
             # Build analyzers for function entry points.
             for i, entry_address in enumerate(entry_point_list):
                 try:
-                    # Try to find an objcmethodinfo with matching address
+                    # Try to find a method-info with a matching address
                     matched_method_info = None
                     for method_info in self.get_objc_methods():
                         if method_info.imp_addr == entry_address:
@@ -371,15 +377,14 @@ class MachoAnalyzer:
                     continue
 
                 # Run every code search on this function and record their respective results
-                for code_search, callback in self._queued_code_searches.items():
-                    search_results[code_search] += function_analyzer.search_code(code_search)
+                for idx, request in enumerate(queued_searches):
+                    search_results[idx] += function_analyzer.search_code(request.search)
 
                 progress_bar.set_progress(i / len(entry_point_list))
 
         # Invoke every callback with their respective search results
-        for search, results in search_results.items():
-            callback = self._queued_code_searches[search]
-            callback(self, search, results)
+        for request, results in zip(queued_searches, search_results):
+            request.callback(self, request.search, results)
 
         # We've completed all of the waiting code searches. Drain the queue
         self._queued_code_searches.clear()

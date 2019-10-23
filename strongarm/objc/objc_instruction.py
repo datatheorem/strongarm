@@ -165,17 +165,14 @@ class ObjcUnconditionalBranchInstruction(ObjcBranchInstruction):
             # it is defined in a class outside this binary
             self.is_external_objc_call = selector.is_external_definition
 
-            self.destination_address = selector.implementation if selector.implementation else VirtualMemoryPointer(0)
+            # Only patch destination_address if the implementation is in this binary.
+            # Otherwise, destination_address will continue to point to __imp_stubs_objc_msgSend
+            if selector.implementation:
+                self.destination_address = selector.implementation
             self.selref = selector.selref
             self.selector = selector
         except RuntimeError as e:
-            # GammaRayTestBad @ 0x10007ed10 causes get_objc_selref() to fail.
-            # This is because x1 has a data dependency on x20.
-            # At the beginning of the function, there's a basic block to return early if imageView is nil.
-            # This basic block includes a stack unwind, which tricks get_register_contents_at_instruction() into
-            # thinking that there's a data dependency on x0, which there *isn't*
-            # Nonetheless, this causes get_objc_selref() to fail.
-            # As a workaround, let's assign all the above fields to 'not found' values if this bug is hit
+            # TODO(PT): Should this ever be hit?
             self.is_external_objc_call = True
             self.destination_address = VirtualMemoryPointer(0)
 

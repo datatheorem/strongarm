@@ -326,7 +326,7 @@ class ObjcRuntimeDataParser:
             # attempt to find corresponding selref
             selref = self._selector_literal_ptr_to_selref_map.get(method_ent.name)
 
-            selector = ObjcSelector(symbol_name, selref, method_ent.implementation)
+            selector = ObjcSelector(symbol_name, selref, VirtualMemoryPointer(method_ent.implementation))
             selectors.append(selector)
 
             # save this selector in the selref pointer -> selector map

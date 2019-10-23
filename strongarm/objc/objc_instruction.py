@@ -17,7 +17,7 @@ class ObjcInstruction:
 
     def __init__(self, instruction: CsInsn) -> None:
         self.raw_instr = instruction
-        self.address = self.raw_instr.address
+        self.address = VirtualMemoryPointer(self.raw_instr.address)
 
         self.is_msgSend_call: bool = False
         self.symbol: Optional[str] = None
@@ -126,7 +126,7 @@ class ObjcUnconditionalBranchInstruction(ObjcBranchInstruction):
             raise ValueError(f'ObjcUnconditionalBranchInstruction instantiated with'
                              f' invalid mnemonic {instruction.mnemonic}')
         # an unconditional branch has the destination as the only operand
-        super().__init__(instruction, instruction.operands[0].value.imm)
+        super().__init__(instruction, VirtualMemoryPointer(instruction.operands[0].value.imm))
 
         self.selref: Optional[ObjcSelref] = None
         self.selector: Optional[ObjcSelector] = None
@@ -201,4 +201,8 @@ class ObjcConditionalBranchInstruction(ObjcBranchInstruction):
         else:
             raise ValueError(f'Unknown conditional mnemonic {instruction.mnemonic}')
 
-        ObjcBranchInstruction.__init__(self, instruction, instruction.operands[dest_op_idx].value.imm)
+        ObjcBranchInstruction.__init__(
+            self,
+            instruction,
+            VirtualMemoryPointer(instruction.operands[dest_op_idx].value.imm)
+        )

@@ -254,7 +254,7 @@ class MachoAnalyzer:
             return self.imp_stubs_to_symbol_names[branch_address]
         raise RuntimeError(f'Unknown branch destination {hex(branch_address)}. Is this a local branch?')
 
-    def _disassemble_region(self, start_address: VirtualMemoryPointer, size: int) -> List[CsInsn]:
+    def disassemble_region(self, start_address: VirtualMemoryPointer, size: int) -> List[CsInsn]:
         """Disassemble the executable code in a given region into a list of CsInsn objects
         """
         func_str = bytes(self.binary.get_content_from_virtual_address(virtual_address=start_address, size=size))
@@ -279,7 +279,7 @@ class MachoAnalyzer:
             end_address = determine_function_boundary(binary_data, start_address) + MachoBinary.BYTES_PER_INSTRUCTION
             self._cached_function_boundaries[start_address] = end_address
 
-        instructions = self._disassemble_region(start_address, end_address - start_address)
+        instructions = self.disassemble_region(start_address, end_address - start_address)
         return instructions
 
     def imp_for_selref(self, selref_ptr: VirtualMemoryPointer) -> Optional[VirtualMemoryPointer]:

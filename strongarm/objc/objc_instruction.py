@@ -75,8 +75,6 @@ class ObjcBranchInstruction(ObjcInstruction):
         self.is_external_c_call: bool = False
         self.is_external_objc_call: bool = False
 
-        self.is_local_branch: bool = False
-
     @classmethod
     def parse_instruction(cls,
                           function_analyzer: 'ObjcFunctionAnalyzer',
@@ -87,12 +85,10 @@ class ObjcBranchInstruction(ObjcInstruction):
         # use appropriate subclass
         if instruction.mnemonic in ObjcUnconditionalBranchInstruction.UNCONDITIONAL_BRANCH_MNEMONICS:
             uncond_instr = ObjcUnconditionalBranchInstruction(function_analyzer, instruction)
-            uncond_instr.is_local_branch = function_analyzer.is_local_branch(uncond_instr)
             return uncond_instr
 
         elif instruction.mnemonic in ObjcConditionalBranchInstruction.CONDITIONAL_BRANCH_MNEMONICS:
             cond_instr = ObjcConditionalBranchInstruction(function_analyzer, instruction)
-            cond_instr.is_local_branch = function_analyzer.is_local_branch(cond_instr)
             return cond_instr
 
         else:

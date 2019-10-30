@@ -138,6 +138,9 @@ class ObjcUnconditionalBranchInstruction(ObjcBranchInstruction):
                 self.is_msgSend_call = False
 
         self.is_external_c_call = self.symbol is not None
+        elif self.destination_address in macho_analyzer.exported_symbol_pointers_to_names:
+            self.symbol = macho_analyzer.exported_symbol_pointers_to_names[self.destination_address]
+            self.is_external_c_call = False
 
     def _patch_msgSend_destination(self, function_analyzer: 'ObjcFunctionAnalyzer') -> None:
         # validate instruction

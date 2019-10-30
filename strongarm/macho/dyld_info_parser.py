@@ -82,7 +82,7 @@ class DyldInfoParser:
         def commit_stub() -> None:
             segment_command = self.binary.segment_for_index(segment_index)
             segment_start = segment_command.vmaddr
-            stub_addr = segment_start + segment_offset
+            stub_addr = VirtualMemoryPointer(segment_start + segment_offset)
             name = name_bytes.decode('utf-8')
 
             symbol = DyldBoundSymbol(self.binary, stub_addr, library_ordinal, name)

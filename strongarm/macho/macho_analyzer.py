@@ -300,6 +300,9 @@ class MachoAnalyzer:
     def selector_for_selref(self, selref_ptr: VirtualMemoryPointer) -> Optional[ObjcSelector]:
         return self.objc_helper.selector_for_selref(selref_ptr)
 
+    def selector_for_selector_literal(self, selref_ptr: VirtualMemoryPointer) -> Optional[ObjcSelector]:
+        return self.objc_helper.selector_for_selector_literal(selref_ptr)
+
     def get_method_imp_addresses(self, selector: str) -> List[VirtualMemoryPointer]:
         """Given a selector, return a list of virtual addresses corresponding to the start of each IMP for that SEL
         """

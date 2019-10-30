@@ -78,13 +78,14 @@ class ObjcBranchInstruction(ObjcInstruction):
     @classmethod
     def parse_instruction(cls,
                           function_analyzer: 'ObjcFunctionAnalyzer',
-                          instruction: CsInsn) -> Union['ObjcUnconditionalBranchInstruction',
-                                                        'ObjcConditionalBranchInstruction']:
+                          instruction: CsInsn,
+                          patch_msgSend_destination=True) -> Union['ObjcUnconditionalBranchInstruction',
+                                                                   'ObjcConditionalBranchInstruction']:
         """Read a branch instruction and encapsulate it in the appropriate ObjcBranchInstruction subclass
         """
         # use appropriate subclass
         if instruction.mnemonic in ObjcUnconditionalBranchInstruction.UNCONDITIONAL_BRANCH_MNEMONICS:
-            uncond_instr = ObjcUnconditionalBranchInstruction(function_analyzer, instruction)
+            uncond_instr = ObjcUnconditionalBranchInstruction(function_analyzer, instruction, patch_msgSend_destination)
             return uncond_instr
 
         elif instruction.mnemonic in ObjcConditionalBranchInstruction.CONDITIONAL_BRANCH_MNEMONICS:
@@ -117,7 +118,10 @@ class ObjcUnconditionalBranchInstruction(ObjcBranchInstruction):
                                       ]
     OBJC_MSGSEND_FUNCTIONS = ['_objc_msgSend', '_objc_msgSendSuper2']
 
-    def __init__(self, function_analyzer: 'ObjcFunctionAnalyzer', instruction: CsInsn) -> None:
+    def __init__(self,
+                 function_analyzer: 'ObjcFunctionAnalyzer',
+                 instruction: CsInsn,
+                 patch_msgSend_destination: True) -> None:
         if instruction.mnemonic not in ObjcUnconditionalBranchInstruction.UNCONDITIONAL_BRANCH_MNEMONICS:
             raise ValueError(f'ObjcUnconditionalBranchInstruction instantiated with'
                              f' invalid mnemonic {instruction.mnemonic}')
@@ -131,13 +135,14 @@ class ObjcUnconditionalBranchInstruction(ObjcBranchInstruction):
         external_c_sym_map = macho_analyzer.imp_stubs_to_symbol_names
         if self.destination_address in external_c_sym_map:
             self.symbol = external_c_sym_map[self.destination_address]  # type: ignore
+            self.is_external_c_call = True
             if self.symbol in self.OBJC_MSGSEND_FUNCTIONS:
                 self.is_msgSend_call = True
-                self._patch_msgSend_destination(function_analyzer)
+                self.is_external_c_call = False
+                if patch_msgSend_destination:
+                    self._patch_msgSend_destination(function_analyzer)
             else:
                 self.is_msgSend_call = False
-
-        self.is_external_c_call = self.symbol is not None
         elif self.destination_address in macho_analyzer.exported_symbol_pointers_to_names:
             self.symbol = macho_analyzer.exported_symbol_pointers_to_names[self.destination_address]
             self.is_external_c_call = False

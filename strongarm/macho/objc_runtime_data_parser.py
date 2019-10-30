@@ -195,6 +195,9 @@ class ObjcRuntimeDataParser:
         # this is fine, just construct an ObjcSelector with what we know
         sel = ObjcSelector(_selref.selector_literal, _selref, None)
         return sel
+    
+    def selector_for_selector_literal(self, literal_addr: VirtualMemoryPointer) -> Optional[ObjcSelector]:
+        return self.selector_for_selref(self._selector_literal_ptr_to_selref_map[literal_addr].source_address)
 
     def selrefs_to_selectors(self) -> Dict[VirtualMemoryPointer, ObjcSelector]:
         return self._selref_ptr_to_selector_map

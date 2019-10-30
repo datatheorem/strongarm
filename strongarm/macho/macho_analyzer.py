@@ -149,6 +149,15 @@ class MachoAnalyzer:
             # There exists a MachoAnalyzer for this binary - use it instead of making a new one
             return cls._ANALYZER_CACHE[binary]
         return MachoAnalyzer(binary)
+    
+    def method_info_for_entry_point(self, entry_point: VirtualMemoryPointer) -> Optional['ObjcMethodInfo']:
+        # TODO(PT): This should return any symbol name, not just Obj-C methods
+        from strongarm.objc.objc_analyzer import ObjcMethodInfo
+        for objc_cls in self.objc_classes():
+            for sel in objc_cls.selectors:
+                if sel.implementation == entry_point:
+                    return ObjcMethodInfo(objc_cls, sel, sel.implementation)
+        raise NotImplementedError(f'No method info found for {entry_point}, not ObjC?')
 
     def objc_classes(self) -> List[ObjcClass]:
         """Return the List of classes and categories implemented within the binary

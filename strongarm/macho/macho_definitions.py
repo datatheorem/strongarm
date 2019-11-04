@@ -52,12 +52,6 @@ class VirtualMemoryPointer(_BasePointer):
     """A pointer representing a virtual memory location within the Mach-O
     """
 
-    def __str__(self):
-        return f'Virt[{super().__str__()}]'
-
-    def __repr__(self):
-        return f'Virt[{super().__repr__()}]'
-
 
 def swap32(i: int) -> int:
     """Reverse the bytes of a little-endian integer representation ie (3) -> 50331648"""

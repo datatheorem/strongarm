@@ -125,7 +125,7 @@ class MachoAnalyzer:
             self.binary,
             allow_mnemonics=ObjcUnconditionalBranchInstruction.UNCONDITIONAL_BRANCH_MNEMONICS
         )
-        logging.debug(f'Queuing branch-XRef search...')
+        # logging.debug(f'Queuing branch-XRef search...')
         self.queue_code_search(find_branch_xrefs, _process_branch_xrefs)
 
     @classmethod
@@ -383,7 +383,7 @@ class MachoAnalyzer:
         Once the CodeSearch has been run over the binary, the `callback` will be invoked, passing the relevant
         info about the discovered code.
         """
-        logging.info(f'{self.binary.path.name} enqueuing CodeSearch {code_search}. Will invoke {callback}')
+        # logging.info(f'{self.binary.path.name} enqueuing CodeSearch {code_search}. Will invoke {callback}')
         self._queued_code_searches.append(CodeSearchRequest(code_search, callback))
 
     def search_all_code(self, display_progress: bool = True) -> None:

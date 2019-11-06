@@ -157,7 +157,7 @@ class MachoAnalyzer:
             for sel in objc_cls.selectors:
                 if sel.implementation == entry_point:
                     return ObjcMethodInfo(objc_cls, sel, sel.implementation)
-        raise NotImplementedError(f'No method info found for {entry_point}, not ObjC?')
+        return None
 
     def objc_classes(self) -> List[ObjcClass]:
         """Return the List of classes and categories implemented within the binary

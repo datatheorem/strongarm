@@ -143,8 +143,8 @@ class MachoAnalyzer:
         This can be used when you are finished analyzing a binary set and don't want to retain the cached data in memory
         """
         for binary, analyzer in cls._ANALYZER_CACHE.items():
-            print(f'Deleting db {analyzer.db}...')
-            analyzer.db.close()
+            print(f'Deleting db {analyzer._branch_xrefs}...')
+            analyzer._branch_xrefs.close()
 
         cls._ANALYZER_CACHE.clear()
 

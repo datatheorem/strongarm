@@ -3,6 +3,7 @@ from ctypes import sizeof
 from dataclasses import dataclass
 from collections import defaultdict
 
+import shelve
 from typing import TYPE_CHECKING, Tuple
 from typing import Set, List, Dict, Optional, Callable
 from capstone import Cs, CsInsn, CS_ARCH_ARM64, CS_MODE_ARM
@@ -104,10 +105,14 @@ class MachoAnalyzer:
         self._branch_xrefs: Dict[VirtualMemoryPointer, List[CallerXRef]] = defaultdict(list)
         self._find_branch_xrefs()
 
+        import uuid
+        self.db = shelve.open(f'analyzer-{uuid.uuid4()}.db', writeback=False)
+
     def xrefs_to(self, address: VirtualMemoryPointer) -> List[CallerXRef]:
         if not self._has_computed_xrefs:
             raise XRefsRequireCodeSearchError(f'XRefs are unavailable until MachoAnalyzer.search_all_code() is called.')
-        return self._branch_xrefs[address]
+        #return self._branch_xrefs[address]
+        return self.db[str(address)]
 
     def _find_branch_xrefs(self):
         from strongarm.objc import ObjcUnconditionalBranchInstruction
@@ -117,7 +122,11 @@ class MachoAnalyzer:
             for r in results:
                 # Record that the branch receiver has an XRef from this instruction
                 xref = CallerXRef(r.found_function, r.found_instruction.address)
-                self._branch_xrefs[r.found_instruction.destination_address].append(xref)
+                branch_addr = str(r.found_instruction.destination_address)
+                if branch_addr not in self.db:
+                    self.db[branch_addr] = []
+                self.db[branch_addr].append(xref)
+                # self._branch_xrefs[r.found_instruction.destination_address].append(xref)
 
             self._has_computed_xrefs = True
 
@@ -133,6 +142,10 @@ class MachoAnalyzer:
         """Delete cached MachoAnalyzer's
         This can be used when you are finished analyzing a binary set and don't want to retain the cached data in memory
         """
+        for analyzer in cls._ANALYZER_CACHE:
+            print(f'Deleting db {analyzer.db}...')
+            analyzer.db.close()
+
         cls._ANALYZER_CACHE.clear()
 
     @property

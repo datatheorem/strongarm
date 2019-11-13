@@ -1,10 +1,12 @@
+import shelve
+import shutil
 import logging
+import pathlib
+import tempfile
 from ctypes import sizeof
 from dataclasses import dataclass
-from collections import defaultdict
 
-import shelve
-from typing import TYPE_CHECKING, Tuple
+from typing import TYPE_CHECKING
 from typing import Set, List, Dict, Optional, Callable
 from capstone import Cs, CsInsn, CS_ARCH_ARM64, CS_MODE_ARM
 
@@ -102,31 +104,32 @@ class MachoAnalyzer:
         # This is meant to support simulation across function boundaries. The decompiler begins with a call site, and
         # may also need to visit the callers of that call site.
         self._has_computed_xrefs = False
-        # TODO(PT): switch to tempdir
-        import uuid
-        self._branch_xrefs: Dict[str, List[CallerXRef]] = shelve.open(f'analyzer-{uuid.uuid4()}.db', writeback=False)
+        self._db_tempdir = pathlib.Path(tempfile.mkdtemp())
+        self._db_path = self._db_tempdir / 'strongarm_db'
         self._find_branch_xrefs()
 
     def xrefs_to(self, address: VirtualMemoryPointer) -> List[CallerXRef]:
         if not self._has_computed_xrefs:
             raise XRefsRequireCodeSearchError(f'XRefs are unavailable until MachoAnalyzer.search_all_code() is called.')
-        if hex(address) not in self._branch_xrefs:
-            return []
-        return self._branch_xrefs[hex(address)]
+        with shelve.open(self._db_path.as_posix(), writeback=False) as branch_xrefs_db:
+            if hex(address) not in branch_xrefs_db:
+                return []
+            return branch_xrefs_db[hex(address)]
 
     def _find_branch_xrefs(self):
         from strongarm.objc import ObjcUnconditionalBranchInstruction
         from strongarm.objc import CodeSearch, CodeSearchResult, CodeSearchInstructionMnemonic
 
         def _process_branch_xrefs(analyzer: MachoAnalyzer, search: CodeSearch, results: List[CodeSearchResult]):
-            for r in results:
-                # Record that the branch receiver has an XRef from this instruction
-                xref = CallerXRef(r.found_function.start_address, r.found_instruction.address)
-                branch_addr = hex(r.found_instruction.destination_address)
-                if branch_addr not in self._branch_xrefs:
-                    self._branch_xrefs[branch_addr] = []
-                # https://stackoverflow.com/questions/33801076/want-to-update-modify-the-value-of-key-in-shelve
-                self._branch_xrefs[branch_addr] = self._branch_xrefs[branch_addr] + [xref]
+            with shelve.open(self._db_path.as_posix(), writeback=False) as branch_xrefs_db:
+                for r in results:
+                    # Record that the branch receiver has an XRef from this instruction
+                    xref = CallerXRef(r.found_function.start_address, r.found_instruction.address)
+                    branch_addr = hex(r.found_instruction.destination_address)
+                    if branch_addr not in branch_xrefs_db:
+                        branch_xrefs_db[branch_addr] = []
+                    # https://stackoverflow.com/questions/33801076/want-to-update-modify-the-value-of-key-in-shelve
+                    branch_xrefs_db[branch_addr] = branch_xrefs_db[branch_addr] + [xref]
 
             self._has_computed_xrefs = True
 
@@ -143,8 +146,8 @@ class MachoAnalyzer:
         This can be used when you are finished analyzing a binary set and don't want to retain the cached data in memory
         """
         for binary, analyzer in cls._ANALYZER_CACHE.items():
-            print(f'Deleting db {analyzer._branch_xrefs}...')
-            analyzer._branch_xrefs.close()
+            print(f'Deleting db {analyzer._db_path}...')
+            shutil.rmtree(analyzer._db_tempdir.as_posix())
 
         cls._ANALYZER_CACHE.clear()
 

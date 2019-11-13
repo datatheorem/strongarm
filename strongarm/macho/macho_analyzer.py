@@ -48,7 +48,7 @@ class XRefsRequireCodeSearchError(Exception):
 
 @dataclass
 class CallerXRef:
-    caller_func: 'ObjcFunctionAnalyzer'
+    caller_func: VirtualMemoryPointer
     caller_addr: VirtualMemoryPointer
 
 
@@ -102,17 +102,17 @@ class MachoAnalyzer:
         # This is meant to support simulation across function boundaries. The decompiler begins with a call site, and
         # may also need to visit the callers of that call site.
         self._has_computed_xrefs = False
-        self._branch_xrefs: Dict[VirtualMemoryPointer, List[CallerXRef]] = defaultdict(list)
-        self._find_branch_xrefs()
-
+        # TODO(PT): switch to tempdir
         import uuid
-        self.db = shelve.open(f'analyzer-{uuid.uuid4()}.db', writeback=False)
+        self._branch_xrefs: Dict[str, List[CallerXRef]] = shelve.open(f'analyzer-{uuid.uuid4()}.db', writeback=False)
+        self._find_branch_xrefs()
 
     def xrefs_to(self, address: VirtualMemoryPointer) -> List[CallerXRef]:
         if not self._has_computed_xrefs:
             raise XRefsRequireCodeSearchError(f'XRefs are unavailable until MachoAnalyzer.search_all_code() is called.')
-        #return self._branch_xrefs[address]
-        return self.db[str(address)]
+        if hex(address) not in self._branch_xrefs:
+            return []
+        return self._branch_xrefs[hex(address)]
 
     def _find_branch_xrefs(self):
         from strongarm.objc import ObjcUnconditionalBranchInstruction
@@ -121,12 +121,12 @@ class MachoAnalyzer:
         def _process_branch_xrefs(analyzer: MachoAnalyzer, search: CodeSearch, results: List[CodeSearchResult]):
             for r in results:
                 # Record that the branch receiver has an XRef from this instruction
-                xref = CallerXRef(r.found_function, r.found_instruction.address)
-                branch_addr = str(r.found_instruction.destination_address)
-                if branch_addr not in self.db:
-                    self.db[branch_addr] = []
-                self.db[branch_addr].append(xref)
-                # self._branch_xrefs[r.found_instruction.destination_address].append(xref)
+                xref = CallerXRef(r.found_function.start_address, r.found_instruction.address)
+                branch_addr = hex(r.found_instruction.destination_address)
+                if branch_addr not in self._branch_xrefs:
+                    self._branch_xrefs[branch_addr] = []
+                # https://stackoverflow.com/questions/33801076/want-to-update-modify-the-value-of-key-in-shelve
+                self._branch_xrefs[branch_addr] = self._branch_xrefs[branch_addr] + [xref]
 
             self._has_computed_xrefs = True
 

@@ -1,5 +1,6 @@
 import shelve
 import shutil
+import sqlite3
 import logging
 import pathlib
 import tempfile
@@ -7,7 +8,7 @@ from ctypes import sizeof
 from dataclasses import dataclass
 
 from typing import TYPE_CHECKING
-from typing import Set, List, Dict, Optional, Callable
+from typing import Set, List, Dict, Tuple, Optional, Callable
 from capstone import Cs, CsInsn, CS_ARCH_ARM64, CS_MODE_ARM
 
 from strongarm.macho.macho_definitions import VirtualMemoryPointer
@@ -108,28 +109,34 @@ class MachoAnalyzer:
         self._db_path = self._db_tempdir / 'strongarm_db'
         self._find_branch_xrefs()
 
-    def xrefs_to(self, address: VirtualMemoryPointer) -> List[CallerXRef]:
+    def xrefs_to(self, address: VirtualMemoryPointer) -> List[Tuple[VirtualMemoryPointer, VirtualMemoryPointer]]:
         if not self._has_computed_xrefs:
             raise XRefsRequireCodeSearchError(f'XRefs are unavailable until MachoAnalyzer.search_all_code() is called.')
-        with shelve.open(self._db_path.as_posix(), writeback=False) as branch_xrefs_db:
-            if hex(address) not in branch_xrefs_db:
-                return []
-            return branch_xrefs_db[hex(address)]
+
+        db_handle = sqlite3.connect(self._db_path.as_posix())
+        c = db_handle.cursor()
+        xrefs = c.execute(f'SELECT * from branches WHERE destination_address={int(address)}').fetchall()
+        xrefs = [(x[2], x[1]) for x in xrefs]
+        db_handle.close()
+        return xrefs
 
     def _find_branch_xrefs(self):
         from strongarm.objc import ObjcUnconditionalBranchInstruction
         from strongarm.objc import CodeSearch, CodeSearchResult, CodeSearchInstructionMnemonic
 
         def _process_branch_xrefs(analyzer: MachoAnalyzer, search: CodeSearch, results: List[CodeSearchResult]):
-            with shelve.open(self._db_path.as_posix(), writeback=False) as branch_xrefs_db:
-                for r in results:
-                    # Record that the branch receiver has an XRef from this instruction
-                    xref = CallerXRef(r.found_function.start_address, r.found_instruction.address)
-                    branch_addr = hex(r.found_instruction.destination_address)
-                    if branch_addr not in branch_xrefs_db:
-                        branch_xrefs_db[branch_addr] = []
-                    # https://stackoverflow.com/questions/33801076/want-to-update-modify-the-value-of-key-in-shelve
-                    branch_xrefs_db[branch_addr] = branch_xrefs_db[branch_addr] + [xref]
+            db_handle = sqlite3.connect(self._db_path.as_posix())
+            c = db_handle.cursor()
+            c.execute("""CREATE TABLE branches
+                      (destination_address int, caller_address int, caller_func_start_address int)""")
+            for r in results:
+                # Record that the branch receiver has an XRef from this instruction
+                # xref = CallerXRef(r.found_function.start_address, r.found_instruction.address)
+                xref = (r.found_function.start_address, r.found_instruction.address)
+                branch_addr = hex(r.found_instruction.destination_address)
+                c.execute(f"INSERT INTO branches VALUES ({branch_addr}, {xref[1]}, {xref[0]})")
+            db_handle.commit()
+            db_handle.close()
 
             self._has_computed_xrefs = True
 

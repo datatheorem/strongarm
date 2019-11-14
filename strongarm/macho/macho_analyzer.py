@@ -36,7 +36,7 @@ if TYPE_CHECKING:
 
 # Callback invoked when the results for a previously queued CodeSearch have been found.
 # This will be dispatched some time after MachoAnalyzer.search_all_code() is called
-CodeSearchCallback = Callable[['MachoAnalyzer', 'CodeSearch', List['CodeSearchResult']], None]
+CodeSearchCallback = Callable[['MachoAnalyzer', 'CodeSearch', 'CodeSearchResult'], None]
 
 
 class DisassemblyFailedError(Exception):
@@ -51,8 +51,9 @@ class XRefsRequireCodeSearchError(Exception):
 
 @dataclass
 class CallerXRef:
-    caller_func: VirtualMemoryPointer
+    destination_addr: VirtualMemoryPointer
     caller_addr: VirtualMemoryPointer
+    caller_func_start_address: VirtualMemoryPointer
 
 
 @dataclass
@@ -109,14 +110,14 @@ class MachoAnalyzer:
         self._db_path = self._db_tempdir / 'strongarm_db'
         self._find_branch_xrefs()
 
-    def xrefs_to(self, address: VirtualMemoryPointer) -> List[Tuple[VirtualMemoryPointer, VirtualMemoryPointer]]:
+    def xrefs_to(self, address: VirtualMemoryPointer) -> List[CallerXRef]:
         if not self._has_computed_xrefs:
             raise XRefsRequireCodeSearchError(f'XRefs are unavailable until MachoAnalyzer.search_all_code() is called.')
 
         db_handle = sqlite3.connect(self._db_path.as_posix())
         c = db_handle.cursor()
         xrefs = c.execute(f'SELECT * from branches WHERE destination_address={int(address)}').fetchall()
-        xrefs = [(x[2], x[1]) for x in xrefs]
+        xrefs = [CallerXRef(x[0], x[1], x[2]) for x in xrefs]
         db_handle.close()
         return xrefs
 

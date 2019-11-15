@@ -241,3 +241,50 @@ class TestMachoAnalyzer:
             self.binary, [], {}
         ), callback)
         self.analyzer.search_all_code()
+
+    def test_find_symbols_by_address(self):
+        # Given I provide a locally-defined callable symbol (__mh_execute_header)
+        # If I ask for the information about this symbol
+        addr = VirtualMemoryPointer(0x100000000)
+        symbol = self.analyzer.callable_symbol_for_address(addr)
+        # Then it is reported correctly
+        assert symbol.is_imported is False
+        assert symbol.address == addr
+        assert symbol.symbol_name == '__mh_execute_header'
+
+        # Given I provide an externally-defined imported symbol (_objc_msgSend)
+        # If I ask for the information about this symbol
+        addr = VirtualMemoryPointer(0x1000067a8)
+        symbol = self.analyzer.callable_symbol_for_address(addr)
+        # Then it is reported correctly
+        assert symbol.is_imported is True
+        assert symbol.address == addr
+        assert symbol.symbol_name == '_objc_msgSend'
+
+        # Given I provide a branch destination which does not have an associated symbol name (an anonymous label)
+        addr = VirtualMemoryPointer(0x100006270)
+        symbol = self.analyzer.callable_symbol_for_address(addr)
+        # Then no named symbol is returned
+        assert symbol is None
+
+    def test_find_symbols_by_name(self):
+        # Given I provide a locally-defined callable symbol (__mh_execute_header)
+        # If I ask for the information about this symbol
+        symbol = self.analyzer.callable_symbol_for_symbol_name('__mh_execute_header')
+        # Then it is reported correctly
+        assert symbol.is_imported is False
+        assert symbol.address == VirtualMemoryPointer(0x100000000)
+        assert symbol.symbol_name == '__mh_execute_header'
+
+        # Given I provide an externally-defined imported symbol (_objc_msgSend)
+        # If I ask for the information about this symbol
+        symbol = self.analyzer.callable_symbol_for_symbol_name('_objc_msgSend')
+        # Then it is reported correctly
+        assert symbol.is_imported is True
+        assert symbol.address == VirtualMemoryPointer(0x1000067a8)
+        assert symbol.symbol_name == '_objc_msgSend'
+
+        # Given I provide a symbol name that is not present in the binary
+        symbol = self.analyzer.callable_symbol_for_symbol_name('_fake_symbol')
+        # Then no named symbol is returned
+        assert symbol is None

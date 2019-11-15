@@ -1,4 +1,4 @@
-from typing import Optional, Union
+from typing import Optional, Union, Tuple
 from typing import TYPE_CHECKING
 
 from capstone import CsInsn
@@ -127,7 +127,8 @@ class ObjcUnconditionalBranchInstruction(ObjcBranchInstruction):
     def __init__(self,
                  function_analyzer: 'ObjcFunctionAnalyzer',
                  instruction: CsInsn,
-                 patch_msgSend_destination: True) -> None:
+                 patch_msgSend_destination=True,
+                 container_function_boundary: Tuple[VirtualMemoryPointer, VirtualMemoryPointer] = None) -> None:
         if instruction.mnemonic not in ObjcUnconditionalBranchInstruction.UNCONDITIONAL_BRANCH_MNEMONICS:
             raise ValueError(f'ObjcUnconditionalBranchInstruction instantiated with'
                              f' invalid mnemonic {instruction.mnemonic}')
@@ -138,6 +139,16 @@ class ObjcUnconditionalBranchInstruction(ObjcBranchInstruction):
         self.selector: Optional[ObjcSelector] = None
 
         analyzer = MachoAnalyzer.get_analyzer(function_analyzer.binary)
+
+        if container_function_boundary:
+            if self.destination_address >= container_function_boundary[0]:
+                if self.destination_address < container_function_boundary[1]:
+                    # Local basic-block branch within a function
+                    # print(f'{self.destination_address} local branch fast path')
+                    self.symbol = None
+                    self.is_external_c_call = False
+                    self.is_msgSend_call = False
+                    return
 
         called_sym = analyzer.callable_symbol_for_address(self.destination_address)
         if not called_sym:

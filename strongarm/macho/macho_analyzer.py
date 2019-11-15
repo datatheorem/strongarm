@@ -52,6 +52,15 @@ class CallerXRef:
 
 
 @dataclass
+class CallableSymbol:
+    """A locally-defined function or externally-defined imported function
+    """
+    address: VirtualMemoryPointer
+    is_imported: bool
+    symbol_name: str
+
+
+@dataclass
 class CodeSearchRequest:
     search: 'CodeSearch'
     callback: CodeSearchCallback
@@ -431,7 +440,7 @@ class MachoAnalyzer:
         # Searching all code can be a time-consumptive operation. Provide UI feedback on the progress.
         # This displays a progress bar to stdout. The progress bar will be erased when the context manager exits.
         code_size = self.binary.slice_filesize / 1024 / 1024
-        with ConsoleProgressBar(prefix=f'CodeSearch {int(code_size)}mb', enabled=display_progress) as progress_bar:
+        with ConsoleProgressBar(prefix=f'{self.binary.path.stem} CodeSearch {int(code_size)}mb', enabled=display_progress) as progress_bar:
 
             # Build analyzers for function entry points.
             for i, entry_address in enumerate(entry_point_list):
@@ -458,6 +467,9 @@ class MachoAnalyzer:
 
         # Invoke every callback with their respective search results
         for request, results in zip(queued_searches, search_results):
+            # Remove the CodeSearch from the waiting queue before dispatching the callback
+            # This ensures that if the callback runs another CodeSearch, the queue will be in the right state.
+            self._queued_code_searches.remove(request)
             request.callback(self, request.search, results)
 
         # We've completed all of the waiting code searches. Drain the queue
@@ -599,3 +611,50 @@ class MachoAnalyzer:
         if is_cfstring:
             return self._stringref_for_cfstring(string)
         return self._stringref_for_cstring(string)
+
+    def callable_symbol_for_address(self,
+                                    branch_destination: VirtualMemoryPointer) -> Optional[CallableSymbol]:
+        """Retrieve information about a callable branch destination.
+        It's the caller's responsibility to provide a valid branch destination with a symbol associated with it.
+        """
+        c = self._db_handle.cursor()
+        symbols = c.execute(f'SELECT * from named_callable_symbols WHERE address={branch_destination}').fetchall()
+        if not len(symbols):
+            return None
+        assert len(symbols) == 1, f'Found more than 1 symbol at {branch_destination}?'
+        symbol_data = symbols[0]
+
+        return CallableSymbol(is_imported=bool(symbol_data[0]),
+                              address=VirtualMemoryPointer(symbol_data[1]),
+                              symbol_name=symbol_data[2])
+
+    def callable_symbol_for_symbol_name(self,
+                                        symbol_name: str) -> Optional[CallableSymbol]:
+        """Retrieve information about a name within the imported or exported symbols tables.
+        It's the caller's responsibility to provide a valid callable symbol name.
+        """
+        c = self._db_handle.cursor()
+        symbols = c.execute(f"SELECT * from named_callable_symbols WHERE symbol_name='{symbol_name}'").fetchall()
+        if not len(symbols):
+            return None
+        assert len(symbols) == 1, f'Found more than 1 symbol named {symbol_name}?'
+        symbol_data = symbols[0]
+
+        return CallableSymbol(is_imported=bool(symbol_data[0]),
+                              address=VirtualMemoryPointer(symbol_data[1]),
+                              symbol_name=symbol_data[2])
+
+    def _build_callable_symbol_index(self) -> None:
+        c = self._db_handle.cursor()
+        c.execute(f"CREATE TABLE named_callable_symbols (is_imported int, address int, symbol_name text)")
+
+        # Process __imp_stubs
+        imported_bound_symbols = self.imp_stubs_to_symbol_names
+        for imp_stub_addr, symbol_name in imported_bound_symbols.items():
+            c.execute(f"INSERT INTO named_callable_symbols VALUES (1, {imp_stub_addr}, '{symbol_name}')")
+
+        # Process the symbols defined in the binary
+        for callable_addr, symbol_name in self.exported_symbol_pointers_to_names.items():
+            c.execute(f"INSERT INTO named_callable_symbols VALUES (0, {callable_addr}, '{symbol_name}')")
+
+        self._db_handle.commit()

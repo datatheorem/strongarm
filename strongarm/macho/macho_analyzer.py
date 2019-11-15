@@ -36,7 +36,7 @@ if TYPE_CHECKING:
 
 # Callback invoked when the results for a previously queued CodeSearch have been found.
 # This will be dispatched some time after MachoAnalyzer.search_all_code() is called
-CodeSearchCallback = Callable[['MachoAnalyzer', 'CodeSearch', 'CodeSearchResult'], None]
+CodeSearchCallback = Callable[['MachoAnalyzer', 'CodeSearch', List['CodeSearchResult']], None]
 
 
 class DisassemblyFailedError(Exception):
@@ -109,16 +109,16 @@ class MachoAnalyzer:
         self._db_tempdir = pathlib.Path(tempfile.mkdtemp())
         self._db_path = self._db_tempdir / 'strongarm_db'
         self._find_branch_xrefs()
+        self._db_handle = sqlite3.connect(self._db_path.as_posix())
 
     def xrefs_to(self, address: VirtualMemoryPointer) -> List[CallerXRef]:
         if not self._has_computed_xrefs:
             raise XRefsRequireCodeSearchError(f'XRefs are unavailable until MachoAnalyzer.search_all_code() is called.')
 
         db_handle = sqlite3.connect(self._db_path.as_posix())
-        c = db_handle.cursor()
+        c = self._db_handle.cursor()
         xrefs = c.execute(f'SELECT * from branches WHERE destination_address={int(address)}').fetchall()
         xrefs = [CallerXRef(x[0], x[1], x[2]) for x in xrefs]
-        db_handle.close()
         return xrefs
 
     def _find_branch_xrefs(self):
@@ -126,8 +126,7 @@ class MachoAnalyzer:
         from strongarm.objc import CodeSearch, CodeSearchResult, CodeSearchInstructionMnemonic
 
         def _process_branch_xrefs(analyzer: MachoAnalyzer, search: CodeSearch, results: List[CodeSearchResult]):
-            db_handle = sqlite3.connect(self._db_path.as_posix())
-            c = db_handle.cursor()
+            c = self._db_handle.cursor()
             c.execute("""CREATE TABLE branches
                       (destination_address int, caller_address int, caller_func_start_address int)""")
             for r in results:
@@ -136,8 +135,7 @@ class MachoAnalyzer:
                 xref = (r.found_function.start_address, r.found_instruction.address)
                 branch_addr = hex(r.found_instruction.destination_address)
                 c.execute(f"INSERT INTO branches VALUES ({branch_addr}, {xref[1]}, {xref[0]})")
-            db_handle.commit()
-            db_handle.close()
+            self._db_handle.commit()
 
             self._has_computed_xrefs = True
 
@@ -154,7 +152,8 @@ class MachoAnalyzer:
         This can be used when you are finished analyzing a binary set and don't want to retain the cached data in memory
         """
         for binary, analyzer in cls._ANALYZER_CACHE.items():
-            print(f'Deleting db {analyzer._db_path}...')
+            logging.info(f'Deleting db {analyzer._db_path}...')
+            analyzer._db_handle.close()
             shutil.rmtree(analyzer._db_tempdir.as_posix())
 
         cls._ANALYZER_CACHE.clear()

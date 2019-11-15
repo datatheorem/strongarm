@@ -44,11 +44,6 @@ class DisassemblyFailedError(Exception):
     """
 
 
-class XRefsRequireCodeSearchError(Exception):
-    """Raised when an XRef is queried before MachoAnalyzer.search_all_code() is invoked.
-    """
-
-
 @dataclass
 class CallerXRef:
     destination_addr: VirtualMemoryPointer
@@ -108,14 +103,15 @@ class MachoAnalyzer:
         self._has_computed_xrefs = False
         self._db_tempdir = pathlib.Path(tempfile.mkdtemp())
         self._db_path = self._db_tempdir / 'strongarm_db'
-        self._find_branch_xrefs()
         self._db_handle = sqlite3.connect(self._db_path.as_posix())
+
+        self._build_callable_symbol_index()
 
     def xrefs_to(self, address: VirtualMemoryPointer) -> List[CallerXRef]:
         if not self._has_computed_xrefs:
-            raise XRefsRequireCodeSearchError(f'XRefs are unavailable until MachoAnalyzer.search_all_code() is called.')
+            logging.info(f'Queried XRef API for the first time, computing XRefs...')
+            self._find_branch_xrefs()
 
-        db_handle = sqlite3.connect(self._db_path.as_posix())
         c = self._db_handle.cursor()
         xrefs = c.execute(f'SELECT * from branches WHERE destination_address={int(address)}').fetchall()
         xrefs = [CallerXRef(x[0], x[1], x[2]) for x in xrefs]
@@ -133,7 +129,7 @@ class MachoAnalyzer:
                 # Record that the branch receiver has an XRef from this instruction
                 # xref = CallerXRef(r.found_function.start_address, r.found_instruction.address)
                 xref = (r.found_function.start_address, r.found_instruction.address)
-                branch_addr = hex(r.found_instruction.destination_address)
+                branch_addr = r.found_instruction.destination_address
                 c.execute(f"INSERT INTO branches VALUES ({branch_addr}, {xref[1]}, {xref[0]})")
             self._db_handle.commit()
 
@@ -145,6 +141,7 @@ class MachoAnalyzer:
         )
         # logging.debug(f'Queuing branch-XRef search...')
         self.queue_code_search(find_branch_xrefs, _process_branch_xrefs)
+        self.search_all_code()
 
     @classmethod
     def clear_cache(cls) -> None:

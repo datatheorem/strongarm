@@ -261,7 +261,11 @@ class ObjcFunctionAnalyzer:
         branches_in_function: List[ObjcBranchInstruction] = []
         for idx, instr in enumerate(self.instructions):
             if ObjcBranchInstruction.is_branch_instruction(instr):
-                branches_in_function.append(ObjcBranchInstruction.parse_instruction(self, instr))
+                branches_in_function.append(ObjcBranchInstruction.parse_instruction(
+                    self, 
+                    instr,
+                    container_function_boundary=(self.start_address, self.end_address)
+                ))
 
         self._call_targets = branches_in_function
         return self._call_targets

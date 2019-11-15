@@ -79,13 +79,19 @@ class ObjcBranchInstruction(ObjcInstruction):
     def parse_instruction(cls,
                           function_analyzer: 'ObjcFunctionAnalyzer',
                           instruction: CsInsn,
-                          patch_msgSend_destination=True) -> Union['ObjcUnconditionalBranchInstruction',
-                                                                   'ObjcConditionalBranchInstruction']:
+                          patch_msgSend_destination=True,
+                          container_function_boundary: Tuple[VirtualMemoryPointer, VirtualMemoryPointer] = None) -> \
+            Union['ObjcUnconditionalBranchInstruction', 'ObjcConditionalBranchInstruction']:
         """Read a branch instruction and encapsulate it in the appropriate ObjcBranchInstruction subclass
         """
         # use appropriate subclass
         if instruction.mnemonic in ObjcUnconditionalBranchInstruction.UNCONDITIONAL_BRANCH_MNEMONICS:
-            uncond_instr = ObjcUnconditionalBranchInstruction(function_analyzer, instruction, patch_msgSend_destination)
+            uncond_instr = ObjcUnconditionalBranchInstruction(
+                function_analyzer,
+                instruction,
+                patch_msgSend_destination,
+                container_function_boundary
+            )
             return uncond_instr
 
         elif instruction.mnemonic in ObjcConditionalBranchInstruction.CONDITIONAL_BRANCH_MNEMONICS:
@@ -131,21 +137,32 @@ class ObjcUnconditionalBranchInstruction(ObjcBranchInstruction):
         self.selref: Optional[ObjcSelref] = None
         self.selector: Optional[ObjcSelector] = None
 
-        macho_analyzer = MachoAnalyzer.get_analyzer(function_analyzer.binary)
-        external_c_sym_map = macho_analyzer.imp_stubs_to_symbol_names
-        if self.destination_address in external_c_sym_map:
-            self.symbol = external_c_sym_map[self.destination_address]  # type: ignore
-            self.is_external_c_call = True
-            if self.symbol in self.OBJC_MSGSEND_FUNCTIONS:
+        analyzer = MachoAnalyzer.get_analyzer(function_analyzer.binary)
+
+        called_sym = analyzer.callable_symbol_for_address(self.destination_address)
+        if not called_sym:
+            # Branch to an anonymous destination
+            # Might be a basic block within a function or some other label
+            import logging
+            logging.debug(f'No symbol for branch destination {hex(self.destination_address)}')
+            self.is_external_c_call = False
+            self.is_msgSend_call = False
+            self.symbol = None
+            return
+
+        self.symbol = called_sym.symbol_name
+        self.is_external_c_call = called_sym.is_imported
+
+        if called_sym.is_imported:
+            if called_sym.symbol_name in self.OBJC_MSGSEND_FUNCTIONS:
                 self.is_msgSend_call = True
                 self.is_external_c_call = False
                 if patch_msgSend_destination:
                     self._patch_msgSend_destination(function_analyzer)
             else:
                 self.is_msgSend_call = False
-        elif self.destination_address in macho_analyzer.exported_symbol_pointers_to_names:
-            self.symbol = macho_analyzer.exported_symbol_pointers_to_names[self.destination_address]
-            self.is_external_c_call = False
+        else:
+            self.is_msgSend_call = False
 
     def _patch_msgSend_destination(self, function_analyzer: 'ObjcFunctionAnalyzer') -> None:
         # validate instruction

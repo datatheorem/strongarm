@@ -161,16 +161,63 @@ class MachoAnalyzer:
 
                 # Record that the branch receiver has an XRef from this instruction
                 destination_address = instr.operands[0].value.imm
-                xref = (destination_address, instr.address, entry_point)
-                function_branches.append(xref)
+                if destination_address != objc_msgSend_addr:
+                    # Branch to any address other than _objc_msgSend
+                    xref = (destination_address, instr.address, entry_point)
+                    function_branches.append(xref)
+
+                else:
+                    # Branch to _objc_msgSend
+                    from strongarm.objc import RegisterContentsType, ObjcFunctionAnalyzer
+                    # print(f'Found objc_msgSend @ {hex(instr.address)}')
+
+                    if not func_analyzer:
+                        func_analyzer = ObjcFunctionAnalyzer.get_function_analyzer(self.binary, entry_point)
+
+                    # PT: H4ck for working around get_register_contents causing a segfault when the provided instruction
+                    # is outside the range of the provide function-analyzer
+                    # This happens in ./tests/bin/DynStaticChecks:[PTObjectTracking earlyReturn] because
+                    # determine_function_boundary gets the wrong end-address due to a return statement in the assembly.
+                    if func_analyzer.end_address < instr.address:
+                        # Ignore the instruction 'outside' the function
+                        continue
+
+                    parsed_instr = ObjcUnconditionalBranchInstruction.parse_instruction(
+                        func_analyzer,
+                        instr,
+                        patch_msgSend_destination=False
+                    )
+                    classref = func_analyzer.get_register_contents_at_instruction('x0', parsed_instr)
+                    if classref.type == RegisterContentsType.IMMEDIATE:
+                        classref = classref.value
+                    else:
+                        classref = 0x0
+
+                    selref = func_analyzer.get_register_contents_at_instruction('x1', parsed_instr)
+                    if selref.type == RegisterContentsType.IMMEDIATE:
+                        selref = selref.value
+                    else:
+                        selref = 0x0
+                    objc_call = (int(classref), int(selref), int(instr.address), int(entry_point))
+                    objc_calls.append(objc_call)
+
+                    # If we're branching to locally-implemented Objective-C, also add a normal XRef with 'fake' info
+                    # i.e. create an XRef where the destination address is the method being called,
+                    # instead of the destination being imp_stubs_objc_msgSend. This facilitates getting local
+                    # Objective-C callers via the xrefs_to() API
+                    # TODO(PT): *should* you need a seperate API to get local ObjC calls?
+                    selector = self.selector_for_selref(selref)
+                    if selector and selector.implementation:
+                        xref = (selector.implementation, instr.address, entry_point)
+                        function_branches.append(xref)
 
             # Add each branch in this source function to the SQLite db
             for xref in function_branches:
                 c.execute(f"INSERT INTO branches VALUES ({xref[0]}, {xref[1]}, {xref[2]})")
+            for objc_call in objc_calls:
+                c.execute(f"INSERT INTO objc_msgSends VALUES ({objc_call[0]}, {objc_call[1]}, {objc_call[2]}, {objc_call[3]})")
 
         self._db_handle.commit()
-        self._db_handle.close()
-
         self._has_computed_xrefs = True
 
     @classmethod

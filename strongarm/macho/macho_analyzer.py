@@ -36,7 +36,7 @@ if TYPE_CHECKING:
 
 # Callback invoked when the results for a previously queued CodeSearch have been found.
 # This will be dispatched some time after MachoAnalyzer.search_all_code() is called
-CodeSearchCallback = Callable[['MachoAnalyzer', 'CodeSearch', 'CodeSearchResult'], None]
+CodeSearchCallback = Callable[['MachoAnalyzer', 'CodeSearch', List['CodeSearchResult']], None]
 
 
 class DisassemblyFailedError(Exception):

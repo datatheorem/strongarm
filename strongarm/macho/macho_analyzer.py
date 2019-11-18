@@ -51,6 +51,14 @@ class CallerXRef:
 
 
 @dataclass
+class ObjcMsgSendXref:
+    classref: VirtualMemoryPointer
+    selref: VirtualMemoryPointer
+    caller_addr: VirtualMemoryPointer
+    caller_func_start_address: VirtualMemoryPointer
+
+
+@dataclass
 class CallableSymbol:
     """A locally-defined function or externally-defined imported function
     """
@@ -110,11 +118,10 @@ class MachoAnalyzer:
         # may also need to visit the callers of that call site.
         self._has_computed_xrefs = False
         self._db_tempdir = pathlib.Path(tempfile.mkdtemp())
-        self._db_path = self._db_tempdir / 'strongarm_db'
+        self._db_path = self._db_tempdir / 'strongarm.db'
         self._db_handle = sqlite3.connect(self._db_path.as_posix())
 
         self._build_callable_symbol_index()
-
 
     def xrefs_to(self, address: VirtualMemoryPointer) -> List[CallerXRef]:
         if not self._has_computed_xrefs:
@@ -125,6 +132,25 @@ class MachoAnalyzer:
         xrefs = [CallerXRef(x[0], x[1], x[2]) for x in xrefs]
         return xrefs
 
+    def objc_calls_to(self,
+                      objc_classrefs: List[VirtualMemoryPointer],
+                      objc_selrefs: List[VirtualMemoryPointer],
+                      requires_class_and_sel_found: bool) -> List[ObjcMsgSendXref]:
+        if not self._has_computed_xrefs:
+            self._find_branch_xrefs()
+
+        c = self._db_handle.cursor()
+
+        if not requires_class_and_sel_found:
+            objc_calls = c.execute(f'SELECT * from objc_msgSends WHERE classref IN ({", ".join([str(int(x)) for x in objc_classrefs])})').fetchall()
+            objc_calls += c.execute(f'SELECT * from objc_msgSends WHERE selref IN ({", ".join([str(int(x)) for x in objc_selrefs])})').fetchall()
+        else:
+            objc_calls = c.execute(f'SELECT * from objc_msgSends '
+                                   f'WHERE classref IN ({", ".join([str(int(x)) for x in objc_classrefs])}) '
+                                   f'AND selref IN ({", ".join([str(int(x)) for x in objc_selrefs])})').fetchall()
+        objc_calls = [ObjcMsgSendXref(x[0], x[1], x[2], x[3]) for x in objc_calls]
+        return objc_calls
+
     def _find_branch_xrefs(self):
         from strongarm.objc import ObjcUnconditionalBranchInstruction
 
@@ -132,10 +158,15 @@ class MachoAnalyzer:
         c = self._db_handle.cursor()
         c.execute("""CREATE TABLE branches
                   (destination_address int, caller_address int, caller_func_start_address int)""")
+        c.execute("""CREATE TABLE objc_msgSends
+                  (classref int, selref int, caller_address int, caller_func_start_address int)""")
 
         # Iterate the sorted entry point list
         max_function_size = 0x1000
         sorted_entry_points = sorted(self.get_functions())
+        # TODO(PT): Test this on a binary with no ObjcMsgSend
+        objc_msgSend_addr = self.callable_symbol_for_symbol_name('_objc_msgSend').address
+
         for idx, entry_point in enumerate(sorted_entry_points):
             if idx != len(sorted_entry_points) - 1:
                 # Common case
@@ -154,6 +185,8 @@ class MachoAnalyzer:
             # Iterate the disassembled code
             disassembled_code = self.disassemble_region(entry_point, function_size)
             function_branches = []
+            objc_calls = []
+            func_analyzer = None
             for instr in disassembled_code:
                 # Is it an unconditional branch instruction?
                 if instr.mnemonic not in ObjcUnconditionalBranchInstruction.UNCONDITIONAL_BRANCH_MNEMONICS:

@@ -155,7 +155,7 @@ class ObjcUnconditionalBranchInstruction(ObjcBranchInstruction):
             # Branch to an anonymous destination
             # Might be a basic block within a function or some other label
             import logging
-            logging.debug(f'No symbol for branch destination {hex(self.destination_address)}')
+            # logging.debug(f'No symbol for branch destination {hex(self.destination_address)}')
             self.is_external_c_call = False
             self.is_msgSend_call = False
             self.symbol = None

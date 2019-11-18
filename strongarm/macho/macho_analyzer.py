@@ -108,11 +108,10 @@ class MachoAnalyzer:
         self._has_computed_xrefs = False
         self._db_tempdir = pathlib.Path(tempfile.mkdtemp())
         self._db_path = self._db_tempdir / 'strongarm_db'
-        self._find_branch_xrefs()
 
     def xrefs_to(self, address: VirtualMemoryPointer) -> List[CallerXRef]:
         if not self._has_computed_xrefs:
-            raise XRefsRequireCodeSearchError(f'XRefs are unavailable until MachoAnalyzer.search_all_code() is called.')
+            self._find_branch_xrefs()
 
         db_handle = sqlite3.connect(self._db_path.as_posix())
         c = db_handle.cursor()

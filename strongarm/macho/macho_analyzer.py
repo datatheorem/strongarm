@@ -462,7 +462,11 @@ class MachoAnalyzer:
 
         # Invoke every callback with their respective search results
         for request, results in zip(queued_searches, search_results):
-            request.callback(self, request.search, results)
+            try:
+                request.callback(self, request.search, results)
+            except Exception as e:
+                logging.exception(f'CodeSearch callback raised {type(e)}: {e}')
+                continue
 
         # We've completed all of the waiting code searches. Drain the queue
         self._queued_code_searches.clear()

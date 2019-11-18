@@ -49,7 +49,7 @@ class TestFunctionAnalyzer:
                 assert i.symbol is not None
 
         external_targets = {0x1000067cc: '_objc_retain',
-                            0x1000068ec: '_objc_msgSend',
+                            0x1000067a8: '_objc_msgSend',
                             0x1000067c0: '_objc_release',
                             0x1000067d8: '_objc_retainAutoreleasedReturnValue',
                             TestFunctionAnalyzer.SEC_TRUST_EVALUATE_STUB_ADDR: '_SecTrustEvaluate'

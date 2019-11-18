@@ -10,5 +10,3 @@ class RegisterContents:
     def __init__(self, value_type: RegisterContentsType, value: int) -> None:
         self.type = value_type
         self.value = value
-
-

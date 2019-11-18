@@ -1,8 +1,12 @@
+from typing import List
+
 import pytest
 import pathlib
 
 from strongarm.macho.macho_parse import MachoParser
-from strongarm.macho.macho_analyzer import MachoAnalyzer
+from strongarm.macho.macho_analyzer import MachoAnalyzer, XRefsRequireCodeSearchError, VirtualMemoryPointer
+
+from strongarm.objc import CodeSearch, CodeSearchFunctionCallWithArguments
 
 
 class TestMachoAnalyzer:
@@ -193,3 +197,47 @@ class TestMachoAnalyzer:
         found_imp_stub_to_sym_name = self.analyzer.imp_stubs_to_symbol_names
         # Then I find the correct data
         assert found_imp_stub_to_sym_name == correct_imp_stub_address_to_sym_name
+
+    def test_read_xref_before_search(self):
+        # Given I do not invoke MachoAnalyzer.search_all_code()
+        # When I ask for an XRef
+        # Then an exception is raised, because the XRef search hasn't run yet
+        with pytest.raises(XRefsRequireCodeSearchError):
+            self.analyzer.xrefs_to(VirtualMemoryPointer(0x100006748))
+
+    def test_read_xref_after_search(self):
+        # Given I invoke MachoAnalyzer.search_all_code(), which should mark branching XRefs
+        self.analyzer.search_all_code()
+        # When I ask for an XRef
+        # Then I get the correct data
+        xrefs = self.analyzer.xrefs_to(VirtualMemoryPointer(0x100006748))
+        assert len(xrefs) == 1
+        xref = xrefs[0]
+        # TODO(PT): ObjcFunctionAnalyzer.get_function_analyzer* should return singletons
+        assert xref.caller_func.method_info.objc_class.name == 'DTLabel'
+        assert xref.caller_func.method_info.objc_sel.name == 'logLabel'
+        assert xref.caller_func.start_address == VirtualMemoryPointer(0x100006308)
+        assert xref.caller_addr == 0x100006350
+
+    def test_read_xref_in_search_callback(self):
+        # Given I queue a CodeSearch which accesses XRef data
+
+        def callback(analyzer: MachoAnalyzer,
+                     search: CodeSearch,
+                     results: List):
+            # When I access XRef data within the callback
+            # Then I can read valid data, because the XRef callback should have been invoked first.
+            xrefs = self.analyzer.xrefs_to(VirtualMemoryPointer(0x100006748))
+            assert len(xrefs) == 1
+            xref = xrefs[0]
+            from strongarm.objc import ObjcFunctionAnalyzer
+            # TODO(PT): ObjcFunctionAnalyzer.get_function_analyzer* should return singletons
+            assert xref.caller_func.method_info.objc_class.name == 'DTLabel'
+            assert xref.caller_func.method_info.objc_sel.name == 'logLabel'
+            assert xref.caller_func.start_address == VirtualMemoryPointer(0x100006308)
+            assert xref.caller_addr == 0x100006350
+
+        self.analyzer.queue_code_search(CodeSearchFunctionCallWithArguments(
+            self.binary, [], {}
+        ), callback)
+        self.analyzer.search_all_code()

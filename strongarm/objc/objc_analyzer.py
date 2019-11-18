@@ -101,14 +101,13 @@ class ObjcFunctionAnalyzer:
     def __init__(self, binary: MachoBinary, instructions: List[CsInsn], method_info: ObjcMethodInfo = None) -> None:
         from strongarm.macho import MachoAnalyzer
         try:
-            self.start_address = instructions[0].address
+            self.start_address = VirtualMemoryPointer(instructions[0].address)
             last_instruction = instructions[len(instructions) - 1]
-            self.end_address = last_instruction.address
+            self.end_address = VirtualMemoryPointer(last_instruction.address)
         except IndexError:
             # this method must have just been a stub with no real instructions!
-            self.start_address = 0
-            self.end_address = 0
-            pass
+            self.start_address = VirtualMemoryPointer(0)
+            self.end_address = VirtualMemoryPointer(0)
 
         self.binary = binary
         self.macho_analyzer = MachoAnalyzer.get_analyzer(binary)
@@ -428,3 +427,6 @@ class ObjcFunctionAnalyzer:
             basic_blocks.append(bb)
 
         return basic_blocks
+
+    def __repr__(self):
+        return f'({self.get_symbol_name()} @ {self.start_address})'

@@ -38,4 +38,5 @@ setup(
     install_requires=[
         'capstone',
     ],
+    package_data={'strongarm': ['py.typed']},
 )

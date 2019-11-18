@@ -1,9 +1,14 @@
+import shelve
+import shutil
+import sqlite3
 import logging
+import pathlib
+import tempfile
 from ctypes import sizeof
-from collections import defaultdict
+from dataclasses import dataclass
 
 from typing import TYPE_CHECKING
-from typing import Set, List, Dict, Optional, Callable
+from typing import Set, List, Dict, Tuple, Optional, Callable
 from capstone import Cs, CsInsn, CS_ARCH_ARM64, CS_MODE_ARM
 
 from strongarm.macho.macho_definitions import VirtualMemoryPointer
@@ -31,12 +36,30 @@ if TYPE_CHECKING:
 
 # Callback invoked when the results for a previously queued CodeSearch have been found.
 # This will be dispatched some time after MachoAnalyzer.search_all_code() is called
-CodeSearchCallback = Callable[['MachoAnalyzer', 'CodeSearch', List['CodeSearchResult']], None]
+CodeSearchCallback = Callable[['MachoAnalyzer', 'CodeSearch', 'CodeSearchResult'], None]
 
 
 class DisassemblyFailedError(Exception):
     """Raised when Capstone fails to disassemble a bytecode sequence.
     """
+
+
+class XRefsRequireCodeSearchError(Exception):
+    """Raised when an XRef is queried before MachoAnalyzer.search_all_code() is invoked.
+    """
+
+
+@dataclass
+class CallerXRef:
+    destination_addr: VirtualMemoryPointer
+    caller_addr: VirtualMemoryPointer
+    caller_func_start_address: VirtualMemoryPointer
+
+
+@dataclass
+class CodeSearchRequest:
+    search: 'CodeSearch'
+    callback: CodeSearchCallback
 
 
 class MachoAnalyzer:
@@ -66,7 +89,7 @@ class MachoAnalyzer:
         self.imp_stubs = MachoImpStubsParser(binary, self.cs).imp_stubs
         self._objc_helper: Optional[ObjcRuntimeDataParser] = None
         self._objc_method_list: List[ObjcMethodInfo] = []
-        self._functions_list: Optional[List[VirtualMemoryPointer]] = None
+        self._functions_list: Optional[Set[VirtualMemoryPointer]] = None
 
         self._cached_function_boundaries: Dict[int, int] = {}
 
@@ -74,16 +97,66 @@ class MachoAnalyzer:
         # Iterating the binary's code is an expensive operation, and this allows us to do it just once.
         # This map is where we store the CodeSearch's that are waiting to be executed, and the
         # callbacks which should be invoked once results are found.
-        self._queued_code_searches: Dict['CodeSearch', CodeSearchCallback] = {}
+        self._queued_code_searches: List[CodeSearchRequest] = []
 
         # done setting up, store this analyzer in class cache
         MachoAnalyzer._ANALYZER_CACHE[binary] = self
+
+        # When we initialize a MachoAnalyzer, queue a CodeSearch to mark branch XRefs
+        # This is meant to support simulation across function boundaries. The decompiler begins with a call site, and
+        # may also need to visit the callers of that call site.
+        self._has_computed_xrefs = False
+        self._db_tempdir = pathlib.Path(tempfile.mkdtemp())
+        self._db_path = self._db_tempdir / 'strongarm_db'
+        self._find_branch_xrefs()
+
+    def xrefs_to(self, address: VirtualMemoryPointer) -> List[CallerXRef]:
+        if not self._has_computed_xrefs:
+            raise XRefsRequireCodeSearchError(f'XRefs are unavailable until MachoAnalyzer.search_all_code() is called.')
+
+        db_handle = sqlite3.connect(self._db_path.as_posix())
+        c = db_handle.cursor()
+        xrefs = c.execute(f'SELECT * from branches WHERE destination_address={int(address)}').fetchall()
+        xrefs = [CallerXRef(x[0], x[1], x[2]) for x in xrefs]
+        db_handle.close()
+        return xrefs
+
+    def _find_branch_xrefs(self):
+        from strongarm.objc import ObjcUnconditionalBranchInstruction
+        from strongarm.objc import CodeSearch, CodeSearchResult, CodeSearchInstructionMnemonic
+
+        def _process_branch_xrefs(analyzer: MachoAnalyzer, search: CodeSearch, results: List[CodeSearchResult]):
+            db_handle = sqlite3.connect(self._db_path.as_posix())
+            c = db_handle.cursor()
+            c.execute("""CREATE TABLE branches
+                      (destination_address int, caller_address int, caller_func_start_address int)""")
+            for r in results:
+                # Record that the branch receiver has an XRef from this instruction
+                # xref = CallerXRef(r.found_function.start_address, r.found_instruction.address)
+                xref = (r.found_function.start_address, r.found_instruction.address)
+                branch_addr = hex(r.found_instruction.destination_address)
+                c.execute(f"INSERT INTO branches VALUES ({branch_addr}, {xref[1]}, {xref[0]})")
+            db_handle.commit()
+            db_handle.close()
+
+            self._has_computed_xrefs = True
+
+        find_branch_xrefs = CodeSearchInstructionMnemonic(
+            self.binary,
+            allow_mnemonics=ObjcUnconditionalBranchInstruction.UNCONDITIONAL_BRANCH_MNEMONICS
+        )
+        # logging.debug(f'Queuing branch-XRef search...')
+        self.queue_code_search(find_branch_xrefs, _process_branch_xrefs)
 
     @classmethod
     def clear_cache(cls) -> None:
         """Delete cached MachoAnalyzer's
         This can be used when you are finished analyzing a binary set and don't want to retain the cached data in memory
         """
+        for binary, analyzer in cls._ANALYZER_CACHE.items():
+            print(f'Deleting db {analyzer._db_path}...')
+            shutil.rmtree(analyzer._db_tempdir.as_posix())
+
         cls._ANALYZER_CACHE.clear()
 
     @property
@@ -100,6 +173,15 @@ class MachoAnalyzer:
             # There exists a MachoAnalyzer for this binary - use it instead of making a new one
             return cls._ANALYZER_CACHE[binary]
         return MachoAnalyzer(binary)
+    
+    def method_info_for_entry_point(self, entry_point: VirtualMemoryPointer) -> Optional['ObjcMethodInfo']:
+        # TODO(PT): This should return any symbol name, not just Obj-C methods
+        from strongarm.objc.objc_analyzer import ObjcMethodInfo
+        for objc_cls in self.objc_classes():
+            for sel in objc_cls.selectors:
+                if sel.implementation == entry_point:
+                    return ObjcMethodInfo(objc_cls, sel, sel.implementation)
+        return None
 
     def objc_classes(self) -> List[ObjcClass]:
         """Return the List of classes and categories implemented within the binary
@@ -170,6 +252,10 @@ class MachoAnalyzer:
         """Return a Dict of imported symbol names to their pointers.
         These symbols are not necessarily callable.
         Inverse of MachoAnalyzer.imported_symbol_names_to_pointers()
+
+        NOTE: This API can lose information! A bound symbol of the same name may be bound to multiple locations,
+        and this API only retains one of those locations. For example, ___CFConstantStringClassReference is bound to
+        the first field of every CFStringStruct in the binary. This API probably shouldn't be used for this reason...
         """
         return {x.name: addr for addr, x in self.dyld_bound_symbols.items()}
 
@@ -201,7 +287,7 @@ class MachoAnalyzer:
             return self.imp_stubs_to_symbol_names[branch_address]
         raise RuntimeError(f'Unknown branch destination {hex(branch_address)}. Is this a local branch?')
 
-    def _disassemble_region(self, start_address: VirtualMemoryPointer, size: int) -> List[CsInsn]:
+    def disassemble_region(self, start_address: VirtualMemoryPointer, size: int) -> List[CsInsn]:
         """Disassemble the executable code in a given region into a list of CsInsn objects
         """
         func_str = bytes(self.binary.get_content_from_virtual_address(virtual_address=start_address, size=size))
@@ -226,7 +312,7 @@ class MachoAnalyzer:
             end_address = determine_function_boundary(binary_data, start_address) + MachoBinary.BYTES_PER_INSTRUCTION
             self._cached_function_boundaries[start_address] = end_address
 
-        instructions = self._disassemble_region(start_address, end_address - start_address)
+        instructions = self.disassemble_region(start_address, end_address - start_address)
         return instructions
 
     def imp_for_selref(self, selref_ptr: VirtualMemoryPointer) -> Optional[VirtualMemoryPointer]:
@@ -237,6 +323,9 @@ class MachoAnalyzer:
 
     def selector_for_selref(self, selref_ptr: VirtualMemoryPointer) -> Optional[ObjcSelector]:
         return self.objc_helper.selector_for_selref(selref_ptr)
+
+    def selector_for_selector_literal(self, selref_ptr: VirtualMemoryPointer) -> Optional[ObjcSelector]:
+        return self.objc_helper.selector_for_selector_literal(selref_ptr)
 
     def get_method_imp_addresses(self, selector: str) -> List[VirtualMemoryPointer]:
         """Given a selector, return a list of virtual addresses corresponding to the start of each IMP for that SEL
@@ -277,7 +366,7 @@ class MachoAnalyzer:
         self._objc_method_list = method_list
         return self._objc_method_list
 
-    def get_functions(self) -> List[VirtualMemoryPointer]:
+    def get_functions(self) -> Set[VirtualMemoryPointer]:
         """Get a list of the function entry points defined in LC_FUNCTION_STARTS. This includes objective-c methods.
 
         Returns: A list of VirtualMemoryPointers corresponding to each function's entry point.
@@ -287,9 +376,9 @@ class MachoAnalyzer:
 
         # Cannot do anything without LC_FUNCTIONS_START
         if not self.binary._function_starts_cmd:
-            return []
+            return set()
 
-        functions_list = []
+        functions_list = set()
 
         fs_start = self.binary._function_starts_cmd.dataoff
         fs_size = self.binary._function_starts_cmd.datasize
@@ -303,7 +392,7 @@ class MachoAnalyzer:
 
             address += address_delta
             func_entry = VirtualMemoryPointer(address)
-            functions_list.append(func_entry)
+            functions_list.add(func_entry)
 
         self._functions_list = functions_list
         return self._functions_list
@@ -318,12 +407,12 @@ class MachoAnalyzer:
         Once the CodeSearch has been run over the binary, the `callback` will be invoked, passing the relevant
         info about the discovered code.
         """
-        logging.info(f'{self.binary.path.name} enqueuing CodeSearch {code_search}. Will invoke {callback}')
-        self._queued_code_searches[code_search] = callback
+        # logging.info(f'{self.binary.path.name} enqueuing CodeSearch {code_search}. Will invoke {callback}')
+        self._queued_code_searches.append(CodeSearchRequest(code_search, callback))
 
     def search_all_code(self, display_progress: bool = True) -> None:
         """Iterate every function in the binary, and run each pending CodeSearch over them.
-        The search space is all known Objective-C entry points within the binary.
+        The search space is all known entry points within the binary.
 
         A CodeSearch describes criteria for matching code. A CodeSearchResult encapsulates a CPU instruction and its
         containing source function which matches the criteria of the search.
@@ -331,17 +420,17 @@ class MachoAnalyzer:
         For each search which is executed, this method will invoke the CodeSearchCallback provided when the search
         was requested, with the List of CodeSearchResult's which were found.
         """
-        from strongarm.objc import CodeSearch, CodeSearchResult     # type: ignore
         from strongarm.objc import ObjcFunctionAnalyzer     # type: ignore
 
         # If there are no queued code searches, we have nothing to do
-        if not len(self._queued_code_searches):
+        queued_searches = self._queued_code_searches
+        if not len(queued_searches):
             return
 
-        logging.info(f'Running {len(self._queued_code_searches.keys())} code searches on {self.binary.path.name}')
+        logging.info(f'Running {len(queued_searches)} code searches on {self.binary.path.name}')
 
         entry_point_list = self.get_functions()
-        search_results: Dict['CodeSearch', List[CodeSearchResult]] = defaultdict(list)
+        search_results: List[List[CodeSearchResult]] = [[] for _ in range(len(queued_searches))]
 
         # Searching all code can be a time-consumptive operation. Provide UI feedback on the progress.
         # This displays a progress bar to stdout. The progress bar will be erased when the context manager exits.
@@ -351,7 +440,7 @@ class MachoAnalyzer:
             # Build analyzers for function entry points.
             for i, entry_address in enumerate(entry_point_list):
                 try:
-                    # Try to find an objcmethodinfo with matching address
+                    # Try to find a method-info with a matching address
                     matched_method_info = None
                     for method_info in self.get_objc_methods():
                         if method_info.imp_addr == entry_address:
@@ -366,15 +455,14 @@ class MachoAnalyzer:
                     continue
 
                 # Run every code search on this function and record their respective results
-                for code_search, callback in self._queued_code_searches.items():
-                    search_results[code_search] += function_analyzer.search_code(code_search)
+                for idx, request in enumerate(queued_searches):
+                    search_results[idx] += function_analyzer.search_code(request.search)
 
                 progress_bar.set_progress(i / len(entry_point_list))
 
         # Invoke every callback with their respective search results
-        for search, results in search_results.items():
-            callback = self._queued_code_searches[search]
-            callback(self, search, results)
+        for request, results in zip(queued_searches, search_results):
+            request.callback(self, request.search, results)
 
         # We've completed all of the waiting code searches. Drain the queue
         self._queued_code_searches.clear()
@@ -462,7 +550,6 @@ class MachoAnalyzer:
         string_table = list(strings_content)
         transformed_strings = MachoStringTableHelper.transform_string_section(string_table)
         for idx, entry in transformed_strings.items():
-            print(f'{hex(strings_base+idx)}: {entry.full_string}')
             if entry.full_string == string:
                 # found the string we're looking for
                 # the address is the base of __cstring plus the index of the entry

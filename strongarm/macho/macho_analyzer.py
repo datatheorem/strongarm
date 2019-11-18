@@ -1,4 +1,3 @@
-import shelve
 import shutil
 import sqlite3
 import logging
@@ -8,7 +7,7 @@ from ctypes import sizeof
 from dataclasses import dataclass
 
 from typing import TYPE_CHECKING
-from typing import Set, List, Dict, Tuple, Optional, Callable
+from typing import Set, List, Dict, Optional, Callable
 from capstone import Cs, CsInsn, CS_ARCH_ARM64, CS_MODE_ARM
 
 from strongarm.macho.macho_definitions import VirtualMemoryPointer
@@ -116,9 +115,9 @@ class MachoAnalyzer:
 
         self._build_callable_symbol_index()
 
+
     def xrefs_to(self, address: VirtualMemoryPointer) -> List[CallerXRef]:
         if not self._has_computed_xrefs:
-            logging.info(f'Queried XRef API for the first time, computing XRefs...')
             self._find_branch_xrefs()
 
         c = self._db_handle.cursor()
@@ -128,29 +127,51 @@ class MachoAnalyzer:
 
     def _find_branch_xrefs(self):
         from strongarm.objc import ObjcUnconditionalBranchInstruction
-        from strongarm.objc import CodeSearch, CodeSearchResult, CodeSearchInstructionMnemonic
 
-        def _process_branch_xrefs(analyzer: MachoAnalyzer, search: CodeSearch, results: List[CodeSearchResult]):
-            c = self._db_handle.cursor()
-            c.execute("""CREATE TABLE branches
-                      (destination_address int, caller_address int, caller_func_start_address int)""")
-            for r in results:
+        # Create the table which will store XRefs
+        c = self._db_handle.cursor()
+        c.execute("""CREATE TABLE branches
+                  (destination_address int, caller_address int, caller_func_start_address int)""")
+
+        # Iterate the sorted entry point list
+        max_function_size = 0x1000
+        sorted_entry_points = sorted(self.get_functions())
+        for idx, entry_point in enumerate(sorted_entry_points):
+            if idx != len(sorted_entry_points) - 1:
+                # Common case
+                # Guess that the size of the function is the distance between this entry point and the next entry point
+                function_size = min(sorted_entry_points[idx+1] - entry_point, max_function_size)
+            else:
+                # Disassemble the last function in the __TEXT segment
+                # Since this is the last entry point, we can't guess the function size by
+                # looking at the distance to the next entry point. Use determine_function_boundary instead
+                from strongarm.objc.dataflow import determine_function_boundary
+                binary_data = bytes(self.binary.get_content_from_virtual_address(entry_point, max_function_size))
+                end_address = determine_function_boundary(binary_data,
+                                                          entry_point) + MachoBinary.BYTES_PER_INSTRUCTION
+                function_size = end_address - entry_point
+
+            # Iterate the disassembled code
+            disassembled_code = self.disassemble_region(entry_point, function_size)
+            function_branches = []
+            for instr in disassembled_code:
+                # Is it an unconditional branch instruction?
+                if instr.mnemonic not in ObjcUnconditionalBranchInstruction.UNCONDITIONAL_BRANCH_MNEMONICS:
+                    continue
+
                 # Record that the branch receiver has an XRef from this instruction
-                # xref = CallerXRef(r.found_function.start_address, r.found_instruction.address)
-                xref = (r.found_function.start_address, r.found_instruction.address)
-                branch_addr = r.found_instruction.destination_address
-                c.execute(f"INSERT INTO branches VALUES ({branch_addr}, {xref[1]}, {xref[0]})")
-            self._db_handle.commit()
+                destination_address = instr.operands[0].value.imm
+                xref = (destination_address, instr.address, entry_point)
+                function_branches.append(xref)
 
-            self._has_computed_xrefs = True
+            # Add each branch in this source function to the SQLite db
+            for xref in function_branches:
+                c.execute(f"INSERT INTO branches VALUES ({xref[0]}, {xref[1]}, {xref[2]})")
 
-        find_branch_xrefs = CodeSearchInstructionMnemonic(
-            self.binary,
-            allow_mnemonics=ObjcUnconditionalBranchInstruction.UNCONDITIONAL_BRANCH_MNEMONICS
-        )
-        # logging.debug(f'Queuing branch-XRef search...')
-        self.queue_code_search(find_branch_xrefs, _process_branch_xrefs)
-        self.search_all_code()
+        self._db_handle.commit()
+        self._db_handle.close()
+
+        self._has_computed_xrefs = True
 
     @classmethod
     def clear_cache(cls) -> None:
@@ -470,7 +491,11 @@ class MachoAnalyzer:
             # Remove the CodeSearch from the waiting queue before dispatching the callback
             # This ensures that if the callback runs another CodeSearch, the queue will be in the right state.
             self._queued_code_searches.remove(request)
-            request.callback(self, request.search, results)
+            try:
+                request.callback(self, request.search, results)
+            except Exception as e:
+                logging.exception(f'CodeSearch callback raised {type(e)}: {e}')
+                continue
 
         # We've completed all of the waiting code searches. Drain the queue
         self._queued_code_searches.clear()

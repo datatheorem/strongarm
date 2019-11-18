@@ -213,11 +213,17 @@ class TestMachoAnalyzer:
         xrefs = self.analyzer.xrefs_to(VirtualMemoryPointer(0x100006748))
         assert len(xrefs) == 1
         xref = xrefs[0]
-        # TODO(PT): ObjcFunctionAnalyzer.get_function_analyzer* should return singletons
-        assert xref.caller_func.method_info.objc_class.name == 'DTLabel'
-        assert xref.caller_func.method_info.objc_sel.name == 'logLabel'
-        assert xref.caller_func.start_address == VirtualMemoryPointer(0x100006308)
+        assert xref.caller_func_start_address == VirtualMemoryPointer(0x100006308)
         assert xref.caller_addr == 0x100006350
+
+        method_info = self.analyzer.method_info_for_entry_point(xref.caller_func_start_address)
+        assert method_info
+
+        # TODO(PT): ObjcFunctionAnalyzer.get_function_analyzer* should return singletons
+        from strongarm.objc import ObjcFunctionAnalyzer
+        caller_func = ObjcFunctionAnalyzer.get_function_analyzer_for_method(self.analyzer.binary, method_info)
+        assert caller_func.method_info.objc_class.name == 'DTLabel'
+        assert caller_func.method_info.objc_sel.name == 'logLabel'
 
     def test_read_xref_in_search_callback(self):
         # Given I queue a CodeSearch which accesses XRef data

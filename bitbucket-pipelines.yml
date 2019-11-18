@@ -2,19 +2,25 @@ image: python:3.7
 
 pipelines:
   default:
-    - step:
-        caches:
-          - pip
-        script:
-          - pip install pipenv
-          - export PIP_PROCESS_DEPENDENCY_LINKS=1
-          - pipenv install --dev
-          - pipenv run invoke deps
-          - pipenv run invoke install
-          - pipenv run invoke test
-        script:
-          - pip install invoke pipenv pytest mypy flake8
-          - python setup.py install
-          - # Build the dataflow module
-          - python setup.py build_ext --inplace
-          - invoke test
+    - parallel:
+      - step:
+          name: Test code
+          caches:
+            - pip
+          script:
+            - pip install pipenv
+            - export PIP_PROCESS_DEPENDENCY_LINKS=1
+            - pipenv install --dev
+            - pipenv run invoke deps
+            - pipenv run invoke install
+            - pipenv run invoke test
+      - step:
+          name: Test installation
+          caches:
+            - pip
+          script:
+            - pip install invoke pipenv pytest mypy flake8
+            - python setup.py install
+            - # Build the dataflow module
+            - python setup.py build_ext --inplace
+            - invoke test

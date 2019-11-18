@@ -24,5 +24,5 @@ def install(ctx):
 @task
 def test(ctx):
     # type: (Context) -> None
-    ctx.run('pipenv run pytest')
     ctx.run('pipenv run mypy strongarm strongarm-cli.py')
+    ctx.run('pipenv run pytest')

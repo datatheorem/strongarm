@@ -15,25 +15,25 @@ from ctypes import (
 
 
 class _BasePointer(int):
-    def __add__(self, other):
+    def __add__(self, other: int) -> '_BasePointer':
         return self.__class__(super().__add__(other))
 
-    def __sub__(self, other):
+    def __sub__(self, other: int) -> '_BasePointer':
         return self.__class__(super().__sub__(other))
 
-    def __mul__(self, other):
+    def __mul__(self, other: int) -> '_BasePointer':
         return self.__class__(super().__mul__(other))
 
-    def __truediv__(self, other):
+    def __truediv__(self, other: int) -> '_BasePointer':
         return self.__class__(super().__truediv__(other))
 
-    def __floordiv__(self, other):
-        return self.__class__(super().__truediv__(other))
+    def __floordiv__(self, other: int) -> '_BasePointer':
+        return self.__class__(super().__floordiv__(other))
 
-    def __str__(self):
+    def __str__(self) -> str:
         return hex(self)
 
-    def __repr__(self):
+    def __repr__(self) -> str:
         return hex(self)
 
 
@@ -41,10 +41,10 @@ class StaticFilePointer(_BasePointer):
     """A pointer analogous to a file offset within the Mach-O
     """
 
-    def __str__(self):
+    def __str__(self) -> str:
         return f'Phys[{super().__str__()}]'
 
-    def __repr__(self):
+    def __repr__(self) -> str:
         return f'Phys[{super().__repr__()}]'
 
 

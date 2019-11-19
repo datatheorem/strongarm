@@ -36,7 +36,7 @@ class ObjcClass:
         self.protocols = protocols if protocols else []
         self.super_classref = super_classref
 
-    def __repr__(self):
+    def __repr__(self) -> str:
         return f'_OBJC_CLASS_$_{self.name}'
 
 
@@ -58,7 +58,7 @@ class ObjcCategory(ObjcClass):
         full_name = f'{base_class} ({category_name})'
         super().__init__(raw_struct, full_name, selectors, ivars, protocols)
 
-    def __repr__(self):
+    def __repr__(self) -> str:
         return f'_OBJC_CATEGORY_$_{self.base_class}_({self.category_name})'
 
 

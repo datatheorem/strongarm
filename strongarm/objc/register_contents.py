@@ -11,7 +11,7 @@ class RegisterContents:
         self.type = value_type
         self.value = value
 
-    def __repr__(self):
+    def __repr__(self) -> str:
         if self.type == RegisterContentsType.IMMEDIATE:
             return f'[RegVal {hex(self.value)}]'
         return f'[RegVal Unkwn]'

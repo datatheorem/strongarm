@@ -166,7 +166,7 @@ class MachoAnalyzer:
         objc_calls = [ObjcMsgSendXref(x[0], x[1], x[2], x[3], x[4]) for x in objc_calls]
         return objc_calls
 
-    def _find_branch_xrefs(self):
+    def _find_branch_xrefs(self) -> None:
         from strongarm.objc import ObjcUnconditionalBranchInstruction
 
         start_time = time.time()
@@ -189,7 +189,10 @@ class MachoAnalyzer:
         max_function_size = 0x1000
         sorted_entry_points = sorted(self.get_functions())
         # TODO(PT): Test this on a binary with no ObjcMsgSend
-        objc_msgSend_addr = self.callable_symbol_for_symbol_name('_objc_msgSend').address
+        objc_msgsend_symbol = self.callable_symbol_for_symbol_name('_objc_msgSend')
+        if not objc_msgsend_symbol:
+            raise NotImplementedError(f'{self.binary.path} has no imported _objc_msgSend symbol')
+        objc_msgsend_addr = objc_msgsend_symbol.address
 
         for idx, entry_point in enumerate(sorted_entry_points):
             if idx != len(sorted_entry_points) - 1:
@@ -218,7 +221,7 @@ class MachoAnalyzer:
 
                 # Record that the branch receiver has an XRef from this instruction
                 destination_address = instr.operands[0].value.imm
-                if destination_address != objc_msgSend_addr:
+                if destination_address != objc_msgsend_addr:
                     # Branch to any address other than _objc_msgSend
                     # Could be an imported C function, a local C function, a block, etc.
                     xref = (destination_address, instr.address, entry_point)
@@ -244,17 +247,15 @@ class MachoAnalyzer:
                         instr,
                         patch_msgSend_destination=False
                     )
-                    classref = func_analyzer.get_register_contents_at_instruction('x0', parsed_instr)
-                    if classref.type == RegisterContentsType.IMMEDIATE:
-                        classref = classref.value
-                    else:
-                        classref = 0x0
+                    classref_reg = func_analyzer.get_register_contents_at_instruction('x0', parsed_instr)
+                    classref = 0x0
+                    if classref_reg.type == RegisterContentsType.IMMEDIATE:
+                        classref = classref_reg.value
 
-                    selref = func_analyzer.get_register_contents_at_instruction('x1', parsed_instr)
-                    if selref.type == RegisterContentsType.IMMEDIATE:
-                        selref = selref.value
-                    else:
-                        selref = 0x0
+                    selref_reg = func_analyzer.get_register_contents_at_instruction('x1', parsed_instr)
+                    selref = 0x0
+                    if selref_reg.type == RegisterContentsType.IMMEDIATE:
+                        selref = selref_reg.value
 
                     # If we're branching to a locally-implemented Objective-C method, set the `destination_addr`
                     # field to be the address of the local Objective-C entry point
@@ -270,6 +271,11 @@ class MachoAnalyzer:
                     objc_calls.append(objc_call)
 
             # Add each branch in this source function to the SQLite db
+            # TODO(PT): After discussion with Fede, we can condense this into one table.
+            # Each entry could have an `is_objc` field. If its set, then the `classref` and `selref` fields may also
+            # be filled in.
+            # Additionally, if `is_local` is set *and* `is_objc` set, there may be some other field for the entry point
+            # to the locally implemented ObjC method.
             for xref in function_branches:
                 c.execute(f"INSERT INTO function_calls VALUES ({xref[0]}, {xref[1]}, {xref[2]})")
             for objc_call in objc_calls:

@@ -1,4 +1,4 @@
-import shelve
+import time
 import shutil
 import sqlite3
 import logging
@@ -8,7 +8,7 @@ from ctypes import sizeof
 from dataclasses import dataclass
 
 from typing import TYPE_CHECKING
-from typing import Set, List, Dict, Tuple, Optional, Callable
+from typing import Set, List, Dict, Optional, Callable
 from capstone import Cs, CsInsn, CS_ARCH_ARM64, CS_MODE_ARM
 
 from strongarm.macho.macho_definitions import VirtualMemoryPointer
@@ -44,16 +44,26 @@ class DisassemblyFailedError(Exception):
     """
 
 
-class XRefsRequireCodeSearchError(Exception):
-    """Raised when an XRef is queried before MachoAnalyzer.search_all_code() is invoked.
-    """
-
-
 @dataclass
 class CallerXRef:
     destination_addr: VirtualMemoryPointer
     caller_addr: VirtualMemoryPointer
     caller_func_start_address: VirtualMemoryPointer
+
+
+@dataclass
+class ObjcMsgSendXref(CallerXRef):
+    classref: VirtualMemoryPointer
+    selref: VirtualMemoryPointer
+
+
+@dataclass
+class CallableSymbol:
+    """A locally-defined function or externally-defined imported function
+    """
+    address: VirtualMemoryPointer
+    is_imported: bool
+    symbol_name: str
 
 
 @dataclass
@@ -99,40 +109,88 @@ class MachoAnalyzer:
         # callbacks which should be invoked once results are found.
         self._queued_code_searches: List[CodeSearchRequest] = []
 
-        # done setting up, store this analyzer in class cache
+        # Use a temporary database to store cross-referenced data. This provides constant-time lookups for things like
+        # finding all the calls to a particular function. In the past, CodeSearch would be used for the same purpose.
+        self._has_computed_call_xrefs = False
+        self._db_tempdir = pathlib.Path(tempfile.mkdtemp())
+        self._db_path = self._db_tempdir / 'strongarm.db'
+        self._db_handle = sqlite3.connect(self._db_path.as_posix())
+
+        self._build_callable_symbol_index()
+
+        # Done setting up, store this analyzer in class cache
         MachoAnalyzer._ANALYZER_CACHE[binary] = self
 
-        # When we initialize a MachoAnalyzer, queue a CodeSearch to mark branch XRefs
-        # This is meant to support simulation across function boundaries. The decompiler begins with a call site, and
-        # may also need to visit the callers of that call site.
-        self._has_computed_xrefs = False
-        self._db_tempdir = pathlib.Path(tempfile.mkdtemp())
-        self._db_path = self._db_tempdir / 'strongarm_db'
-        self._find_branch_xrefs()
+    def calls_to(self, address: VirtualMemoryPointer) -> List[CallerXRef]:
+        """Return the list of code-locations within the binary which branch to the provided address.
+        """
+        if not self._has_computed_call_xrefs:
+            self._find_branch_xrefs()
 
-    def xrefs_to(self, address: VirtualMemoryPointer) -> List[CallerXRef]:
-        if not self._has_computed_xrefs:
-            raise XRefsRequireCodeSearchError(f'XRefs are unavailable until MachoAnalyzer.search_all_code() is called.')
-
-        db_handle = sqlite3.connect(self._db_path.as_posix())
-        c = db_handle.cursor()
-        xrefs = c.execute(f'SELECT * from branches WHERE destination_address={int(address)}').fetchall()
+        c = self._db_handle.cursor()
+        xrefs = c.execute(f'SELECT * from function_calls WHERE destination_address={int(address)}').fetchall()
         xrefs = [CallerXRef(x[0], x[1], x[2]) for x in xrefs]
-        db_handle.close()
         return xrefs
+
+    def objc_calls_to(self,
+                      objc_classrefs: List[VirtualMemoryPointer],
+                      objc_selrefs: List[VirtualMemoryPointer],
+                      requires_class_and_sel_found: bool) -> List[ObjcMsgSendXref]:
+        """Return the list of code-locations in the binary which invoke _objc_msgSend with any of the provided
+        classrefs or selrefs.
+
+        If requires_class_and_sel_found is set, a call-site will only be yielded if one of the
+        classrefs and one of the selrefs are messaged in the same call.
+        Otherwise, a call-site will be yielded if one of the classrefs *or* one of the selrefs are messaged
+        at a call site.
+        """
+        if not self._has_computed_call_xrefs:
+            self._find_branch_xrefs()
+
+        c = self._db_handle.cursor()
+
+        # Do we require the classref and selref being messaged to both be messaged at the same call site?
+        if not requires_class_and_sel_found:
+            # The classref and selref don't both need to be present to yield a match
+            objc_calls = c.execute(f'SELECT * from objc_msgSends '
+                                   f'WHERE classref IN ({", ".join([str(int(x)) for x in objc_classrefs])})').fetchall()
+
+            objc_calls += c.execute(f'SELECT * from objc_msgSends '
+                                    f'WHERE selref IN ({", ".join([str(int(x)) for x in objc_selrefs])})').fetchall()
+
+        else:
+            # The classref and selref must both be present to yield a match
+            objc_calls = c.execute(f'SELECT * from objc_msgSends '
+                                   f'WHERE classref IN ({", ".join([str(int(x)) for x in objc_classrefs])}) '
+                                   f'AND selref IN ({", ".join([str(int(x)) for x in objc_selrefs])})').fetchall()
+        objc_calls = [ObjcMsgSendXref(x[0], x[1], x[2], x[3], x[4]) for x in objc_calls]
+        return objc_calls
 
     def _find_branch_xrefs(self):
         from strongarm.objc import ObjcUnconditionalBranchInstruction
 
+        start_time = time.time()
+        logging.debug(f'{self.binary.path} computing call XRefs...')
+
         # Create the table which will store XRefs
-        db_handle = sqlite3.connect(self._db_path.as_posix())
-        c = db_handle.cursor()
-        c.execute("""CREATE TABLE branches
-                  (destination_address int, caller_address int, caller_func_start_address int)""")
+        c = self._db_handle.cursor()
+        c.execute("""CREATE TABLE function_calls
+                  (destination_address int,
+                   caller_address int, 
+                   caller_func_start_address int)""")
+        c.execute("""CREATE TABLE objc_msgSends
+                  (destination_address int, 
+                   caller_address int, 
+                   caller_func_start_address int,
+                   classref int, 
+                   selref int)""")
 
         # Iterate the sorted entry point list
         max_function_size = 0x1000
         sorted_entry_points = sorted(self.get_functions())
+        # TODO(PT): Test this on a binary with no ObjcMsgSend
+        objc_msgSend_addr = self.callable_symbol_for_symbol_name('_objc_msgSend').address
+
         for idx, entry_point in enumerate(sorted_entry_points):
             if idx != len(sorted_entry_points) - 1:
                 # Common case
@@ -151,6 +209,8 @@ class MachoAnalyzer:
             # Iterate the disassembled code
             disassembled_code = self.disassemble_region(entry_point, function_size)
             function_branches = []
+            objc_calls = []
+            func_analyzer = None
             for instr in disassembled_code:
                 # Is it an unconditional branch instruction?
                 if instr.mnemonic not in ObjcUnconditionalBranchInstruction.UNCONDITIONAL_BRANCH_MNEMONICS:
@@ -158,17 +218,68 @@ class MachoAnalyzer:
 
                 # Record that the branch receiver has an XRef from this instruction
                 destination_address = instr.operands[0].value.imm
-                xref = (destination_address, instr.address, entry_point)
-                function_branches.append(xref)
+                if destination_address != objc_msgSend_addr:
+                    # Branch to any address other than _objc_msgSend
+                    # Could be an imported C function, a local C function, a block, etc.
+                    xref = (destination_address, instr.address, entry_point)
+                    function_branches.append(xref)
+
+                else:
+                    # Branch to _objc_msgSend
+                    from strongarm.objc import RegisterContentsType, ObjcFunctionAnalyzer
+
+                    if not func_analyzer:
+                        func_analyzer = ObjcFunctionAnalyzer.get_function_analyzer(self.binary, entry_point)
+
+                    # PT: H4ck for working around get_register_contents causing a segfault when the provided instruction
+                    # is outside the range of the provide function-analyzer
+                    # This happens in ./tests/bin/DynStaticChecks:[PTObjectTracking earlyReturn] because
+                    # determine_function_boundary gets the wrong end-address due to a return statement in the assembly.
+                    if func_analyzer.end_address < instr.address:
+                        # Ignore the instruction 'outside' the function
+                        continue
+
+                    parsed_instr = ObjcUnconditionalBranchInstruction.parse_instruction(
+                        func_analyzer,
+                        instr,
+                        patch_msgSend_destination=False
+                    )
+                    classref = func_analyzer.get_register_contents_at_instruction('x0', parsed_instr)
+                    if classref.type == RegisterContentsType.IMMEDIATE:
+                        classref = classref.value
+                    else:
+                        classref = 0x0
+
+                    selref = func_analyzer.get_register_contents_at_instruction('x1', parsed_instr)
+                    if selref.type == RegisterContentsType.IMMEDIATE:
+                        selref = selref.value
+                    else:
+                        selref = 0x0
+
+                    # If we're branching to a locally-implemented Objective-C method, set the `destination_addr`
+                    # field to be the address of the local Objective-C entry point
+                    # Additionally, in this case, include a 'function call' XRef. This enables getting all the callers
+                    # to a locally-implemented Objective-C method *or* C function via the `calls_to` API.
+                    selector = self.selector_for_selref(selref)
+                    if selector and selector.implementation:
+                        destination_address = selector.implementation
+                        function_call_xref = (destination_address, instr.address, entry_point)
+                        function_branches.append(function_call_xref)
+
+                    objc_call = (int(destination_address), instr.address, entry_point, int(classref), int(selref))
+                    objc_calls.append(objc_call)
 
             # Add each branch in this source function to the SQLite db
             for xref in function_branches:
-                c.execute(f"INSERT INTO branches VALUES ({xref[0]}, {xref[1]}, {xref[2]})")
+                c.execute(f"INSERT INTO function_calls VALUES ({xref[0]}, {xref[1]}, {xref[2]})")
+            for objc_call in objc_calls:
+                c.execute(f"INSERT INTO objc_msgSends "
+                          f"VALUES ({objc_call[0]}, {objc_call[1]}, {objc_call[2]}, {objc_call[3]}, {objc_call[4]})")
 
-        db_handle.commit()
-        db_handle.close()
-
-        self._has_computed_xrefs = True
+        self._db_handle.commit()
+        self._has_computed_call_xrefs = True
+        end_time = time.time()
+        logging.debug(f'Finding call xrefs took {end_time - start_time} seconds')
 
     @classmethod
     def clear_cache(cls) -> None:
@@ -176,7 +287,8 @@ class MachoAnalyzer:
         This can be used when you are finished analyzing a binary set and don't want to retain the cached data in memory
         """
         for binary, analyzer in cls._ANALYZER_CACHE.items():
-            print(f'Deleting db {analyzer._db_path}...')
+            logging.info(f'Deleting db {analyzer._db_path}...')
+            analyzer._db_handle.close()
             shutil.rmtree(analyzer._db_tempdir.as_posix())
 
         cls._ANALYZER_CACHE.clear()
@@ -457,7 +569,7 @@ class MachoAnalyzer:
         # Searching all code can be a time-consumptive operation. Provide UI feedback on the progress.
         # This displays a progress bar to stdout. The progress bar will be erased when the context manager exits.
         code_size = self.binary.slice_filesize / 1024 / 1024
-        with ConsoleProgressBar(prefix=f'CodeSearch {int(code_size)}mb', enabled=display_progress) as progress_bar:
+        with ConsoleProgressBar(prefix=f'{self.binary.path.stem} CodeSearch {int(code_size)}mb', enabled=display_progress) as progress_bar:
 
             # Build analyzers for function entry points.
             for i, entry_address in enumerate(entry_point_list):
@@ -484,6 +596,9 @@ class MachoAnalyzer:
 
         # Invoke every callback with their respective search results
         for request, results in zip(queued_searches, search_results):
+            # Remove the CodeSearch from the waiting queue before dispatching the callback
+            # This ensures that if the callback runs another CodeSearch, the queue will be in the right state.
+            self._queued_code_searches.remove(request)
             try:
                 request.callback(self, request.search, results)
             except Exception as e:
@@ -629,3 +744,53 @@ class MachoAnalyzer:
         if is_cfstring:
             return self._stringref_for_cfstring(string)
         return self._stringref_for_cstring(string)
+
+    def callable_symbol_for_address(self,
+                                    branch_destination: VirtualMemoryPointer) -> Optional[CallableSymbol]:
+        """Retrieve information about a callable branch destination.
+        It's the caller's responsibility to provide a valid branch destination with a symbol associated with it.
+        """
+        c = self._db_handle.cursor()
+        symbols = c.execute(f'SELECT * from named_callable_symbols WHERE address={branch_destination}').fetchall()
+        if not len(symbols):
+            return None
+        assert len(symbols) == 1, f'Found more than 1 symbol at {branch_destination}?'
+        symbol_data = symbols[0]
+
+        return CallableSymbol(is_imported=bool(symbol_data[0]),
+                              address=VirtualMemoryPointer(symbol_data[1]),
+                              symbol_name=symbol_data[2])
+
+    def callable_symbol_for_symbol_name(self,
+                                        symbol_name: str) -> Optional[CallableSymbol]:
+        """Retrieve information about a name within the imported or exported symbols tables.
+        It's the caller's responsibility to provide a valid callable symbol name.
+        """
+        c = self._db_handle.cursor()
+        symbols = c.execute(f"SELECT * from named_callable_symbols WHERE symbol_name='{symbol_name}'").fetchall()
+        if not len(symbols):
+            return None
+        assert len(symbols) == 1, f'Found more than 1 symbol named {symbol_name}?'
+        symbol_data = symbols[0]
+
+        return CallableSymbol(is_imported=bool(symbol_data[0]),
+                              address=VirtualMemoryPointer(symbol_data[1]),
+                              symbol_name=symbol_data[2])
+
+    def _build_callable_symbol_index(self) -> None:
+        """Build a database index for every callable symbol to symbol name.
+        This index includes both imported and exported symbols.
+        """
+        c = self._db_handle.cursor()
+        c.execute(f"CREATE TABLE named_callable_symbols (is_imported int, address int, symbol_name text)")
+
+        # Process __imp_stubs
+        imported_bound_symbols = self.imp_stubs_to_symbol_names
+        for imp_stub_addr, symbol_name in imported_bound_symbols.items():
+            c.execute(f"INSERT INTO named_callable_symbols VALUES (1, {imp_stub_addr}, '{symbol_name}')")
+
+        # Process the symbols defined in the binary
+        for callable_addr, symbol_name in self.exported_symbol_pointers_to_names.items():
+            c.execute(f"INSERT INTO named_callable_symbols VALUES (0, {callable_addr}, '{symbol_name}')")
+
+        self._db_handle.commit()

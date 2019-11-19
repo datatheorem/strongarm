@@ -102,6 +102,8 @@ from .objc_runtime_data_parser import (
 
 from .macho_analyzer import (
     MachoAnalyzer,
+    CallerXRef,
+    ObjcMsgSendXref,
     CodeSearchCallback
 )
 

@@ -1,4 +1,5 @@
 import struct
+from typing import TypeVar
 
 from enum import IntEnum
 from ctypes import (
@@ -13,21 +14,23 @@ from ctypes import (
     c_uint64,
 )
 
+_BasePointerT = TypeVar("_BasePointerT", bound='_BasePointer')
+
 
 class _BasePointer(int):
-    def __add__(self, other: int) -> '_BasePointer':
-        return self.__class__(super().__add__(other))
+    def __add__(self: _BasePointerT, other: int) -> _BasePointerT:
+        return type(self)(super().__add__(other))
 
-    def __sub__(self, other: int) -> '_BasePointer':
+    def __sub__(self: _BasePointerT, other: int) -> _BasePointerT:
         return self.__class__(super().__sub__(other))
 
-    def __mul__(self, other: int) -> '_BasePointer':
+    def __mul__(self: _BasePointerT, other: int) -> _BasePointerT:
         return self.__class__(super().__mul__(other))
 
-    def __truediv__(self, other: int) -> '_BasePointer':
+    def __truediv__(self: _BasePointerT, other: int) -> _BasePointerT:
         return self.__class__(super().__truediv__(other))
 
-    def __floordiv__(self, other: int) -> '_BasePointer':
+    def __floordiv__(self: _BasePointerT, other: int) -> _BasePointerT:
         return self.__class__(super().__floordiv__(other))
 
     def __str__(self) -> str:

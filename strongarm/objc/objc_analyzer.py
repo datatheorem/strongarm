@@ -432,5 +432,5 @@ class ObjcFunctionAnalyzer:
 
         return basic_blocks
 
-    def __repr__(self):
+    def __repr__(self) -> str:
         return f'({self.get_symbol_name()} @ {self.start_address})'

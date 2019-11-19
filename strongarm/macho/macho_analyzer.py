@@ -261,7 +261,7 @@ class MachoAnalyzer:
                     # field to be the address of the local Objective-C entry point
                     # Additionally, in this case, include a 'function call' XRef. This enables getting all the callers
                     # to a locally-implemented Objective-C method *or* C function via the `calls_to` API.
-                    selector = self.selector_for_selref(selref)
+                    selector = self.selector_for_selref(VirtualMemoryPointer(selref))
                     if selector and selector.implementation:
                         destination_address = selector.implementation
                         function_call_xref = (destination_address, instr.address, entry_point)
@@ -606,7 +606,7 @@ class MachoAnalyzer:
             # This ensures that if the callback runs another CodeSearch, the queue will be in the right state.
             self._queued_code_searches.remove(request)
             try:
-                request.callback(self, request.search, results)
+                request.callback(self, request.search, results)     # type: ignore
             except Exception as e:
                 logging.exception(f'CodeSearch callback raised {type(e)}: {e}')
                 continue

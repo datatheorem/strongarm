@@ -79,7 +79,7 @@ class ObjcBranchInstruction(ObjcInstruction):
     def parse_instruction(cls,
                           function_analyzer: 'ObjcFunctionAnalyzer',
                           instruction: CsInsn,
-                          patch_msgSend_destination=True,
+                          patch_msgSend_destination: bool = True,
                           container_function_boundary: Tuple[VirtualMemoryPointer, VirtualMemoryPointer] = None) -> \
             Union['ObjcUnconditionalBranchInstruction', 'ObjcConditionalBranchInstruction']:
         """Read a branch instruction and encapsulate it in the appropriate ObjcBranchInstruction subclass
@@ -127,7 +127,7 @@ class ObjcUnconditionalBranchInstruction(ObjcBranchInstruction):
     def __init__(self,
                  function_analyzer: 'ObjcFunctionAnalyzer',
                  instruction: CsInsn,
-                 patch_msgSend_destination=True,
+                 patch_msgSend_destination: bool = True,
                  container_function_boundary: Tuple[VirtualMemoryPointer, VirtualMemoryPointer] = None) -> None:
         if instruction.mnemonic not in ObjcUnconditionalBranchInstruction.UNCONDITIONAL_BRANCH_MNEMONICS:
             raise ValueError(f'ObjcUnconditionalBranchInstruction instantiated with'

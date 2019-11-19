@@ -169,6 +169,10 @@ class MachoAnalyzer:
     def _find_branch_xrefs(self) -> None:
         from strongarm.objc import ObjcUnconditionalBranchInstruction
 
+        if self._has_computed_call_xrefs:
+            logging.error(f'Already computed xrefs, why was _find_branch_xrefs called again?')
+            return
+
         start_time = time.time()
         logging.debug(f'{self.binary.path} computing call XRefs...')
 

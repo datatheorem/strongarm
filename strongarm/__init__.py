@@ -1,3 +1,3 @@
 from .debug_util import DebugUtil
 
-__version__ = '7.1.1'
+__version__ = '7.1.2'

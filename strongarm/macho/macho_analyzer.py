@@ -1,3 +1,4 @@
+import time
 import shutil
 import sqlite3
 import logging
@@ -51,11 +52,9 @@ class CallerXRef:
 
 
 @dataclass
-class ObjcMsgSendXref:
+class ObjcMsgSendXref(CallerXRef):
     classref: VirtualMemoryPointer
     selref: VirtualMemoryPointer
-    caller_addr: VirtualMemoryPointer
-    caller_func_start_address: VirtualMemoryPointer
 
 
 @dataclass
@@ -110,25 +109,26 @@ class MachoAnalyzer:
         # callbacks which should be invoked once results are found.
         self._queued_code_searches: List[CodeSearchRequest] = []
 
-        # done setting up, store this analyzer in class cache
-        MachoAnalyzer._ANALYZER_CACHE[binary] = self
-
-        # When we initialize a MachoAnalyzer, queue a CodeSearch to mark branch XRefs
-        # This is meant to support simulation across function boundaries. The decompiler begins with a call site, and
-        # may also need to visit the callers of that call site.
-        self._has_computed_xrefs = False
+        # Use a temporary database to store cross-referenced data. This provides constant-time lookups for things like
+        # finding all the calls to a particular function. In the past, CodeSearch would be used for the same purpose.
+        self._has_computed_call_xrefs = False
         self._db_tempdir = pathlib.Path(tempfile.mkdtemp())
         self._db_path = self._db_tempdir / 'strongarm.db'
         self._db_handle = sqlite3.connect(self._db_path.as_posix())
 
         self._build_callable_symbol_index()
 
-    def xrefs_to(self, address: VirtualMemoryPointer) -> List[CallerXRef]:
-        if not self._has_computed_xrefs:
+        # Done setting up, store this analyzer in class cache
+        MachoAnalyzer._ANALYZER_CACHE[binary] = self
+
+    def calls_to(self, address: VirtualMemoryPointer) -> List[CallerXRef]:
+        """Return the list of code-locations within the binary which branch to the provided address.
+        """
+        if not self._has_computed_call_xrefs:
             self._find_branch_xrefs()
 
         c = self._db_handle.cursor()
-        xrefs = c.execute(f'SELECT * from branches WHERE destination_address={int(address)}').fetchall()
+        xrefs = c.execute(f'SELECT * from function_calls WHERE destination_address={int(address)}').fetchall()
         xrefs = [CallerXRef(x[0], x[1], x[2]) for x in xrefs]
         return xrefs
 
@@ -136,30 +136,54 @@ class MachoAnalyzer:
                       objc_classrefs: List[VirtualMemoryPointer],
                       objc_selrefs: List[VirtualMemoryPointer],
                       requires_class_and_sel_found: bool) -> List[ObjcMsgSendXref]:
-        if not self._has_computed_xrefs:
+        """Return the list of code-locations in the binary which invoke _objc_msgSend with any of the provided
+        classrefs or selrefs.
+
+        If requires_class_and_sel_found is set, a call-site will only be yielded if one of the
+        classrefs and one of the selrefs are messaged in the same call.
+        Otherwise, a call-site will be yielded if one of the classrefs *or* one of the selrefs are messaged
+        at a call site.
+        """
+        if not self._has_computed_call_xrefs:
             self._find_branch_xrefs()
 
         c = self._db_handle.cursor()
 
+        # Do we require the classref and selref being messaged to both be messaged at the same call site?
         if not requires_class_and_sel_found:
-            objc_calls = c.execute(f'SELECT * from objc_msgSends WHERE classref IN ({", ".join([str(int(x)) for x in objc_classrefs])})').fetchall()
-            objc_calls += c.execute(f'SELECT * from objc_msgSends WHERE selref IN ({", ".join([str(int(x)) for x in objc_selrefs])})').fetchall()
+            # The classref and selref don't both need to be present to yield a match
+            objc_calls = c.execute(f'SELECT * from objc_msgSends '
+                                   f'WHERE classref IN ({", ".join([str(int(x)) for x in objc_classrefs])})').fetchall()
+
+            objc_calls += c.execute(f'SELECT * from objc_msgSends '
+                                    f'WHERE selref IN ({", ".join([str(int(x)) for x in objc_selrefs])})').fetchall()
+
         else:
+            # The classref and selref must both be present to yield a match
             objc_calls = c.execute(f'SELECT * from objc_msgSends '
                                    f'WHERE classref IN ({", ".join([str(int(x)) for x in objc_classrefs])}) '
                                    f'AND selref IN ({", ".join([str(int(x)) for x in objc_selrefs])})').fetchall()
-        objc_calls = [ObjcMsgSendXref(x[0], x[1], x[2], x[3]) for x in objc_calls]
+        objc_calls = [ObjcMsgSendXref(x[0], x[1], x[2], x[3], x[4]) for x in objc_calls]
         return objc_calls
 
     def _find_branch_xrefs(self):
         from strongarm.objc import ObjcUnconditionalBranchInstruction
 
+        start_time = time.time()
+        logging.debug(f'{self.binary.path} computing call XRefs...')
+
         # Create the table which will store XRefs
         c = self._db_handle.cursor()
-        c.execute("""CREATE TABLE branches
-                  (destination_address int, caller_address int, caller_func_start_address int)""")
+        c.execute("""CREATE TABLE function_calls
+                  (destination_address int,
+                   caller_address int, 
+                   caller_func_start_address int)""")
         c.execute("""CREATE TABLE objc_msgSends
-                  (classref int, selref int, caller_address int, caller_func_start_address int)""")
+                  (destination_address int, 
+                   caller_address int, 
+                   caller_func_start_address int,
+                   classref int, 
+                   selref int)""")
 
         # Iterate the sorted entry point list
         max_function_size = 0x1000
@@ -196,13 +220,13 @@ class MachoAnalyzer:
                 destination_address = instr.operands[0].value.imm
                 if destination_address != objc_msgSend_addr:
                     # Branch to any address other than _objc_msgSend
+                    # Could be an imported C function, a local C function, a block, etc.
                     xref = (destination_address, instr.address, entry_point)
                     function_branches.append(xref)
 
                 else:
                     # Branch to _objc_msgSend
                     from strongarm.objc import RegisterContentsType, ObjcFunctionAnalyzer
-                    # print(f'Found objc_msgSend @ {hex(instr.address)}')
 
                     if not func_analyzer:
                         func_analyzer = ObjcFunctionAnalyzer.get_function_analyzer(self.binary, entry_point)
@@ -231,27 +255,31 @@ class MachoAnalyzer:
                         selref = selref.value
                     else:
                         selref = 0x0
-                    objc_call = (int(classref), int(selref), int(instr.address), int(entry_point))
-                    objc_calls.append(objc_call)
 
-                    # If we're branching to locally-implemented Objective-C, also add a normal XRef with 'fake' info
-                    # i.e. create an XRef where the destination address is the method being called,
-                    # instead of the destination being imp_stubs_objc_msgSend. This facilitates getting local
-                    # Objective-C callers via the xrefs_to() API
-                    # TODO(PT): *should* you need a seperate API to get local ObjC calls?
+                    # If we're branching to a locally-implemented Objective-C method, set the `destination_addr`
+                    # field to be the address of the local Objective-C entry point
+                    # Additionally, in this case, include a 'function call' XRef. This enables getting all the callers
+                    # to a locally-implemented Objective-C method *or* C function via the `calls_to` API.
                     selector = self.selector_for_selref(selref)
                     if selector and selector.implementation:
-                        xref = (selector.implementation, instr.address, entry_point)
-                        function_branches.append(xref)
+                        destination_address = selector.implementation
+                        function_call_xref = (destination_address, instr.address, entry_point)
+                        function_branches.append(function_call_xref)
+
+                    objc_call = (int(destination_address), instr.address, entry_point, int(classref), int(selref))
+                    objc_calls.append(objc_call)
 
             # Add each branch in this source function to the SQLite db
             for xref in function_branches:
-                c.execute(f"INSERT INTO branches VALUES ({xref[0]}, {xref[1]}, {xref[2]})")
+                c.execute(f"INSERT INTO function_calls VALUES ({xref[0]}, {xref[1]}, {xref[2]})")
             for objc_call in objc_calls:
-                c.execute(f"INSERT INTO objc_msgSends VALUES ({objc_call[0]}, {objc_call[1]}, {objc_call[2]}, {objc_call[3]})")
+                c.execute(f"INSERT INTO objc_msgSends "
+                          f"VALUES ({objc_call[0]}, {objc_call[1]}, {objc_call[2]}, {objc_call[3]}, {objc_call[4]})")
 
         self._db_handle.commit()
-        self._has_computed_xrefs = True
+        self._has_computed_call_xrefs = True
+        end_time = time.time()
+        logging.debug(f'Finding call xrefs took {end_time - start_time} seconds')
 
     @classmethod
     def clear_cache(cls) -> None:
@@ -750,6 +778,9 @@ class MachoAnalyzer:
                               symbol_name=symbol_data[2])
 
     def _build_callable_symbol_index(self) -> None:
+        """Build a database index for every callable symbol to symbol name.
+        This index includes both imported and exported symbols.
+        """
         c = self._db_handle.cursor()
         c.execute(f"CREATE TABLE named_callable_symbols (is_imported int, address int, symbol_name text)")
 

@@ -26,6 +26,7 @@ from strongarm.macho.objc_runtime_data_parser import (
     ObjcSelector,
     ObjcRuntimeDataParser,
 )
+import functools
 
 if TYPE_CHECKING:
     from strongarm.objc import (
@@ -755,6 +756,7 @@ class MachoAnalyzer:
             return self._stringref_for_cfstring(string)
         return self._stringref_for_cstring(string)
 
+    @functools.lru_cache(64)
     def callable_symbol_for_address(self,
                                     branch_destination: VirtualMemoryPointer) -> Optional[CallableSymbol]:
         """Retrieve information about a callable branch destination.

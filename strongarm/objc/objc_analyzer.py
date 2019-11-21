@@ -1,5 +1,5 @@
 import functools
-from typing import List, Optional
+from typing import List, Tuple, Optional
 from subprocess import check_output
 
 from capstone import CsInsn
@@ -117,9 +117,6 @@ class ObjcFunctionAnalyzer:
         self._call_targets: Optional[List[ObjcBranchInstruction]] = None
 
         # Find basic-block-boundaries upfront
-        # This call will eventually access `self.basic_blocks` in get_register_contents_for_instruction,
-        # so set the attribute before calling
-        self.basic_blocks: List[BasicBlock] = []
         self.basic_blocks = self._find_basic_blocks()
 
     def _get_instruction_index_of_address(self, address: VirtualMemoryPointer) -> Optional[int]:
@@ -398,23 +395,29 @@ class ObjcFunctionAnalyzer:
         basic_block_end_indexes = [len(self.instructions) - 1]
 
         # Iterate all of the internal-branching within the function to record the basic blocks
-        for branch in self.get_local_branches():
-            branch_idx = self._get_instruction_index_of_address(branch.address)
-            branch_destination_idx = self._get_instruction_index_of_address(branch.destination_address)
-            if not branch_idx or not branch_destination_idx:
-                # We somehow were given a branch that isn't function-local - move on
-                DebugUtil.log(self, f'Consistency check failed: {branch.address} is not a local branch of {self}')
+        for instr in self.instructions:
+            # Is it an unconditional branch instruction?
+            if instr.mnemonic not in ObjcUnconditionalBranchInstruction.UNCONDITIONAL_BRANCH_MNEMONICS:
                 continue
+            # Is it a branch to a local label within the function?
+            destination_address = instr.operands[0].value.imm
+            if self.start_address <= destination_address < self.end_address:
+                branch_idx = self._get_instruction_index_of_address(instr.address)
+                branch_destination_idx = self._get_instruction_index_of_address(destination_address)
+                if not branch_idx or not branch_destination_idx:
+                    # We somehow were given a branch that isn't function-local - move on
+                    DebugUtil.log(self, f'Consistency check failed: {instr.address} is not a local branch of {self}')
+                    continue
 
-            # A basic block ends at this branch
-            basic_block_end_indexes.append(branch_idx)
-            # A different basic block begins just after this branch
-            basic_block_start_indexes.append(branch_idx + 1)
+                # A basic block ends at this branch
+                basic_block_end_indexes.append(branch_idx)
+                # A different basic block begins just after this branch
+                basic_block_start_indexes.append(branch_idx + 1)
 
-            # A basic block begins at the branch destination
-            basic_block_start_indexes.append(branch_destination_idx)
-            # A basic block ends just before the branch destination
-            basic_block_end_indexes.append(branch_destination_idx - 1)
+                # A basic block begins at the branch destination
+                basic_block_start_indexes.append(branch_destination_idx)
+                # A basic block ends just before the branch destination
+                basic_block_end_indexes.append(branch_destination_idx - 1)
 
         # Sort arrays of basic block start/end addresses so we can zip them together into basic block ranges
         # Also, remove duplicate entries

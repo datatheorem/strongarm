@@ -10,7 +10,7 @@ from strongarm.decompiler.objc_class import NSObject, FunctionArgumentObject, NS
 from strongarm.decompiler.exec_context import ExecContext
 from strongarm.decompiler.simulator import Simulator
 
-from .utils import binary_containing_code
+from .utils import binary_containing_code, simulate_assembly
 
 import logging
 
@@ -51,3 +51,36 @@ class TestSimulator:
             sim = Simulator(analyzer, func, [func.start_address, func.end_address])
             # Then simulation eventually completes, because a maximum call-depth was exceeded
             sim.run()
+
+    def test_write_sp_updates_exec_context(self):
+        # Given I write to the register named sp
+        source = """mov sp, #0x1000"""
+        # When I simulate the code
+        with simulate_assembly(source) as ctxs:
+            ctx = ctxs[0]
+            # Then the machine's stack_pointer_field is written
+            assert ctx.stack_pointer == 0x1000
+
+        # Given I write to the register named x13, which is a synonym for the stack pointer
+        source = """mov x13, #0x2000"""
+        # When I simulate the code
+        with simulate_assembly(source) as ctxs:
+            ctx = ctxs[0]
+            # Then the machine's stack_pointer field is correctly updated
+            assert ctx.stack_pointer == 0x2000
+
+        # Given I add to the stack pointer register
+        source = """add sp, sp, 0x500"""
+        # When I simulate the code
+        with simulate_assembly(source) as ctxs:
+            ctx = ctxs[0]
+            # Then the machine's stack_pointer field is correctly updated
+            assert ctx.stack_pointer == ctx.VIRTUAL_STACK_BASE + 0x500
+
+        # Given I subtract from the stack pointer register
+        source = """sub sp, sp, 0x500"""
+        # When I simulate the code
+        with simulate_assembly(source) as ctxs:
+            ctx = ctxs[0]
+            # Then the machine's stack_pointer field is correctly updated
+            assert ctx.stack_pointer == 0x8fffffb00

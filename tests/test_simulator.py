@@ -61,14 +61,6 @@ class TestSimulator:
             # Then the machine's stack_pointer_field is written
             assert ctx.stack_pointer == 0x1000
 
-        # Given I write to the register named x13, which is a synonym for the stack pointer
-        source = """mov x13, #0x2000"""
-        # When I simulate the code
-        with simulate_assembly(source) as ctxs:
-            ctx = ctxs[0]
-            # Then the machine's stack_pointer field is correctly updated
-            assert ctx.stack_pointer == 0x2000
-
         # Given I add to the stack pointer register
         source = """add sp, sp, 0x500"""
         # When I simulate the code

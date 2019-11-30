@@ -27,6 +27,7 @@ class TestBasicBlocks:
             (0x1000067c0, 0x1000067c8), (0x1000067cc, 0x1000067d4), (0x1000067d8, 0x1000067dc),
             (0x1000067e0, 0x1000067f0),
         ]
+        correct_basic_blocks = [(VirtualMemoryPointer(s), VirtualMemoryPointer(e)) for s, e in correct_basic_blocks]
         assert basic_blocks == correct_basic_blocks
 
     def test_find_basic_blocks_2(self):

@@ -103,7 +103,7 @@ def binary_containing_code(source_code: str,
 
     # Do we need to compile this code, or is there a cached version available?
     code_hash = hashlib.md5(source_code.encode()).hexdigest()
-    compiled_artifacts_dir = pathlib.Path(__file__).parent / "bin" / "source_code_test_binaries"
+    compiled_artifacts_dir = pathlib.Path(__file__).parent / "bin" / "auto_compiled_binaries"
     compiled_code_bin_path = compiled_artifacts_dir / str(code_hash)
     if not compiled_code_bin_path.exists():
         # Compile and cache this source code

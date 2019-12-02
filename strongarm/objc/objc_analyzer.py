@@ -396,11 +396,18 @@ class ObjcFunctionAnalyzer:
 
         # Iterate all of the internal-branching within the function to record the basic blocks
         for instr in self.instructions:
-            # Is it an unconditional branch instruction?
-            if instr.mnemonic not in ObjcUnconditionalBranchInstruction.UNCONDITIONAL_BRANCH_MNEMONICS:
+            # Ensure we're looking at a branch instruction and pull out the destination address
+            if instr.mnemonic in ObjcUnconditionalBranchInstruction.UNCONDITIONAL_BRANCH_MNEMONICS:
+                destination_address = instr.operands[0].value.imm
+            elif instr.mnemonic in ['cbz', 'cbnz']:
+                destination_address = instr.operands[1].value.imm
+            elif instr.mnemonic in ['tbz', 'tbnz']:
+                destination_address = instr.operands[2].value.imm
+            else:
+                # Not a branch instruction
                 continue
+
             # Is it a branch to a local label within the function?
-            destination_address = instr.operands[0].value.imm
             if self.start_address <= destination_address < self.end_address:
                 branch_idx = self._get_instruction_index_of_address(instr.address)
                 branch_destination_idx = self._get_instruction_index_of_address(destination_address)

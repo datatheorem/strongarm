@@ -283,3 +283,53 @@ class TestAArch64CSelInstruction:
             ctx = ctxs[0]
             # The 2nd operand was selected, because the condition was false
             assert ctx.register('x4').read(ConstantValue).value() == 0x2
+
+
+class TestAArch64CcmpInstruction:
+    def test_ccmp__initial_condition_passed(self):
+        # Given I perform a conditional compare where the initial condition is true
+        source = """
+        ; Set up a "greater-than" comparison
+        mov x4, #0x300
+        cmp x4, #0x250
+        
+        mov x0, #0xf00d
+        mov x1, x0
+        
+        ; Compare x0 and x1 only if the previous condition was greater-than
+        ; Comparing x0 and x1 will move 0x4 (EQUAL) into status register
+        ; Else, move 0xa (LESS_THAN) into status register
+        ccmp x0, x1, #0xa, ge
+        """
+        # When I simulate the code
+        with simulate_assembly(source) as ctxs:
+            ctx = ctxs[0]
+            # The status register is set to EQUAL, because:
+            # - The initial condition to ccmp was true
+            # - Therefore, op0 and op1 were compared
+            assert ctx.condition_flags == {ConditionFlag.EQUAL,
+                                           ConditionFlag.GREATER_EQUAL,
+                                           ConditionFlag.LESS_EQUAL}
+
+    def test_ccmp__initial_condition_failed(self):
+        # Given I perform a conditional compare where the initial condition is false
+        source = """
+        ; Set up an "equal" comparison
+        mov x4, #0x250
+        cmp x4, #0x250
+
+        mov x0, #0xf00d
+        mov x1, #0xf00e
+
+        ; Compare x0 and x1 only if the previous condition was not-equal
+        ; Comparing x0 and x1 will move 0x0 (GREATER_THAN) into the status register
+        ; Else, move 0xa (LESS_THAN) into status register
+        ccmp x0, x1, #0xa, ne
+        """
+        # When I simulate the code
+        with simulate_assembly(source) as ctxs:
+            ctx = ctxs[0]
+            # The status register is set to LESS_THAN, because:
+            # - The initial condition to ccmp was false
+            # - Therefore, the status register was overridden with the value of the 3rd operand
+            assert ctx.condition_flags == {ConditionFlag.LESS_THAN}

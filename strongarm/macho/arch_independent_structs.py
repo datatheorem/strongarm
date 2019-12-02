@@ -86,7 +86,7 @@ class ArchIndependentStructure:
         if struct_type is None:
             raise ValueError('Undefined struct_type')
 
-        struct: ArchIndependentStructure = struct_type.from_buffer(struct_bytes)
+        struct: ArchIndependentStructure = struct_type.from_buffer(struct_bytes)    # type: ignore
 
         for field_name, _ in struct._fields_:
             # clone fields from struct to this class

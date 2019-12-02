@@ -110,6 +110,21 @@ class TestAArch64CmpInstruction:
                                            ConditionFlag.GREATER_THAN,
                                            ConditionFlag.GREATER_EQUAL]
 
+    def test_cmp__reg_shifted(self):
+        # Given I evaluate a comparison of a value in another register with a shift applied
+        source = """
+        mov x2, #0x1000
+        mov x3, #0x1
+        cmp x2, x3, lsl #12
+        """
+        # When I simulate the code
+        with simulate_assembly(source) as ctxs:
+            ctx = ctxs[0]
+            # The status register indicates the operands were equal, because the shift was correctly applied
+            assert ctx.condition_flags == [ConditionFlag.EQUAL,
+                                           ConditionFlag.LESS_EQUAL,
+                                           ConditionFlag.GREATER_EQUAL]
+
 
 class TestAArch64CmnInstruction:
     def test_cmn__imm_lt(self):
@@ -211,6 +226,21 @@ class TestAArch64CmnInstruction:
         with simulate_assembly(source) as ctxs:
             ctx = ctxs[0]
             # The status register reflects the last conditional which was evaluated
+            assert ctx.condition_flags == [ConditionFlag.NOT_EQUAL,
+                                           ConditionFlag.LESS_EQUAL,
+                                           ConditionFlag.LESS_THAN]
+
+    def test_cmn__reg_shifted(self):
+        # Given I evaluate a negative comparison of a value in another register with a shift applied
+        source = """
+        mov x2, #-0x80
+        mov x3, #0x1
+        cmp x2, x3, lsl #12
+        """
+        # When I simulate the code
+        with simulate_assembly(source) as ctxs:
+            ctx = ctxs[0]
+            # The status register indicates the first operand was lesser, because the shift was correctly applied
             assert ctx.condition_flags == [ConditionFlag.NOT_EQUAL,
                                            ConditionFlag.LESS_EQUAL,
                                            ConditionFlag.LESS_THAN]

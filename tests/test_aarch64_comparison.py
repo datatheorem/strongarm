@@ -1,3 +1,4 @@
+from strongarm.decompiler import ConstantValue
 from strongarm.decompiler.exec_context import ConditionFlag
 
 from .utils import simulate_assembly
@@ -242,3 +243,43 @@ class TestAArch64CmnInstruction:
             assert ctx.condition_flags == {ConditionFlag.NOT_EQUAL,
                                            ConditionFlag.LESS_EQUAL,
                                            ConditionFlag.LESS_THAN}
+
+
+class TestAArch64CSelInstruction:
+    def test_select_op0(self):
+        # Given I perform a conditional select where the evaluated condition was "greater than"
+        source = """
+        ; Compare some data
+        mov x0, #0x200
+        mov x1, #0x100
+        cmp x0, x1
+        
+        mov x5, #0x1
+        mov x6, #0x2
+        ; Choose 1 or 2 based on the conditional evaluation
+        csel x4, x5, x6, ge
+        """
+        # When I simulate the code
+        with simulate_assembly(source) as ctxs:
+            ctx = ctxs[0]
+            # The 1st operand was selected, because the condition was true
+            assert ctx.register('x4').read(ConstantValue).value() == 0x1
+
+    def test_select_op1(self):
+        # Given I perform a conditional select where the evaluated condition was "not equal"
+        source = """
+        ; Compare some equal data
+        mov x0, #0x200
+        mov x1, #0x200
+        cmp x0, x1
+
+        mov x5, #0x1
+        mov x6, #0x2
+        ; Choose 1 or 2 based on the conditional evaluation
+        csel x4, x5, x6, ne
+        """
+        # When I simulate the code
+        with simulate_assembly(source) as ctxs:
+            ctx = ctxs[0]
+            # The 2nd operand was selected, because the condition was false
+            assert ctx.register('x4').read(ConstantValue).value() == 0x2

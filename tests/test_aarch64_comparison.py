@@ -1,5 +1,3 @@
-from strongarm.macho import VirtualMemoryPointer
-from strongarm.decompiler.variable import ConstantValue
 from strongarm.decompiler.exec_context import ConditionFlag
 
 from .utils import simulate_assembly
@@ -17,9 +15,9 @@ class TestAArch64CmpInstruction:
         with simulate_assembly(source) as ctxs:
             ctx = ctxs[0]
             # The correct status flags are set
-            assert ctx.condition_flags == [ConditionFlag.NOT_EQUAL,
+            assert ctx.condition_flags == {ConditionFlag.NOT_EQUAL,
                                            ConditionFlag.LESS_EQUAL,
-                                           ConditionFlag.LESS_THAN]
+                                           ConditionFlag.LESS_THAN}
 
     def test_cmp__reg_lt(self):
         # Given I evaluate a comparison of a smaller number to a larger number in a register
@@ -32,9 +30,9 @@ class TestAArch64CmpInstruction:
         with simulate_assembly(source) as ctxs:
             ctx = ctxs[0]
             # The correct status flags are set
-            assert ctx.condition_flags == [ConditionFlag.NOT_EQUAL,
+            assert ctx.condition_flags == {ConditionFlag.NOT_EQUAL,
                                            ConditionFlag.LESS_EQUAL,
-                                           ConditionFlag.LESS_THAN]
+                                           ConditionFlag.LESS_THAN}
 
     def test_cmp__imm_eq(self):
         # Given I evaluate a comparison of a number and itself as an immediate
@@ -46,9 +44,9 @@ class TestAArch64CmpInstruction:
         with simulate_assembly(source) as ctxs:
             ctx = ctxs[0]
             # The correct status flags are set
-            assert ctx.condition_flags == [ConditionFlag.EQUAL,
+            assert ctx.condition_flags == {ConditionFlag.EQUAL,
                                            ConditionFlag.LESS_EQUAL,
-                                           ConditionFlag.GREATER_EQUAL]
+                                           ConditionFlag.GREATER_EQUAL}
 
     def test_cmp__reg_eq(self):
         # Given I evaluate a comparison of a number and itself in another register
@@ -61,9 +59,9 @@ class TestAArch64CmpInstruction:
         with simulate_assembly(source) as ctxs:
             ctx = ctxs[0]
             # The correct status flags are set
-            assert ctx.condition_flags == [ConditionFlag.EQUAL,
+            assert ctx.condition_flags == {ConditionFlag.EQUAL,
                                            ConditionFlag.LESS_EQUAL,
-                                           ConditionFlag.GREATER_EQUAL]
+                                           ConditionFlag.GREATER_EQUAL}
 
     def test_cmp__imm_gt(self):
         # Given I evaluate a comparison of a larger number to a smaller immediate number
@@ -75,9 +73,9 @@ class TestAArch64CmpInstruction:
         with simulate_assembly(source) as ctxs:
             ctx = ctxs[0]
             # The correct status flags are set
-            assert ctx.condition_flags == [ConditionFlag.NOT_EQUAL,
+            assert ctx.condition_flags == {ConditionFlag.NOT_EQUAL,
                                            ConditionFlag.GREATER_THAN,
-                                           ConditionFlag.GREATER_EQUAL]
+                                           ConditionFlag.GREATER_EQUAL}
 
     def test_cmp__reg_gt(self):
         # Given I evaluate a comparison of a larger number to a smaller number in another register
@@ -90,9 +88,9 @@ class TestAArch64CmpInstruction:
         with simulate_assembly(source) as ctxs:
             ctx = ctxs[0]
             # The correct status flags are set
-            assert ctx.condition_flags == [ConditionFlag.NOT_EQUAL,
+            assert ctx.condition_flags == {ConditionFlag.NOT_EQUAL,
                                            ConditionFlag.GREATER_THAN,
-                                           ConditionFlag.GREATER_EQUAL]
+                                           ConditionFlag.GREATER_EQUAL}
 
     def test_flags_updated(self):
         # Given I perform multiple comparisons
@@ -106,9 +104,9 @@ class TestAArch64CmpInstruction:
         with simulate_assembly(source) as ctxs:
             ctx = ctxs[0]
             # The status register reflects the last conditional which was evaluated
-            assert ctx.condition_flags == [ConditionFlag.NOT_EQUAL,
+            assert ctx.condition_flags == {ConditionFlag.NOT_EQUAL,
                                            ConditionFlag.GREATER_THAN,
-                                           ConditionFlag.GREATER_EQUAL]
+                                           ConditionFlag.GREATER_EQUAL}
 
     def test_cmp__reg_shifted(self):
         # Given I evaluate a comparison of a value in another register with a shift applied
@@ -121,9 +119,9 @@ class TestAArch64CmpInstruction:
         with simulate_assembly(source) as ctxs:
             ctx = ctxs[0]
             # The status register indicates the operands were equal, because the shift was correctly applied
-            assert ctx.condition_flags == [ConditionFlag.EQUAL,
+            assert ctx.condition_flags == {ConditionFlag.EQUAL,
                                            ConditionFlag.LESS_EQUAL,
-                                           ConditionFlag.GREATER_EQUAL]
+                                           ConditionFlag.GREATER_EQUAL}
 
 
 class TestAArch64CmnInstruction:
@@ -137,9 +135,9 @@ class TestAArch64CmnInstruction:
         with simulate_assembly(source) as ctxs:
             ctx = ctxs[0]
             # The correct status flags are set
-            assert ctx.condition_flags == [ConditionFlag.NOT_EQUAL,
+            assert ctx.condition_flags == {ConditionFlag.NOT_EQUAL,
                                            ConditionFlag.GREATER_THAN,
-                                           ConditionFlag.GREATER_EQUAL]
+                                           ConditionFlag.GREATER_EQUAL}
 
     def test_cmn__reg_lt(self):
         # Given I evaluate a negative comparison of a smaller number to a larger number in a register
@@ -152,9 +150,9 @@ class TestAArch64CmnInstruction:
         with simulate_assembly(source) as ctxs:
             ctx = ctxs[0]
             # The correct status flags are set
-            assert ctx.condition_flags == [ConditionFlag.NOT_EQUAL,
+            assert ctx.condition_flags == {ConditionFlag.NOT_EQUAL,
                                            ConditionFlag.GREATER_THAN,
-                                           ConditionFlag.GREATER_EQUAL]
+                                           ConditionFlag.GREATER_EQUAL}
 
     def test_cmn__imm_eq(self):
         # Given I evaluate a comparison of a number and itself as a negative immediate
@@ -166,9 +164,9 @@ class TestAArch64CmnInstruction:
         with simulate_assembly(source) as ctxs:
             ctx = ctxs[0]
             # The correct status flags are set
-            assert ctx.condition_flags == [ConditionFlag.EQUAL,
+            assert ctx.condition_flags == {ConditionFlag.EQUAL,
                                            ConditionFlag.LESS_EQUAL,
-                                           ConditionFlag.GREATER_EQUAL]
+                                           ConditionFlag.GREATER_EQUAL}
 
     def test_cmn__reg_eq(self):
         # Given I evaluate a negative comparison of a number and itself in another register
@@ -181,9 +179,9 @@ class TestAArch64CmnInstruction:
         with simulate_assembly(source) as ctxs:
             ctx = ctxs[0]
             # The correct status flags are set
-            assert ctx.condition_flags == [ConditionFlag.EQUAL,
+            assert ctx.condition_flags == {ConditionFlag.EQUAL,
                                            ConditionFlag.LESS_EQUAL,
-                                           ConditionFlag.GREATER_EQUAL]
+                                           ConditionFlag.GREATER_EQUAL}
 
     def test_cmn__imm_gt(self):
         # Given I evaluate a negative comparison of a larger number to a smaller immediate number
@@ -195,9 +193,9 @@ class TestAArch64CmnInstruction:
         with simulate_assembly(source) as ctxs:
             ctx = ctxs[0]
             # The correct status flags are set
-            assert ctx.condition_flags == [ConditionFlag.NOT_EQUAL,
+            assert ctx.condition_flags == {ConditionFlag.NOT_EQUAL,
                                            ConditionFlag.LESS_EQUAL,
-                                           ConditionFlag.LESS_THAN]
+                                           ConditionFlag.LESS_THAN}
 
     def test_cmn__reg_gt(self):
         # Given I evaluate a negative comparison of a larger number to a smaller number in another register
@@ -210,9 +208,9 @@ class TestAArch64CmnInstruction:
         with simulate_assembly(source) as ctxs:
             ctx = ctxs[0]
             # The correct status flags are set
-            assert ctx.condition_flags == [ConditionFlag.NOT_EQUAL,
+            assert ctx.condition_flags == {ConditionFlag.NOT_EQUAL,
                                            ConditionFlag.LESS_EQUAL,
-                                           ConditionFlag.LESS_THAN]
+                                           ConditionFlag.LESS_THAN}
 
     def test_flags_updated(self):
         # Given I perform multiple negative comparisons
@@ -226,9 +224,9 @@ class TestAArch64CmnInstruction:
         with simulate_assembly(source) as ctxs:
             ctx = ctxs[0]
             # The status register reflects the last conditional which was evaluated
-            assert ctx.condition_flags == [ConditionFlag.NOT_EQUAL,
+            assert ctx.condition_flags == {ConditionFlag.NOT_EQUAL,
                                            ConditionFlag.LESS_EQUAL,
-                                           ConditionFlag.LESS_THAN]
+                                           ConditionFlag.LESS_THAN}
 
     def test_cmn__reg_shifted(self):
         # Given I evaluate a negative comparison of a value in another register with a shift applied
@@ -241,6 +239,6 @@ class TestAArch64CmnInstruction:
         with simulate_assembly(source) as ctxs:
             ctx = ctxs[0]
             # The status register indicates the first operand was lesser, because the shift was correctly applied
-            assert ctx.condition_flags == [ConditionFlag.NOT_EQUAL,
+            assert ctx.condition_flags == {ConditionFlag.NOT_EQUAL,
                                            ConditionFlag.LESS_EQUAL,
-                                           ConditionFlag.LESS_THAN]
+                                           ConditionFlag.LESS_THAN}

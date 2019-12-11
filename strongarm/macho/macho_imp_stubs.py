@@ -57,7 +57,7 @@ class MachoImpStubsParser:
             pattern_idx = 1
         else:
             # unknown stub format
-            raise NotImplementedError()
+            raise NotImplementedError({hex(instr1.address)})
 
         expected_ops = patterns[pattern_idx]
         for idx, op in enumerate([instr1, instr2, instr3]):

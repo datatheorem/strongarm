@@ -259,7 +259,7 @@ class MachoBinary:
                     binary_offset: int,
                     struct_type: Type[AIS],
                     virtual: bool = False) -> AIS:
-        """Given an binary offset, return the structure ot describes.
+        """Given an binary offset, return the structure it describes.
 
         Params:
             binary_offset: Address from where to read the bytes.

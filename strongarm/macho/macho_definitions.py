@@ -74,6 +74,16 @@ class MachArch(IntEnum):
     MH_CPU_TYPE_ARM = 12
     MH_CPU_TYPE_ARM64 = MH_CPU_TYPE_ARM | MH_CPU_ARCH_ABI64
 
+    DYLD_SHARED_CACHE_MAGIC = 0x646c7964    # b'dyld'
+
+
+class VMProtFlags(IntEnum):
+    # https://opensource.apple.com/source/xnu/xnu-1504.7.4/osfmk/mach/vm_prot.h.auto.html
+    VM_PROT_NONE = 0x0
+    VM_PROT_READ = (1 << 1)
+    VM_PROT_WRITE = (1 << 2)
+    VM_PROT_EXECUTE = (1 << 3)
+
 
 class CPU_TYPE(IntEnum):
     ARMV7 = 0
@@ -356,6 +366,52 @@ class MachoFatArch(Structure):
         ('offset', c_uint32),
         ('size', c_uint32),
         ('align', c_uint32),
+    ]
+
+
+class DyldSharedCacheHeader(Structure):
+    # https://opensource.apple.com/source/dyld/dyld-655.1.1/launch-cache/dyld_cache_format.h.auto.html
+    _fields_ = [
+        ('magic', c_char * 16),         # e.g. "dyld_v1   arm64"
+        ('mappingOffset', c_uint32),    # file offset to first shared_file_mapping
+        ('mappingCount', c_uint32),     # number of shared_file_mapping entries
+        ('imagesOffset', c_uint32),     # file offset to first dyld_cache_image_info
+        ('imagesCount', c_uint32),      # number of dyld_cache_image_info entries
+        ('dyldBaseAddress', c_uint64),  # base address of dyld when cache was built
+        ('codeSignOffset', c_uint64),   # file offset of code signature blob
+        ('codeSignSize', c_uint64),     # size of code signature blob
+        ('slideInfoOffset', c_uint64),  # file offset of kernel slid info
+        ('slideInfoSize', c_uint64),    # size of kernel slid info
+        ('localSymbolsOffset', c_uint64),  # file offset where local symbols are stored
+        ('localSymbolsSize', c_uint64),  # size of local symbols
+        ('uuid', c_char * 16),  # unique value for each shared_cache file
+        ('cacheType', c_uint64),  # 0 for dev, 1 for prod
+        ('branchPoolsOffset', c_uint32),  # file offset to table of uint64_t pool addresses
+        ('branchPoolsSize', c_uint32),  # number of uint64_t entries
+        ('accelerateInfoAddr', c_uint64),  # (unslid) address of optimization info
+        ('accelerateInfoSize', c_uint64),  # size of optimization info
+        ('imagesTextOffset', c_uint64),  # file offset to first dyld_cache_image_text_info
+        ('imagesTextCount', c_uint64),  # number of dyld_cache_image_text_info entries
+    ]
+
+
+class DyldSharedFileMapping(Structure):
+    _fields_ = [
+        ('address', c_uint64),
+        ('size', c_uint64),
+        ('file_offset', c_uint64),
+        ('max_prot', c_uint32),
+        ('init_prot', c_uint32),
+    ]
+
+
+class DyldSharedCacheImageInfo(Structure):
+    _fields_ = [
+        ('address', c_uint64),
+        ('modTime', c_uint64),
+        ('inode', c_uint64),
+        ('pathFileOffset', c_uint32),
+        ('pad', c_uint32)
     ]
 
 

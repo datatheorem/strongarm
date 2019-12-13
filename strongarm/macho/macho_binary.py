@@ -118,6 +118,7 @@ class MachoBinary:
         self._code_signature_cmd: Optional[MachoLinkeditDataCommandStruct] = None
         self._function_starts_cmd: Optional[MachoLinkeditDataCommandStruct] = None
         self._functions_list: Optional[Set[VirtualMemoryPointer]] = None
+        self._id_dylib_cmd: Optional[DylibCommandStruct]
 
         self.__codesign_parser: Optional[CodesignParser] = None
 
@@ -254,6 +255,11 @@ class MachoBinary:
 
             elif load_command.cmd == MachoLoadCommands.LC_FUNCTION_STARTS:
                 self._function_starts_cmd = self.read_struct(offset, MachoLinkeditDataCommandStruct)
+
+            elif load_command.cmd == MachoLoadCommands.LC_ID_DYLIB:
+                self._id_dylib_cmd = self.read_struct(offset, DylibCommandStruct)
+                # This load command should only be present for dylibs. Validate this assumption
+                assert self.file_type == MachoFileType.MH_DYLIB
 
             # move to next load command in header
             offset += load_command.cmdsize
@@ -916,3 +922,16 @@ class MachoBinary:
         self._functions_list = functions_list
         return self._functions_list
 
+    def dylib_id(self) -> Optional[str]:
+        """If the binary contains an LC_ID_DYLIB load command, return the pathname which the binary represents.
+        """
+        if not self._id_dylib_cmd:
+            return None
+
+        dylib_name_addr = self._id_dylib_cmd.binary_offset + \
+                          self._id_dylib_cmd.dylib.name.offset + \
+                          self.get_virtual_base()
+        dylib_name = self.get_full_string_from_start_address(dylib_name_addr)
+        if not dylib_name:
+            dylib_name = '<unknown dylib>'
+        return dylib_name

@@ -100,7 +100,6 @@ class MachoAnalyzer:
         self.imp_stubs = MachoImpStubsParser(binary, self.cs).imp_stubs
         self._objc_helper: Optional[ObjcRuntimeDataParser] = None
         self._objc_method_list: List[ObjcMethodInfo] = []
-        self._functions_list: Optional[Set[VirtualMemoryPointer]] = None
 
         self._cached_function_boundaries: Dict[int, int] = {}
 
@@ -298,7 +297,7 @@ class MachoAnalyzer:
         This can be used when you are finished analyzing a binary set and don't want to retain the cached data in memory
         """
         for binary, analyzer in cls._ANALYZER_CACHE.items():
-            logging.info(f'Deleting db {analyzer._db_path}...')
+            logging.debug(f'Deleting db {analyzer._db_path}...')
             analyzer._db_handle.close()
             shutil.rmtree(analyzer._db_tempdir.as_posix())
 
@@ -516,31 +515,7 @@ class MachoAnalyzer:
 
         Returns: A list of VirtualMemoryPointers corresponding to each function's entry point.
         """
-        if self._functions_list:
-            return self._functions_list
-
-        # Cannot do anything without LC_FUNCTIONS_START
-        if not self.binary._function_starts_cmd:
-            return set()
-
-        functions_list = set()
-
-        fs_start = self.binary._function_starts_cmd.dataoff
-        fs_size = self.binary._function_starts_cmd.datasize
-        fs_uleb = self.binary.get_contents_from_address(fs_start, fs_size)
-
-        address = int(self.binary.get_virtual_base())
-
-        idx = 0
-        while idx < fs_size:
-            address_delta, idx = self.dyld_info_parser.read_uleb(fs_uleb, idx)
-
-            address += address_delta
-            func_entry = VirtualMemoryPointer(address)
-            functions_list.add(func_entry)
-
-        self._functions_list = functions_list
-        return self._functions_list
+        return self.binary.get_functions()
 
     def queue_code_search(self, code_search: 'CodeSearch', callback: CodeSearchCallback) -> None:
         """Enqueue a CodeSearch. It will be ran when `search_all_code` runs. `callback` will then be invoked.

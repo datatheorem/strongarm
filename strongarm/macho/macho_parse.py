@@ -163,7 +163,8 @@ class MachoParser:
 
     @property
     def file_magic(self) -> int:
-        """Read file magic"""
+        """Read file magic
+        """
         return c_uint32.from_buffer(bytearray(self.get_bytes(StaticFilePointer(0), sizeof(c_uint32)))).value
 
     @property

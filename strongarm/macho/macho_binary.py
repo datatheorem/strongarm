@@ -1,7 +1,7 @@
 import math
 from _ctypes import Structure
 from pathlib import Path
-from typing import List, Tuple, Any, Type, Optional, TypeVar, TYPE_CHECKING
+from typing import List, Tuple, Any, Type, Optional, TypeVar, TYPE_CHECKING, Set
 
 from ctypes import c_uint64, c_uint32, sizeof
 
@@ -87,6 +87,8 @@ class MachoBinary:
     BYTES_PER_INSTRUCTION = 4
 
     def __init__(self, path: Path, binary_data: bytes) -> None:
+        """Parse the bytes representing a Mach-O file.
+        """
         from .codesign.codesign_parser import CodesignParser
 
         self._cached_binary = binary_data
@@ -98,10 +100,10 @@ class MachoBinary:
         self._load_commands_end_addr = 0
 
         # Mach-O header data
-        self.cpu_type: CPU_TYPE = CPU_TYPE.UNKNOWN      # Overwritten later in the parse
+        self.cpu_type: CPU_TYPE = CPU_TYPE.UNKNOWN  # Overwritten later in the parse
         self._header: Optional[MachoHeaderStruct] = None
         self.header_flags: List[int] = []
-        self.file_type: MachoFileType = MachoFileType.MH_EXECUTE    # Overwritten later in the parse
+        self.file_type: MachoFileType = MachoFileType.MH_EXECUTE  # Overwritten later in the parse
         self._virtual_base: Optional[VirtualMemoryPointer] = None
 
         # Segment and section commands from Mach-O header
@@ -115,6 +117,8 @@ class MachoBinary:
         self.load_dylib_commands: List[DylibCommandStruct] = []
         self._code_signature_cmd: Optional[MachoLinkeditDataCommandStruct] = None
         self._function_starts_cmd: Optional[MachoLinkeditDataCommandStruct] = None
+        self._functions_list: Optional[Set[VirtualMemoryPointer]] = None
+        self._id_dylib_cmd: Optional[DylibCommandStruct] = None
 
         self.__codesign_parser: Optional[CodesignParser] = None
 
@@ -140,7 +144,12 @@ class MachoBinary:
         if not self.verify_magic():
             DebugUtil.log(self, f'unsupported magic {hex(self.slice_magic)}')
             return False
+
         self.is_swap = self.should_swap_bytes()
+        # Big endian binaries are currently unsupported
+        if self.is_swap:
+            raise NotImplementedError(f'Big-endian binaries are unsupported')
+
         self.is_64bit = self.magic_is_64()
 
         self.parse_header()
@@ -192,7 +201,7 @@ class MachoBinary:
         # load commands begin directly after Mach O header, so the offset is the size of the header
         load_commands_off = self.header.sizeof
 
-        self._load_commands_end_addr = load_commands_off + self.header.sizeofcmds   # type: ignore
+        self._load_commands_end_addr = load_commands_off + self.header.sizeofcmds  # type: ignore
         self._parse_load_commands(load_commands_off, self.header.ncmds)  # type: ignore
 
     def _parse_header_flags(self) -> None:
@@ -248,9 +257,14 @@ class MachoBinary:
 
             elif load_command.cmd == MachoLoadCommands.LC_CODE_SIGNATURE:
                 self._code_signature_cmd = self.read_struct(offset, MachoLinkeditDataCommandStruct)
-            
+
             elif load_command.cmd == MachoLoadCommands.LC_FUNCTION_STARTS:
                 self._function_starts_cmd = self.read_struct(offset, MachoLinkeditDataCommandStruct)
+
+            elif load_command.cmd == MachoLoadCommands.LC_ID_DYLIB:
+                self._id_dylib_cmd = self.read_struct(offset, DylibCommandStruct)
+                # This load command should only be present for dylibs. Validate this assumption
+                assert self.file_type == MachoFileType.MH_DYLIB
 
             # move to next load command in header
             offset += load_command.cmdsize
@@ -259,7 +273,7 @@ class MachoBinary:
                     binary_offset: int,
                     struct_type: Type[AIS],
                     virtual: bool = False) -> AIS:
-        """Given an binary offset, return the structure ot describes.
+        """Given an binary offset, return the structure it describes.
 
         Params:
             binary_offset: Address from where to read the bytes.
@@ -374,12 +388,15 @@ class MachoBinary:
 
         return self._virtual_base
 
-    def get_bytes(self, offset: StaticFilePointer, size: int) -> bytearray:
+    def get_bytes(self, offset: StaticFilePointer, size: int, _translate_addr_to_file=False) -> bytearray:
         """Retrieve bytes from Mach-O slice, taking into account that the slice could be at an offset within a FAT
 
         Args:
             offset: index from beginning of slice to retrieve data from
             size: maximum number of bytes to read
+            _translate_addr_to_file: Internal option to support parsing DYLD shared cache binaries.
+                Images within the shared cache store some of their data in a separate part of the cache from their code.
+                This option tells DYLD cache binaries to translate the offset into the global cache file.
 
         Returns:
             string containing byte content of mach-o slice at an offset from the start of the slice
@@ -390,6 +407,8 @@ class MachoBinary:
                                       f' Did you mean to use get_content_from_virtual_address?')
         if offset < 0:
             raise InvalidAddressError(f'get_bytes() passed negative offset: {hex(offset)}')
+        if _translate_addr_to_file:
+            raise ValueError(f"_translate_addr_to_file may only be used with dyld_shared_cache binaries")
 
         # safeguard against reading from an encrypted segment of the binary
         if self.is_range_encrypted(offset, size):
@@ -397,7 +416,7 @@ class MachoBinary:
                                        f' range [{hex(int(self.encryption_info.cryptoff))}'
                                        f' to {hex(int(self.encryption_info.cryptsize))}]')
 
-        return bytearray(self._cached_binary[offset:offset+size])
+        return bytearray(self._cached_binary[offset:offset + size])
 
     def should_swap_bytes(self) -> bool:
         """Check whether self.slice_magic refers to a big-endian Mach-O binary
@@ -406,9 +425,6 @@ class MachoBinary:
             True if self.slice_magic indicates a big endian Mach-O, False otherwise
 
         """
-        # TODO(pt): figure out whether we need to swap to little or big endian,
-        # based on system endianness and binary endianness
-        # everything we touch currently is little endian, so let's not worry about it for now
         return self.slice_magic in MachoBinary._MAG_BIG_ENDIAN
 
     def get_raw_string_table(self) -> List[int]:
@@ -734,7 +750,7 @@ class MachoBinary:
         # Create a new binary with the overwritten data
         new_binary_data = bytearray(len(self._cached_binary))
         new_binary_data[:] = self._cached_binary
-        new_binary_data[file_offset:file_offset+len(data)] = data
+        new_binary_data[file_offset:file_offset + len(data)] = data
 
         return MachoBinary(self.path, new_binary_data)
 
@@ -767,7 +783,7 @@ class MachoBinary:
         load_cmd.cmdsize = sizeof_load_cmd + max(len(dylib_path_bytes), 0x20)
         # Align the size on an 8-byte boundary
         if load_cmd.cmdsize % 8:
-            load_cmd.cmdsize = (load_cmd.cmdsize + 8) & ~(8-1)
+            load_cmd.cmdsize = (load_cmd.cmdsize + 8) & ~(8 - 1)
 
         load_cmd.dylib = DylibStruct()
         dylib_name = LcStrUnion()
@@ -865,7 +881,7 @@ class MachoBinary:
         # The FAT header is a list of 32-bit ints
         for idx in range(len(file_data))[::4]:
             # Reverse the bytes of this int
-            file_data[idx:idx+4] = bytearray(reversed(file_data[idx:idx+4]))
+            file_data[idx:idx + 4] = bytearray(reversed(file_data[idx:idx + 4]))
 
         # We now know the final file size, and where each slice should be placed
         # Zero-fill the rest of the file, and copy in each slice
@@ -873,9 +889,56 @@ class MachoBinary:
         speculative_data_end = (speculative_data_end + page_size) & ~(page_size - 1)
         file_data += bytearray(speculative_data_end - len(file_data))
         for arch, binary in arch_to_binaries:
-            file_data[arch.offset:arch.offset+arch.size] = binary._cached_binary
+            file_data[arch.offset:arch.offset + arch.size] = binary._cached_binary
 
         # The output file has been constructed. Write it to disk
         # Pass 'x' so the call will throw an exception if the path already exists
         with open(path, 'xb') as out_file:
             out_file.write(file_data)
+
+    def get_functions(self) -> Set[VirtualMemoryPointer]:
+        """Get a list of the function entry points defined in LC_FUNCTION_STARTS. This includes objective-c methods.
+
+        Returns: A list of VirtualMemoryPointers corresponding to each function's entry point.
+        """
+        # TODO(PT): move read_uleb somewhere else
+        from .dyld_info_parser import DyldInfoParser
+        if self._functions_list:
+            return self._functions_list
+
+        # Cannot do anything without LC_FUNCTIONS_START
+        if not self._function_starts_cmd:
+            return set()
+
+        functions_list = set()
+
+        fs_start = self._function_starts_cmd.dataoff
+        fs_size = self._function_starts_cmd.datasize
+        fs_uleb = self.get_contents_from_address(fs_start, fs_size)
+
+        address = int(self.get_virtual_base())
+
+        idx = 0
+        while idx < fs_size:
+            address_delta, idx = DyldInfoParser.read_uleb(fs_uleb, idx)
+
+            address += address_delta
+            func_entry = VirtualMemoryPointer(address)
+            functions_list.add(func_entry)
+
+        self._functions_list = functions_list
+        return self._functions_list
+
+    def dylib_id(self) -> Optional[str]:
+        """If the binary contains an LC_ID_DYLIB load command, return the pathname which the binary represents.
+        """
+        if not self._id_dylib_cmd:
+            return None
+
+        dylib_name_addr = self._id_dylib_cmd.binary_offset + \
+                          self._id_dylib_cmd.dylib.name.offset + \
+                          self.get_virtual_base()
+        dylib_name = self.get_full_string_from_start_address(dylib_name_addr)
+        if not dylib_name:
+            dylib_name = '<unknown dylib>'
+        return dylib_name

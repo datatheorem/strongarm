@@ -33,6 +33,10 @@ from .macho_definitions import (
     ObjcProtocolRaw32, ObjcProtocolRaw64,
     ObjcCategoryRaw32, ObjcCategoryRaw64,
     ObjcProtocolList32, ObjcProtocolList64,
+
+    DyldSharedCacheHeader,
+    DyldSharedFileMapping,
+    DyldSharedCacheImageInfo
 )
 
 from .arch_independent_structs import (
@@ -112,3 +116,7 @@ from .macho_parse import (
     ArchitectureNotSupportedError,
 )
 
+from .dyld_shared_cache import (
+    DyldSharedCacheParser,
+    DyldSharedCacheBinary
+)

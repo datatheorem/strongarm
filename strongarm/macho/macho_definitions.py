@@ -79,10 +79,10 @@ class MachArch(IntEnum):
 
 class VMProtFlags(IntEnum):
     # https://opensource.apple.com/source/xnu/xnu-1504.7.4/osfmk/mach/vm_prot.h.auto.html
-    VM_PROT_NONE = 0x0
-    VM_PROT_READ = (1 << 1)
-    VM_PROT_WRITE = (1 << 2)
-    VM_PROT_EXECUTE = (1 << 3)
+    VM_PROT_NONE = (0 << 0)
+    VM_PROT_READ = (1 << 0)
+    VM_PROT_WRITE = (1 << 1)
+    VM_PROT_EXECUTE = (1 << 2)
 
 
 class CPU_TYPE(IntEnum):

@@ -244,7 +244,7 @@ class DyldSharedCacheBinary(MachoBinary):
         # Translate into the global DSC file
         return self.dyld_shared_cache_parser.translate_virtual_address_to_static(virtual_address)
 
-    def get_bytes(self, offset: StaticFilePointer, size: int, _translated=True) -> bytearray:
+    def get_bytes(self, offset: StaticFilePointer, size: int, _translate_addr_to_file=True) -> bytearray:
         # There are two possibilities: The requested data is "binary-local", meaning it's within the __TEXT buffer
         # backing this object. Or, the requested data is somewhere within the global DSC.
         # It would be clear which is the case from the calling context. For example, if the pointer comes from
@@ -255,12 +255,14 @@ class DyldSharedCacheBinary(MachoBinary):
         # Otherwise, don't translate and read directly from the global DSC.
         if offset+size > self.dyld_shared_cache_file_offset + len(self._cached_binary):
             logging.debug(f'Reading from addr outside __TEXT: {offset}')
+            # This address is outside the binary's buffer. If translation was disabled, an assumption has been violated
+            assert _translate_addr_to_file, f"Must translate addr outside __TEXT: {offset}"
+
         else:
-            if _translated:
-                logging.debug(f'Reading non-translated local binary data: {offset}')
+            if _translate_addr_to_file:
                 offset += self.dyld_shared_cache_file_offset
             else:
-                logging.debug(f'Translation explicitly disabled')
+                logging.debug(f'Translation explicitly disabled, direct read of {offset}')
 
         return bytearray(self.dyld_shared_cache_parser.get_bytes(offset, size))
 

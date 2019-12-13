@@ -144,7 +144,12 @@ class MachoBinary:
         if not self.verify_magic():
             DebugUtil.log(self, f'unsupported magic {hex(self.slice_magic)}')
             return False
+
         self.is_swap = self.should_swap_bytes()
+        # Big endian binaries are currently unsupported
+        if self.is_swap:
+            raise NotImplementedError(f'Big-endian binaries are unsupported')
+
         self.is_64bit = self.magic_is_64()
 
         self.parse_header()
@@ -383,12 +388,15 @@ class MachoBinary:
 
         return self._virtual_base
 
-    def get_bytes(self, offset: StaticFilePointer, size: int) -> bytearray:
+    def get_bytes(self, offset: StaticFilePointer, size: int, _translate_addr_to_file=False) -> bytearray:
         """Retrieve bytes from Mach-O slice, taking into account that the slice could be at an offset within a FAT
 
         Args:
             offset: index from beginning of slice to retrieve data from
             size: maximum number of bytes to read
+            _translate_addr_to_file: Internal option to support parsing DYLD shared cache binaries.
+                Images within the shared cache store some of their data in a separate part of the cache from their code.
+                This option tells DYLD cache binaries to translate the offset into the global cache file.
 
         Returns:
             string containing byte content of mach-o slice at an offset from the start of the slice
@@ -399,6 +407,8 @@ class MachoBinary:
                                       f' Did you mean to use get_content_from_virtual_address?')
         if offset < 0:
             raise InvalidAddressError(f'get_bytes() passed negative offset: {hex(offset)}')
+        if _translate_addr_to_file:
+            raise ValueError(f"_translate_addr_to_file may only be used with dyld_shared_cache binaries")
 
         # safeguard against reading from an encrypted segment of the binary
         if self.is_range_encrypted(offset, size):
@@ -415,9 +425,6 @@ class MachoBinary:
             True if self.slice_magic indicates a big endian Mach-O, False otherwise
 
         """
-        # TODO(pt): figure out whether we need to swap to little or big endian,
-        # based on system endianness and binary endianness
-        # everything we touch currently is little endian, so let's not worry about it for now
         return self.slice_magic in MachoBinary._MAG_BIG_ENDIAN
 
     def get_raw_string_table(self) -> List[int]:

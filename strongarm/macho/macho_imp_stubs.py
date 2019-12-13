@@ -84,10 +84,14 @@ class MachoImpStubsParser:
         if not stubs_section:
             return []
 
-        func_str = bytes(self.binary.get_bytes(stubs_section.cmd.offset, stubs_section.cmd.size))
+        func_str = bytes(self.binary.get_bytes(
+            stubs_section.offset,
+            stubs_section.cmd.size,
+            _translate_addr_to_file=False)  # When working with DSC's, the reported offset should not be translated
+        )
         instructions = [instr for instr in self._cs.disasm(
             func_str,
-            self.binary.get_virtual_base() + stubs_section.cmd.offset
+            stubs_section.address
         )]
 
         stubs = []

@@ -210,6 +210,13 @@ class DyldSharedCacheParser:
 
         return DyldSharedCacheBinary(self, binary_path, static_addr, image_bytes)
 
+    def image_for_text_address(self, address: VirtualMemoryPointer) -> Path:
+        for path, text_region in self.embedded_binary_info.items():
+            text_vm_start, text_vm_end = text_region
+            if text_vm_start <= address < text_vm_end:
+                return path
+        raise ValueError(f'No embedded __TEXT segment contains {address}')
+
 
 class DyldSharedCacheBinary(MachoBinary):
     """A special Mach-O binary which exists within a dyld_shared_cache.
@@ -233,8 +240,28 @@ class DyldSharedCacheBinary(MachoBinary):
         self.dyld_shared_cache_file_offset = file_offset
         super().__init__(path, binary_data)
 
-    def get_bytes(self, offset: StaticFilePointer, size: int, absolute=False) -> bytearray:
-        # TODO(PT): Remove 'absolute' and check here whether the addr is within __TEXT or should be read from global DSC
-        if not absolute:
-            offset += self.dyld_shared_cache_file_offset
+    def file_offset_for_virtual_address(self, virtual_address: VirtualMemoryPointer) -> StaticFilePointer:
+        # Translate into the global DSC file
+        return self.dyld_shared_cache_parser.translate_virtual_address_to_static(virtual_address)
+
+    def get_bytes(self, offset: StaticFilePointer, size: int, _translated=True) -> bytearray:
+        # There are two possibilities: The requested data is "binary-local", meaning it's within the __TEXT buffer
+        # backing this object. Or, the requested data is somewhere within the global DSC.
+        # It would be clear which is the case from the calling context. For example, if the pointer comes from
+        # a symbol table, it's probably in the DSC-global __LINKEDIT mapping. In contrast, if the pointer represents
+        # the bytecode for some function, it's probably in the __TEXT mapping. We don't want to provide this context
+        # from every get_bytes caller, so try to determine what data is being requested here.
+        # If offset+size refers to an address outside the local image, translate and read from the global DSC.
+        # Otherwise, don't translate and read directly from the global DSC.
+        if offset+size > self.dyld_shared_cache_file_offset + len(self._cached_binary):
+            logging.debug(f'Reading from addr outside __TEXT: {offset}')
+        else:
+            if _translated:
+                logging.debug(f'Reading non-translated local binary data: {offset}')
+                offset += self.dyld_shared_cache_file_offset
+            else:
+                logging.debug(f'Translation explicitly disabled')
+
         return bytearray(self.dyld_shared_cache_parser.get_bytes(offset, size))
+
+

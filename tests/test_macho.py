@@ -340,3 +340,10 @@ class TestMachoBinary:
             new_dylibs = [arm64.dylib_name_for_library_ordinal(i + 1) for i in
                           range(len(arm64.load_dylib_commands))]
             assert new_dylibs == original_dylibs + [new_dylib_name]
+
+    def test_get_dylib_id(self):
+        # Given an executable binary, it has no dylib ID
+        assert not MachoParser(self.THIN_PATH).get_arm64_slice().dylib_id()
+        # Given a dylib, it has a dylib ID which is parsed correctly
+        expected_dylib_id = '@rpath/BroadSoftDialpadFramework.framework/BroadSoftDialpadFramework'
+        assert MachoParser(self.MULTIPLE_CONST_SECTIONS).get_arm64_slice().dylib_id() == expected_dylib_id

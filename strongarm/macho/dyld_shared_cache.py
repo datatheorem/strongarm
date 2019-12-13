@@ -78,7 +78,7 @@ class DyldSharedCacheParser:
             struct_type loaded from the pointed address
         """
         data = bytearray(self.get_bytes(file_offset, sizeof(struct_type)))
-        return struct_type.from_buffer(data)
+        return struct_type.from_buffer(data)    # type: ignore
 
     def _read_static_c_string(self, start_address: StaticFilePointer) -> Optional[str]:
         """Return a string containing the bytes from start_address up to the next NULL character
@@ -170,7 +170,11 @@ class DyldSharedCacheParser:
             image_off += sizeof(DyldSharedCacheImageInfo)
 
             # Example: /System/Library/Frameworks/CoreFoundation.framework/CoreFoundation
-            embedded_binary_path = Path(self._read_static_c_string(image_struct.pathFileOffset))
+            embedded_binary_path_str = self._read_static_c_string(image_struct.pathFileOffset)
+            if not embedded_binary_path_str:
+                file_offset = image_off - sizeof(DyldSharedCacheImageInfo)
+                raise ValueError(f'Failed to read an image name for image struct @ {hex(file_offset)}')
+            embedded_binary_path = Path(embedded_binary_path_str)
 
             vm_addr = VirtualMemoryPointer(image_struct.address)
             # To calculate the size of this image, we need to look at the next image's address
@@ -211,6 +215,8 @@ class DyldSharedCacheParser:
         return DyldSharedCacheBinary(self, binary_path, static_addr, image_bytes)
 
     def image_for_text_address(self, address: VirtualMemoryPointer) -> Path:
+        """Given a virtual memory address of __TEXT content, return the embedded image which contains it
+        """
         for path, text_region in self.embedded_binary_info.items():
             text_vm_start, text_vm_end = text_region
             if text_vm_start <= address < text_vm_end:
@@ -229,7 +235,9 @@ class DyldSharedCacheBinary(MachoBinary):
     - The DSC binary retains a reference to the global DSC
     - When the DSC binary is initialized, MachoBinary only reads the __TEXT segment bytes
     - When get_bytes() is called, it checks whether the address is within __TEXT.
-        If not, it will read the data from the global DSC.
+        If not, it will read the data from the global DSC, with an optional flag to disable the translation.
+        The translation must be disabled for a few reads, such as symbol-table parsing, as the DSC has pre-
+        translated these values.
     """
     def __init__(self,
                  dsc_parser: 'DyldSharedCacheParser',

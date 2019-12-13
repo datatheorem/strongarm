@@ -118,7 +118,7 @@ class MachoBinary:
         self._code_signature_cmd: Optional[MachoLinkeditDataCommandStruct] = None
         self._function_starts_cmd: Optional[MachoLinkeditDataCommandStruct] = None
         self._functions_list: Optional[Set[VirtualMemoryPointer]] = None
-        self._id_dylib_cmd: Optional[DylibCommandStruct]
+        self._id_dylib_cmd: Optional[DylibCommandStruct] = None
 
         self.__codesign_parser: Optional[CodesignParser] = None
 

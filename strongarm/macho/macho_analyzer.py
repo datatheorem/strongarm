@@ -180,14 +180,21 @@ class MachoAnalyzer:
         c = self._db_handle.cursor()
         c.execute("""CREATE TABLE function_calls
                   (destination_address int,
-                   caller_address int, 
+                   caller_address int,
                    caller_func_start_address int)""")
         c.execute("""CREATE TABLE objc_msgSends
-                  (destination_address int, 
-                   caller_address int, 
+                  (destination_address int,
+                   caller_address int,
                    caller_func_start_address int,
-                   classref int, 
+                   classref int,
                    selref int)""")
+        c.execute(
+            "CREATE TABLE function_boundaries(       "
+            "    start_address INT NOT NULL UNIQUE,  "
+            "    end_address   INT NOT NULL UNIQUE,  "
+            "    CHECK (start_address >= end_address)"
+            ")                                       "
+        )
 
         # Iterate the sorted entry point list
         max_function_size = 0x1000
@@ -207,11 +214,17 @@ class MachoAnalyzer:
                 # Disassemble the last function in the __TEXT segment
                 # Since this is the last entry point, we can't guess the function size by
                 # looking at the distance to the next entry point. Use determine_function_boundary instead
+                # TODO(AP): What about offset to __TEXT's end address instead?
                 from strongarm.objc.dataflow import determine_function_boundary
                 binary_data = bytes(self.binary.get_content_from_virtual_address(entry_point, max_function_size))
                 end_address = determine_function_boundary(binary_data,
                                                           entry_point) + MachoBinary.BYTES_PER_INSTRUCTION
                 function_size = end_address - entry_point
+
+            c.execute(
+                "INSERT INTO function_boundaries (start_address, end_address) VALUES (?, ?)",
+                (entry_point, end_address),
+            )
 
             # Iterate the disassembled code
             disassembled_code = self.disassemble_region(entry_point, function_size)
@@ -443,17 +456,24 @@ class MachoAnalyzer:
     def get_function_instructions(self, start_address: VirtualMemoryPointer) -> List[CsInsn]:
         """Get a list of disassembled instructions for the function beginning at start_address
         """
-        from strongarm.objc.dataflow import determine_function_boundary
-
         if start_address in self._cached_function_boundaries:
             end_address = self._cached_function_boundaries[start_address]
         else:
             # limit functions to 8kb
             max_function_size = 0x2000
             binary_data = bytes(self.binary.get_content_from_virtual_address(start_address, max_function_size))
-            # not in cache. calculate function boundary, then cache it
+
+            results = c.execute(
+                "SELECT end_address FROM function_boundaries WHERE start_address = ?",
+                (start_address,)
+            ).fetchone()
+
+            if results is None:
+                raise RuntimeError("")
+
+            # not in cache. fetch function boundary, then cache it
             # add 1 instruction size to the end address so the last instruction is included in the function scope
-            end_address = determine_function_boundary(binary_data, start_address) + MachoBinary.BYTES_PER_INSTRUCTION
+            end_address = results[0] + MachoBinary.BYTES_PER_INSTRUCTION
             self._cached_function_boundaries[start_address] = end_address
 
         instructions = self.disassemble_region(start_address, end_address - start_address)

@@ -9,6 +9,7 @@ from dataclasses import dataclass
 
 from typing import TYPE_CHECKING
 from typing import Set, List, Dict, Optional, Callable
+from typing import Iterable, Tuple
 from capstone import Cs, CsInsn, CS_ARCH_ARM64, CS_MODE_ARM
 
 from strongarm.macho.macho_definitions import VirtualMemoryPointer
@@ -117,6 +118,7 @@ class MachoAnalyzer:
         self._db_handle = sqlite3.connect(self._db_path.as_posix())
 
         self._build_callable_symbol_index()
+        self._find_function_boundaries()
 
         # Done setting up, store this analyzer in class cache
         MachoAnalyzer._ANALYZER_CACHE[binary] = self
@@ -166,6 +168,45 @@ class MachoAnalyzer:
         objc_calls = [ObjcMsgSendXref(x[0], x[1], x[2], x[3], x[4]) for x in objc_calls]
         return objc_calls
 
+    def _compute_function_boundaries(self) -> Iterable[Tuple[int, int]]:
+        max_function_size = 0x1000
+        sorted_entry_points = sorted(self.get_functions())
+
+        for idx, entry_point in enumerate(sorted_entry_points):
+            if idx != len(sorted_entry_points) - 1:
+                # Common case
+                # Guess that the size of the function is the distance between this entry point and the next entry point
+                end_address = sorted_entry_points[idx+1]
+            else:
+                # Disassemble the last function in the __TEXT segment
+                # Since this is the last entry point, we can't guess the function size by
+                # looking at the distance to the next entry point. Use determine_function_boundary instead
+                # TODO(AP): What about offset to __TEXT's end address instead?
+                from strongarm.objc.dataflow import determine_function_boundary
+                binary_data = bytes(self.binary.get_content_from_virtual_address(entry_point, max_function_size))
+                end_address = determine_function_boundary(binary_data,
+                                                          entry_point) + MachoBinary.BYTES_PER_INSTRUCTION
+
+            yield (entry_point, end_address)
+
+    def _find_function_boundaries(self) -> None:
+        cursor = self._db_handle.cursor()
+
+        with self._db_handle:
+            # NOTE(ap): This table should be created at database instantiation
+            cursor.execute(
+                "CREATE TABLE function_boundaries(    "
+                "    entry_point INT NOT NULL UNIQUE, "
+                "    end_address INT NOT NULL UNIQUE, "
+                "    CHECK (entry_point < end_address)"
+                ")                                    "
+            )
+
+            cursor.executemany(
+                "INSERT INTO function_boundaries (entry_point, end_address) VALUES (?, ?)",
+                self._compute_function_boundaries(),
+            )
+
     def _find_branch_xrefs(self) -> None:
         from strongarm.objc import ObjcUnconditionalBranchInstruction
 
@@ -188,43 +229,17 @@ class MachoAnalyzer:
                    caller_func_start_address int,
                    classref int,
                    selref int)""")
-        c.execute(
-            "CREATE TABLE function_boundaries(       "
-            "    start_address INT NOT NULL UNIQUE,  "
-            "    end_address   INT NOT NULL UNIQUE,  "
-            "    CHECK (start_address >= end_address)"
-            ")                                       "
-        )
 
         # Iterate the sorted entry point list
-        max_function_size = 0x1000
-        sorted_entry_points = sorted(self.get_functions())
+        sorted_entry_points = c.execute("SELECT entry_point, end_address FROM function_boundaries")
         # TODO(PT): Test this on a binary with no ObjcMsgSend
         objc_msgsend_symbol = self.callable_symbol_for_symbol_name('_objc_msgSend')
         if not objc_msgsend_symbol:
             raise NotImplementedError(f'{self.binary.path} has no imported _objc_msgSend symbol')
         objc_msgsend_addr = objc_msgsend_symbol.address
 
-        for idx, entry_point in enumerate(sorted_entry_points):
-            if idx != len(sorted_entry_points) - 1:
-                # Common case
-                # Guess that the size of the function is the distance between this entry point and the next entry point
-                function_size = min(sorted_entry_points[idx+1] - entry_point, max_function_size)
-            else:
-                # Disassemble the last function in the __TEXT segment
-                # Since this is the last entry point, we can't guess the function size by
-                # looking at the distance to the next entry point. Use determine_function_boundary instead
-                # TODO(AP): What about offset to __TEXT's end address instead?
-                from strongarm.objc.dataflow import determine_function_boundary
-                binary_data = bytes(self.binary.get_content_from_virtual_address(entry_point, max_function_size))
-                end_address = determine_function_boundary(binary_data,
-                                                          entry_point) + MachoBinary.BYTES_PER_INSTRUCTION
-                function_size = end_address - entry_point
-
-            c.execute(
-                "INSERT INTO function_boundaries (start_address, end_address) VALUES (?, ?)",
-                (entry_point, end_address),
-            )
+        for entry_point, end_address in sorted_entry_points:
+            function_size = end_address - entry_point
 
             # Iterate the disassembled code
             disassembled_code = self.disassemble_region(entry_point, function_size)
@@ -459,21 +474,20 @@ class MachoAnalyzer:
         if start_address in self._cached_function_boundaries:
             end_address = self._cached_function_boundaries[start_address]
         else:
-            # limit functions to 8kb
-            max_function_size = 0x2000
-            binary_data = bytes(self.binary.get_content_from_virtual_address(start_address, max_function_size))
-
-            results = c.execute(
+            cursor = self._db_handle.execute(
                 "SELECT end_address FROM function_boundaries WHERE start_address = ?",
                 (start_address,)
-            ).fetchone()
+            )
+
+            results = cursor.fetchone()
+            cursor.close()
 
             if results is None:
                 raise RuntimeError("")
 
+            end_address = results[0]
             # not in cache. fetch function boundary, then cache it
             # add 1 instruction size to the end address so the last instruction is included in the function scope
-            end_address = results[0] + MachoBinary.BYTES_PER_INSTRUCTION
             self._cached_function_boundaries[start_address] = end_address
 
         instructions = self.disassemble_region(start_address, end_address - start_address)

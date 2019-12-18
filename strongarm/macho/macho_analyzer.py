@@ -475,7 +475,7 @@ class MachoAnalyzer:
             end_address = self._cached_function_boundaries[start_address]
         else:
             cursor = self._db_handle.execute(
-                "SELECT end_address FROM function_boundaries WHERE start_address = ?",
+                "SELECT end_address FROM function_boundaries WHERE entry_point = ?",
                 (start_address,)
             )
 

@@ -4,6 +4,7 @@ import sqlite3
 import logging
 import pathlib
 import tempfile
+from contextlib import closing
 from ctypes import sizeof
 from dataclasses import dataclass
 
@@ -168,15 +169,15 @@ class MachoAnalyzer:
         objc_calls = [ObjcMsgSendXref(x[0], x[1], x[2], x[3], x[4]) for x in objc_calls]
         return objc_calls
 
-    def _compute_function_boundaries(self) -> Iterable[Tuple[int, int]]:
-        max_function_size = 0x1000
+    def _compute_function_boundaries(self) -> Iterable[Tuple[VirtualMemoryPointer, VirtualMemoryPointer]]:
+        max_function_size = 0x2000
         sorted_entry_points = sorted(self.get_functions())
 
         for idx, entry_point in enumerate(sorted_entry_points):
             if idx != len(sorted_entry_points) - 1:
                 # Common case
                 # Guess that the size of the function is the distance between this entry point and the next entry point
-                end_address = sorted_entry_points[idx+1]
+                end_address = min(sorted_entry_points[idx+1], entry_point + max_function_size)
             else:
                 # Disassemble the last function in the __TEXT segment
                 # Since this is the last entry point, we can't guess the function size by
@@ -187,12 +188,12 @@ class MachoAnalyzer:
                 end_address = determine_function_boundary(binary_data,
                                                           entry_point) + MachoBinary.BYTES_PER_INSTRUCTION
 
-            yield (entry_point, end_address)
+            yield (entry_point, VirtualMemoryPointer(end_address))
 
     def _find_function_boundaries(self) -> None:
         cursor = self._db_handle.cursor()
 
-        with self._db_handle:
+        with self._db_handle, closing(cursor):
             # NOTE(ap): This table should be created at database instantiation
             cursor.execute(
                 "CREATE TABLE function_boundaries(    "
@@ -231,14 +232,20 @@ class MachoAnalyzer:
                    selref int)""")
 
         # Iterate the sorted entry point list
-        sorted_entry_points = c.execute("SELECT entry_point, end_address FROM function_boundaries")
+        cursor = self._db_handle.execute("SELECT entry_point, end_address FROM function_boundaries")
+
+        with closing(cursor):
+            entry_points = cursor.fetchall()
+
         # TODO(PT): Test this on a binary with no ObjcMsgSend
         objc_msgsend_symbol = self.callable_symbol_for_symbol_name('_objc_msgSend')
         if not objc_msgsend_symbol:
             raise NotImplementedError(f'{self.binary.path} has no imported _objc_msgSend symbol')
         objc_msgsend_addr = objc_msgsend_symbol.address
 
-        for entry_point, end_address in sorted_entry_points:
+        for entry_point, end_address in entry_points:
+            entry_point = VirtualMemoryPointer(entry_point)
+            end_address = VirtualMemoryPointer(end_address)
             function_size = end_address - entry_point
 
             # Iterate the disassembled code
@@ -345,7 +352,7 @@ class MachoAnalyzer:
             # There exists a MachoAnalyzer for this binary - use it instead of making a new one
             return cls._ANALYZER_CACHE[binary]
         return MachoAnalyzer(binary)
-    
+
     def method_info_for_entry_point(self, entry_point: VirtualMemoryPointer) -> Optional['ObjcMethodInfo']:
         # TODO(PT): This should return any symbol name, not just Obj-C methods
         from strongarm.objc.objc_analyzer import ObjcMethodInfo
@@ -479,13 +486,14 @@ class MachoAnalyzer:
                 (start_address,)
             )
 
-            results = cursor.fetchone()
-            cursor.close()
+            with closing(cursor):
+                results = cursor.fetchone()
 
             if results is None:
                 raise RuntimeError("")
 
             end_address = results[0]
+
             # not in cache. fetch function boundary, then cache it
             # add 1 instruction size to the end address so the last instruction is included in the function scope
             self._cached_function_boundaries[start_address] = end_address

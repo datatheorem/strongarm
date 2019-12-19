@@ -46,6 +46,34 @@ _T = TypeVar("_T")
 # This will be dispatched some time after MachoAnalyzer.search_all_code() is called
 CodeSearchCallback = Callable[['MachoAnalyzer', 'CodeSearch', List['CodeSearchResult']], None]
 
+ANALYZER_SQL_SCHEMA = """
+    CREATE TABLE function_boundaries(
+        entry_point INT NOT NULL UNIQUE,
+        end_address INT NOT NULL UNIQUE,
+        CHECK (entry_point < end_address)
+    );
+
+    CREATE TABLE function_calls(
+        destination_address INT,
+        caller_address INT,
+        caller_func_start_address INT
+    );
+
+    CREATE TABLE objc_msgSends(
+        destination_address INT,
+        caller_address INT,
+        caller_func_start_address INT,
+        classref INT,
+        selref INT
+    );
+
+    CREATE TABLE named_callable_symbols(
+        is_imported INT,
+        address INT,
+        symbol_name TEXT
+    );
+"""
+
 
 def pairwise(iterable: Iterable[_T]) -> Iterable[Tuple[_T, _T]]:
     a, b = tee(iterable)
@@ -129,6 +157,10 @@ class MachoAnalyzer:
         self._db_path = self._db_tempdir / 'strongarm.db'
         self._db_handle = sqlite3.connect(self._db_path.as_posix())
 
+        cursor = self._db_handle.executescript(ANALYZER_SQL_SCHEMA)
+        cursor.close()
+        self._db_handle.commit()
+
         self._build_callable_symbol_index()
         self._find_function_boundaries()
 
@@ -201,15 +233,6 @@ class MachoAnalyzer:
         cursor = self._db_handle.cursor()
 
         with self._db_handle, closing(cursor):
-            # NOTE(ap): This table should be created at database instantiation
-            cursor.execute(
-                "CREATE TABLE function_boundaries(    "
-                "    entry_point INT NOT NULL UNIQUE, "
-                "    end_address INT NOT NULL UNIQUE, "
-                "    CHECK (entry_point < end_address)"
-                ")                                    "
-            )
-
             cursor.executemany(
                 "INSERT INTO function_boundaries (entry_point, end_address) VALUES (?, ?)",
                 self._compute_function_boundaries(),
@@ -227,16 +250,6 @@ class MachoAnalyzer:
 
         # Create the table which will store XRefs
         c = self._db_handle.cursor()
-        c.execute("""CREATE TABLE function_calls
-                  (destination_address int,
-                   caller_address int,
-                   caller_func_start_address int)""")
-        c.execute("""CREATE TABLE objc_msgSends
-                  (destination_address int,
-                   caller_address int,
-                   caller_func_start_address int,
-                   classref int,
-                   selref int)""")
 
         # Iterate the sorted entry point list
         cursor = self._db_handle.execute("SELECT entry_point, end_address FROM function_boundaries")
@@ -818,7 +831,6 @@ class MachoAnalyzer:
         This index includes both imported and exported symbols.
         """
         c = self._db_handle.cursor()
-        c.execute(f"CREATE TABLE named_callable_symbols (is_imported int, address int, symbol_name text)")
 
         # Process __imp_stubs
         imported_bound_symbols = self.imp_stubs_to_symbol_names

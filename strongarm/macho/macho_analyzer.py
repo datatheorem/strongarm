@@ -158,8 +158,9 @@ class MachoAnalyzer:
         self._db_handle = sqlite3.connect(self._db_path.as_posix())
 
         cursor = self._db_handle.executescript(ANALYZER_SQL_SCHEMA)
-        cursor.close()
-        self._db_handle.commit()
+
+        with self._db_handle:
+            cursor.close()
 
         self._build_callable_symbol_index()
         self._find_function_boundaries()
@@ -230,13 +231,13 @@ class MachoAnalyzer:
             yield (entry_point, end_address)
 
     def _find_function_boundaries(self) -> None:
-        cursor = self._db_handle.cursor()
+        cursor = self._db_handle.executemany(
+            "INSERT INTO function_boundaries (entry_point, end_address) VALUES (?, ?)",
+            self._compute_function_boundaries(),
+        )
 
-        with self._db_handle, closing(cursor):
-            cursor.executemany(
-                "INSERT INTO function_boundaries (entry_point, end_address) VALUES (?, ?)",
-                self._compute_function_boundaries(),
-            )
+        with self._db_handle:
+            cursor.close()
 
     def _find_branch_xrefs(self) -> None:
         from strongarm.objc import ObjcUnconditionalBranchInstruction

@@ -1,4 +1,5 @@
 import time
+import functools
 import shutil
 import sqlite3
 import logging
@@ -8,9 +9,12 @@ from contextlib import closing
 from ctypes import sizeof
 from dataclasses import dataclass
 
+from itertools import tee
 from typing import TYPE_CHECKING
 from typing import Set, List, Dict, Optional, Callable
-from typing import Iterable, Tuple
+from typing import Iterable
+from typing import Tuple
+from typing import TypeVar
 from capstone import Cs, CsInsn, CS_ARCH_ARM64, CS_MODE_ARM
 
 from strongarm.macho.macho_definitions import VirtualMemoryPointer
@@ -28,7 +32,6 @@ from strongarm.macho.objc_runtime_data_parser import (
     ObjcSelector,
     ObjcRuntimeDataParser,
 )
-import functools
 
 if TYPE_CHECKING:
     from strongarm.objc import (
@@ -37,9 +40,17 @@ if TYPE_CHECKING:
     )
 
 
+_T = TypeVar("_T")
+
 # Callback invoked when the results for a previously queued CodeSearch have been found.
 # This will be dispatched some time after MachoAnalyzer.search_all_code() is called
 CodeSearchCallback = Callable[['MachoAnalyzer', 'CodeSearch', List['CodeSearchResult']], None]
+
+
+def pairwise(iterable: Iterable[_T]) -> Iterable[Tuple[_T, _T]]:
+    a, b = tee(iterable)
+    next(b, None)
+    return zip(a, b)
 
 
 class DisassemblyFailedError(Exception):
@@ -173,22 +184,18 @@ class MachoAnalyzer:
         max_function_size = 0x2000
         sorted_entry_points = sorted(self.get_functions())
 
-        for idx, entry_point in enumerate(sorted_entry_points):
-            if idx != len(sorted_entry_points) - 1:
-                # Common case
-                # Guess that the size of the function is the distance between this entry point and the next entry point
-                end_address = min(sorted_entry_points[idx+1], entry_point + max_function_size)
-            else:
-                # Disassemble the last function in the __TEXT segment
-                # Since this is the last entry point, we can't guess the function size by
-                # looking at the distance to the next entry point. Use determine_function_boundary instead
-                # TODO(AP): What about offset to __TEXT's end address instead?
-                from strongarm.objc.dataflow import determine_function_boundary
-                binary_data = bytes(self.binary.get_content_from_virtual_address(entry_point, max_function_size))
-                end_address = determine_function_boundary(binary_data,
-                                                          entry_point) + MachoBinary.BYTES_PER_INSTRUCTION
+        try:
+            last_entry = sorted_entry_points[-1]
+        except IndexError:
+            pass
+        else:
+            section = self.binary.section_for_address(last_entry)
+            assert section is not None and section.end_address >= last_entry
+            sorted_entry_points.append(section.end_address)
 
-            yield (entry_point, VirtualMemoryPointer(end_address))
+        for entry_point, end_address in pairwise(sorted_entry_points):
+            end_address = min(end_address, entry_point + max_function_size)
+            yield (entry_point, end_address)
 
     def _find_function_boundaries(self) -> None:
         cursor = self._db_handle.cursor()

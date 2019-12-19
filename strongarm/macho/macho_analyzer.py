@@ -142,8 +142,6 @@ class MachoAnalyzer:
         self._objc_helper: Optional[ObjcRuntimeDataParser] = None
         self._objc_method_list: List[ObjcMethodInfo] = []
 
-        self._cached_function_boundaries: Dict[int, int] = {}
-
         # For efficiency, API clients submit several CodeSearch's to be performed in a batch, instead of sequentially.
         # Iterating the binary's code is an expensive operation, and this allows us to do it just once.
         # This map is where we store the CodeSearch's that are waiting to be executed, and the
@@ -491,19 +489,10 @@ class MachoAnalyzer:
     def get_function_instructions(self, start_address: VirtualMemoryPointer) -> List[CsInsn]:
         """Get a list of disassembled instructions for the function beginning at start_address
         """
-        if start_address in self._cached_function_boundaries:
-            end_address = self._cached_function_boundaries[start_address]
-        else:
-            found_end_address = self.get_function_end_address(start_address)
+        end_address = self.get_function_end_address(start_address)
 
-            if found_end_address is None:
-                raise RuntimeError("")
-
-            end_address = int(found_end_address)
-
-            # not in cache. fetch function boundary, then cache it
-            # add 1 instruction size to the end address so the last instruction is included in the function scope
-            self._cached_function_boundaries[start_address] = end_address
+        if end_address is None:
+            raise RuntimeError(f"No function with start address {start_address} found.")
 
         instructions = self.disassemble_region(start_address, end_address - start_address)
         return instructions

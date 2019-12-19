@@ -252,21 +252,13 @@ class MachoAnalyzer:
         # Create the table which will store XRefs
         c = self._db_handle.cursor()
 
-        # Iterate the sorted entry point list
-        cursor = self._db_handle.execute("SELECT entry_point, end_address FROM function_boundaries")
-
-        with closing(cursor):
-            entry_points = cursor.fetchall()
-
         # TODO(PT): Test this on a binary with no ObjcMsgSend
         objc_msgsend_symbol = self.callable_symbol_for_symbol_name('_objc_msgSend')
         if not objc_msgsend_symbol:
             raise NotImplementedError(f'{self.binary.path} has no imported _objc_msgSend symbol')
         objc_msgsend_addr = objc_msgsend_symbol.address
 
-        for entry_point, end_address in entry_points:
-            entry_point = VirtualMemoryPointer(entry_point)
-            end_address = VirtualMemoryPointer(end_address)
+        for entry_point, end_address in self.get_function_boundaries():
             function_size = end_address - entry_point
 
             # Iterate the disassembled code
@@ -502,18 +494,12 @@ class MachoAnalyzer:
         if start_address in self._cached_function_boundaries:
             end_address = self._cached_function_boundaries[start_address]
         else:
-            cursor = self._db_handle.execute(
-                "SELECT end_address FROM function_boundaries WHERE entry_point = ?",
-                (start_address,)
-            )
+            found_end_address = self.get_function_end_address(start_address)
 
-            with closing(cursor):
-                results = cursor.fetchone()
-
-            if results is None:
+            if found_end_address is None:
                 raise RuntimeError("")
 
-            end_address = results[0]
+            end_address = int(found_end_address)
 
             # not in cache. fetch function boundary, then cache it
             # add 1 instruction size to the end address so the last instruction is included in the function scope
@@ -579,6 +565,26 @@ class MachoAnalyzer:
         Returns: A list of VirtualMemoryPointers corresponding to each function's entry point.
         """
         return self.binary.get_functions()
+
+    def get_function_boundaries(self) -> Set[Tuple[VirtualMemoryPointer, VirtualMemoryPointer]]:
+        cursor = self._db_handle.execute("SELECT entry_point, end_address FROM function_boundaries")
+
+        with closing(cursor):
+            return {(VirtualMemoryPointer(a), VirtualMemoryPointer(b)) for a, b in cursor}
+
+    def get_function_end_address(self, entry_point: VirtualMemoryPointer) -> Optional[VirtualMemoryPointer]:
+        cursor = self._db_handle.execute(
+            "SELECT end_address FROM function_boundaries WHERE entry_point = ?",
+            (entry_point,)
+        )
+
+        with closing(cursor):
+            results = cursor.fetchone()
+
+        if results is None:
+            return None
+
+        return VirtualMemoryPointer(results[0])
 
     def queue_code_search(self, code_search: 'CodeSearch', callback: CodeSearchCallback) -> None:
         """Enqueue a CodeSearch. It will be ran when `search_all_code` runs. `callback` will then be invoked.

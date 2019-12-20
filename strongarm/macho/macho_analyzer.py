@@ -284,14 +284,6 @@ class MachoAnalyzer:
                     if not func_analyzer:
                         func_analyzer = ObjcFunctionAnalyzer.get_function_analyzer(self.binary, entry_point)
 
-                    # PT: H4ck for working around get_register_contents causing a segfault when the provided instruction
-                    # is outside the range of the provide function-analyzer
-                    # This happens in ./tests/bin/DynStaticChecks:[PTObjectTracking earlyReturn] because
-                    # determine_function_boundary gets the wrong end-address due to a return statement in the assembly.
-                    if func_analyzer.end_address < instr.address:
-                        # Ignore the instruction 'outside' the function
-                        continue
-
                     parsed_instr = ObjcUnconditionalBranchInstruction.parse_instruction(
                         func_analyzer,
                         instr,

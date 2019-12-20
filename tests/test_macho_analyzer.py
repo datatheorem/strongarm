@@ -5,6 +5,7 @@ import pathlib
 
 from strongarm.macho.macho_parse import MachoParser
 from strongarm.macho.macho_analyzer import MachoAnalyzer, VirtualMemoryPointer
+from strongarm.macho.macho_binary import MachoBinary
 
 from strongarm.objc import CodeSearch, CodeSearchFunctionCallWithArguments
 from strongarm.objc import ObjcFunctionAnalyzer
@@ -40,6 +41,13 @@ class TestMachoAnalyzer:
         assert len(found_instructions) == 69
         found_end_addr = found_instructions[-1].address
         assert found_end_addr == correct_end_addr
+
+    def test_get_function_end_address(self):
+        start_addr = 0x100006420
+        correct_end_addr = 0x100006530 + MachoBinary.BYTES_PER_INSTRUCTION
+
+        end_address = self.analyzer.get_function_end_address(start_addr)
+        assert end_address == correct_end_addr
 
     def test_find_imported_symbols(self):
         correct_imported_symbols = ['_NSClassFromString',

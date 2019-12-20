@@ -1,14 +1,20 @@
 import time
+import functools
 import shutil
 import sqlite3
 import logging
 import pathlib
 import tempfile
+from contextlib import closing
 from ctypes import sizeof
 from dataclasses import dataclass
 
+from itertools import tee
 from typing import TYPE_CHECKING
 from typing import Set, List, Dict, Optional, Callable
+from typing import Iterable
+from typing import Tuple
+from typing import TypeVar
 from capstone import Cs, CsInsn, CS_ARCH_ARM64, CS_MODE_ARM
 
 from strongarm.macho.macho_definitions import VirtualMemoryPointer
@@ -26,7 +32,6 @@ from strongarm.macho.objc_runtime_data_parser import (
     ObjcSelector,
     ObjcRuntimeDataParser,
 )
-import functools
 
 if TYPE_CHECKING:
     from strongarm.objc import (
@@ -35,9 +40,45 @@ if TYPE_CHECKING:
     )
 
 
+_T = TypeVar("_T")
+
 # Callback invoked when the results for a previously queued CodeSearch have been found.
 # This will be dispatched some time after MachoAnalyzer.search_all_code() is called
 CodeSearchCallback = Callable[['MachoAnalyzer', 'CodeSearch', List['CodeSearchResult']], None]
+
+ANALYZER_SQL_SCHEMA = """
+    CREATE TABLE function_boundaries(
+        entry_point INT NOT NULL UNIQUE,
+        end_address INT NOT NULL UNIQUE,
+        CHECK (entry_point < end_address)
+    );
+
+    CREATE TABLE function_calls(
+        destination_address INT,
+        caller_address INT,
+        caller_func_start_address INT
+    );
+
+    CREATE TABLE objc_msgSends(
+        destination_address INT,
+        caller_address INT,
+        caller_func_start_address INT,
+        classref INT,
+        selref INT
+    );
+
+    CREATE TABLE named_callable_symbols(
+        is_imported INT,
+        address INT,
+        symbol_name TEXT
+    );
+"""
+
+
+def pairwise(iterable: Iterable[_T]) -> Iterable[Tuple[_T, _T]]:
+    a, b = tee(iterable)
+    next(b, None)
+    return zip(a, b)
 
 
 class DisassemblyFailedError(Exception):
@@ -101,8 +142,6 @@ class MachoAnalyzer:
         self._objc_helper: Optional[ObjcRuntimeDataParser] = None
         self._objc_method_list: List[ObjcMethodInfo] = []
 
-        self._cached_function_boundaries: Dict[int, int] = {}
-
         # For efficiency, API clients submit several CodeSearch's to be performed in a batch, instead of sequentially.
         # Iterating the binary's code is an expensive operation, and this allows us to do it just once.
         # This map is where we store the CodeSearch's that are waiting to be executed, and the
@@ -116,7 +155,13 @@ class MachoAnalyzer:
         self._db_path = self._db_tempdir / 'strongarm.db'
         self._db_handle = sqlite3.connect(self._db_path.as_posix())
 
+        cursor = self._db_handle.executescript(ANALYZER_SQL_SCHEMA)
+
+        with self._db_handle:
+            cursor.close()
+
         self._build_callable_symbol_index()
+        self._find_function_boundaries()
 
         # Done setting up, store this analyzer in class cache
         MachoAnalyzer._ANALYZER_CACHE[binary] = self
@@ -166,6 +211,32 @@ class MachoAnalyzer:
         objc_calls = [ObjcMsgSendXref(x[0], x[1], x[2], x[3], x[4]) for x in objc_calls]
         return objc_calls
 
+    def _compute_function_boundaries(self) -> Iterable[Tuple[VirtualMemoryPointer, VirtualMemoryPointer]]:
+        max_function_size = 0x2000
+        sorted_entry_points = sorted(self.get_functions())
+
+        try:
+            last_entry = sorted_entry_points[-1]
+        except IndexError:
+            pass
+        else:
+            section = self.binary.section_for_address(last_entry)
+            assert section is not None and section.end_address >= last_entry
+            sorted_entry_points.append(section.end_address)
+
+        for entry_point, end_address in pairwise(sorted_entry_points):
+            end_address = min(end_address, entry_point + max_function_size)
+            yield (entry_point, end_address)
+
+    def _find_function_boundaries(self) -> None:
+        cursor = self._db_handle.executemany(
+            "INSERT INTO function_boundaries (entry_point, end_address) VALUES (?, ?)",
+            self._compute_function_boundaries(),
+        )
+
+        with self._db_handle:
+            cursor.close()
+
     def _find_branch_xrefs(self) -> None:
         from strongarm.objc import ObjcUnconditionalBranchInstruction
 
@@ -178,40 +249,15 @@ class MachoAnalyzer:
 
         # Create the table which will store XRefs
         c = self._db_handle.cursor()
-        c.execute("""CREATE TABLE function_calls
-                  (destination_address int,
-                   caller_address int, 
-                   caller_func_start_address int)""")
-        c.execute("""CREATE TABLE objc_msgSends
-                  (destination_address int, 
-                   caller_address int, 
-                   caller_func_start_address int,
-                   classref int, 
-                   selref int)""")
 
-        # Iterate the sorted entry point list
-        max_function_size = 0x1000
-        sorted_entry_points = sorted(self.get_functions())
         # TODO(PT): Test this on a binary with no ObjcMsgSend
         objc_msgsend_symbol = self.callable_symbol_for_symbol_name('_objc_msgSend')
         if not objc_msgsend_symbol:
             raise NotImplementedError(f'{self.binary.path} has no imported _objc_msgSend symbol')
         objc_msgsend_addr = objc_msgsend_symbol.address
 
-        for idx, entry_point in enumerate(sorted_entry_points):
-            if idx != len(sorted_entry_points) - 1:
-                # Common case
-                # Guess that the size of the function is the distance between this entry point and the next entry point
-                function_size = min(sorted_entry_points[idx+1] - entry_point, max_function_size)
-            else:
-                # Disassemble the last function in the __TEXT segment
-                # Since this is the last entry point, we can't guess the function size by
-                # looking at the distance to the next entry point. Use determine_function_boundary instead
-                from strongarm.objc.dataflow import determine_function_boundary
-                binary_data = bytes(self.binary.get_content_from_virtual_address(entry_point, max_function_size))
-                end_address = determine_function_boundary(binary_data,
-                                                          entry_point) + MachoBinary.BYTES_PER_INSTRUCTION
-                function_size = end_address - entry_point
+        for entry_point, end_address in self.get_function_boundaries():
+            function_size = end_address - entry_point
 
             # Iterate the disassembled code
             disassembled_code = self.disassemble_region(entry_point, function_size)
@@ -237,14 +283,6 @@ class MachoAnalyzer:
 
                     if not func_analyzer:
                         func_analyzer = ObjcFunctionAnalyzer.get_function_analyzer(self.binary, entry_point)
-
-                    # PT: H4ck for working around get_register_contents causing a segfault when the provided instruction
-                    # is outside the range of the provide function-analyzer
-                    # This happens in ./tests/bin/DynStaticChecks:[PTObjectTracking earlyReturn] because
-                    # determine_function_boundary gets the wrong end-address due to a return statement in the assembly.
-                    if func_analyzer.end_address < instr.address:
-                        # Ignore the instruction 'outside' the function
-                        continue
 
                     parsed_instr = ObjcUnconditionalBranchInstruction.parse_instruction(
                         func_analyzer,
@@ -317,7 +355,7 @@ class MachoAnalyzer:
             # There exists a MachoAnalyzer for this binary - use it instead of making a new one
             return cls._ANALYZER_CACHE[binary]
         return MachoAnalyzer(binary)
-    
+
     def method_info_for_entry_point(self, entry_point: VirtualMemoryPointer) -> Optional['ObjcMethodInfo']:
         # TODO(PT): This should return any symbol name, not just Obj-C methods
         from strongarm.objc.objc_analyzer import ObjcMethodInfo
@@ -443,18 +481,10 @@ class MachoAnalyzer:
     def get_function_instructions(self, start_address: VirtualMemoryPointer) -> List[CsInsn]:
         """Get a list of disassembled instructions for the function beginning at start_address
         """
-        from strongarm.objc.dataflow import determine_function_boundary
+        end_address = self.get_function_end_address(start_address)
 
-        if start_address in self._cached_function_boundaries:
-            end_address = self._cached_function_boundaries[start_address]
-        else:
-            # limit functions to 8kb
-            max_function_size = 0x2000
-            binary_data = bytes(self.binary.get_content_from_virtual_address(start_address, max_function_size))
-            # not in cache. calculate function boundary, then cache it
-            # add 1 instruction size to the end address so the last instruction is included in the function scope
-            end_address = determine_function_boundary(binary_data, start_address) + MachoBinary.BYTES_PER_INSTRUCTION
-            self._cached_function_boundaries[start_address] = end_address
+        if end_address is None:
+            raise RuntimeError(f"No function with start address {start_address} found.")
 
         instructions = self.disassemble_region(start_address, end_address - start_address)
         return instructions
@@ -516,6 +546,26 @@ class MachoAnalyzer:
         Returns: A list of VirtualMemoryPointers corresponding to each function's entry point.
         """
         return self.binary.get_functions()
+
+    def get_function_boundaries(self) -> Set[Tuple[VirtualMemoryPointer, VirtualMemoryPointer]]:
+        cursor = self._db_handle.execute("SELECT entry_point, end_address FROM function_boundaries")
+
+        with closing(cursor):
+            return {(VirtualMemoryPointer(a), VirtualMemoryPointer(b)) for a, b in cursor}
+
+    def get_function_end_address(self, entry_point: VirtualMemoryPointer) -> Optional[VirtualMemoryPointer]:
+        cursor = self._db_handle.execute(
+            "SELECT end_address FROM function_boundaries WHERE entry_point = ?",
+            (entry_point,)
+        )
+
+        with closing(cursor):
+            results = cursor.fetchone()
+
+        if results is None:
+            return None
+
+        return VirtualMemoryPointer(results[0])
 
     def queue_code_search(self, code_search: 'CodeSearch', callback: CodeSearchCallback) -> None:
         """Enqueue a CodeSearch. It will be ran when `search_all_code` runs. `callback` will then be invoked.
@@ -769,7 +819,6 @@ class MachoAnalyzer:
         This index includes both imported and exported symbols.
         """
         c = self._db_handle.cursor()
-        c.execute(f"CREATE TABLE named_callable_symbols (is_imported int, address int, symbol_name text)")
 
         # Process __imp_stubs
         imported_bound_symbols = self.imp_stubs_to_symbol_names

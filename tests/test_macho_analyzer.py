@@ -5,6 +5,7 @@ import pathlib
 
 from strongarm.macho.macho_parse import MachoParser
 from strongarm.macho.macho_analyzer import MachoAnalyzer, VirtualMemoryPointer
+from strongarm.macho.macho_binary import MachoBinary
 
 from strongarm.objc import CodeSearch, CodeSearchFunctionCallWithArguments
 from strongarm.objc import ObjcFunctionAnalyzer
@@ -14,7 +15,7 @@ class TestMachoAnalyzer:
     FAT_PATH = pathlib.Path(__file__).parent / 'bin' / 'StrongarmTarget'
 
     def setup_method(self):
-        parser = MachoParser(TestMachoAnalyzer.FAT_PATH)
+        parser = MachoParser(self.FAT_PATH)
         self.binary = parser.slices[0]
         self.analyzer = MachoAnalyzer.get_analyzer(self.binary)
 
@@ -40,6 +41,26 @@ class TestMachoAnalyzer:
         assert len(found_instructions) == 69
         found_end_addr = found_instructions[-1].address
         assert found_end_addr == correct_end_addr
+
+    def test_get_function_boundaries(self):
+        correct_entry_points = [
+            0x100006228, 0x100006284, 0x100006308, 0x1000063b0,
+            0x1000063e8, 0x100006420, 0x100006534, 0x100006590,
+            0x1000065ec, 0x10000665c, 0x1000066dc, 0x1000066e4,
+            0x1000066e8, 0x1000066ec, 0x1000066f0, 0x1000066f4,
+            0x1000066f8, 0x100006708, 0x10000671c,
+        ]
+        boundaries = self.analyzer.get_function_boundaries()
+        entry_points, end_addresses = zip(*sorted(boundaries))
+        assert list(entry_points) == correct_entry_points
+        assert list(end_addresses) == correct_entry_points[1:] + [0x100006730]
+
+    def test_get_function_end_address(self):
+        start_addr = 0x100006420
+        correct_end_addr = 0x100006530 + MachoBinary.BYTES_PER_INSTRUCTION
+
+        end_address = self.analyzer.get_function_end_address(start_addr)
+        assert end_address == correct_end_addr
 
     def test_find_imported_symbols(self):
         correct_imported_symbols = ['_NSClassFromString',
@@ -289,3 +310,72 @@ class TestMachoAnalyzer:
         symbol = self.analyzer.callable_symbol_for_symbol_name('_fake_symbol')
         # Then no named symbol is returned
         assert symbol is None
+
+
+class TestMachoAnalyzerDynStaticChecks:
+    FAT_PATH = pathlib.Path(__file__).parent / 'bin' / 'DynStaticChecks'
+
+    def setup_method(self):
+        parser = MachoParser(self.FAT_PATH)
+        self.binary = parser.slices[0]
+        self.analyzer = MachoAnalyzer.get_analyzer(self.binary)
+
+    def test_get_function_boundaries(self):
+        correct_entry_points = [
+            0x100007b1c, 0x100007bd8, 0x100007c94, 0x100007d50,
+            0x100007e0c, 0x100007ec8, 0x100007f84, 0x100007fe4,
+            0x1000080d0, 0x100008158, 0x1000081cc, 0x100008254,
+            0x1000082c8, 0x100008350, 0x1000083c4, 0x1000083fc,
+            0x100008434, 0x10000849c, 0x100008504, 0x1000085f0,
+            0x100008610, 0x100008690, 0x100008774, 0x1000087f0,
+            0x100008864, 0x1000089ec, 0x100008ab8, 0x100008b48,
+            0x100008c3c, 0x100008d6c, 0x100008e4c, 0x100008f3c,
+            0x100008f50, 0x10000901c, 0x1000090a4, 0x100009104,
+            0x100009188, 0x10000920c, 0x100009274, 0x1000092e4,
+            0x1000093a4, 0x1000093d8, 0x100009460, 0x10000950c,
+            0x100009584, 0x100009604, 0x100009688, 0x100009700,
+            0x1000097ec, 0x1000097f4, 0x1000097f8, 0x1000097fc,
+            0x100009800, 0x100009804, 0x100009808, 0x100009818,
+            0x10000982c, 0x100009840, 0x10000992c, 0x100009968,
+            0x1000099a8, 0x1000099e8, 0x100009a64, 0x100009ae4,
+            0x100009b64, 0x100009bb4, 0x100009c08, 0x100009c5c,
+            0x100009ce8, 0x100009d78, 0x100009e08, 0x100009e50,
+        ]
+        correct_entry_points = list(map(VirtualMemoryPointer, correct_entry_points))
+        boundaries = self.analyzer.get_function_boundaries()
+        entry_points, end_addresses = zip(*sorted(boundaries))
+        assert list(entry_points) == correct_entry_points
+        assert list(end_addresses) == correct_entry_points[1:] + [0x100009ea8]
+
+    def test_get_function_end_address(self):
+        test_cases = (
+            # -[PTObjectTracking earlyReturn] defined at 0x100008e4c
+            (0x100008e4c, 0x100008f3c),
+            # -[PTObjectTracking .cxx_destruct] defined at 0x100008f3c
+            (0x100008f3c, 0x100008f50),
+            # -[ITJRSA SecKeyDecryptStaticPrivateKey] defined at 0x10000901c
+            (0x10000901c, 0x1000090a4),
+            # -[ITJCCKeyDerivationPBKDF lowRoundCount] defined at 0x100009604
+            (0x100009604, 0x100009688),
+        )
+        for entry_point, expected_end_address in test_cases:
+            end_address = self.analyzer.get_function_end_address(entry_point)
+            assert end_address == expected_end_address
+
+
+class TestMachoAnalyzerControlFlowTarget:
+    FAT_PATH = pathlib.Path(__file__).parent / 'bin' / 'StrongarmControlFlowTarget'
+
+    def setup_method(self):
+        parser = MachoParser(self.FAT_PATH)
+        self.binary = parser.slices[0]
+        self.analyzer = MachoAnalyzer.get_analyzer(self.binary)
+
+    def test_get_function_end_address(self):
+        test_cases = (
+            # -[CFDataFlowMethods switchControlFlow] defined at 0x10000675c
+            (0x10000675c, 0x100006804),
+        )
+        for entry_point, expected_end_address in test_cases:
+            end_address = self.analyzer.get_function_end_address(entry_point)
+            assert end_address == expected_end_address

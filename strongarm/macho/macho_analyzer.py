@@ -161,7 +161,7 @@ class MachoAnalyzer:
             cursor.close()
 
         self._build_callable_symbol_index()
-        self._find_function_boundaries()
+        self._build_function_boundaries_index()
 
         # Done setting up, store this analyzer in class cache
         MachoAnalyzer._ANALYZER_CACHE[binary] = self
@@ -170,7 +170,7 @@ class MachoAnalyzer:
         """Return the list of code-locations within the binary which branch to the provided address.
         """
         if not self._has_computed_call_xrefs:
-            self._find_branch_xrefs()
+            self._build_branch_xrefs_index()
 
         c = self._db_handle.cursor()
         xrefs = c.execute(f'SELECT * from function_calls WHERE destination_address={int(address)}').fetchall()
@@ -190,7 +190,7 @@ class MachoAnalyzer:
         at a call site.
         """
         if not self._has_computed_call_xrefs:
-            self._find_branch_xrefs()
+            self._build_branch_xrefs_index()
 
         c = self._db_handle.cursor()
 
@@ -212,9 +212,13 @@ class MachoAnalyzer:
         return objc_calls
 
     def _compute_function_boundaries(self) -> Iterable[Tuple[VirtualMemoryPointer, VirtualMemoryPointer]]:
+        from strongarm.objc import ObjcUnconditionalBranchInstruction
+
         max_function_size = 0x2000
         sorted_entry_points = sorted(self.get_functions())
 
+        # Computing a function boundaries uses the next entry point address as a hint. For the last entry point in the
+        # binary, use the end of the section as the hint.
         try:
             last_entry = sorted_entry_points[-1]
         except IndexError:
@@ -224,11 +228,49 @@ class MachoAnalyzer:
             assert section is not None and section.end_address >= last_entry
             sorted_entry_points.append(section.end_address)
 
-        for entry_point, end_address in pairwise(sorted_entry_points):
-            end_address = min(end_address, entry_point + max_function_size)
-            yield (entry_point, end_address)
+        for entry_point, next_entry_point in pairwise(sorted_entry_points):
+            # Grab a chunk of code within which to search for a function boundary
+            speculative_function_size = min(next_entry_point - entry_point, max_function_size)
+            disassembled_code = self.disassemble_region(entry_point, speculative_function_size)
+            # Find the basic blocks in this code chunk which are before the next entry point
+            basic_block_starts = []
+            for instr in disassembled_code:
+                # Grab the destination address of branch instructions
+                if instr.mnemonic in ObjcUnconditionalBranchInstruction.UNCONDITIONAL_BRANCH_MNEMONICS:
+                    destination_address = instr.operands[0].value.imm
+                elif instr.mnemonic in ['cbz', 'cbnz']:
+                    destination_address = instr.operands[1].value.imm
+                elif instr.mnemonic in ['tbz', 'tbnz']:
+                    destination_address = instr.operands[2].value.imm
+                else:
+                    # Not a branch instruction
+                    continue
 
-    def _find_function_boundaries(self) -> None:
+                # Is it a local branch?
+                if destination_address < next_entry_point:
+                    basic_block_starts.append(destination_address)
+
+            last_basic_block_start = sorted(basic_block_starts)[-1]
+            last_basic_block_start_instr_idx = (last_basic_block_start - entry_point) // MachoBinary.BYTES_PER_INSTRUCTION
+            if last_basic_block_start_instr_idx >= len(disassembled_code):
+                logging.error(f'Could not determine function boundary @ {hex(entry_point)}. '
+                              f'The last basic block was outside the speculative code region: '
+                              f'{last_basic_block_start_instr_idx} > {len(disassembled_code)}')
+                continue
+
+            for instr_in_last_bb in disassembled_code[last_basic_block_start_instr_idx:]:
+                # The next branch instruction is the end of the last basic block, and therefore the EOF
+                # Grab the destination address of branch instructions
+                if instr_in_last_bb.mnemonic in [*ObjcUnconditionalBranchInstruction.UNCONDITIONAL_BRANCH_MNEMONICS,
+                                                 'cbz', 'cbnz',
+                                                 'tbz', 'tbnz']:
+                    yield (entry_point, instr_in_last_bb.address)
+                    break
+            else:
+                logging.error(f'Could not determine function boundary @ {hex(entry_point)}, '
+                              f'didn\'t find EOF within last basic block @ {last_basic_block_start}')
+
+    def _build_function_boundaries_index(self) -> None:
         cursor = self._db_handle.executemany(
             "INSERT INTO function_boundaries (entry_point, end_address) VALUES (?, ?)",
             self._compute_function_boundaries(),
@@ -237,11 +279,11 @@ class MachoAnalyzer:
         with self._db_handle:
             cursor.close()
 
-    def _find_branch_xrefs(self) -> None:
+    def _build_branch_xrefs_index(self) -> None:
         from strongarm.objc import ObjcUnconditionalBranchInstruction
 
         if self._has_computed_call_xrefs:
-            logging.error(f'Already computed xrefs, why was _find_branch_xrefs called again?')
+            logging.error(f'Already computed xrefs, why was _build_branch_xrefs_index called again?')
             return
 
         start_time = time.time()

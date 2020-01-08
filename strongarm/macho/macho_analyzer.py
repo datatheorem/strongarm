@@ -226,10 +226,7 @@ class MachoAnalyzer:
             assert section is not None and section.end_address >= last_entry
             sorted_entry_points.append(VirtualMemoryPointer(section.end_address))
 
-        print(self.binary.path)
-
         for entry_point, end_address in pairwise(sorted_entry_points):
-            print(entry_point, end_address)
             end_address = min(end_address, entry_point + max_function_size)
             end_address = max(
                 (x for _, x in self._compute_function_basic_blocks(entry_point, end_address)),

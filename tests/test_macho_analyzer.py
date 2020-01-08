@@ -374,7 +374,7 @@ class TestMachoAnalyzerControlFlowTarget:
     def test_get_function_end_address(self):
         test_cases = (
             # -[CFDataFlowMethods switchControlFlow] defined at 0x10000675c
-            (0x10000675c, 0x100006804),
+            (0x10000675c, 0x1000067f4),
         )
         for entry_point, expected_end_address in test_cases:
             end_address = self.analyzer.get_function_end_address(entry_point)

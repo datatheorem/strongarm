@@ -212,8 +212,6 @@ class MachoAnalyzer:
         return objc_calls
 
     def _compute_function_boundaries(self) -> Iterable[Tuple[VirtualMemoryPointer, VirtualMemoryPointer]]:
-        from strongarm.objc import ObjcUnconditionalBranchInstruction
-
         max_function_size = 0x2000
         sorted_entry_points = sorted(self.get_functions())
 
@@ -226,49 +224,56 @@ class MachoAnalyzer:
         else:
             section = self.binary.section_for_address(last_entry)
             assert section is not None and section.end_address >= last_entry
-            sorted_entry_points.append(section.end_address)
+            sorted_entry_points.append(VirtualMemoryPointer(section.end_address))
 
-        for entry_point, next_entry_point in pairwise(sorted_entry_points):
-            # Grab a chunk of code within which to search for a function boundary
-            speculative_function_size = min(next_entry_point - entry_point, max_function_size)
-            disassembled_code = self.disassemble_region(entry_point, speculative_function_size)
-            # Find the basic blocks in this code chunk which are before the next entry point
-            basic_block_starts = []
-            for instr in disassembled_code:
-                # Grab the destination address of branch instructions
-                if instr.mnemonic in ObjcUnconditionalBranchInstruction.UNCONDITIONAL_BRANCH_MNEMONICS:
-                    destination_address = instr.operands[0].value.imm
-                elif instr.mnemonic in ['cbz', 'cbnz']:
-                    destination_address = instr.operands[1].value.imm
-                elif instr.mnemonic in ['tbz', 'tbnz']:
-                    destination_address = instr.operands[2].value.imm
-                else:
-                    # Not a branch instruction
-                    continue
+        print(self.binary.path)
 
-                # Is it a local branch?
-                if destination_address < next_entry_point:
-                    basic_block_starts.append(destination_address)
+        for entry_point, end_address in pairwise(sorted_entry_points):
+            print(entry_point, end_address)
+            end_address = min(end_address, entry_point + max_function_size)
+            end_address = max(
+                (x for _, x in self._compute_function_basic_blocks(entry_point, end_address)),
+                default=end_address,
+            )
+            yield (entry_point, end_address)
 
-            last_basic_block_start = sorted(basic_block_starts)[-1]
-            last_basic_block_start_instr_idx = (last_basic_block_start - entry_point) // MachoBinary.BYTES_PER_INSTRUCTION
-            if last_basic_block_start_instr_idx >= len(disassembled_code):
-                logging.error(f'Could not determine function boundary @ {hex(entry_point)}. '
-                              f'The last basic block was outside the speculative code region: '
-                              f'{last_basic_block_start_instr_idx} > {len(disassembled_code)}')
+    def _compute_function_basic_blocks(
+            self,
+            entry_point: VirtualMemoryPointer,
+            end_address: VirtualMemoryPointer,
+    ) -> Iterable[Tuple[VirtualMemoryPointer, VirtualMemoryPointer]]:
+        from strongarm.objc import ObjcUnconditionalBranchInstruction
+
+        binary_content = self.binary.get_content_from_virtual_address(
+            virtual_address=entry_point,
+            size=end_address-entry_point,
+        )
+        # Grab a chunk of code within which to search for a function boundary
+        disassembled_code = self.cs.disasm(binary_content, entry_point)
+
+        # Find the basic blocks in this code chunk which are before the next entry point
+        basic_blocks_start = {entry_point}
+
+        for instr in disassembled_code:
+            # Grab the destination address of branch instructions
+            if instr.mnemonic in ObjcUnconditionalBranchInstruction.UNCONDITIONAL_BRANCH_MNEMONICS:
+                destination_address = instr.operands[0].value.imm
+            elif instr.mnemonic in ['cbz', 'cbnz']:
+                destination_address = instr.operands[1].value.imm
+            elif instr.mnemonic in ['tbz', 'tbnz']:
+                destination_address = instr.operands[2].value.imm
+            elif instr.mnemonic in ["br", "ret"]:
+                destination_address = -1
+            else:
+                # Not a branch instruction
                 continue
 
-            for instr_in_last_bb in disassembled_code[last_basic_block_start_instr_idx:]:
-                # The next branch instruction is the end of the last basic block, and therefore the EOF
-                # Grab the destination address of branch instructions
-                if instr_in_last_bb.mnemonic in [*ObjcUnconditionalBranchInstruction.UNCONDITIONAL_BRANCH_MNEMONICS,
-                                                 'cbz', 'cbnz',
-                                                 'tbz', 'tbnz']:
-                    yield (entry_point, instr_in_last_bb.address)
-                    break
-            else:
-                logging.error(f'Could not determine function boundary @ {hex(entry_point)}, '
-                              f'didn\'t find EOF within last basic block @ {last_basic_block_start}')
+            basic_blocks_start.add(VirtualMemoryPointer(instr.address + instr.size))
+
+            if entry_point <= destination_address < end_address:
+                basic_blocks_start.add(VirtualMemoryPointer(destination_address))
+
+        return pairwise(sorted(basic_blocks_start))
 
     def _build_function_boundaries_index(self) -> None:
         cursor = self._db_handle.executemany(

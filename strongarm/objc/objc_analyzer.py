@@ -387,60 +387,11 @@ class ObjcFunctionAnalyzer:
         In other words, it is the smallest unit of callable code - a subroutine.
         There is a single entry point, and single exit point.
 
-        Returns a List of objects encapsulating the basic block boundaries.
+        Returns:
+            a List of objects encapsulating the basic block boundaries.
         """
-        # First basic block begins at the first instruction in the function
-        basic_block_start_indexes = [0]
-        # Last basic block ends at the last instruction in the function
-        basic_block_end_indexes = [len(self.instructions) - 1]
-
-        # Iterate all of the internal-branching within the function to record the basic blocks
-        for instr in self.instructions:
-            # Ensure we're looking at a branch instruction and pull out the destination address
-            if instr.mnemonic in ObjcUnconditionalBranchInstruction.UNCONDITIONAL_BRANCH_MNEMONICS:
-                destination_address = instr.operands[0].value.imm
-            elif instr.mnemonic in ['cbz', 'cbnz']:
-                destination_address = instr.operands[1].value.imm
-            elif instr.mnemonic in ['tbz', 'tbnz']:
-                destination_address = instr.operands[2].value.imm
-            else:
-                # Not a branch instruction
-                continue
-
-            # Is it a branch to a local label within the function?
-            if self.start_address <= destination_address < self.end_address:
-                branch_idx = self._get_instruction_index_of_address(instr.address)
-                branch_destination_idx = self._get_instruction_index_of_address(destination_address)
-                if not branch_idx or not branch_destination_idx:
-                    # We somehow were given a branch that isn't function-local - move on
-                    DebugUtil.log(self, f'Consistency check failed: {instr.address} is not a local branch of {self}')
-                    continue
-
-                # A basic block ends at this branch
-                basic_block_end_indexes.append(branch_idx)
-                # A different basic block begins just after this branch
-                basic_block_start_indexes.append(branch_idx + 1)
-
-                # A basic block begins at the branch destination
-                basic_block_start_indexes.append(branch_destination_idx)
-                # A basic block ends just before the branch destination
-                basic_block_end_indexes.append(branch_destination_idx - 1)
-
-        # Sort arrays of basic block start/end addresses so we can zip them together into basic block ranges
-        # Also, remove duplicate entries
-        basic_block_start_indexes = sorted(set(basic_block_start_indexes))
-        basic_block_end_indexes = sorted(set(basic_block_end_indexes))
-        basic_block_indexes = list(zip(basic_block_start_indexes, basic_block_end_indexes))
-
-        # Convert to ObjcBasicBlockLocation objects
-        basic_blocks = []
-        for start_idx, end_idx in basic_block_indexes:
-            start_address = self.start_address + (start_idx * MachoBinary.BYTES_PER_INSTRUCTION)
-            end_address = self.start_address + (end_idx * MachoBinary.BYTES_PER_INSTRUCTION)
-            bb = BasicBlock(start_address, end_address)
-            basic_blocks.append(bb)
-
-        return basic_blocks
+        from itertools import starmap
+        return list(starmap(BasicBlock, self.macho_analyzer._compute_function_basic_blocks(self.start_address, self.end_address)))
 
     def __repr__(self) -> str:
         return f'({self.get_symbol_name()} @ {self.start_address})'

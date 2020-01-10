@@ -390,8 +390,11 @@ class ObjcFunctionAnalyzer:
         Returns:
             a List of objects encapsulating the basic block boundaries.
         """
-        from itertools import starmap
-        return list(starmap(BasicBlock, self.macho_analyzer._compute_function_basic_blocks(self.start_address, self.end_address)))
+        basic_blocks = self.macho_analyzer._compute_function_basic_blocks(
+            self.start_address,
+            self.end_address + self.instructions[-1].size,
+        )
+        return [BasicBlock(beg, end - MachoBinary.BYTES_PER_INSTRUCTION) for beg, end in basic_blocks]
 
     def __repr__(self) -> str:
         return f'({self.get_symbol_name()} @ {self.start_address})'

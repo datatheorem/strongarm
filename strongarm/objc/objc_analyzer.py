@@ -1,4 +1,5 @@
 import functools
+from itertools import starmap
 from typing import List, Tuple, Optional
 from subprocess import check_output
 
@@ -394,7 +395,7 @@ class ObjcFunctionAnalyzer:
             self.start_address,
             self.end_address + self.instructions[-1].size,
         )
-        return [BasicBlock(beg, end - MachoBinary.BYTES_PER_INSTRUCTION) for beg, end in basic_blocks]
+        return list(starmap(BasicBlock, basic_blocks))
 
     def __repr__(self) -> str:
         return f'({self.get_symbol_name()} @ {self.start_address})'

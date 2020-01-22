@@ -300,8 +300,8 @@ class MachoAnalyzer:
             raise NotImplementedError(f'{self.binary.path} has no imported _objc_msgSend symbol')
         objc_msgsend_addr = objc_msgsend_symbol.address
 
-        # Fast-paths for special selectors added in iOS 13
-        # Only emitted instead of the _objc_msgSend counterparts when the class has not implemented the selectors
+        # Some special selectors have a fast-path, _objc_opt_<selector>, that was added in iOS 13
+        # The _objc_opt_* call is emitted instead of _objc_msgSend when the class has not re-implemented the selector.
         # In other words, these fast-paths are only used if the default NSObject implementation will be called
         # Found with: $ nm "/usr/lib/libobjc.A.dylib" | grep "objc_opt"
         objc_opt_function_names = [
@@ -311,12 +311,14 @@ class MachoAnalyzer:
             '_objc_opt_respondsToSelector',
             '_objc_opt_self'
         ]
-        objc_opt_function_addrs = [-1] * len(objc_opt_function_names)
+        objc_opt_function_addrs: List[VirtualMemoryPointer] = []
         for idx, func_name in enumerate(objc_opt_function_names):
             # A callable symbol is only present if the function has been used in this binary
             sym = self.callable_symbol_for_symbol_name(func_name)
             if sym:
-                objc_opt_function_addrs[idx] = sym.address
+                objc_opt_function_addrs.append(sym.address)
+            else:
+                objc_opt_function_addrs.append(VirtualMemoryPointer(-1))
         objc_function_addrs = objc_opt_function_addrs + [objc_msgsend_addr]
 
         for entry_point, end_address in self.get_function_boundaries():

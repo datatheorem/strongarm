@@ -312,7 +312,7 @@ class MachoAnalyzer:
             '_objc_opt_self'
         ]
         objc_opt_function_addrs: List[VirtualMemoryPointer] = []
-        for idx, func_name in enumerate(objc_opt_function_names):
+        for func_name in objc_opt_function_names:
             # A callable symbol is only present if the function has been used in this binary
             sym = self.callable_symbol_for_symbol_name(func_name)
             if sym:

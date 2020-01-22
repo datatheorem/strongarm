@@ -300,15 +300,24 @@ class MachoAnalyzer:
             raise NotImplementedError(f'{self.binary.path} has no imported _objc_msgSend symbol')
         objc_msgsend_addr = objc_msgsend_symbol.address
 
-        objc_opt_new_addr = -1
-        objc_opt_new_symbol = self.callable_symbol_for_symbol_name("_objc_opt_new")
-        if objc_opt_new_symbol:
-            objc_opt_new_addr = objc_opt_new_symbol.address
-
-        objc_opt_class_addr = -1
-        objc_opt_class_symbol = self.callable_symbol_for_symbol_name("_objc_opt_class")
-        if objc_opt_class_symbol:
-            objc_opt_class_addr = objc_opt_class_symbol.address
+        # Fast-paths for special selectors added in iOS 13
+        # Only emitted instead of the _objc_msgSend counterparts when the class has not implemented the selectors
+        # In other words, these fast-paths are only used if the default NSObject implementation will be called
+        # Found with: $ nm "/usr/lib/libobjc.A.dylib" | grep "objc_opt"
+        objc_opt_function_names = [
+            '_objc_opt_class',
+            '_objc_opt_isKindOfClass',
+            '_objc_opt_new',
+            '_objc_opt_respondsToSelector',
+            '_objc_opt_self'
+        ]
+        objc_opt_function_addrs = [-1] * len(objc_opt_function_names)
+        for idx, func_name in enumerate(objc_opt_function_names):
+            # A callable symbol is only present if the function has been used in this binary
+            sym = self.callable_symbol_for_symbol_name(func_name)
+            if sym:
+                objc_opt_function_addrs[idx] = sym.address
+        objc_function_addrs = objc_opt_function_addrs + [objc_msgsend_addr]
 
         for entry_point, end_address in self.get_function_boundaries():
             function_size = end_address - entry_point
@@ -329,11 +338,7 @@ class MachoAnalyzer:
                 # Record that the branch receiver has an XRef from this instruction
                 destination_address = instr.operands[0].value.imm
 
-                if destination_address in [
-                    objc_opt_new_addr,
-                    objc_opt_class_addr,
-                    objc_msgsend_addr,
-                ]:
+                if destination_address in objc_function_addrs:
                     # Branch to function in the _objc_* family
                     from strongarm.objc import (
                         RegisterContentsType,

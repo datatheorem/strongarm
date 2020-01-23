@@ -234,7 +234,7 @@ class MachoAnalyzer:
                 (x for _, x in self._compute_function_basic_blocks(entry_point, end_address)),
                 default=end_address,
             )
-            yield (entry_point, end_address)
+            yield (entry_point, end_address + MachoBinary.BYTES_PER_INSTRUCTION)
 
     def _compute_function_basic_blocks(
             self,
@@ -272,7 +272,8 @@ class MachoAnalyzer:
             if entry_point <= destination_address < end_address:
                 basic_blocks_start.add(VirtualMemoryPointer(destination_address))
 
-        return pairwise(sorted(basic_blocks_start))
+        right_exclusive_basic_blocks = pairwise(sorted(basic_blocks_start))
+        return ((l, r - MachoBinary.BYTES_PER_INSTRUCTION) for l, r in right_exclusive_basic_blocks)
 
     def _build_function_boundaries_index(self) -> None:
         cursor = self._db_handle.executemany(

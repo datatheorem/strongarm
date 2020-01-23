@@ -227,7 +227,9 @@ class MachoAnalyzer:
             sorted_entry_points.append(VirtualMemoryPointer(section.end_address))
 
         for entry_point, end_address in pairwise(sorted_entry_points):
+            # First use the next function's entry point as an upper limit the end_address
             end_address = min(end_address, entry_point + max_function_size)
+            # Use the end_address of the last basic block as the definitive end_address of the function
             end_address = max(
                 (x for _, x in self._compute_function_basic_blocks(entry_point, end_address)),
                 default=end_address,

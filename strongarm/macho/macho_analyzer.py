@@ -325,7 +325,12 @@ class MachoAnalyzer:
             function_size = end_address - entry_point
 
             # Iterate the disassembled code
-            disassembled_code = self.disassemble_region(entry_point, function_size)
+            try:
+                disassembled_code = self.disassemble_region(entry_point, function_size)
+            except DisassemblyFailedError:
+                # Skip code regions containing invalid bytecode
+                continue
+
             function_branches = []
             objc_calls = []
             func_analyzer = None

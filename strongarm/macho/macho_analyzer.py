@@ -421,12 +421,12 @@ class MachoAnalyzer:
             # to the locally implemented ObjC method.
             for xref in function_branches:
                 c.execute(
-                    f"INSERT INTO function_calls VALUES ({xref[0]}, {xref[1]}, {xref[2]})"
+                    "INSERT INTO function_calls VALUES (?, ?, ?)", (xref[0], xref[1], xref[2])
                 )
             for objc_call in objc_calls:
                 c.execute(
-                    f"INSERT INTO objc_msgSends "
-                    f"VALUES ({objc_call[0]}, {objc_call[1]}, {objc_call[2]}, {objc_call[3]}, {objc_call[4]})"
+                    "INSERT INTO objc_msgSends "
+                    "VALUES (?, ?, ?, ?, ?)", (objc_call[0], objc_call[1], objc_call[2], objc_call[3], objc_call[4])
                 )
 
         self._db_handle.commit()
@@ -931,10 +931,10 @@ class MachoAnalyzer:
         # Process __imp_stubs
         imported_bound_symbols = self.imp_stubs_to_symbol_names
         for imp_stub_addr, symbol_name in imported_bound_symbols.items():
-            c.execute(f"INSERT INTO named_callable_symbols VALUES (1, {imp_stub_addr}, '{symbol_name}')")
+            c.execute("INSERT INTO named_callable_symbols VALUES (1, ?, ?)", (imp_stub_addr, symbol_name))
 
         # Process the symbols defined in the binary
         for callable_addr, symbol_name in self.exported_symbol_pointers_to_names.items():
-            c.execute(f"INSERT INTO named_callable_symbols VALUES (0, {callable_addr}, '{symbol_name}')")
+            c.execute("INSERT INTO named_callable_symbols VALUES (0, ?, ?)", (callable_addr, symbol_name))
 
         self._db_handle.commit()

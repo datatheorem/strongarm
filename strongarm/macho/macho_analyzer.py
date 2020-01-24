@@ -50,7 +50,7 @@ ANALYZER_SQL_SCHEMA = """
     CREATE TABLE function_boundaries(
         entry_point INT NOT NULL UNIQUE,
         end_address INT NOT NULL UNIQUE,
-        CHECK (entry_point < end_address)
+        CHECK (entry_point <= end_address)
     );
 
     CREATE TABLE function_calls(
@@ -231,10 +231,10 @@ class MachoAnalyzer:
             end_address = min(end_address, entry_point + max_function_size)
             # Use the end_address of the last basic block as the definitive end_address of the function
             end_address = max(
-                (x for _, x in self._compute_function_basic_blocks(entry_point, end_address)),
+                (x + MachoBinary.BYTES_PER_INSTRUCTION for _, x in self._compute_function_basic_blocks(entry_point, end_address)),
                 default=end_address,
             )
-            yield (entry_point, end_address + MachoBinary.BYTES_PER_INSTRUCTION)
+            yield (entry_point, end_address)
 
     def _compute_function_basic_blocks(
             self,

@@ -372,7 +372,7 @@ class ObjcFunctionAnalyzer:
         # If basic-block analysis has been done, reduce the dataflow analysis space to the instruction's basic-block
         # Otherwise, use the entire source function as the search space
         for bb in self.basic_blocks:
-            if bb.start_address <= instruction.address <= bb.end_address:
+            if bb.start_address <= instruction.address < bb.end_address:
                 # Found the basic block containing the instruction; reduce dataflow analysis space to its head
                 dataflow_space_start = bb.start_address
                 break

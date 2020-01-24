@@ -50,7 +50,7 @@ ANALYZER_SQL_SCHEMA = """
     CREATE TABLE function_boundaries(
         entry_point INT NOT NULL UNIQUE,
         end_address INT NOT NULL UNIQUE,
-        CHECK (entry_point <= end_address)
+        CHECK (entry_point < end_address)
     );
 
     CREATE TABLE function_calls(

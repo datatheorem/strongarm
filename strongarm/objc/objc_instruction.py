@@ -119,8 +119,12 @@ class ObjcUnconditionalBranchInstruction(ObjcBranchInstruction):
                                       'b.eq',  # TODO(PT): these b-suffix are not strictly unconditional branches, but
                                                # they're functionally unconditional for what we care about
                                       'b.ne',
+                                      'b.ge',
+                                      'b.le',
+                                      'b.gt',
                                       'b.lt',
-                                      'b.gt'
+                                      'b.hi',
+                                      'b.lo',
                                       ]
     OBJC_MSGSEND_FUNCTIONS = ['_objc_msgSend', '_objc_msgSendSuper2']
 

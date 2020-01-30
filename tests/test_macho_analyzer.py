@@ -50,8 +50,6 @@ class TestMachoAnalyzer:
             0x1000066e8, 0x1000066ec, 0x1000066f0, 0x1000066f4,
             0x1000066f8, 0x100006708, 0x10000671c,
         ]
-        import logging
-        logging.info((VirtualMemoryPointer(x) for x in sorted(correct_entry_points)))
         boundaries = self.analyzer.get_function_boundaries()
         entry_points, end_addresses = zip(*sorted(boundaries))
         assert list(entry_points) == correct_entry_points

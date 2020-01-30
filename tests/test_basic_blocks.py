@@ -3,6 +3,7 @@ import pathlib
 from strongarm.macho.macho_analyzer import MachoAnalyzer, VirtualMemoryPointer
 from strongarm.macho.macho_parse import MachoParser
 from strongarm.objc.objc_analyzer import ObjcFunctionAnalyzer
+from tests.utils import function_containing_asm
 
 
 class TestBasicBlocks:
@@ -143,3 +144,28 @@ class TestBasicBlocks:
             (0x100008ed4, 0x100008ee4), (0x100008ee4, 0x100008f24), (0x100008f24, 0x100008f3c)
         ]
         assert basic_blocks == [(VirtualMemoryPointer(a), VirtualMemoryPointer(b)) for a, b in correct_basic_blocks]
+
+    def test_early_return2(self):
+        # Given I provide a function that has a `ret` instruction on an early code path, with more basic blocks after it
+        source = """
+        mov x0, #0x123
+        and x1, x0, #0x1
+        ; Load the address after the ret. 
+        ; Be careful with these lines!
+        ldr x9, .+4
+        br x9
+        ; x0 was even - return early
+        ret
+        ; We checked a condition and jumped - run some more code
+        mov x1, x0
+        mov x0, x2
+        """
+        with function_containing_asm(source) as (analyzer, function_analyzer):
+            # If I query the basic-block layout of the method
+            basic_blocks = [(x.start_address, x.end_address) for x in function_analyzer.basic_blocks]
+
+            # Then the basic-block boundaries are correctly identified
+            correct_basic_blocks = [
+                (0x100007f90, 0x100007fa0), (0x100007fa0, 0x100007fa4), (0x100007fa4, 0x100007fb4)
+            ]
+            assert basic_blocks == [(VirtualMemoryPointer(a), VirtualMemoryPointer(b)) for a, b in correct_basic_blocks]

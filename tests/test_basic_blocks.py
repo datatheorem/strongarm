@@ -151,7 +151,7 @@ class TestBasicBlocks:
         mov x0, #0x123
         and x1, x0, #0x1
         ; Load the address after the ret. Be careful with this line, the instruction-jump-count should be correct
-        b .+4
+        b .+8
         ; x0 was even - return early
         ret
         ; We checked a condition and jumped - run some more code

@@ -126,3 +126,20 @@ class TestBasicBlocks:
             (0x100007b1c, 0x100007bc4), (0x100007bc4, 0x100007bd4), (0x100007bd4, 0x100007bd8)
         ]
         assert basic_blocks == [(VirtualMemoryPointer(a), VirtualMemoryPointer(b)) for a, b in correct_basic_blocks]
+
+    def test_early_return(self):
+        # Given I provide a function that has a `ret` instruction on an early code path, with more basic blocks after it
+        binary_path = pathlib.Path(__file__).parent / 'bin' / 'DynStaticChecks'
+        binary = MachoParser(binary_path).get_arm64_slice()
+        analyzer = MachoAnalyzer.get_analyzer(binary)
+        function_analyzer = analyzer.get_imps_for_sel('earlyReturn')[0]
+
+        # If I query the basic-block layout of the method
+        basic_blocks = [(x.start_address, x.end_address) for x in function_analyzer.basic_blocks]
+
+        # Then the basic-block boundaries are correctly identified
+        correct_basic_blocks = [
+            (0x100008e4c, 0x100008e6c), (0x100008e6c, 0x100008e8c), (0x100008e8c, 0x100008ed4),
+            (0x100008ed4, 0x100008ee4), (0x100008ee4, 0x100008f24), (0x100008f24, 0x100008f3c)
+        ]
+        assert basic_blocks == [(VirtualMemoryPointer(a), VirtualMemoryPointer(b)) for a, b in correct_basic_blocks]

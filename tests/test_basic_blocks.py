@@ -150,10 +150,8 @@ class TestBasicBlocks:
         source = """
         mov x0, #0x123
         and x1, x0, #0x1
-        ; Load the address after the ret. 
-        ; Be careful with these lines!
-        ldr x9, .+4
-        br x9
+        ; Load the address after the ret. Be careful with this line, the instruction-jump-count should be correct
+        b .+4
         ; x0 was even - return early
         ret
         ; We checked a condition and jumped - run some more code
@@ -166,6 +164,6 @@ class TestBasicBlocks:
 
             # Then the basic-block boundaries are correctly identified
             correct_basic_blocks = [
-                (0x100007f90, 0x100007fa0), (0x100007fa0, 0x100007fa4), (0x100007fa4, 0x100007fb4)
+                (0x100007f94, 0x100007fa0), (0x100007fa0, 0x100007fa4), (0x100007fa4, 0x100007fb4)
             ]
             assert basic_blocks == [(VirtualMemoryPointer(a), VirtualMemoryPointer(b)) for a, b in correct_basic_blocks]

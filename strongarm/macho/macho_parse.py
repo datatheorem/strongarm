@@ -3,9 +3,13 @@ from pathlib import Path
 from typing import List, Optional
 
 from strongarm.macho.macho_binary import MachoBinary
-from strongarm.macho.macho_definitions import (MachArch, MachoFatArch,
-                                               MachoFatHeader,
-                                               StaticFilePointer, swap32)
+from strongarm.macho.macho_definitions import (
+    MachArch,
+    MachoFatArch,
+    MachoFatHeader,
+    StaticFilePointer,
+    swap32,
+)
 
 
 class ArchitectureNotSupportedError(Exception):

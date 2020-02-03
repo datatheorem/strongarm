@@ -4,12 +4,24 @@ from typing import List
 from capstone import CsInsn
 from capstone.arm64 import ARM64_OP_IMM, ARM64_OP_MEM, ARM64_OP_REG, Arm64Op
 
-from strongarm.macho import (CPU_TYPE, MachoAnalyzer, MachoBinary, MachoParser,
-                             ObjcCategory, ObjcClass, ObjcSelector,
-                             VirtualMemoryPointer)
-from strongarm.objc import (BasicBlock, ObjcBranchInstruction,
-                            ObjcFunctionAnalyzer, ObjcInstruction,
-                            ObjcMethodInfo, RegisterContentsType)
+from strongarm.macho import (
+    CPU_TYPE,
+    MachoAnalyzer,
+    MachoBinary,
+    MachoParser,
+    ObjcCategory,
+    ObjcClass,
+    ObjcSelector,
+    VirtualMemoryPointer,
+)
+from strongarm.objc import (
+    BasicBlock,
+    ObjcBranchInstruction,
+    ObjcFunctionAnalyzer,
+    ObjcInstruction,
+    ObjcMethodInfo,
+    RegisterContentsType,
+)
 
 
 class StringFormatter:

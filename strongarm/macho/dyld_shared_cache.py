@@ -5,12 +5,15 @@ from pathlib import Path
 from typing import Dict, List, Optional, Tuple, Type, TypeVar
 
 from strongarm.macho.macho_binary import MachoBinary
-from strongarm.macho.macho_definitions import (DyldSharedCacheHeader,
-                                               DyldSharedCacheImageInfo,
-                                               DyldSharedFileMapping, MachArch,
-                                               StaticFilePointer,
-                                               VirtualMemoryPointer,
-                                               VMProtFlags)
+from strongarm.macho.macho_definitions import (
+    DyldSharedCacheHeader,
+    DyldSharedCacheImageInfo,
+    DyldSharedFileMapping,
+    MachArch,
+    StaticFilePointer,
+    VirtualMemoryPointer,
+    VMProtFlags,
+)
 
 _StructureT = TypeVar("_StructureT", bound=Structure)
 

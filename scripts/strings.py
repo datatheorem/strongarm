@@ -8,10 +8,12 @@ from strongarm.macho import MachoAnalyzer, MachoBinary, MachoParser
 
 
 def main():
-    arg_parser = argparse.ArgumentParser(description='strings clone')
+    arg_parser = argparse.ArgumentParser(description="strings clone")
     arg_parser.add_argument(
-        'binary_path', metavar='binary_path', type=str, help=
-        'Path to binary whose strings should be printed'
+        "binary_path",
+        metavar="binary_path",
+        type=str,
+        help="Path to binary whose strings should be printed",
     )
     args = arg_parser.parse_args()
 
@@ -28,5 +30,5 @@ def main():
         print(string)
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     main()

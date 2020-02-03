@@ -8,23 +8,29 @@ from strongarm.macho import MachoBinary, MachoParser
 
 
 def main():
-    arg_parser = argparse.ArgumentParser(description='lipo clone')
+    arg_parser = argparse.ArgumentParser(description="lipo clone")
     arg_parser.add_argument(
-        '-archs', action='store_true', help='Display the architecture names present in each slice of the archive.'
+        "-archs",
+        action="store_true",
+        help="Display the architecture names present in each slice of the archive.",
     )
     arg_parser.add_argument(
-        '-create', action='store_true', help='Create a FAT archive from the provided input files'
+        "-create",
+        action="store_true",
+        help="Create a FAT archive from the provided input files",
     )
     arg_parser.add_argument(
-        '-extract', dest='desired_arch', type=str, help=
-        'Extract a single architecture from the input FAT into an output file'
+        "-extract",
+        dest="desired_arch",
+        type=str,
+        help="Extract a single architecture from the input FAT into an output file",
     )
+    arg_parser.add_argument("input_paths", type=str, nargs="+", help="Path to binary")
     arg_parser.add_argument(
-        'input_paths', type=str, nargs='+', help=
-        'Path to binary'
-    )
-    arg_parser.add_argument(
-        'output_path', type=str, nargs='?', help='Path to place generated binary, if using -create or -extract'
+        "output_path",
+        type=str,
+        nargs="?",
+        help="Path to place generated binary, if using -create or -extract",
     )
     args = arg_parser.parse_args()
 
@@ -38,7 +44,7 @@ def main():
 
     if args.create:
         if not args.output_path:
-            raise ValueError(f'-create option requires an output_path')
+            raise ValueError(f"-create option requires an output_path")
         parsers = [MachoParser(pathlib.Path(path)) for path in args.input_paths]
         all_slices = []
         for parser in parsers:
@@ -48,7 +54,7 @@ def main():
 
     if args.extract:
         if not args.output_path:
-            raise ValueError(f'-create option requires an output_path')
+            raise ValueError(f"-create option requires an output_path")
         # Find the desired architecture in the slices of the input files
         for input_path in args.input_paths:
             parser = MachoParser(pathlib.Path(input_path))
@@ -57,9 +63,9 @@ def main():
                     # Found the desired slice - extract it into its own output binary
                     binary.write_binary(pathlib.Path(args.output_path))
                     return
-        print(f'Failed to find a {args.desired_arch} slice in the input archives.')
+        print(f"Failed to find a {args.desired_arch} slice in the input archives.")
         return
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     main()

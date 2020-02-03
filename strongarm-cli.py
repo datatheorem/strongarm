@@ -4,18 +4,28 @@ import pathlib
 import sys
 from typing import List, Text
 
-from strongarm.cli.utils import (disassemble_function, disassemble_method,
-                                 pick_macho_slice, print_analyzer_classes,
-                                 print_analyzer_exported_symbols,
-                                 print_analyzer_imported_symbols,
-                                 print_analyzer_methods,
-                                 print_analyzer_protocols, print_binary_info,
-                                 print_binary_load_commands,
-                                 print_binary_sections, print_binary_segments,
-                                 print_selector)
+from strongarm.cli.utils import (
+    disassemble_function,
+    disassemble_method,
+    pick_macho_slice,
+    print_analyzer_classes,
+    print_analyzer_exported_symbols,
+    print_analyzer_imported_symbols,
+    print_analyzer_methods,
+    print_analyzer_protocols,
+    print_binary_info,
+    print_binary_load_commands,
+    print_binary_sections,
+    print_binary_segments,
+    print_selector,
+)
 from strongarm.debug_util import DebugUtil
-from strongarm.macho import (MachoAnalyzer, MachoBinary, MachoParser,
-                             VirtualMemoryPointer)
+from strongarm.macho import (
+    MachoAnalyzer,
+    MachoBinary,
+    MachoParser,
+    VirtualMemoryPointer,
+)
 
 
 def print_header(args: argparse.Namespace) -> None:

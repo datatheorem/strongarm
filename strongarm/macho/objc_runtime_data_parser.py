@@ -3,16 +3,18 @@ from ctypes import c_uint32, sizeof
 from typing import Dict, List, Optional
 
 from strongarm.debug_util import DebugUtil
-from strongarm.macho.arch_independent_structs import (ArchIndependentStructure,
-                                                      ObjcCategoryRawStruct,
-                                                      ObjcClassRawStruct,
-                                                      ObjcDataRawStruct,
-                                                      ObjcIvarListStruct,
-                                                      ObjcIvarStruct,
-                                                      ObjcMethodListStruct,
-                                                      ObjcMethodStruct,
-                                                      ObjcProtocolListStruct,
-                                                      ObjcProtocolRawStruct)
+from strongarm.macho.arch_independent_structs import (
+    ArchIndependentStructure,
+    ObjcCategoryRawStruct,
+    ObjcClassRawStruct,
+    ObjcDataRawStruct,
+    ObjcIvarListStruct,
+    ObjcIvarStruct,
+    ObjcMethodListStruct,
+    ObjcMethodStruct,
+    ObjcProtocolListStruct,
+    ObjcProtocolRawStruct,
+)
 from strongarm.macho.macho_binary import MachoBinary
 from strongarm.macho.macho_definitions import VirtualMemoryPointer
 

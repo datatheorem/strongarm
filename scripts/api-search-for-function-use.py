@@ -33,6 +33,4 @@ for search_result in search_results:
     elif string_arg.type == RegisterContentsType.IMMEDIATE:
         # string_arg is a pointer to the string literal. Read it!
         string_to_print = binary.read_string_at_address(string_arg.value)
-        print(
-            f'\t{hex(log_call_instruction.address)}: {log_call_instruction.symbol}("{string_to_print}")'
-        )
+        print(f'\t{hex(log_call_instruction.address)}: {log_call_instruction.symbol}("{string_to_print}")')

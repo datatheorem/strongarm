@@ -20,9 +20,7 @@ def deps(ctx):
     if platform == "linux":
         # On macOS - assuming we are going to be running the CI
         ctx.run("apt-get update")
-        ctx.run(
-            "apt-get install libcapstone3 libcapstone-dev -y --allow-unauthenticated"
-        )
+        ctx.run("apt-get install libcapstone3 libcapstone-dev -y --allow-unauthenticated")
 
 
 @task
@@ -61,33 +59,21 @@ def _run_linters(ctx: Context, check: bool) -> None:
 
     # Find virtual environment for isort
     venv = ctx.run("pipenv --venv", hide=True).stdout.strip()
-    autoflake_version = (
-        ctx.run("autoflake --version", hide=True).stdout.strip().split()[1]
-    )
-    isort_version = (
-        ctx.run("isort --version | grep VERSION", hide=True).stdout.strip().split()[1]
-    )
+    autoflake_version = ctx.run("autoflake --version", hide=True).stdout.strip().split()[1]
+    isort_version = ctx.run("isort --version | grep VERSION", hide=True).stdout.strip().split()[1]
     black_version = ctx.run("black --version", hide=True).stdout.strip().split()[2]
-    mypy_version = ctx.run("mypy --version", hide=True).stdout.strip().split()[1]
     flake8_version = ctx.run("flake8 --version", hide=True).stdout.strip().split()[0]
 
     if check:
         # Check that validations pass without modifying the code
         print(f"Checking imports optimization (autoflake v{autoflake_version})")
-        ctx.run(
-            f"autoflake --recursive {files_to_process}"
-        )  # Default behaviour is to print diff
+        ctx.run(f"autoflake --recursive {files_to_process}")  # Default behaviour is to print diff
 
         print(f"Checking imports sorting (isort v{isort_version})")
-        ctx.run(
-            f"isort --check --diff --virtual-env {venv} --recursive {files_to_process}"
-        )
+        ctx.run(f"isort --check --diff --virtual-env {venv} --recursive {files_to_process}")
 
-        print(f"Checking code Blackifying (black v{black_version})")
+        print(f"Checking black format (black v{black_version})")
         ctx.run(f"black --check --diff {files_to_process}")
-
-        print(f"Checking types (mypy v{mypy_version})")
-        ctx.run(f"mypy {files_to_process}")
 
         print(f"Checking format (flake8 v{flake8_version})")
         ctx.run(f"flake8 {files_to_process}")

@@ -4,13 +4,7 @@ from strongarm.debug_util import DebugUtil
 from strongarm.macho.macho_binary import MachoBinary
 from strongarm.macho.macho_definitions import StaticFilePointer
 
-from .codesign_definitions import (
-    CodesignBlobTypeEnum,
-    CSBlob,
-    CSBlobIndex,
-    CSCodeDirectory,
-    CSSuperblob,
-)
+from .codesign_definitions import CodesignBlobTypeEnum, CSBlob, CSBlobIndex, CSCodeDirectory, CSSuperblob
 
 
 class CodesignParser:
@@ -62,9 +56,7 @@ class CodesignParser:
             pass
         else:
             # unknown magic
-            DebugUtil.log(
-                self, f"Unknown CodeSign blob magic @ {hex(file_offset)}: {hex(magic)}"
-            )
+            DebugUtil.log(self, f"Unknown CodeSign blob magic @ {hex(file_offset)}: {hex(magic)}")
 
     def parse_superblob(self, file_offset: StaticFilePointer) -> None:
         """Parse a codesign 'superblob' at the provided file offset.
@@ -75,18 +67,14 @@ class CodesignParser:
         internal_file_offset = int(file_offset)
         superblob = self.binary.read_struct(internal_file_offset, CSSuperblob)
         if superblob.magic != CodesignBlobTypeEnum.CSMAGIC_EMBEDDED_SIGNATURE:
-            raise RuntimeError(
-                f"Can blobs other than embedded signatures be superblobs? {hex(superblob.magic)}"
-            )
+            raise RuntimeError(f"Can blobs other than embedded signatures be superblobs? {hex(superblob.magic)}")
 
         # move past the superblob header to the first index struct entry
         internal_file_offset += superblob.sizeof
 
         # parse each struct csblob_index following the superblob header
         for i in range(superblob.index_entry_count):
-            csblob_index = self.parse_csblob_index(
-                StaticFilePointer(internal_file_offset)
-            )
+            csblob_index = self.parse_csblob_index(StaticFilePointer(internal_file_offset))
             csblob_file_offset = self._codesign_entry + csblob_index.offset
 
             # found a blob, now parse it
@@ -125,12 +113,8 @@ class CodesignParser:
         """
         code_directory = self.binary.read_struct(file_offset, CSCodeDirectory)
 
-        identifier_address = (
-            code_directory.binary_offset + code_directory.identifier_offset
-        )
-        identifier_string = self.binary.get_full_string_from_start_address(
-            identifier_address, virtual=False
-        )
+        identifier_address = code_directory.binary_offset + code_directory.identifier_offset
+        identifier_string = self.binary.get_full_string_from_start_address(identifier_address, virtual=False)
         self.signing_identifier = identifier_string
 
         # Version 0x20100+ includes scatter_offset
@@ -138,9 +122,7 @@ class CodesignParser:
         if code_directory.version >= 0x20200:
             # Note that if the version < 0x20200, the CSCodeDirectory structure parses past the end of the actual struct
             team_id_address = code_directory.binary_offset + code_directory.team_offset
-            team_id_string = self.binary.get_full_string_from_start_address(
-                team_id_address, virtual=False
-            )
+            team_id_string = self.binary.get_full_string_from_start_address(team_id_address, virtual=False)
             self.signing_team_id = team_id_string
 
     def print_code_directory(self, code_dir: CSCodeDirectory) -> None:
@@ -165,13 +147,8 @@ class CodesignParser:
         Returns a bytearray of the embedded entitlements.
         """
         entitlements_blob = self.binary.read_struct(file_offset, CSBlob)
-        if (
-            entitlements_blob.magic
-            != CodesignBlobTypeEnum.CSMAGIC_EMBEDDED_ENTITLEMENTS
-        ):
-            raise RuntimeError(
-                f"incorrect magic for embedded entitlements: {hex(entitlements_blob.magic)}"
-            )
+        if entitlements_blob.magic != CodesignBlobTypeEnum.CSMAGIC_EMBEDDED_ENTITLEMENTS:
+            raise RuntimeError(f"incorrect magic for embedded entitlements: {hex(entitlements_blob.magic)}")
 
         blob_end = entitlements_blob.binary_offset + entitlements_blob.length
 

@@ -37,10 +37,7 @@ def _prototype_from_selector(sel: str) -> str:
 def main():
     arg_parser = argparse.ArgumentParser(description="classdump clone")
     arg_parser.add_argument(
-        "binary_path",
-        metavar="binary_path",
-        type=str,
-        help="Path to binary to print Objective-C class information",
+        "binary_path", metavar="binary_path", type=str, help="Path to binary to print Objective-C class information"
     )
     args = arg_parser.parse_args()
 

@@ -10,14 +10,8 @@ from strongarm.macho import MachoBinary, MachoParser
 def main():
     arg_parser = argparse.ArgumentParser(description="Add a load command to a binary")
     arg_parser.add_argument("binary_path", type=str, help="Path to binary")
-    arg_parser.add_argument(
-        "output_path",
-        type=str,
-        help="Path to write the modified binary (must not already exist)",
-    )
-    arg_parser.add_argument(
-        "load_path", type=str, help="The dylib load path to be added to the binary"
-    )
+    arg_parser.add_argument("output_path", type=str, help="Path to write the modified binary (must not already exist)")
+    arg_parser.add_argument("load_path", type=str, help="The dylib load path to be added to the binary")
     args = arg_parser.parse_args()
 
     parser = MachoParser(pathlib.Path(args.binary_path))

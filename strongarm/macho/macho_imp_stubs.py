@@ -30,9 +30,7 @@ class MachoImpStub:
     as well as the __la_symbol_ptr entry which is targeted by the stub.
     """
 
-    def __init__(
-        self, address: VirtualMemoryPointer, destination: VirtualMemoryPointer
-    ) -> None:
+    def __init__(self, address: VirtualMemoryPointer, destination: VirtualMemoryPointer) -> None:
         self.address = address
         self.destination = destination
 
@@ -44,9 +42,7 @@ class MachoImpStubsParser:
         self.imp_stubs = self._parse_all_stubs()
 
     @staticmethod
-    def _parse_stub_from_instructions(
-        instr1: CsInsn, instr2: CsInsn, instr3: CsInsn
-    ) -> MachoImpStub:
+    def _parse_stub_from_instructions(instr1: CsInsn, instr2: CsInsn, instr3: CsInsn) -> MachoImpStub:
         # TODO(PT): write CsInsn by hand to test this function
         # each stub follows one of two patterns
         # pattern 1: nop / ldr x16, <sym> / br x16
@@ -81,9 +77,7 @@ class MachoImpStubsParser:
             stub_dest_page = instr1.operands[1].value.imm
             stub_dest_pageoff = instr2.operands[1].mem.disp
             stub_dest = stub_dest_page + stub_dest_pageoff
-        stub = MachoImpStub(
-            VirtualMemoryPointer(stub_addr), VirtualMemoryPointer(stub_dest)
-        )
+        stub = MachoImpStub(VirtualMemoryPointer(stub_addr), VirtualMemoryPointer(stub_dest))
         return stub
 
     def _parse_all_stubs(self) -> List[MachoImpStub]:
@@ -93,14 +87,10 @@ class MachoImpStubsParser:
 
         func_str = bytes(
             self.binary.get_bytes(
-                stubs_section.offset,
-                stubs_section.cmd.size,
-                _translate_addr_to_file=False,
+                stubs_section.offset, stubs_section.cmd.size, _translate_addr_to_file=False
             )  # When working with DSC's, the reported offset should not be translated
         )
-        instructions = [
-            instr for instr in self._cs.disasm(func_str, stubs_section.address)
-        ]
+        instructions = [instr for instr in self._cs.disasm(func_str, stubs_section.address)]
 
         stubs = []
         # each stub follows one of two patterns

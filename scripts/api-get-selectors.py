@@ -9,9 +9,7 @@ def find_selector_implementations(binary):
     implementations = analyzer.get_imps_for_sel(desired_selector)
     for imp_function in implementations:
         instruction_size = 4
-        instruction_count = int(
-            (imp_function.end_address - imp_function.start_address) / instruction_size
-        )
+        instruction_count = int((imp_function.end_address - imp_function.start_address) / instruction_size)
         print(
             f"Found implementation of @selector({desired_selector}) at [{hex(imp_function.start_address)}"
             f" - {hex(imp_function.end_address)}] ({instruction_count} instructions)"

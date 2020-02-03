@@ -3,17 +3,9 @@ from typing import List
 
 import pytest
 
-from strongarm.macho.macho_analyzer import (
-    MachoAnalyzer,
-    ObjcMsgSendXref,
-    VirtualMemoryPointer,
-)
+from strongarm.macho.macho_analyzer import MachoAnalyzer, ObjcMsgSendXref, VirtualMemoryPointer
 from strongarm.macho.macho_parse import MachoParser
-from strongarm.objc import (
-    CodeSearch,
-    CodeSearchFunctionCallWithArguments,
-    ObjcFunctionAnalyzer,
-)
+from strongarm.objc import CodeSearch, CodeSearchFunctionCallWithArguments, ObjcFunctionAnalyzer
 
 
 class TestMachoAnalyzer:
@@ -120,12 +112,8 @@ class TestMachoAnalyzer:
         assert sorted(found_imported_symbols) == sorted(correct_imported_symbols)
 
     def test_find_exported_symbols(self):
-        assert self.analyzer.exported_symbol_pointers_to_names == {
-            4294967296: "__mh_execute_header"
-        }
-        assert self.analyzer.exported_symbol_names_to_pointers == {
-            "__mh_execute_header": 4294967296
-        }
+        assert self.analyzer.exported_symbol_pointers_to_names == {4294967296: "__mh_execute_header"}
+        assert self.analyzer.exported_symbol_names_to_pointers == {"__mh_execute_header": 4294967296}
 
     def test_cached_analyzer(self):
         # there should only be one MachoAnalyzer for a given MachoBinary
@@ -206,10 +194,7 @@ class TestMachoAnalyzer:
             self.analyzer.symbol_name_for_branch_destination(0xDEADBEEF)
 
         # objc_msgSend
-        assert (
-            self.analyzer.symbol_name_for_branch_destination(0x10000676C)
-            == "_UIApplicationMain"
-        )
+        assert self.analyzer.symbol_name_for_branch_destination(0x10000676C) == "_UIApplicationMain"
 
     def test_selref_to_name_map(self):
         correct_selref_to_imp_map = {
@@ -220,10 +205,7 @@ class TestMachoAnalyzer:
         }
         # did analyzer map all selrefs?
         for selref in correct_selref_to_imp_map:
-            assert (
-                self.analyzer.imp_for_selref(selref)
-                == correct_selref_to_imp_map[selref]
-            )
+            assert self.analyzer.imp_for_selref(selref) == correct_selref_to_imp_map[selref]
 
         # can we get an IMP from a selref?
         assert self.analyzer.imp_for_selref(0x100009070) == 0x100006228
@@ -270,17 +252,13 @@ class TestMachoAnalyzer:
         assert xref.caller_func_start_address == VirtualMemoryPointer(0x100006308)
         assert xref.caller_addr == 0x100006350
 
-        method_info = self.analyzer.method_info_for_entry_point(
-            xref.caller_func_start_address
-        )
+        method_info = self.analyzer.method_info_for_entry_point(xref.caller_func_start_address)
         assert method_info
 
         # TODO(PT): ObjcFunctionAnalyzer.get_function_analyzer* should return singletons
         from strongarm.objc import ObjcFunctionAnalyzer
 
-        caller_func = ObjcFunctionAnalyzer.get_function_analyzer_for_method(
-            self.analyzer.binary, method_info
-        )
+        caller_func = ObjcFunctionAnalyzer.get_function_analyzer_for_method(self.analyzer.binary, method_info)
         assert caller_func.method_info.objc_class.name == "DTLabel"
         assert caller_func.method_info.objc_sel.name == "logLabel"
 
@@ -294,22 +272,16 @@ class TestMachoAnalyzer:
             assert len(xrefs) == 1
             xref = xrefs[0]
 
-            method_info = self.analyzer.method_info_for_entry_point(
-                xref.caller_func_start_address
-            )
+            method_info = self.analyzer.method_info_for_entry_point(xref.caller_func_start_address)
             assert method_info
-            caller_func = ObjcFunctionAnalyzer.get_function_analyzer_for_method(
-                self.analyzer.binary, method_info
-            )
+            caller_func = ObjcFunctionAnalyzer.get_function_analyzer_for_method(self.analyzer.binary, method_info)
             # TODO(PT): ObjcFunctionAnalyzer.get_function_analyzer* should return singletons
             assert caller_func.method_info.objc_class.name == "DTLabel"
             assert caller_func.method_info.objc_sel.name == "logLabel"
             assert caller_func.start_address == VirtualMemoryPointer(0x100006308)
             assert xref.caller_addr == 0x100006350
 
-        self.analyzer.queue_code_search(
-            CodeSearchFunctionCallWithArguments(self.binary, [], {}), callback
-        )
+        self.analyzer.queue_code_search(CodeSearchFunctionCallWithArguments(self.binary, [], {}), callback)
         self.analyzer.search_all_code()
 
     def test_find_symbols_by_address(self):
@@ -467,18 +439,14 @@ class TestMachoAnalyzerDynStaticChecks:
     def test_xref_objc_opt_new(self):
         # Given I provide a binary which contains the code:
         # _objc_opt_new(_OBJC_CLASS_$_ARSKView)
-        binary = MachoParser(
-            pathlib.Path(__file__).parent / "bin" / "iOS13_objc_opt"
-        ).get_arm64_slice()
+        binary = MachoParser(pathlib.Path(__file__).parent / "bin" / "iOS13_objc_opt").get_arm64_slice()
         analyzer = MachoAnalyzer.get_analyzer(binary)
 
         # When I ask for XRefs to `ARSKView`
         arskview_classref = analyzer.classref_for_class_name("_OBJC_CLASS_$_ARSKView")
         assert arskview_classref
         objc_calls = analyzer.objc_calls_to(
-            objc_classrefs=[arskview_classref],
-            objc_selrefs=[],
-            requires_class_and_sel_found=False,
+            objc_classrefs=[arskview_classref], objc_selrefs=[], requires_class_and_sel_found=False
         )
 
         # Then the code location is returned
@@ -503,20 +471,14 @@ class TestMachoAnalyzerDynStaticChecks:
     def test_xref_objc_opt_class(self):
         # Given I provide a binary which contains the code:
         # _objc_opt_class(_OBJC_CLASS_$_ARFaceTrackingConfiguration)
-        binary = MachoParser(
-            pathlib.Path(__file__).parent / "bin" / "iOS13_objc_opt"
-        ).get_arm64_slice()
+        binary = MachoParser(pathlib.Path(__file__).parent / "bin" / "iOS13_objc_opt").get_arm64_slice()
         analyzer = MachoAnalyzer.get_analyzer(binary)
 
         # When I ask for XRefs to `ARSKView`
-        arfacetracking_classref = analyzer.classref_for_class_name(
-            "_OBJC_CLASS_$_ARFaceTrackingConfiguration"
-        )
+        arfacetracking_classref = analyzer.classref_for_class_name("_OBJC_CLASS_$_ARFaceTrackingConfiguration")
         assert arfacetracking_classref
         objc_calls = analyzer.objc_calls_to(
-            objc_classrefs=[arfacetracking_classref],
-            objc_selrefs=[],
-            requires_class_and_sel_found=False,
+            objc_classrefs=[arfacetracking_classref], objc_selrefs=[], requires_class_and_sel_found=False
         )
 
         # Then the code location is returned

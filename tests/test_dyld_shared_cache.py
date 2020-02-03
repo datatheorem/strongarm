@@ -8,20 +8,11 @@ import pytest
 from strongarm.macho import DyldSharedCacheParser, MachoAnalyzer, VirtualMemoryPointer
 
 
-@pytest.mark.skipif(
-    "CI" in os.environ, reason="Cannot run dyld_shared_cache tests in CI"
-)
+@pytest.mark.skipif("CI" in os.environ, reason="Cannot run dyld_shared_cache tests in CI")
 class TestDyldSharedCache:
     # XXX(PT): This test suite expects to run on a mounted IPSW of iOS 12.1.1 iPad 6 WiFi
     _FIRMWARE_ROOT = Path("/") / "Volumes" / "PeaceC16C50.J71bJ72bJ71sJ72sJ71tJ72tOS"
-    DSC_PATH = (
-        _FIRMWARE_ROOT
-        / "System"
-        / "Library"
-        / "Caches"
-        / "com.apple.dyld"
-        / "dyld_shared_cache_arm64"
-    )
+    DSC_PATH = _FIRMWARE_ROOT / "System" / "Library" / "Caches" / "com.apple.dyld" / "dyld_shared_cache_arm64"
 
     @pytest.fixture
     def dyld_shared_cache(self) -> DyldSharedCacheParser:
@@ -54,14 +45,9 @@ class TestDyldSharedCache:
     def test_parses_dsc_images(self, dyld_shared_cache):
         assert len(dyld_shared_cache.embedded_binary_info) == 1400
         # Pick out a binary and ensure its location is reported correctly
-        image_path = Path(
-            "/System/Library/Frameworks/CoreFoundation.framework/CoreFoundation"
-        )
+        image_path = Path("/System/Library/Frameworks/CoreFoundation.framework/CoreFoundation")
         corefoundation_range = dyld_shared_cache.embedded_binary_info[image_path]
-        assert corefoundation_range == (
-            VirtualMemoryPointer(0x180DB9000),
-            VirtualMemoryPointer(0x18111D000),
-        )
+        assert corefoundation_range == (VirtualMemoryPointer(0x180DB9000), VirtualMemoryPointer(0x18111D000))
 
     def test_find_image_for_code_address(self, dyld_shared_cache):
         # Given an address within an embedded image
@@ -73,18 +59,10 @@ class TestDyldSharedCache:
 
     def test_analyze_embedded_binary(self, dyld_shared_cache):
         # Given I parse an embedded binary
-        binary = dyld_shared_cache.get_embedded_binary(
-            Path("/usr/lib/libSystem.B.dylib")
-        )
+        binary = dyld_shared_cache.get_embedded_binary(Path("/usr/lib/libSystem.B.dylib"))
         # The binary appears to be parsed correctly
         assert binary.get_virtual_base() == 0x18002E000
-        assert binary.get_functions() == {
-            0x18002FA7C,
-            0x18002FB7C,
-            0x18002FB34,
-            0x18002FB58,
-            0x18002FBBC,
-        }
+        assert binary.get_functions() == {0x18002FA7C, 0x18002FB7C, 0x18002FB34, 0x18002FB58, 0x18002FBBC}
 
         # And the binary can be analyzed further
         analyzer = MachoAnalyzer.get_analyzer(binary)

@@ -52,17 +52,13 @@ class TestObjcRuntimeDataParser:
         objc_parser = ObjcRuntimeDataParser(binary)
 
         # extract category list
-        category_classes = [
-            x for x in objc_parser.classes if isinstance(x, ObjcCategory)
-        ]
+        category_classes = [x for x in objc_parser.classes if isinstance(x, ObjcCategory)]
         print(category_classes)
         print([x.name for x in category_classes])
         assert len(category_classes) == 9
 
         # look at one category
-        category = [
-            x for x in category_classes if x.name == "$_Unknown_Class (DataController)"
-        ][0]
+        category = [x for x in category_classes if x.name == "$_Unknown_Class (DataController)"][0]
         assert category.base_class == "$_Unknown_Class"
         assert category.category_name == "DataController"
         assert len(category.selectors) == 1
@@ -78,9 +74,7 @@ class TestObjcRuntimeDataParser:
         # Given I read a class with a known ivar layout
         cls = [x for x in objc_parser.classes if x.name == "AamvaPDF417"][0]
         # If I read its parsed ivar layout
-        parsed_ivars = [
-            (ivar.name, ivar.class_name, ivar.field_offset) for ivar in cls.ivars
-        ]
+        parsed_ivars = [(ivar.name, ivar.class_name, ivar.field_offset) for ivar in cls.ivars]
         correct_ivar_layout = [
             ("_fields", '@"NSMutableDictionary"', 8),
             ("fields_desc", '@"NSDictionary"', 16),
@@ -109,11 +103,7 @@ class TestObjcRuntimeDataParser:
         protocols = objc_parser.protocols
         assert len(protocols) == 3
 
-        correct_protocols = [
-            "NSObject",
-            "NSURLSessionDelegate",
-            "UIApplicationDelegate",
-        ]
+        correct_protocols = ["NSObject", "NSURLSessionDelegate", "UIApplicationDelegate"]
         for p in correct_protocols:
             assert p in [a.name for a in protocols]
 
@@ -135,9 +125,7 @@ class TestObjcRuntimeDataParser:
             assert s in [sel.name for sel in session_protocol.selectors]
 
     def test_class_conforming_protocols(self):
-        def check_class_conformed_protocols(
-            class_name: str, correct_protocols: List[str]
-        ):
+        def check_class_conformed_protocols(class_name: str, correct_protocols: List[str]):
             cls = [x for x in objc_parser.classes if x.name == class_name][0]
             assert cls is not None
             conformed_protocol_names = [x.name for x in cls.protocols]
@@ -149,16 +137,10 @@ class TestObjcRuntimeDataParser:
 
         check_class_conformed_protocols(
             "CDVInAppBrowserViewController",
-            [
-                "CDVScreenOrientationDelegate",
-                "WKNavigationDelegate",
-                "WKUIDelegate",
-                "WKScriptMessageHandler",
-            ],
+            ["CDVScreenOrientationDelegate", "WKNavigationDelegate", "WKUIDelegate", "WKScriptMessageHandler"],
         )
         check_class_conformed_protocols(
-            "_TtC26Digital_Advisory_Solutions21LicenceViewController",
-            ["UITableViewDataSource"],
+            "_TtC26Digital_Advisory_Solutions21LicenceViewController", ["UITableViewDataSource"]
         )
         # this class doesn't conform to any protocols
         check_class_conformed_protocols("BadFilesDetector", [])
@@ -168,9 +150,7 @@ class TestObjcRuntimeDataParser:
         binary = parser.get_armv7_slice()
         objc_parser = ObjcRuntimeDataParser(binary)
         assert len(objc_parser.classes) == 66
-        test_cls = [
-            x for x in objc_parser.classes if x.name == "Pepsico_iPhoneAppDelegate"
-        ][0]
+        test_cls = [x for x in objc_parser.classes if x.name == "Pepsico_iPhoneAppDelegate"][0]
         assert len(test_cls.protocols) == 2
         proto_names = [x.name for x in test_cls.protocols]
         assert proto_names == ["UIApplicationDelegate", "UITabBarControllerDelegate"]

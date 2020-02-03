@@ -29,9 +29,7 @@ for path in paths:
 
     load_commands = binary.load_dylib_commands
     for cmd in load_commands:
-        dylib_name_addr = (
-            binary.get_virtual_base() + cmd.binary_offset + cmd.dylib.name.offset
-        )
+        dylib_name_addr = binary.get_virtual_base() + cmd.binary_offset + cmd.dylib.name.offset
         dylib_name = binary.read_string_at_address(dylib_name_addr)
         print(f"{path} loads {dylib_name}")
         i += 1

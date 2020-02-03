@@ -19,9 +19,7 @@ class TestBasicBlocks:
         function_analyzer = self.analyzer.get_imps_for_sel("switchControlFlow")[0]
 
         # If I query the basic-block layout of the method
-        basic_blocks = [
-            (x.start_address, x.end_address) for x in function_analyzer.basic_blocks
-        ]
+        basic_blocks = [(x.start_address, x.end_address) for x in function_analyzer.basic_blocks]
 
         # Then the basic-block-boundaries are correctly identified
         # (Right-exclusive basic blocks copied from Hopper's UI)
@@ -35,78 +33,48 @@ class TestBasicBlocks:
             (0x1000067D8, 0x1000067E0),
             (0x1000067E0, 0x1000067F4),
         ]
-        assert basic_blocks == [
-            (VirtualMemoryPointer(a), VirtualMemoryPointer(b))
-            for a, b in correct_basic_blocks
-        ]
+        assert basic_blocks == [(VirtualMemoryPointer(a), VirtualMemoryPointer(b)) for a, b in correct_basic_blocks]
 
     def test_find_basic_blocks_2(self):
         # Given I provide a method implementation with a backwards local jump
         function_analyzer = self.analyzer.get_imps_for_sel("forControlFlow")[0]
 
         # If I query the basic-block layout of the method
-        basic_blocks = [
-            (x.start_address, x.end_address) for x in function_analyzer.basic_blocks
-        ]
+        basic_blocks = [(x.start_address, x.end_address) for x in function_analyzer.basic_blocks]
 
         # Then the basic-block-boundaries are correctly identified
-        correct_basic_blocks = [
-            (0x100006804, 0x100006820),
-            (0x100006820, 0x100006838),
-            (0x100006838, 0x100006848),
-        ]
+        correct_basic_blocks = [(0x100006804, 0x100006820), (0x100006820, 0x100006838), (0x100006838, 0x100006848)]
 
-        assert basic_blocks == [
-            (VirtualMemoryPointer(a), VirtualMemoryPointer(b))
-            for a, b in correct_basic_blocks
-        ]
+        assert basic_blocks == [(VirtualMemoryPointer(a), VirtualMemoryPointer(b)) for a, b in correct_basic_blocks]
 
     def test_find_basic_blocks_3(self):
         # Given I provide a method implementation with a backwards local jump
         function_analyzer = self.analyzer.get_imps_for_sel("whileControlFlow")[0]
 
         # If I query the basic-block layout of the method
-        basic_blocks = [
-            (x.start_address, x.end_address) for x in function_analyzer.basic_blocks
-        ]
+        basic_blocks = [(x.start_address, x.end_address) for x in function_analyzer.basic_blocks]
 
         # Then the basic-block-boundaries are correctly identified
-        correct_basic_blocks = [
-            (0x100006848, 0x100006864),
-            (0x100006864, 0x10000687C),
-            (0x10000687C, 0x100006898),
-        ]
-        assert basic_blocks == [
-            (VirtualMemoryPointer(a), VirtualMemoryPointer(b))
-            for a, b in correct_basic_blocks
-        ]
+        correct_basic_blocks = [(0x100006848, 0x100006864), (0x100006864, 0x10000687C), (0x10000687C, 0x100006898)]
+        assert basic_blocks == [(VirtualMemoryPointer(a), VirtualMemoryPointer(b)) for a, b in correct_basic_blocks]
 
     def test_find_basic_blocks_4(self):
         # Given I provide a function with no internal branching
-        function_analyzer = ObjcFunctionAnalyzer.get_function_analyzer(
-            self.binary, VirtualMemoryPointer(0x100006898)
-        )
+        function_analyzer = ObjcFunctionAnalyzer.get_function_analyzer(self.binary, VirtualMemoryPointer(0x100006898))
 
         # If I query the basic-block layout of the method
-        basic_blocks = [
-            (x.start_address, x.end_address) for x in function_analyzer.basic_blocks
-        ]
+        basic_blocks = [(x.start_address, x.end_address) for x in function_analyzer.basic_blocks]
 
         # Then I see one big basic block
         correct_basic_blocks = [(0x100006898, 0x100006918)]
-        assert basic_blocks == [
-            (VirtualMemoryPointer(a), VirtualMemoryPointer(b))
-            for a, b in correct_basic_blocks
-        ]
+        assert basic_blocks == [(VirtualMemoryPointer(a), VirtualMemoryPointer(b)) for a, b in correct_basic_blocks]
 
     def test_find_basic_blocks_5(self):
         # Given I provide a method implementation with forwards local jumps
         function_analyzer = self.analyzer.get_imps_for_sel("ifControlFlow")[0]
 
         # If I query the basic-block layout of the method
-        basic_blocks = [
-            (x.start_address, x.end_address) for x in function_analyzer.basic_blocks
-        ]
+        basic_blocks = [(x.start_address, x.end_address) for x in function_analyzer.basic_blocks]
 
         # Then the basic-block-boundaries are correctly identified
         correct_basic_blocks = [
@@ -117,19 +85,14 @@ class TestBasicBlocks:
             (0x10000673C, 0x100006744),
             (0x100006744, 0x10000675C),
         ]
-        assert basic_blocks == [
-            (VirtualMemoryPointer(a), VirtualMemoryPointer(b))
-            for a, b in correct_basic_blocks
-        ]
+        assert basic_blocks == [(VirtualMemoryPointer(a), VirtualMemoryPointer(b)) for a, b in correct_basic_blocks]
 
     def test_find_control_flow_6(self):
         # Given I provide a method implementation with both forwards and backwards local jumps
         function_analyzer = self.analyzer.get_imps_for_sel("nestedControlFlow")[0]
 
         # If I query the basic-block layout of the method
-        basic_blocks = [
-            (x.start_address, x.end_address) for x in function_analyzer.basic_blocks
-        ]
+        basic_blocks = [(x.start_address, x.end_address) for x in function_analyzer.basic_blocks]
 
         # Then the basic-block-boundaries are correctly identified
         correct_basic_blocks = [
@@ -142,10 +105,7 @@ class TestBasicBlocks:
             (0x1000066C4, 0x1000066D0),
             (0x1000066D0, 0x1000066E4),
         ]
-        assert basic_blocks == [
-            (VirtualMemoryPointer(a), VirtualMemoryPointer(b))
-            for a, b in correct_basic_blocks
-        ]
+        assert basic_blocks == [(VirtualMemoryPointer(a), VirtualMemoryPointer(b)) for a, b in correct_basic_blocks]
 
     def test_find_basic_blocks_7(self):
         # Given I provide a method implementation with no conditional branching which ends in an unconditional jump
@@ -155,16 +115,11 @@ class TestBasicBlocks:
         function_analyzer = analyzer.get_imps_for_sel("bluetoothManagerCall")[0]
 
         # If I query the basic-block layout of the method
-        basic_blocks = [
-            (x.start_address, x.end_address) for x in function_analyzer.basic_blocks
-        ]
+        basic_blocks = [(x.start_address, x.end_address) for x in function_analyzer.basic_blocks]
 
         # Then the basic-block boundaries are correctly identified
         correct_basic_blocks = [(0x100006534, 0x100006590)]
-        assert basic_blocks == [
-            (VirtualMemoryPointer(a), VirtualMemoryPointer(b))
-            for a, b in correct_basic_blocks
-        ]
+        assert basic_blocks == [(VirtualMemoryPointer(a), VirtualMemoryPointer(b)) for a, b in correct_basic_blocks]
 
     def test_find_basic_blocks_8(self):
         binary_path = pathlib.Path(__file__).parent / "bin" / "DynStaticChecks"
@@ -173,20 +128,11 @@ class TestBasicBlocks:
         function_analyzer = analyzer.get_imps_for_sel("UsageDESAlgorithm")[0]
 
         # If I query the basic-block layout of the method
-        basic_blocks = [
-            (x.start_address, x.end_address) for x in function_analyzer.basic_blocks
-        ]
+        basic_blocks = [(x.start_address, x.end_address) for x in function_analyzer.basic_blocks]
 
         # Then the basic-block boundaries are correctly identified
-        correct_basic_blocks = [
-            (0x100007B1C, 0x100007BC4),
-            (0x100007BC4, 0x100007BD4),
-            (0x100007BD4, 0x100007BD8),
-        ]
-        assert basic_blocks == [
-            (VirtualMemoryPointer(a), VirtualMemoryPointer(b))
-            for a, b in correct_basic_blocks
-        ]
+        correct_basic_blocks = [(0x100007B1C, 0x100007BC4), (0x100007BC4, 0x100007BD4), (0x100007BD4, 0x100007BD8)]
+        assert basic_blocks == [(VirtualMemoryPointer(a), VirtualMemoryPointer(b)) for a, b in correct_basic_blocks]
 
     def test_early_return(self):
         # Given I provide a function that has a `ret` instruction on an early code path, with more basic blocks after it
@@ -196,9 +142,7 @@ class TestBasicBlocks:
         function_analyzer = analyzer.get_imps_for_sel("earlyReturn")[0]
 
         # If I query the basic-block layout of the method
-        basic_blocks = [
-            (x.start_address, x.end_address) for x in function_analyzer.basic_blocks
-        ]
+        basic_blocks = [(x.start_address, x.end_address) for x in function_analyzer.basic_blocks]
 
         # Then the basic-block boundaries are correctly identified
         correct_basic_blocks = [
@@ -209,10 +153,7 @@ class TestBasicBlocks:
             (0x100008EE4, 0x100008F24),
             (0x100008F24, 0x100008F3C),
         ]
-        assert basic_blocks == [
-            (VirtualMemoryPointer(a), VirtualMemoryPointer(b))
-            for a, b in correct_basic_blocks
-        ]
+        assert basic_blocks == [(VirtualMemoryPointer(a), VirtualMemoryPointer(b)) for a, b in correct_basic_blocks]
 
     def test_early_return2(self):
         # Given I provide a function that has a `ret` instruction on an early code path, with more basic blocks after it
@@ -229,17 +170,8 @@ class TestBasicBlocks:
         """
         with function_containing_asm(source) as (analyzer, function_analyzer):
             # If I query the basic-block layout of the method
-            basic_blocks = [
-                (x.start_address, x.end_address) for x in function_analyzer.basic_blocks
-            ]
+            basic_blocks = [(x.start_address, x.end_address) for x in function_analyzer.basic_blocks]
 
             # Then the basic-block boundaries are correctly identified
-            correct_basic_blocks = [
-                (0x100007F94, 0x100007FA0),
-                (0x100007FA0, 0x100007FA4),
-                (0x100007FA4, 0x100007FB4),
-            ]
-            assert basic_blocks == [
-                (VirtualMemoryPointer(a), VirtualMemoryPointer(b))
-                for a, b in correct_basic_blocks
-            ]
+            correct_basic_blocks = [(0x100007F94, 0x100007FA0), (0x100007FA0, 0x100007FA4), (0x100007FA4, 0x100007FB4)]
+            assert basic_blocks == [(VirtualMemoryPointer(a), VirtualMemoryPointer(b)) for a, b in correct_basic_blocks]

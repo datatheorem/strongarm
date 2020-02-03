@@ -45,9 +45,7 @@ class DyldSharedCacheParser:
         # In other words, the value for each path is a tuple of:
         # - The VM pointer to the image's Mach-O header
         # - The VM pointer to the end-address of the Mach-O's __TEXT segment
-        self.embedded_binary_info: Dict[
-            Path, Tuple[VirtualMemoryPointer, VirtualMemoryPointer]
-        ] = {}
+        self.embedded_binary_info: Dict[Path, Tuple[VirtualMemoryPointer, VirtualMemoryPointer]] = {}
 
         self._parse()
 
@@ -55,9 +53,7 @@ class DyldSharedCacheParser:
     def file_magic(self) -> int:
         """Read file magic
         """
-        return c_uint32.from_buffer(
-            bytearray(self.get_bytes(StaticFilePointer(0), sizeof(c_uint32)))
-        ).value
+        return c_uint32.from_buffer(bytearray(self.get_bytes(StaticFilePointer(0), sizeof(c_uint32)))).value
 
     def get_bytes(self, offset: StaticFilePointer, size: int) -> bytes:
         """Read a region of bytes from the input file
@@ -71,9 +67,7 @@ class DyldSharedCacheParser:
             binary_file.seek(offset)
             return binary_file.read(size)
 
-    def read_struct(
-        self, file_offset: StaticFilePointer, struct_type: Type[_StructureT]
-    ) -> _StructureT:
+    def read_struct(self, file_offset: StaticFilePointer, struct_type: Type[_StructureT]) -> _StructureT:
         """Given a file offset, return the structure it describes
         Args:
             file_offset: Address from where to read the bytes
@@ -148,9 +142,7 @@ class DyldSharedCacheParser:
         # Parse the DSC mappings
         mapping_off = self.header.mappingOffset
         for mapping_idx in range(self.header.mappingCount):
-            mapping_struct = self.read_struct(
-                StaticFilePointer(mapping_off), DyldSharedFileMapping
-            )
+            mapping_struct = self.read_struct(StaticFilePointer(mapping_off), DyldSharedFileMapping)
             mapping_off += sizeof(DyldSharedCacheImageInfo)
 
             virt_addr = VirtualMemoryPointer(mapping_struct.address)
@@ -159,14 +151,10 @@ class DyldSharedCacheParser:
             static_addr = StaticFilePointer(mapping_struct.file_offset)
             prot = mapping_struct.max_prot
 
-            logging.debug(
-                f"Mapping [{mapping_idx}]: [{virt_addr} - {virt_end}] @ {static_addr}, prot = {prot}"
-            )
+            logging.debug(f"Mapping [{mapping_idx}]: [{virt_addr} - {virt_end}] @ {static_addr}, prot = {prot}")
 
             # Verify the permissions of this mapping are as we expect
-            assert (
-                prot == expected_vm_protections[mapping_idx]
-            ), f"{hex(prot)} {expected_vm_protections[mapping_idx]}"
+            assert prot == expected_vm_protections[mapping_idx], f"{hex(prot)} {expected_vm_protections[mapping_idx]}"
 
             self.segment_mappings.append(mapping_struct)
 
@@ -176,42 +164,30 @@ class DyldSharedCacheParser:
         # Parse the embedded binaries within the DSC
         image_off = self.header.imagesOffset
         for image_idx in range(self.header.imagesCount):
-            image_struct = self.read_struct(
-                StaticFilePointer(image_off), DyldSharedCacheImageInfo
-            )
+            image_struct = self.read_struct(StaticFilePointer(image_off), DyldSharedCacheImageInfo)
             image_off += sizeof(DyldSharedCacheImageInfo)
 
             # Example: /System/Library/Frameworks/CoreFoundation.framework/CoreFoundation
-            embedded_binary_path_str = self._read_static_c_string(
-                image_struct.pathFileOffset
-            )
+            embedded_binary_path_str = self._read_static_c_string(image_struct.pathFileOffset)
             if not embedded_binary_path_str:
                 file_offset = image_off - sizeof(DyldSharedCacheImageInfo)
-                raise ValueError(
-                    f"Failed to read an image name for image struct @ {hex(file_offset)}"
-                )
+                raise ValueError(f"Failed to read an image name for image struct @ {hex(file_offset)}")
             embedded_binary_path = Path(embedded_binary_path_str)
 
             vm_addr = VirtualMemoryPointer(image_struct.address)
             # To calculate the size of this image, we need to look at the next image's address
             # Except for the last image, which doesn't have an image after it
             if image_idx == self.header.imagesCount - 1:
-                mapping_end = VirtualMemoryPointer(
-                    self.segment_mappings[0].address + self.segment_mappings[0].size
-                )
+                mapping_end = VirtualMemoryPointer(self.segment_mappings[0].address + self.segment_mappings[0].size)
                 image_size = mapping_end - vm_addr
             else:
-                next_image = self.read_struct(
-                    StaticFilePointer(image_off), DyldSharedFileMapping
-                )
+                next_image = self.read_struct(StaticFilePointer(image_off), DyldSharedFileMapping)
                 image_size = next_image.address - image_struct.address
 
             vm_end = vm_addr + image_size
             self.embedded_binary_info[Path(embedded_binary_path)] = (vm_addr, vm_end)
 
-    def translate_virtual_address_to_static(
-        self, vm_addr: VirtualMemoryPointer
-    ) -> StaticFilePointer:
+    def translate_virtual_address_to_static(self, vm_addr: VirtualMemoryPointer) -> StaticFilePointer:
         """Given a pointer within the DSC's virtual address mappings, return the file pointer to the same data.
         """
         # Find the mapping which contains the provided address
@@ -229,9 +205,7 @@ class DyldSharedCacheParser:
 
         text_vm_start, text_vm_end = self.embedded_binary_info[binary_path]
         text_size = text_vm_end - text_vm_start
-        logging.debug(
-            f"Parsing DSC image {binary_path} @ [{text_vm_start}, {text_vm_end}]"
-        )
+        logging.debug(f"Parsing DSC image {binary_path} @ [{text_vm_start}, {text_vm_end}]")
 
         static_addr = self.translate_virtual_address_to_static(text_vm_start)
         image_bytes = self.get_bytes(static_addr, text_size)
@@ -265,27 +239,17 @@ class DyldSharedCacheBinary(MachoBinary):
     """
 
     def __init__(
-        self,
-        dsc_parser: "DyldSharedCacheParser",
-        path: Path,
-        file_offset: StaticFilePointer,
-        binary_data: bytes,
+        self, dsc_parser: "DyldSharedCacheParser", path: Path, file_offset: StaticFilePointer, binary_data: bytes
     ) -> None:
         self.dyld_shared_cache_parser = dsc_parser
         self.dyld_shared_cache_file_offset = file_offset
         super().__init__(path, binary_data)
 
-    def file_offset_for_virtual_address(
-        self, virtual_address: VirtualMemoryPointer
-    ) -> StaticFilePointer:
+    def file_offset_for_virtual_address(self, virtual_address: VirtualMemoryPointer) -> StaticFilePointer:
         # Translate into the global DSC file
-        return self.dyld_shared_cache_parser.translate_virtual_address_to_static(
-            virtual_address
-        )
+        return self.dyld_shared_cache_parser.translate_virtual_address_to_static(virtual_address)
 
-    def get_bytes(
-        self, offset: StaticFilePointer, size: int, _translate_addr_to_file=True
-    ) -> bytearray:
+    def get_bytes(self, offset: StaticFilePointer, size: int, _translate_addr_to_file=True) -> bytearray:
         # There are two possibilities: The requested data is "binary-local", meaning it's within the __TEXT buffer
         # backing this object. Or, the requested data is somewhere within the global DSC.
         # It would be clear which is the case from the calling context. For example, if the pointer comes from
@@ -294,21 +258,15 @@ class DyldSharedCacheBinary(MachoBinary):
         # from every get_bytes caller, so try to determine what data is being requested here.
         # If offset+size refers to an address outside the local image, translate and read from the global DSC.
         # Otherwise, don't translate and read directly from the global DSC.
-        if offset + size > self.dyld_shared_cache_file_offset + len(
-            self._cached_binary
-        ):
+        if offset + size > self.dyld_shared_cache_file_offset + len(self._cached_binary):
             logging.debug(f"Reading from addr outside __TEXT: {offset}")
             # This address is outside the binary's buffer. If translation was disabled, an assumption has been violated
-            assert (
-                _translate_addr_to_file
-            ), f"Must translate addr outside __TEXT: {offset}"
+            assert _translate_addr_to_file, f"Must translate addr outside __TEXT: {offset}"
 
         else:
             if _translate_addr_to_file:
                 offset += self.dyld_shared_cache_file_offset
             else:
-                logging.debug(
-                    f"Translation explicitly disabled, direct read of {offset}"
-                )
+                logging.debug(f"Translation explicitly disabled, direct read of {offset}")
 
         return bytearray(self.dyld_shared_cache_parser.get_bytes(offset, size))

@@ -12,13 +12,9 @@ from strongarm.macho import DyldSharedCacheParser, MachoAnalyzer, VirtualMemoryP
 def main():
     logging.basicConfig(level=logging.INFO)
 
-    arg_parser = argparse.ArgumentParser(
-        description="dyld_shared_cache symbol map generator"
-    )
+    arg_parser = argparse.ArgumentParser(description="dyld_shared_cache symbol map generator")
     arg_parser.add_argument(
-        "dyld_shared_cache_path",
-        type=str,
-        help="Path to the dyld_shared_cache which should be symbolicated",
+        "dyld_shared_cache_path", type=str, help="Path to the dyld_shared_cache which should be symbolicated"
     )
     arg_parser.add_argument("output_csv_path", type=str, help="Output CSV path")
     args = arg_parser.parse_args()

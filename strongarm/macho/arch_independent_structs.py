@@ -40,12 +40,7 @@ from strongarm.macho.macho_definitions import (
 
 # create type alias for the following classes that inherit from ArchIndependentStructure
 if TYPE_CHECKING:
-    from .codesign.codesign_definitions import (
-        CSBlobStruct,
-        CSSuperblobStruct,
-        CSCodeDirectoryStruct,
-        CSBlobIndexStruct,
-    )
+    from .codesign.codesign_definitions import CSBlobStruct, CSSuperblobStruct, CSCodeDirectoryStruct, CSBlobIndexStruct
 
 # Create type alias for the following classes that inherit from ArchIndependentStructure
 _32_BIT_STRUCT_ALIAS = Union[
@@ -123,9 +118,7 @@ class ArchIndependentStructure:
 
         return sizeof(struct_type)
 
-    def __init__(
-        self, binary_offset: int, struct_bytes: bytearray, is_64bit: bool = True
-    ) -> None:
+    def __init__(self, binary_offset: int, struct_bytes: bytearray, is_64bit: bool = True) -> None:
         """Parse structure from 32bit or 64bit definition
 
         Args:
@@ -137,9 +130,7 @@ class ArchIndependentStructure:
         if struct_type is None:
             raise ValueError("Undefined struct_type")
 
-        struct: ArchIndependentStructure = struct_type.from_buffer(
-            struct_bytes
-        )  # type: ignore
+        struct: ArchIndependentStructure = struct_type.from_buffer(struct_bytes)  # type: ignore
 
         for field_name, _ in struct._fields_:
             # clone fields from struct to this class
@@ -159,9 +150,7 @@ class ArchIndependentStructure:
         data: Any = None
 
     def __repr__(self) -> str:
-        attributes = "\t".join(
-            [f"{x}: {getattr(self, x)}" for x in self.__dict__.keys()]
-        )
+        attributes = "\t".join([f"{x}: {getattr(self, x)}" for x in self.__dict__.keys()])
         rep = f"{self.__class__.__name__} ({attributes})"
         return rep
 

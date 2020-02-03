@@ -42,14 +42,9 @@ def main():
     arg_parser = argparse.ArgumentParser(description="hexdump clone")
     arg_parser.add_argument("binary_path", type=str, help="Path to binary")
     arg_parser.add_argument(
-        "-s",
-        dest="start_address_str",
-        type=str,
-        help="Byte-count to skip before beginning hexdump (base16)",
+        "-s", dest="start_address_str", type=str, help="Byte-count to skip before beginning hexdump (base16)"
     )
-    arg_parser.add_argument(
-        "-n", dest="count", type=int, help="Number of bytes to hex-dump"
-    )
+    arg_parser.add_argument("-n", dest="count", type=int, help="Number of bytes to hex-dump")
     arg_parser.set_defaults(start_address_str="0x0", count=0x100000000)
     args = arg_parser.parse_args()
 

@@ -16,11 +16,7 @@ class ConsoleProgressBar:
         self.progress = progress
 
     def __init__(
-        self,
-        prefix: str = None,
-        bar_width: int = 40,
-        update_interval: float = 0.5,
-        enabled: bool = True,
+        self, prefix: str = None, bar_width: int = 40, update_interval: float = 0.5, enabled: bool = True
     ) -> None:
         self.prefix = ""
         if prefix:
@@ -41,9 +37,7 @@ class ConsoleProgressBar:
                 continue
 
             elapsed_seconds = time.time() - self.start_time
-            elapsed_time = (
-                f"{(elapsed_seconds // 60) % 60:02.0f}:{elapsed_seconds % 60:02.0f}"
-            )
+            elapsed_time = f"{(elapsed_seconds // 60) % 60:02.0f}:{elapsed_seconds % 60:02.0f}"
 
             complete_segment = "#" * int(self.progress * self.bar_width)
             incomplete_segment = "=" * int((1 - self.progress) * self.bar_width)
@@ -63,11 +57,6 @@ class ConsoleProgressBar:
         threading.Thread(target=self._update_bar).start()
         return self
 
-    def __exit__(
-        self,
-        exc_type: Optional[BaseException],
-        exc_val: Optional[Exception],
-        exc_tb: TracebackType,
-    ) -> None:
+    def __exit__(self, exc_type: Optional[BaseException], exc_val: Optional[Exception], exc_tb: TracebackType) -> None:
         self._in_context_manager = False
         time.sleep(self.update_interval)

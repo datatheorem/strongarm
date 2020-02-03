@@ -11,9 +11,7 @@ analyzer = MachoAnalyzer(binary)
 desired_selector = "URLSession:didReceiveChallenge:completionHandler:"
 implementations = analyzer.get_imps_for_sel(desired_selector)
 for imp_function in implementations:
-    log_search = CodeSearch(
-        [CodeSearchTermCallDestination(binary, invokes_symbol="_NSLog")]
-    )
+    log_search = CodeSearch([CodeSearchTermCallDestination(binary, invokes_symbol="_NSLog")])
     for search_result in imp_function.search_call_graph(log_search):
         function_containing_log_call = search_result.found_function
         print(

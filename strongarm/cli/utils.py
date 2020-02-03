@@ -130,9 +130,7 @@ def disassemble_method(binary: MachoBinary, method: ObjcMethodInfo) -> str:
     sel_args = args_from_sel_name(method.objc_sel.name)
 
     argument_list = ", ".join(sel_args)
-    signature = (
-        f"\n-[{method.objc_class.name} {method.objc_sel.name}]({argument_list});"
-    )
+    signature = f"\n-[{method.objc_class.name} {method.objc_sel.name}]({argument_list});"
     disassembled_text.append(signature)
 
     if not method.imp_addr:
@@ -146,18 +144,11 @@ def print_instr(instr: ObjcInstruction) -> None:
     instruction_string += f"\t{hex(instr.address)}\t\t{instr.raw_instr.mnemonic}"
 
     # Add each arg to the string
-    instruction_string += ", ".join(
-        [
-            format_instruction_arg(instr.raw_instr, arg)
-            for arg in instr.raw_instr.operands
-        ]
-    )
+    instruction_string += ", ".join([format_instruction_arg(instr.raw_instr, arg) for arg in instr.raw_instr.operands])
     print(instruction_string)
 
 
-def annotate_instruction(
-    function_analyzer: ObjcFunctionAnalyzer, sel_args: List[str], instr: CsInsn
-) -> str:
+def annotate_instruction(function_analyzer: ObjcFunctionAnalyzer, sel_args: List[str], instr: CsInsn) -> str:
     annotation = "\t\t"
     # Parse as an ObjcInstruction
     wrapped_instr = ObjcInstruction.parse_instruction(
@@ -169,9 +160,7 @@ def annotate_instruction(
 
         annotation += "#\t"
         if function_analyzer.is_local_branch(wrapped_branch_instr):
-            annotation += StringPalette.ANNOTATION(
-                f"jump loc_{hex(wrapped_branch_instr.destination_address)}"
-            )
+            annotation += StringPalette.ANNOTATION(f"jump loc_{hex(wrapped_branch_instr.destination_address)}")
         elif wrapped_instr.symbol:
             annotation += StringPalette.ANNOTATION(wrapped_instr.symbol)
 
@@ -186,9 +175,7 @@ def annotate_instruction(
                 for i in range(arg_count):
                     # x0 is self, x1 is the SEL, real args start at x2
                     register = f"x{i + 2}"
-                    method_arg = function_analyzer.get_register_contents_at_instruction(
-                        register, wrapped_branch_instr
-                    )
+                    method_arg = function_analyzer.get_register_contents_at_instruction(register, wrapped_branch_instr)
 
                     method_arg_string = ", "
                     if method_arg.type == RegisterContentsType.IMMEDIATE:
@@ -204,9 +191,7 @@ def annotate_instruction(
             for i in range(arg_count):
                 # x0 is self, x1 is the SEL, real args start at x2
                 register = f"x{i}"
-                method_arg = function_analyzer.get_register_contents_at_instruction(
-                    register, wrapped_instr
-                )
+                method_arg = function_analyzer.get_register_contents_at_instruction(register, wrapped_instr)
 
                 method_arg_string = f"{register}: "
                 if method_arg.type == RegisterContentsType.IMMEDIATE:
@@ -227,12 +212,8 @@ def annotate_instruction(
                 if len(instr_mutated_regs):
                     # Get the contents of the register (an address)
                     register = instr.reg_name(instr_mutated_regs[0])
-                    wrapped_instr = ObjcInstruction.parse_instruction(
-                        function_analyzer, instr
-                    )
-                    register_contents = function_analyzer.get_register_contents_at_instruction(
-                        register, wrapped_instr
-                    )
+                    wrapped_instr = ObjcInstruction.parse_instruction(function_analyzer, instr)
+                    register_contents = function_analyzer.get_register_contents_at_instruction(register, wrapped_instr)
                     if register_contents.type == RegisterContentsType.IMMEDIATE:
                         # Try reading a string
                         binary_str = function_analyzer.binary.read_string_at_address(
@@ -245,10 +226,7 @@ def annotate_instruction(
 
 
 def disassemble_function(
-    binary: MachoBinary,
-    function_addr: VirtualMemoryPointer,
-    prefix: List[str] = None,
-    sel_args: List[str] = None,
+    binary: MachoBinary, function_addr: VirtualMemoryPointer, prefix: List[str] = None, sel_args: List[str] = None
 ) -> str:
     if not prefix:
         prefix = []
@@ -256,19 +234,12 @@ def disassemble_function(
         sel_args = []
 
     disassembled_text = prefix
-    function_analyzer = ObjcFunctionAnalyzer.get_function_analyzer(
-        binary, function_addr
-    )
+    function_analyzer = ObjcFunctionAnalyzer.get_function_analyzer(binary, function_addr)
 
     # Transform basic blocks into tuples of (basic block start addr, basic block end addr)
-    basic_block_boundaries = [
-        [block.start_address, block.end_address]
-        for block in function_analyzer.basic_blocks
-    ]
+    basic_block_boundaries = [[block.start_address, block.end_address] for block in function_analyzer.basic_blocks]
     # Flatten basic_block_boundaries into one-dimensional list
-    basic_block_boundaries_flat = [
-        x for boundaries in basic_block_boundaries for x in boundaries
-    ]
+    basic_block_boundaries_flat = [x for boundaries in basic_block_boundaries for x in boundaries]
     # Remove duplicate boundaries
     basic_block_boundaries_set = set(basic_block_boundaries_flat)
 
@@ -276,19 +247,14 @@ def disassemble_function(
         instruction_string = ""
         # Add visual indicator if this is a basic block boundary
         if instr.address in basic_block_boundaries_set:
-            instruction_string += StringPalette.BASIC_BLOCK(
-                f"--- loc_{hex(instr.address)} ----------\n"
-            )
+            instruction_string += StringPalette.BASIC_BLOCK(f"--- loc_{hex(instr.address)} ----------\n")
 
         instruction_string += (
-            f"\t{StringPalette.ADDRESS(hex(instr.address))}\t"
-            f"\t{StringPalette.MNEMONIC(instr.mnemonic)} "
+            f"\t{StringPalette.ADDRESS(hex(instr.address))}\t" f"\t{StringPalette.MNEMONIC(instr.mnemonic)} "
         )
 
         # Add each arg to the string
-        instruction_string += ", ".join(
-            [format_instruction_arg(instr, x) for x in instr.operands]
-        )
+        instruction_string += ", ".join([format_instruction_arg(instr, x) for x in instr.operands])
 
         instruction_string += annotate_instruction(function_analyzer, sel_args, instr)
         disassembled_text.append(instruction_string)
@@ -307,9 +273,7 @@ def print_binary_load_commands(binary: MachoBinary) -> None:
     print("\nLoad commands:")
     load_commands = binary.load_dylib_commands
     for cmd in load_commands:
-        dylib_name_addr = (
-            binary.get_virtual_base() + cmd.binary_offset + cmd.dylib.name.offset
-        )
+        dylib_name_addr = binary.get_virtual_base() + cmd.binary_offset + cmd.dylib.name.offset
         dylib_name = binary.read_string_at_address(dylib_name_addr)
         dylib_version = cmd.dylib.current_version
         print(f"\t{dylib_name} v.{hex(dylib_version)}")
@@ -357,9 +321,7 @@ def print_selector(objc_class: ObjcClass, selector: ObjcSelector) -> None:
     else:
         class_name = objc_class.name
     if selector.implementation:
-        print(
-            f"\t-[{class_name} {selector.name}] defined at {hex(selector.implementation)}"
-        )
+        print(f"\t-[{class_name} {selector.name}] defined at {hex(selector.implementation)}")
     else:
         print(f"\t-[{class_name} {selector.name}]")
 

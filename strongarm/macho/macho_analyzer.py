@@ -9,25 +9,11 @@ from contextlib import closing
 from ctypes import sizeof
 from dataclasses import dataclass
 from itertools import tee
-from typing import (
-    TYPE_CHECKING,
-    Callable,
-    Dict,
-    Iterable,
-    List,
-    Optional,
-    Set,
-    Tuple,
-    TypeVar,
-)
+from typing import TYPE_CHECKING, Callable, Dict, Iterable, List, Optional, Set, Tuple, TypeVar
 
 from capstone import CS_ARCH_ARM64, CS_MODE_ARM, Cs, CsInsn
 
-from strongarm.macho.arch_independent_structs import (
-    CFString32,
-    CFString64,
-    CFStringStruct,
-)
+from strongarm.macho.arch_independent_structs import CFString32, CFString64, CFStringStruct
 from strongarm.macho.dyld_info_parser import DyldBoundSymbol, DyldInfoParser
 from strongarm.macho.macho_binary import InvalidAddressError, MachoBinary
 from strongarm.macho.macho_definitions import VirtualMemoryPointer
@@ -43,21 +29,14 @@ from strongarm.macho.objc_runtime_data_parser import (
 from strongarm.macho.progress_bar import ConsoleProgressBar
 
 if TYPE_CHECKING:
-    from strongarm.objc import (
-        ObjcFunctionAnalyzer,
-        ObjcMethodInfo,
-        CodeSearch,
-        CodeSearchResult,
-    )
+    from strongarm.objc import ObjcFunctionAnalyzer, ObjcMethodInfo, CodeSearch, CodeSearchResult
 
 
 _T = TypeVar("_T")
 
 # Callback invoked when the results for a previously queued CodeSearch have been found.
 # This will be dispatched some time after MachoAnalyzer.search_all_code() is called
-CodeSearchCallback = Callable[
-    ["MachoAnalyzer", "CodeSearch", List["CodeSearchResult"]], None
-]
+CodeSearchCallback = Callable[["MachoAnalyzer", "CodeSearch", List["CodeSearchResult"]], None]
 
 ANALYZER_SQL_SCHEMA = """
     CREATE TABLE function_boundaries(
@@ -187,9 +166,7 @@ class MachoAnalyzer:
             self._build_branch_xrefs_index()
 
         c = self._db_handle.cursor()
-        xrefs = c.execute(
-            f"SELECT * from function_calls WHERE destination_address={int(address)}"
-        ).fetchall()
+        xrefs = c.execute(f"SELECT * from function_calls WHERE destination_address={int(address)}").fetchall()
         xrefs = [CallerXRef(x[0], x[1], x[2]) for x in xrefs]
         return xrefs
 
@@ -221,8 +198,7 @@ class MachoAnalyzer:
             ).fetchall()
 
             objc_calls += c.execute(
-                f"SELECT * from objc_msgSends "
-                f'WHERE selref IN ({", ".join([str(int(x)) for x in objc_selrefs])})'
+                f"SELECT * from objc_msgSends " f'WHERE selref IN ({", ".join([str(int(x)) for x in objc_selrefs])})'
             ).fetchall()
 
         else:
@@ -250,9 +226,7 @@ class MachoAnalyzer:
         basic_block_starts = {entry_point}
 
         branch_mnemonic_to_dest_addr_op_idx = {
-            **dict.fromkeys(
-                ObjcUnconditionalBranchInstruction.UNCONDITIONAL_BRANCH_MNEMONICS, 0
-            ),
+            **dict.fromkeys(ObjcUnconditionalBranchInstruction.UNCONDITIONAL_BRANCH_MNEMONICS, 0),
             "cbz": 1,
             "cbnz": 1,
             "tbz": 2,
@@ -276,18 +250,14 @@ class MachoAnalyzer:
 
                 # Is it a branch to a local label within the function?
                 if entry_point <= destination_address <= end_address:
-                    basic_block_starts.add(
-                        VirtualMemoryPointer(instr.address + instr.size)
-                    )
+                    basic_block_starts.add(VirtualMemoryPointer(instr.address + instr.size))
                     basic_block_starts.add(VirtualMemoryPointer(destination_address))
                     continue
 
                 # Unconditional branches always end a basic block, even if jumping somewhere outside the function
                 # (such as a tail call at the end of a code path)
                 if instr.mnemonic == "b":
-                    basic_block_starts.add(
-                        VirtualMemoryPointer(instr.address + instr.size)
-                    )
+                    basic_block_starts.add(VirtualMemoryPointer(instr.address + instr.size))
 
                 # If a function contains a stack canary, its last instruction will be a branch-with-link to
                 # __stack_chk_fail. A 'normal' branch-with-link would not be a sensible function-end, but a
@@ -297,9 +267,7 @@ class MachoAnalyzer:
                 # We could make this heuristic stronger by parsing the instruction and checking if it jumps to the
                 # __stack_chk_fail symbol, but this likely gets the job done most of the time.
                 if instr.address == end_address - instr.size and instr.mnemonic == "bl":
-                    basic_block_starts.add(
-                        VirtualMemoryPointer(instr.address + instr.size)
-                    )
+                    basic_block_starts.add(VirtualMemoryPointer(instr.address + instr.size))
 
         # Convert basic-block starts to [start, end] pairs
         return pairwise(sorted(basic_block_starts))
@@ -327,17 +295,14 @@ class MachoAnalyzer:
 
         for entry_point, end_address in pairwise(sorted_entry_points):
             # The end address of the function is the last instruction in the last basic block
-            basic_blocks = [
-                x for x in self._compute_function_basic_blocks(entry_point, end_address)
-            ]
+            basic_blocks = [x for x in self._compute_function_basic_blocks(entry_point, end_address)]
             # If we found a function with no code, just skip it
             # This can happen in the assembly unit tests, where we insert a jump to a dummy __text label
             if len(basic_blocks) == 0:
                 continue
             end_address = max((bb_end for _, bb_end in basic_blocks))
             cursor.execute(
-                f"INSERT INTO function_boundaries (entry_point, end_address) VALUES (?, ?)",
-                (entry_point, end_address),
+                f"INSERT INTO function_boundaries (entry_point, end_address) VALUES (?, ?)", (entry_point, end_address)
             )
 
         with self._db_handle:
@@ -347,9 +312,7 @@ class MachoAnalyzer:
         from strongarm.objc import ObjcUnconditionalBranchInstruction
 
         if self._has_computed_call_xrefs:
-            logging.error(
-                f"Already computed xrefs, why was _build_branch_xrefs_index called again?"
-            )
+            logging.error(f"Already computed xrefs, why was _build_branch_xrefs_index called again?")
             return
 
         start_time = time.time()
@@ -361,9 +324,7 @@ class MachoAnalyzer:
         # TODO(PT): Test this on a binary with no ObjcMsgSend
         objc_msgsend_symbol = self.callable_symbol_for_symbol_name("_objc_msgSend")
         if not objc_msgsend_symbol:
-            raise NotImplementedError(
-                f"{self.binary.path} has no imported _objc_msgSend symbol"
-            )
+            raise NotImplementedError(f"{self.binary.path} has no imported _objc_msgSend symbol")
         objc_msgsend_addr = objc_msgsend_symbol.address
 
         # Some special selectors have a fast-path, _objc_opt_<selector>, that was added in iOS 13
@@ -402,10 +363,7 @@ class MachoAnalyzer:
             func_analyzer = None
             for instr in disassembled_code:
                 # Is it an unconditional branch instruction?
-                if (
-                    instr.mnemonic
-                    not in ObjcUnconditionalBranchInstruction.UNCONDITIONAL_BRANCH_MNEMONICS
-                ):
+                if instr.mnemonic not in ObjcUnconditionalBranchInstruction.UNCONDITIONAL_BRANCH_MNEMONICS:
                     continue
 
                 # Record that the branch receiver has an XRef from this instruction
@@ -413,15 +371,10 @@ class MachoAnalyzer:
 
                 if destination_address in objc_function_addrs:
                     # Branch to function in the _objc_* family
-                    from strongarm.objc import (
-                        RegisterContentsType,
-                        ObjcFunctionAnalyzer,
-                    )
+                    from strongarm.objc import RegisterContentsType, ObjcFunctionAnalyzer
 
                     if not func_analyzer:
-                        func_analyzer = ObjcFunctionAnalyzer.get_function_analyzer(
-                            self.binary, entry_point
-                        )
+                        func_analyzer = ObjcFunctionAnalyzer.get_function_analyzer(self.binary, entry_point)
 
                     parsed_instr = ObjcUnconditionalBranchInstruction.parse_instruction(
                         func_analyzer, instr, patch_msgSend_destination=False
@@ -430,17 +383,13 @@ class MachoAnalyzer:
                     classref = 0x0
                     selref = 0x0
 
-                    classref_reg = func_analyzer.get_register_contents_at_instruction(
-                        "x0", parsed_instr
-                    )
+                    classref_reg = func_analyzer.get_register_contents_at_instruction("x0", parsed_instr)
                     if classref_reg.type == RegisterContentsType.IMMEDIATE:
                         classref = classref_reg.value
 
                     if destination_address == objc_msgsend_addr:
                         # Branch to _objc_msgSend
-                        selref_reg = func_analyzer.get_register_contents_at_instruction(
-                            "x1", parsed_instr
-                        )
+                        selref_reg = func_analyzer.get_register_contents_at_instruction("x1", parsed_instr)
                         if selref_reg.type == RegisterContentsType.IMMEDIATE:
                             selref = selref_reg.value
 
@@ -449,16 +398,10 @@ class MachoAnalyzer:
                         # Additionally, in this case, include a 'function call' XRef. This enables getting all the
                         # callers to a locally-implemented Objective-C method *or* C function via the `calls_to` API.
                         # TODO(PT): Re-evaluate whether this is necessary or if the objc_calls_to() API is sufficient
-                        selector = self.selector_for_selref(
-                            VirtualMemoryPointer(selref)
-                        )
+                        selector = self.selector_for_selref(VirtualMemoryPointer(selref))
                         if selector and selector.implementation:
                             destination_address = selector.implementation
-                            function_call_xref = (
-                                destination_address,
-                                instr.address,
-                                entry_point,
-                            )
+                            function_call_xref = (destination_address, instr.address, entry_point)
                             function_branches.append(function_call_xref)
                     else:
                         # Branch to _objc_opt*. Even though the specific _objc_opt_* function tells us which method is
@@ -469,13 +412,7 @@ class MachoAnalyzer:
                         # _objc_msgSend elsewhere.
                         pass
 
-                    objc_call = (
-                        int(destination_address),
-                        instr.address,
-                        entry_point,
-                        int(classref),
-                        int(selref),
-                    )
+                    objc_call = (int(destination_address), instr.address, entry_point, int(classref), int(selref))
                     objc_calls.append(objc_call)
 
                 else:
@@ -491,20 +428,11 @@ class MachoAnalyzer:
             # Additionally, if `is_local` is set *and* `is_objc` set, there may be some other field for the entry point
             # to the locally implemented ObjC method.
             for xref in function_branches:
-                c.execute(
-                    "INSERT INTO function_calls VALUES (?, ?, ?)",
-                    (xref[0], xref[1], xref[2]),
-                )
+                c.execute("INSERT INTO function_calls VALUES (?, ?, ?)", (xref[0], xref[1], xref[2]))
             for objc_call in objc_calls:
                 c.execute(
                     "INSERT INTO objc_msgSends " "VALUES (?, ?, ?, ?, ?)",
-                    (
-                        objc_call[0],
-                        objc_call[1],
-                        objc_call[2],
-                        objc_call[3],
-                        objc_call[4],
-                    ),
+                    (objc_call[0], objc_call[1], objc_call[2], objc_call[3], objc_call[4]),
                 )
 
         self._db_handle.commit()
@@ -539,9 +467,7 @@ class MachoAnalyzer:
             return cls._ANALYZER_CACHE[binary]
         return MachoAnalyzer(binary)
 
-    def method_info_for_entry_point(
-        self, entry_point: VirtualMemoryPointer
-    ) -> Optional["ObjcMethodInfo"]:
+    def method_info_for_entry_point(self, entry_point: VirtualMemoryPointer) -> Optional["ObjcMethodInfo"]:
         # TODO(PT): This should return any symbol name, not just Obj-C methods
         from strongarm.objc.objc_analyzer import ObjcMethodInfo
 
@@ -560,9 +486,7 @@ class MachoAnalyzer:
         """Return the List of categories implemented within the app
         """
         all_classes = self.objc_classes()
-        categories: List[ObjcCategory] = [
-            c for c in all_classes if isinstance(c, ObjcCategory)
-        ]
+        categories: List[ObjcCategory] = [c for c in all_classes if isinstance(c, ObjcCategory)]
         return categories
 
     def get_conformed_protocols(self) -> List[ObjcProtocol]:
@@ -643,46 +567,30 @@ class MachoAnalyzer:
         """
         return {y: x for x, y in self.exported_symbol_pointers_to_names.items()}
 
-    def exported_symbol_name_for_address(
-        self, address: VirtualMemoryPointer
-    ) -> Optional[str]:
+    def exported_symbol_name_for_address(self, address: VirtualMemoryPointer) -> Optional[str]:
         """Return the symbol name for the provided address, or None if the address is not a named exported symbol.
         """
         if address in self.exported_symbol_pointers_to_names:
             return self.exported_symbol_pointers_to_names[address]
         return None
 
-    def symbol_name_for_branch_destination(
-        self, branch_address: VirtualMemoryPointer
-    ) -> str:
+    def symbol_name_for_branch_destination(self, branch_address: VirtualMemoryPointer) -> str:
         """Get the associated symbol name for a given branch destination
         """
         if branch_address in self.imp_stubs_to_symbol_names:
             return self.imp_stubs_to_symbol_names[branch_address]
-        raise RuntimeError(
-            f"Unknown branch destination {hex(branch_address)}. Is this a local branch?"
-        )
+        raise RuntimeError(f"Unknown branch destination {hex(branch_address)}. Is this a local branch?")
 
-    def disassemble_region(
-        self, start_address: VirtualMemoryPointer, size: int
-    ) -> List[CsInsn]:
+    def disassemble_region(self, start_address: VirtualMemoryPointer, size: int) -> List[CsInsn]:
         """Disassemble the executable code in a given region into a list of CsInsn objects
         """
-        func_str = bytes(
-            self.binary.get_content_from_virtual_address(
-                virtual_address=start_address, size=size
-            )
-        )
+        func_str = bytes(self.binary.get_content_from_virtual_address(virtual_address=start_address, size=size))
         instructions = [instr for instr in self.cs.disasm(func_str, start_address)]
         if not len(instructions):
-            raise DisassemblyFailedError(
-                f"Failed to disassemble code at {hex(start_address)}:{hex(size)}"
-            )
+            raise DisassemblyFailedError(f"Failed to disassemble code at {hex(start_address)}:{hex(size)}")
         return instructions
 
-    def get_function_instructions(
-        self, start_address: VirtualMemoryPointer
-    ) -> List[CsInsn]:
+    def get_function_instructions(self, start_address: VirtualMemoryPointer) -> List[CsInsn]:
         """Get a list of disassembled instructions for the function beginning at start_address
         """
         end_address = self.get_function_end_address(start_address)
@@ -690,27 +598,19 @@ class MachoAnalyzer:
         if end_address is None:
             raise RuntimeError(f"No function with start address {start_address} found.")
 
-        instructions = self.disassemble_region(
-            start_address, end_address - start_address
-        )
+        instructions = self.disassemble_region(start_address, end_address - start_address)
         return instructions
 
-    def imp_for_selref(
-        self, selref_ptr: VirtualMemoryPointer
-    ) -> Optional[VirtualMemoryPointer]:
+    def imp_for_selref(self, selref_ptr: VirtualMemoryPointer) -> Optional[VirtualMemoryPointer]:
         selector = self.objc_helper.selector_for_selref(selref_ptr)
         if not selector:
             return None
         return selector.implementation
 
-    def selector_for_selref(
-        self, selref_ptr: VirtualMemoryPointer
-    ) -> Optional[ObjcSelector]:
+    def selector_for_selref(self, selref_ptr: VirtualMemoryPointer) -> Optional[ObjcSelector]:
         return self.objc_helper.selector_for_selref(selref_ptr)
 
-    def selector_for_selector_literal(
-        self, selref_ptr: VirtualMemoryPointer
-    ) -> Optional[ObjcSelector]:
+    def selector_for_selector_literal(self, selref_ptr: VirtualMemoryPointer) -> Optional[ObjcSelector]:
         return self.objc_helper.selector_for_selector_literal(selref_ptr)
 
     def get_method_imp_addresses(self, selector: str) -> List[VirtualMemoryPointer]:
@@ -760,24 +660,15 @@ class MachoAnalyzer:
         """
         return self.binary.get_functions()
 
-    def get_function_boundaries(
-        self
-    ) -> Set[Tuple[VirtualMemoryPointer, VirtualMemoryPointer]]:
-        cursor = self._db_handle.execute(
-            "SELECT entry_point, end_address FROM function_boundaries"
-        )
+    def get_function_boundaries(self) -> Set[Tuple[VirtualMemoryPointer, VirtualMemoryPointer]]:
+        cursor = self._db_handle.execute("SELECT entry_point, end_address FROM function_boundaries")
 
         with closing(cursor):
-            return {
-                (VirtualMemoryPointer(a), VirtualMemoryPointer(b)) for a, b in cursor
-            }
+            return {(VirtualMemoryPointer(a), VirtualMemoryPointer(b)) for a, b in cursor}
 
-    def get_function_end_address(
-        self, entry_point: VirtualMemoryPointer
-    ) -> Optional[VirtualMemoryPointer]:
+    def get_function_end_address(self, entry_point: VirtualMemoryPointer) -> Optional[VirtualMemoryPointer]:
         cursor = self._db_handle.execute(
-            "SELECT end_address FROM function_boundaries WHERE entry_point = ?",
-            (entry_point,),
+            "SELECT end_address FROM function_boundaries WHERE entry_point = ?", (entry_point,)
         )
 
         with closing(cursor):
@@ -788,9 +679,7 @@ class MachoAnalyzer:
 
         return VirtualMemoryPointer(results[0])
 
-    def queue_code_search(
-        self, code_search: "CodeSearch", callback: CodeSearchCallback
-    ) -> None:
+    def queue_code_search(self, code_search: "CodeSearch", callback: CodeSearchCallback) -> None:
         """Enqueue a CodeSearch. It will be ran when `search_all_code` runs. `callback` will then be invoked.
         The search space is all known Objective-C entry points within the binary.
 
@@ -820,21 +709,16 @@ class MachoAnalyzer:
         if not len(queued_searches):
             return
 
-        logging.info(
-            f"Running {len(queued_searches)} code searches on {self.binary.path.name}"
-        )
+        logging.info(f"Running {len(queued_searches)} code searches on {self.binary.path.name}")
 
         entry_point_list = self.get_functions()
-        search_results: List[List[CodeSearchResult]] = [
-            [] for _ in range(len(queued_searches))
-        ]
+        search_results: List[List[CodeSearchResult]] = [[] for _ in range(len(queued_searches))]
 
         # Searching all code can be a time-consumptive operation. Provide UI feedback on the progress.
         # This displays a progress bar to stdout. The progress bar will be erased when the context manager exits.
         code_size = self.binary.slice_filesize / 1024 / 1024
         with ConsoleProgressBar(
-            prefix=f"{self.binary.path.stem} CodeSearch {int(code_size)}mb",
-            enabled=display_progress,
+            prefix=f"{self.binary.path.stem} CodeSearch {int(code_size)}mb", enabled=display_progress
         ) as progress_bar:
 
             # Build analyzers for function entry points.
@@ -851,13 +735,9 @@ class MachoAnalyzer:
                             self.binary, matched_method_info
                         )
                     else:
-                        function_analyzer = ObjcFunctionAnalyzer.get_function_analyzer(
-                            self.binary, entry_address
-                        )
+                        function_analyzer = ObjcFunctionAnalyzer.get_function_analyzer(self.binary, entry_address)
                 except DisassemblyFailedError as e:
-                    logging.error(
-                        f"Failed to disassemble function {hex(entry_address)}: {str(e)}"
-                    )
+                    logging.error(f"Failed to disassemble function {hex(entry_address)}: {str(e)}")
                     continue
 
                 # Run every code search on this function and record their respective results
@@ -880,9 +760,7 @@ class MachoAnalyzer:
         # We've completed all of the waiting code searches. Drain the queue
         self._queued_code_searches.clear()
 
-    def class_name_for_class_pointer(
-        self, classref: VirtualMemoryPointer
-    ) -> Optional[str]:
+    def class_name_for_class_pointer(self, classref: VirtualMemoryPointer) -> Optional[str]:
         """Given a classref, return the name of the class.
         This method will handle classes implemented within the binary and imported classes.
         """
@@ -897,41 +775,25 @@ class MachoAnalyzer:
             # invalid classref
             return None
 
-        local_class = [
-            x
-            for x in self.objc_classes()
-            if x.raw_struct.binary_offset == class_location
-        ]
+        local_class = [x for x in self.objc_classes() if x.raw_struct.binary_offset == class_location]
         if len(local_class):
             return local_class[0].name
 
         # invalid classref
         return None
 
-    def classref_for_class_name(
-        self, class_name: str
-    ) -> Optional[VirtualMemoryPointer]:
+    def classref_for_class_name(self, class_name: str) -> Optional[VirtualMemoryPointer]:
         """Given a class name, try to find a classref for it.
         """
-        classrefs = [
-            addr
-            for addr, name in self.imported_symbols_to_symbol_names.items()
-            if name == class_name
-        ]
+        classrefs = [addr for addr, name in self.imported_symbols_to_symbol_names.items() if name == class_name]
         if len(classrefs):
             return classrefs[0]
 
         # TODO(PT): this is expensive! We should do one analysis step of __objc_classrefs and create a map.
-        classref_locations, classref_destinations = self.binary.read_pointer_section(
-            "__objc_classrefs"
-        )
+        classref_locations, classref_destinations = self.binary.read_pointer_section("__objc_classrefs")
 
         # is it a local class?
-        class_locations = [
-            x.raw_struct.binary_offset
-            for x in self.objc_classes()
-            if x.name == class_name
-        ]
+        class_locations = [x.raw_struct.binary_offset for x in self.objc_classes() if x.name == class_name]
         if not len(class_locations):
             # unknown class name
             return None
@@ -944,9 +806,7 @@ class MachoAnalyzer:
         classref_index = classref_destinations.index(class_location)
         return classref_locations[classref_index]
 
-    def selref_for_selector_name(
-        self, selector_name: str
-    ) -> Optional[VirtualMemoryPointer]:
+    def selref_for_selector_name(self, selector_name: str) -> Optional[VirtualMemoryPointer]:
         return self.objc_helper.selref_for_selector_name(selector_name)
 
     def strings(self) -> Set[str]:
@@ -963,9 +823,7 @@ class MachoAnalyzer:
 
         # split into characters (string table is packed and each entry is terminated by a null character)
         string_table = list(strings_content)
-        transformed_strings = MachoStringTableHelper.transform_string_section(
-            string_table
-        )
+        transformed_strings = MachoStringTableHelper.transform_string_section(string_table)
         return set((x.full_string for x in transformed_strings.values()))
 
     def _stringref_for_cstring(self, string: str) -> Optional[VirtualMemoryPointer]:
@@ -983,9 +841,7 @@ class MachoAnalyzer:
 
         # split into characters (string table is packed and each entry is terminated by a null character)
         string_table = list(strings_content)
-        transformed_strings = MachoStringTableHelper.transform_string_section(
-            string_table
-        )
+        transformed_strings = MachoStringTableHelper.transform_string_section(string_table)
         for idx, entry in transformed_strings.items():
             if entry.full_string == string:
                 # found the string we're looking for
@@ -1006,20 +862,13 @@ class MachoAnalyzer:
         if not cfstrings_section:
             return None
 
-        sizeof_cfstring = (
-            sizeof(CFString64) if self.binary.is_64bit else sizeof(CFString32)
-        )
+        sizeof_cfstring = sizeof(CFString64) if self.binary.is_64bit else sizeof(CFString32)
         cfstrings_base = cfstrings_section.address
 
-        cfstrings_count = int(
-            (cfstrings_section.end_address - cfstrings_section.address)
-            / sizeof_cfstring
-        )
+        cfstrings_count = int((cfstrings_section.end_address - cfstrings_section.address) / sizeof_cfstring)
         for i in range(cfstrings_count):
             cfstring_addr = cfstrings_base + (i * sizeof_cfstring)
-            cfstring = self.binary.read_struct(
-                cfstring_addr, CFStringStruct, virtual=True
-            )
+            cfstring = self.binary.read_struct(cfstring_addr, CFStringStruct, virtual=True)
 
             # check if this is the string the user requested
             string_address = cfstring.literal
@@ -1038,9 +887,7 @@ class MachoAnalyzer:
         is_cfstring = False
         if string.startswith('@"'):
             if not string.endswith('"'):
-                raise RuntimeError(
-                    f"incorrectly formatted ObjC string literal {string}"
-                )
+                raise RuntimeError(f"incorrectly formatted ObjC string literal {string}")
 
             is_cfstring = True
             # trim the @" prefix and the " suffix
@@ -1051,46 +898,34 @@ class MachoAnalyzer:
         return self._stringref_for_cstring(string)
 
     @functools.lru_cache(64)
-    def callable_symbol_for_address(
-        self, branch_destination: VirtualMemoryPointer
-    ) -> Optional[CallableSymbol]:
+    def callable_symbol_for_address(self, branch_destination: VirtualMemoryPointer) -> Optional[CallableSymbol]:
         """Retrieve information about a callable branch destination.
         It's the caller's responsibility to provide a valid branch destination with a symbol associated with it.
         """
         c = self._db_handle.cursor()
-        symbols = c.execute(
-            f"SELECT * from named_callable_symbols WHERE address={branch_destination}"
-        ).fetchall()
+        symbols = c.execute(f"SELECT * from named_callable_symbols WHERE address={branch_destination}").fetchall()
         if not len(symbols):
             return None
         assert len(symbols) == 1, f"Found more than 1 symbol at {branch_destination}?"
         symbol_data = symbols[0]
 
         return CallableSymbol(
-            is_imported=bool(symbol_data[0]),
-            address=VirtualMemoryPointer(symbol_data[1]),
-            symbol_name=symbol_data[2],
+            is_imported=bool(symbol_data[0]), address=VirtualMemoryPointer(symbol_data[1]), symbol_name=symbol_data[2]
         )
 
-    def callable_symbol_for_symbol_name(
-        self, symbol_name: str
-    ) -> Optional[CallableSymbol]:
+    def callable_symbol_for_symbol_name(self, symbol_name: str) -> Optional[CallableSymbol]:
         """Retrieve information about a name within the imported or exported symbols tables.
         It's the caller's responsibility to provide a valid callable symbol name.
         """
         c = self._db_handle.cursor()
-        symbols = c.execute(
-            f"SELECT * from named_callable_symbols WHERE symbol_name='{symbol_name}'"
-        ).fetchall()
+        symbols = c.execute(f"SELECT * from named_callable_symbols WHERE symbol_name='{symbol_name}'").fetchall()
         if not len(symbols):
             return None
         assert len(symbols) == 1, f"Found more than 1 symbol named {symbol_name}?"
         symbol_data = symbols[0]
 
         return CallableSymbol(
-            is_imported=bool(symbol_data[0]),
-            address=VirtualMemoryPointer(symbol_data[1]),
-            symbol_name=symbol_data[2],
+            is_imported=bool(symbol_data[0]), address=VirtualMemoryPointer(symbol_data[1]), symbol_name=symbol_data[2]
         )
 
     def _build_callable_symbol_index(self) -> None:
@@ -1102,19 +937,10 @@ class MachoAnalyzer:
         # Process __imp_stubs
         imported_bound_symbols = self.imp_stubs_to_symbol_names
         for imp_stub_addr, symbol_name in imported_bound_symbols.items():
-            c.execute(
-                "INSERT INTO named_callable_symbols VALUES (1, ?, ?)",
-                (imp_stub_addr, symbol_name),
-            )
+            c.execute("INSERT INTO named_callable_symbols VALUES (1, ?, ?)", (imp_stub_addr, symbol_name))
 
         # Process the symbols defined in the binary
-        for (
-            callable_addr,
-            symbol_name,
-        ) in self.exported_symbol_pointers_to_names.items():
-            c.execute(
-                "INSERT INTO named_callable_symbols VALUES (0, ?, ?)",
-                (callable_addr, symbol_name),
-            )
+        for (callable_addr, symbol_name) in self.exported_symbol_pointers_to_names.items():
+            c.execute("INSERT INTO named_callable_symbols VALUES (0, ?, ?)", (callable_addr, symbol_name))
 
         self._db_handle.commit()

@@ -66,10 +66,7 @@ class TestDyldInfoParser:
         for imported_pointer in correct_imported_symbols.keys():
             symbol_name = correct_imported_symbols[imported_pointer]
             if "_OBJC_CLASS_$_" in symbol_name:
-                assert (
-                    analyzer.class_name_for_class_pointer(imported_pointer)
-                    == symbol_name
-                )
+                assert analyzer.class_name_for_class_pointer(imported_pointer) == symbol_name
 
                 # some symbols have multiple imported pointers, so just make sure when we lookup pointer it's the same
                 # symbol name.
@@ -86,6 +83,4 @@ class TestDyldInfoParser:
         # which previously had a bug where we didn't increment the data pointer after binding
 
         # verify data is correct
-        assert (
-            analyzer.classref_for_class_name("_OBJC_CLASS_$_UIAlertView") == 0x100212338
-        )
+        assert analyzer.classref_for_class_name("_OBJC_CLASS_$_UIAlertView") == 0x100212338

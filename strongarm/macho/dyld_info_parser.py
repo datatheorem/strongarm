@@ -24,13 +24,7 @@ class BindOpcode(IntEnum):
 
 
 class DyldBoundSymbol:
-    def __init__(
-        self,
-        binary: MachoBinary,
-        stub_addr: VirtualMemoryPointer,
-        library_ordinal: int,
-        name: str,
-    ) -> None:
+    def __init__(self, binary: MachoBinary, stub_addr: VirtualMemoryPointer, library_ordinal: int, name: str) -> None:
         self.binary = binary
         self.address = stub_addr
         self.library_ordinal = library_ordinal
@@ -66,12 +60,8 @@ class DyldInfoParser:
         return result, offset
 
     def parse_dyld_info(self) -> None:
-        self.parse_dyld_bytestream(
-            self.dyld_info_cmd.bind_off, self.dyld_info_cmd.bind_size
-        )
-        self.parse_dyld_bytestream(
-            self.dyld_info_cmd.lazy_bind_off, self.dyld_info_cmd.lazy_bind_size
-        )
+        self.parse_dyld_bytestream(self.dyld_info_cmd.bind_off, self.dyld_info_cmd.bind_size)
+        self.parse_dyld_bytestream(self.dyld_info_cmd.lazy_bind_off, self.dyld_info_cmd.lazy_bind_size)
 
     def parse_dyld_bytestream(self, file_offset: StaticFilePointer, size: int) -> None:
         from ctypes import sizeof
@@ -143,6 +133,4 @@ class DyldInfoParser:
                     commit_stub()
                     segment_offset += pointer_size + skip
             else:
-                logging.error(
-                    f"unknown dyld bind opcode {hex(opcode)}, immediate {hex(immediate)}"
-                )
+                logging.error(f"unknown dyld bind opcode {hex(opcode)}, immediate {hex(immediate)}")

@@ -41,9 +41,7 @@ class TestCodeSignParser:
         assert self.codesign_parser.entitlements == correct_ents
 
     def test_identifier(self):
-        assert (
-            self.codesign_parser.signing_identifier == "com.honestdollar.honestdollar"
-        )
+        assert self.codesign_parser.signing_identifier == "com.honestdollar.honestdollar"
 
     def test_team_id(self):
         assert self.codesign_parser.signing_team_id == "E6435Z6R89"

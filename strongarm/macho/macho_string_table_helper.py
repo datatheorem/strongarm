@@ -25,17 +25,13 @@ class MachoStringTableHelper:
 
     def __init__(self, binary: MachoBinary) -> None:
         self.binary = binary
-        self.string_table_entries = MachoStringTableHelper.transform_string_section(
-            self.binary.get_raw_string_table()
-        )
+        self.string_table_entries = MachoStringTableHelper.transform_string_section(self.binary.get_raw_string_table())
         self.imported_symbols: List[str] = []
         self.exported_symbols: Dict[VirtualMemoryPointer, str] = {}
         self.parse_sym_lists()
 
     @classmethod
-    def transform_string_section(
-        cls, strtab: List[int]
-    ) -> Dict[int, MachoStringTableEntry]:
+    def transform_string_section(cls, strtab: List[int]) -> Dict[int, MachoStringTableEntry]:
         """Create more efficient representation of string table data
 
         Often, tables in a Mach-O will reference data within the string table.
@@ -77,9 +73,7 @@ class MachoStringTableHelper:
                 entry_start_idx = idx + 1
         return string_table_entries
 
-    def string_table_entry_for_strtab_index(
-        self, start_idx: int
-    ) -> Optional[MachoStringTableEntry]:
+    def string_table_entry_for_strtab_index(self, start_idx: int) -> Optional[MachoStringTableEntry]:
         """For a index in the packed character table, get the corresponding MachoStringTableEntry
 
         Returns:
@@ -117,9 +111,7 @@ class MachoStringTableHelper:
             elif symbol_type == NTYPE_VALUES.N_SECT:
                 self.exported_symbols[sym.n_value] = symbol_str
 
-    def get_symbol_name_for_address(
-        self, address: VirtualMemoryPointer
-    ) -> Optional[str]:
+    def get_symbol_name_for_address(self, address: VirtualMemoryPointer) -> Optional[str]:
         """ For an address of a function entrypoint, return the function's symbol name
         """
         if address in self.exported_symbols:

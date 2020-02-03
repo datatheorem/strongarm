@@ -20,12 +20,7 @@ from strongarm.cli.utils import (
     print_selector,
 )
 from strongarm.debug_util import DebugUtil
-from strongarm.macho import (
-    MachoAnalyzer,
-    MachoBinary,
-    MachoParser,
-    VirtualMemoryPointer,
-)
+from strongarm.macho import MachoAnalyzer, MachoBinary, MachoParser, VirtualMemoryPointer
 
 
 def print_header(args: argparse.Namespace) -> None:
@@ -94,16 +89,10 @@ class StrongarmShell:
             "help": ("Display available commands", self.help),
             "exit": ("Exit interactive shell", self.exit),
             "info": (InfoCommand(self.binary, self.analyzer).description(), self.info),
-            "sels": (
-                "List selectors implemented by a class. sels [class]",
-                self.selectors,
-            ),
+            "sels": ("List selectors implemented by a class. sels [class]", self.selectors),
             "disasm": ("Decompile a given selector. disasm [sel]", self.disasm),
             "disasm_f": ("Decompile a given selector. disasm [sel]", self.disasm_f),
-            "dump": (
-                "Hex dump a memory address. dump [size] [virtual address]",
-                self.dump_memory,
-            ),
+            "dump": ("Hex dump a memory address. dump [size] [virtual address]", self.dump_memory),
         }
         print("strongarm interactive shell\nType 'help' for available commands.")
         self.active = True
@@ -122,9 +111,7 @@ class StrongarmShell:
             print(f"Failed to interpret address: {e}")
             return err()
 
-        binary_data = self.binary.get_content_from_virtual_address(
-            VirtualMemoryPointer(address), dump_size
-        )
+        binary_data = self.binary.get_content_from_virtual_address(VirtualMemoryPointer(address), dump_size)
 
         # split to 16 byte regions
         region_size = 16
@@ -161,9 +148,7 @@ class StrongarmShell:
         class_name = args[0]
         objc_classes = [x for x in self.analyzer.objc_classes() if x.name == class_name]
         if not len(objc_classes):
-            print(
-                f"Unknown class '{class_name}'. Run 'info classes' for a list of implemented classes."
-            )
+            print(f"Unknown class '{class_name}'. Run 'info classes' for a list of implemented classes.")
             return
 
         objc_class = objc_classes[0]
@@ -176,13 +161,9 @@ class StrongarmShell:
             return
 
         sel_name = args[0]
-        matching_sels = [
-            x for x in self.analyzer.get_objc_methods() if x.objc_sel.name == sel_name
-        ]
+        matching_sels = [x for x in self.analyzer.get_objc_methods() if x.objc_sel.name == sel_name]
         if not len(matching_sels):
-            print(
-                f"Unknown selector '{sel_name}'. Run 'info methods' for a list of selectors."
-            )
+            print(f"Unknown selector '{sel_name}'. Run 'info methods' for a list of selectors.")
             return
 
         disassembled_str = disassemble_method(self.binary, matching_sels[0])
@@ -193,9 +174,7 @@ class StrongarmShell:
             print("Usage: disasm [sel]")
             return
 
-        disassembled_str = disassemble_function(
-            self.binary, VirtualMemoryPointer(args[0], 16)
-        )
+        disassembled_str = disassemble_function(self.binary, VirtualMemoryPointer(args[0], 16))
         print(disassembled_str)
 
     def help(self, args: List[str]) -> None:
@@ -244,12 +223,8 @@ def main() -> None:
     # end of config
 
     arg_parser = argparse.ArgumentParser(description="Mach-O Analyzer")
-    arg_parser.add_argument(
-        "--verbose", action="store_true", help="Output extra info while analyzing"
-    )
-    arg_parser.add_argument(
-        "binary_path", metavar="binary_path", type=str, help="Path to binary to analyze"
-    )
+    arg_parser.add_argument("--verbose", action="store_true", help="Output extra info while analyzing")
+    arg_parser.add_argument("binary_path", metavar="binary_path", type=str, help="Path to binary to analyze")
     args = arg_parser.parse_args()
 
     def configure_logger() -> None:
@@ -258,9 +233,7 @@ def main() -> None:
 
         ch = logging.StreamHandler(sys.stdout)
         ch.setLevel(logging.INFO)
-        formatter = logging.Formatter(
-            "%(asctime)s - %(name)s - %(levelname)s - %(message)s"
-        )
+        formatter = logging.Formatter("%(asctime)s - %(name)s - %(levelname)s - %(message)s")
         ch.setFormatter(formatter)
         root.addHandler(ch)
 

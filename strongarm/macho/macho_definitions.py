@@ -1,15 +1,5 @@
 import struct
-from ctypes import (
-    Structure,
-    Union,
-    c_char,
-    c_char_p,
-    c_int16,
-    c_uint8,
-    c_uint16,
-    c_uint32,
-    c_uint64,
-)
+from ctypes import Structure, Union, c_char, c_char_p, c_int16, c_uint8, c_uint16, c_uint32, c_uint64
 from enum import IntEnum
 from typing import TypeVar
 
@@ -99,9 +89,7 @@ class MachoFileType(IntEnum):
     MH_DYLIB = 6  # dynamically bound shared library
     MH_DYLINKER = 7  # dynamic link editor
     MH_BUNDLE = 8  # dynamically bound bundle file
-    MH_DYLIB_STUB = (
-        9
-    )  # shared library stub for static linking only, no section contents
+    MH_DYLIB_STUB = 9  # shared library stub for static linking only, no section contents
     MH_DSYM = 10  # shared library stub for static
     MH_KEXT_BUNDLE = 11  # x86_64 kext
 
@@ -271,11 +259,7 @@ class MachoLinkeditDataCommand(Structure):
     Definition found in <mach-o/loader.h>
     """
 
-    _fields_ = [
-        *MachoLoadCommand._fields_,
-        ("dataoff", c_uint32),
-        ("datasize", c_uint32),
-    ]
+    _fields_ = [*MachoLoadCommand._fields_, ("dataoff", c_uint32), ("datasize", c_uint32)]
 
 
 class MachoNlistUn(Union):
@@ -326,12 +310,7 @@ class MachoEncryptionInfo32Command(Structure):
     Definition found in <mach-o/loader.h>
     """
 
-    _fields_ = [
-        *MachoLoadCommand._fields_,
-        ("cryptoff", c_uint32),
-        ("cryptsize", c_uint32),
-        ("cryptid", c_uint32),
-    ]
+    _fields_ = [*MachoLoadCommand._fields_, ("cryptoff", c_uint32), ("cryptsize", c_uint32), ("cryptid", c_uint32)]
 
 
 class MachoEncryptionInfo64Command(Structure):
@@ -390,17 +369,11 @@ class DyldSharedCacheHeader(Structure):
         ("localSymbolsSize", c_uint64),  # size of local symbols
         ("uuid", c_char * 16),  # unique value for each shared_cache file
         ("cacheType", c_uint64),  # 0 for dev, 1 for prod
-        (
-            "branchPoolsOffset",
-            c_uint32,
-        ),  # file offset to table of uint64_t pool addresses
+        ("branchPoolsOffset", c_uint32),  # file offset to table of uint64_t pool addresses
         ("branchPoolsSize", c_uint32),  # number of uint64_t entries
         ("accelerateInfoAddr", c_uint64),  # (unslid) address of optimization info
         ("accelerateInfoSize", c_uint64),  # size of optimization info
-        (
-            "imagesTextOffset",
-            c_uint64,
-        ),  # file offset to first dyld_cache_image_text_info
+        ("imagesTextOffset", c_uint64),  # file offset to first dyld_cache_image_text_info
         ("imagesTextCount", c_uint64),  # number of dyld_cache_image_text_info entries
     ]
 
@@ -595,19 +568,11 @@ class ObjcProtocolList64(Structure):
 
 
 class ObjcMethod32(Structure):
-    _fields_ = [
-        ("name", c_uint32),
-        ("signature", c_uint32),
-        ("implementation", c_uint32),
-    ]
+    _fields_ = [("name", c_uint32), ("signature", c_uint32), ("implementation", c_uint32)]
 
 
 class ObjcMethod64(Structure):
-    _fields_ = [
-        ("name", c_uint64),
-        ("signature", c_uint64),
-        ("implementation", c_uint64),
-    ]
+    _fields_ = [("name", c_uint64), ("signature", c_uint64), ("implementation", c_uint64)]
 
 
 class ObjcIvar32(Structure):
@@ -648,18 +613,8 @@ class DylibCommand(Structure):
 
 
 class CFString32(Structure):
-    _fields_ = [
-        ("base", c_uint32),
-        ("flags", c_uint32),
-        ("literal", c_uint32),
-        ("length", c_uint32),
-    ]
+    _fields_ = [("base", c_uint32), ("flags", c_uint32), ("literal", c_uint32), ("length", c_uint32)]
 
 
 class CFString64(Structure):
-    _fields_ = [
-        ("base", c_uint64),
-        ("flags", c_uint64),
-        ("literal", c_uint64),
-        ("length", c_uint64),
-    ]
+    _fields_ = [("base", c_uint64), ("flags", c_uint64), ("literal", c_uint64), ("length", c_uint64)]

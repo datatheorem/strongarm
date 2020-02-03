@@ -4,14 +4,7 @@ from unittest import mock
 
 import pytest
 
-from strongarm.macho import (
-    MachoAnalyzer,
-    MachoParser,
-    ObjcClass,
-    ObjcSelector,
-    ObjcSelref,
-    VirtualMemoryPointer,
-)
+from strongarm.macho import MachoAnalyzer, MachoParser, ObjcClass, ObjcSelector, ObjcSelref, VirtualMemoryPointer
 from strongarm.objc import (
     CodeSearch,
     CodeSearchFunctionCallWithArguments,
@@ -27,9 +20,7 @@ from strongarm.objc.objc_analyzer import _demangle_cpp_symbol, _is_mangled_cpp_s
 
 class TestFunctionAnalyzer:
     FAT_PATH = pathlib.Path(__file__).parent / "bin" / "StrongarmTarget"
-    DIGITAL_ADVISORY_PATH = (
-        pathlib.Path(__file__).parent / "bin" / "DigitalAdvisorySolutions"
-    )
+    DIGITAL_ADVISORY_PATH = pathlib.Path(__file__).parent / "bin" / "DigitalAdvisorySolutions"
 
     OBJC_RETAIN_STUB_ADDR = 0x1000067CC
     SEC_TRUST_EVALUATE_STUB_ADDR = 0x100006760
@@ -41,9 +32,7 @@ class TestFunctionAnalyzer:
         self.binary = parser.slices[0]
         self.analyzer = MachoAnalyzer.get_analyzer(self.binary)
 
-        self.implementations = self.analyzer.get_imps_for_sel(
-            u"URLSession:didReceiveChallenge:completionHandler:"
-        )
+        self.implementations = self.analyzer.get_imps_for_sel("URLSession:didReceiveChallenge:completionHandler:")
         self.instructions = self.implementations[0].instructions
 
         self.imp_addr = self.instructions[0].address
@@ -73,10 +62,7 @@ class TestFunctionAnalyzer:
             if not target.destination_address:
                 assert target.is_external_objc_call
             else:
-                assert (
-                    target.destination_address
-                    in list(external_targets.keys()) + local_targets
-                )
+                assert target.destination_address in list(external_targets.keys()) + local_targets
                 if target.is_external_c_call:
                     correct_sym_name = external_targets[target.destination_address]
                     assert target.symbol == correct_sym_name
@@ -95,9 +81,7 @@ class TestFunctionAnalyzer:
         )
 
         def process_results(
-            analyzer: MachoAnalyzer,
-            search: CodeSearch,
-            results: List[CodeSearchResultFunctionCallWithArguments],
+            analyzer: MachoAnalyzer, search: CodeSearch, results: List[CodeSearchResultFunctionCallWithArguments]
         ) -> None:
             assert len(results) == 1
             result = results[0]
@@ -116,15 +100,11 @@ class TestFunctionAnalyzer:
         from strongarm.objc import RegisterContentsType
 
         first_instr = self.function_analyzer.get_instruction_at_index(0)
-        contents = self.function_analyzer.get_register_contents_at_instruction(
-            "x4", first_instr
-        )
+        contents = self.function_analyzer.get_register_contents_at_instruction("x4", first_instr)
         assert contents.type == RegisterContentsType.UNKNOWN
 
         another_instr = self.function_analyzer.get_instruction_at_index(16)
-        contents = self.function_analyzer.get_register_contents_at_instruction(
-            "x1", another_instr
-        )
+        contents = self.function_analyzer.get_register_contents_at_instruction("x1", another_instr)
         assert contents.type == RegisterContentsType.IMMEDIATE
         assert contents.value == 0x1000090C0
 
@@ -135,23 +115,16 @@ class TestFunctionAnalyzer:
         # Given I provide assembly where an address is loaded via a page load + page offset, using the same register
         # 0x000000010000428c    adrp       x1, #0x10011a000
         # 0x0000000100004290    add        x1, x1, #0x9c8
-        binary = MachoParser(
-            TestFunctionAnalyzer.DIGITAL_ADVISORY_PATH
-        ).get_arm64_slice()
+        binary = MachoParser(TestFunctionAnalyzer.DIGITAL_ADVISORY_PATH).get_arm64_slice()
 
         function_analyzer = ObjcFunctionAnalyzer.get_function_analyzer_for_signature(
             binary, "AppDelegate", "application:didFinishLaunchingWithOptions:"
         )
         instruction = ObjcInstruction.parse_instruction(
-            function_analyzer,
-            function_analyzer.get_instruction_at_address(
-                VirtualMemoryPointer(0x100004290)
-            ),
+            function_analyzer, function_analyzer.get_instruction_at_address(VirtualMemoryPointer(0x100004290))
         )
         # If I ask for the contents of the register
-        contents = function_analyzer.get_register_contents_at_instruction(
-            "x1", instruction
-        )
+        contents = function_analyzer.get_register_contents_at_instruction("x1", instruction)
         # Then I get the correct value
         assert contents.type == RegisterContentsType.IMMEDIATE
         assert contents.value == 0x10011A9C8
@@ -161,29 +134,20 @@ class TestFunctionAnalyzer:
         # 0x0000000100004744    adrp       x8, #0x100115000
         # 0x0000000100004748    ldr        x8, [x8, #0x60]
         instruction = ObjcInstruction.parse_instruction(
-            function_analyzer,
-            function_analyzer.get_instruction_at_address(
-                VirtualMemoryPointer(0x100004748)
-            ),
+            function_analyzer, function_analyzer.get_instruction_at_address(VirtualMemoryPointer(0x100004748))
         )
         # If I ask for the contents of the register
-        contents = function_analyzer.get_register_contents_at_instruction(
-            "x8", instruction
-        )
+        contents = function_analyzer.get_register_contents_at_instruction("x8", instruction)
         # Then I get the correct value
         assert contents.type == RegisterContentsType.IMMEDIATE
         assert contents.value == 0x100115060
 
     def test_get_selref(self):
-        objc_msgSendInstr = ObjcInstruction.parse_instruction(
-            self.function_analyzer, self.instructions[16]
-        )
+        objc_msgSendInstr = ObjcInstruction.parse_instruction(self.function_analyzer, self.instructions[16])
         selref = self.function_analyzer.get_objc_selref(objc_msgSendInstr)
         assert selref == 0x1000090C0
 
-        non_branch_instruction = ObjcInstruction.parse_instruction(
-            self.function_analyzer, self.instructions[15]
-        )
+        non_branch_instruction = ObjcInstruction.parse_instruction(self.function_analyzer, self.instructions[15])
         with pytest.raises(ValueError):
             self.function_analyzer.get_objc_selref(non_branch_instruction)
 
@@ -191,24 +155,15 @@ class TestFunctionAnalyzer:
         # 0x000000010000665c         adrp       x0, #0x102a41000
         # 0x0000000100006660         add        x0, x0, #0x458
         # 0x0000000100006664         bl         0x101f8600c
-        three_op_binary = (
-            pathlib.Path(__file__).parent / "bin" / "ThreeOpAddInstruction"
-        )
+        three_op_binary = pathlib.Path(__file__).parent / "bin" / "ThreeOpAddInstruction"
         binary = MachoParser(three_op_binary).get_arm64_slice()
         analyzer = MachoAnalyzer.get_analyzer(binary)
         function_analyzer = ObjcFunctionAnalyzer(
-            binary,
-            analyzer.get_function_instructions(VirtualMemoryPointer(0x10000665C)),
+            binary, analyzer.get_function_instructions(VirtualMemoryPointer(0x10000665C))
         )
-        target_instr = function_analyzer.get_instruction_at_address(
-            VirtualMemoryPointer(0x100006664)
-        )
-        wrapped_instr = ObjcInstruction.parse_instruction(
-            function_analyzer, target_instr
-        )
-        contents = function_analyzer.get_register_contents_at_instruction(
-            "x0", wrapped_instr
-        )
+        target_instr = function_analyzer.get_instruction_at_address(VirtualMemoryPointer(0x100006664))
+        wrapped_instr = ObjcInstruction.parse_instruction(function_analyzer, target_instr)
+        contents = function_analyzer.get_register_contents_at_instruction("x0", wrapped_instr)
         assert contents.type == RegisterContentsType.IMMEDIATE
         assert contents.value == 0x102A41458
 
@@ -282,43 +237,32 @@ class TestFunctionAnalyzer:
 
     def test_get_symbol_name_exported_c_function(self):
         # Given a function analyzer which is associated with an exported symbol name
-        with mock.patch(
-            "strongarm.macho.MachoStringTableHelper.get_symbol_name_for_address",
-            return_value="_strlen",
-        ):
+        with mock.patch("strongarm.macho.MachoStringTableHelper.get_symbol_name_for_address", return_value="_strlen"):
             # Then I read the correct C symbol name
             assert self.function_analyzer.get_symbol_name() == "_strlen"
 
     def test_get_symbol_name_anonymous_c_function(self):
         # Given a function analyzer which does not have an associated symbol name
-        with mock.patch(
-            "strongarm.macho.MachoStringTableHelper.get_symbol_name_for_address",
-            return_value=None,
-        ):
+        with mock.patch("strongarm.macho.MachoStringTableHelper.get_symbol_name_for_address", return_value=None):
             # Then the code location is reported as "_unsymbolicated_function"
-            assert (
-                self.function_analyzer.get_symbol_name() == "_unsymbolicated_function"
-            )
+            assert self.function_analyzer.get_symbol_name() == "_unsymbolicated_function"
 
     def test_get_symbol_name_cpp_function(self):
         # Given a function analyzer which is given a mangled C++ symbol name
         with mock.patch(
             "strongarm.macho.MachoStringTableHelper.get_symbol_name_for_address",
-            return_value="__ZNK3MapI10StringName3RefI8GDScriptE10ComparatorIS0_"
-            "E16DefaultAllocatorE3hasERKS0_",
+            return_value="__ZNK3MapI10StringName3RefI8GDScriptE10ComparatorIS0_" "E16DefaultAllocatorE3hasERKS0_",
         ):
             # Then the code location is reported as the demangled symbol name
             assert (
-                self.function_analyzer.get_symbol_name()
-                == "Map<StringName, Ref<GDScript>, Comparator<StringName>, "
+                self.function_analyzer.get_symbol_name() == "Map<StringName, Ref<GDScript>, Comparator<StringName>, "
                 "DefaultAllocator>::has(StringName const&) const"
             )
 
     def test_identify_mangled_cpp_symbol(self):
         # Check identification of C++ mangled symbols
         assert _is_mangled_cpp_symbol(
-            "__ZNK3MapI10StringName3RefI8GDScriptE10ComparatorIS0_"
-            "E16DefaultAllocatorE3hasERKS0_"
+            "__ZNK3MapI10StringName3RefI8GDScriptE10ComparatorIS0_" "E16DefaultAllocatorE3hasERKS0_"
         )
         assert _is_mangled_cpp_symbol("___Z5test1v_block_invoke")
         assert not _is_mangled_cpp_symbol("_strlen")
@@ -327,8 +271,7 @@ class TestFunctionAnalyzer:
         # Check expected demangling of mangled C++ symbols
         assert (
             _demangle_cpp_symbol(
-                "__ZNK3MapI10StringName3RefI8GDScriptE10ComparatorIS0_"
-                "E16DefaultAllocatorE3hasERKS0_"
+                "__ZNK3MapI10StringName3RefI8GDScriptE10ComparatorIS0_" "E16DefaultAllocatorE3hasERKS0_"
             )
             == "Map<StringName, Ref<GDScript>, Comparator<StringName>, "
             "DefaultAllocator>::has(StringName const&) const"
@@ -356,8 +299,7 @@ class TestFunctionAnalyzer:
     def test_demangle_misleading_symbol(self):
         # Given a function analyzer which represents a symbol which looks like a mangled C++ symbol, but isn't one
         with mock.patch(
-            "strongarm.macho.MachoStringTableHelper.get_symbol_name_for_address",
-            return_value="__ZappBrannigan",
+            "strongarm.macho.MachoStringTableHelper.get_symbol_name_for_address", return_value="__ZappBrannigan"
         ):
             # Then the code location is reported as the original symbol name
             assert self.function_analyzer.get_symbol_name() == "__ZappBrannigan"

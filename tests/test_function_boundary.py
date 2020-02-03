@@ -30,13 +30,9 @@ class TestFunctionBoundary:
         assert start_address == correct_start_address
         assert end_address == correct_end_address - MachoBinary.BYTES_PER_INSTRUCTION
         assert instructions[0].address == correct_start_address
-        assert (
-            instructions[-1].address
-            == correct_end_address - MachoBinary.BYTES_PER_INSTRUCTION
-        )
+        assert instructions[-1].address == correct_end_address - MachoBinary.BYTES_PER_INSTRUCTION
 
         correct_instruction_count = int(
-            (correct_end_address - correct_start_address)
-            / MachoBinary.BYTES_PER_INSTRUCTION
+            (correct_end_address - correct_start_address) / MachoBinary.BYTES_PER_INSTRUCTION
         )
         assert len(instructions) == correct_instruction_count

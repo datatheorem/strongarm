@@ -12,13 +12,9 @@ class CodesignBlobTypeEnum(IntEnum):
     CSMAGIC_REQUIREMENT_SET = 0xFADE0C01  # requirements vector (internal requirements)
     CSMAGIC_CODE_DIRECTORY = 0xFADE0C02  # CodeDirectory blob
     CSMAGIC_EMBEDDED_SIGNATURE = 0xFADE0CC0  # embedded signature data
-    CSMAGIC_DETACHED_SIGNATURE = (
-        0xFADE0CC1
-    )  # multi-arch collection of embedded signatures
+    CSMAGIC_DETACHED_SIGNATURE = 0xFADE0CC1  # multi-arch collection of embedded signatures
     CSMAGIC_EMBEDDED_ENTITLEMENTS = 0xFADE7171  # embedded entitlements
-    CSMAGIC_BLOBWRAPPER = (
-        0xFADE0B01
-    )  # CMS signature, "among other things" from the source code
+    CSMAGIC_BLOBWRAPPER = 0xFADE0B01  # CMS signature, "among other things" from the source code
 
 
 class CSBlobStruct(BigEndianStructure):

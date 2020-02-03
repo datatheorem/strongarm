@@ -10,15 +10,9 @@ from strongarm.macho import MachoBinary, MachoParser
 def main():
     arg_parser = argparse.ArgumentParser(description="lipo clone")
     arg_parser.add_argument(
-        "-archs",
-        action="store_true",
-        help="Display the architecture names present in each slice of the archive.",
+        "-archs", action="store_true", help="Display the architecture names present in each slice of the archive."
     )
-    arg_parser.add_argument(
-        "-create",
-        action="store_true",
-        help="Create a FAT archive from the provided input files",
-    )
+    arg_parser.add_argument("-create", action="store_true", help="Create a FAT archive from the provided input files")
     arg_parser.add_argument(
         "-extract",
         dest="desired_arch",
@@ -27,10 +21,7 @@ def main():
     )
     arg_parser.add_argument("input_paths", type=str, nargs="+", help="Path to binary")
     arg_parser.add_argument(
-        "output_path",
-        type=str,
-        nargs="?",
-        help="Path to place generated binary, if using -create or -extract",
+        "output_path", type=str, nargs="?", help="Path to place generated binary, if using -create or -extract"
     )
     args = arg_parser.parse_args()
 

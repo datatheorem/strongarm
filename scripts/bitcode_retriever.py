@@ -10,9 +10,7 @@ from strongarm.macho import MachoParser
 
 def main():
     arg_parser = argparse.ArgumentParser(description="bitcode_retriever clone")
-    arg_parser.add_argument(
-        "binary_path", metavar="binary_path", type=str, help="Path to Bitcode binary"
-    )
+    arg_parser.add_argument("binary_path", metavar="binary_path", type=str, help="Path to Bitcode binary")
     args = arg_parser.parse_args()
 
     parser = MachoParser(pathlib.Path(args.binary_path))
@@ -31,9 +29,7 @@ def main():
         xar_data = binary.get_bytes(bitcode_segment.fileoff, bitcode_segment.filesize)
 
         # Place the bitcode adjacent to this file, named <arch>.xar
-        output_path = (
-            pathlib.Path(__file__).parent / f"{binary.cpu_type.name.lower()}.xar"
-        )
+        output_path = pathlib.Path(__file__).parent / f"{binary.cpu_type.name.lower()}.xar"
         with open(output_path, "xb") as f:
             f.write(xar_data)
 

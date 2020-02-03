@@ -3,12 +3,7 @@ from tempfile import TemporaryDirectory
 
 import pytest
 
-from strongarm.macho import (
-    BinaryEncryptedError,
-    MachoBinary,
-    MachoParser,
-    NoEmptySpaceForLoadCommandError,
-)
+from strongarm.macho import BinaryEncryptedError, MachoBinary, MachoParser, NoEmptySpaceForLoadCommandError
 from strongarm.macho.macho_definitions import *
 
 
@@ -17,9 +12,7 @@ class TestMachoBinary:
     FAT_PATH = pathlib.Path(__file__).parent / "bin" / "GammaRayTestBad"
     ENCRYPTED_PATH = pathlib.Path(__file__).parent / "bin" / "RxTest"
     # Found within this app: https://pythia.sourcetheorem.com/mobile_app_scans/5196911454191616
-    MULTIPLE_CONST_SECTIONS = (
-        pathlib.Path(__file__).parent / "bin" / "BroadSoftDialpadFramework"
-    )
+    MULTIPLE_CONST_SECTIONS = pathlib.Path(__file__).parent / "bin" / "BroadSoftDialpadFramework"
     # Test binary from Eric for the secure enclave check
     CLASSLIST_DATA_CONST = pathlib.Path(__file__).parent / "bin" / "CKTest2"
 
@@ -35,9 +28,7 @@ class TestMachoBinary:
         # ensure virtual addresses are correctly translated to file offsets
         virt = 0x100006DB8
         correct_bytes = b"application:openURL:sourceApplication:annotation:\x00"
-        found_bytes = self.binary.get_content_from_virtual_address(
-            virtual_address=virt, size=len(correct_bytes)
-        )
+        found_bytes = self.binary.get_content_from_virtual_address(virtual_address=virt, size=len(correct_bytes))
         assert found_bytes == correct_bytes
 
         # test an address before the end of load commands
@@ -146,14 +137,10 @@ class TestMachoBinary:
 
     def test_read_classlist_data_segment(self):
         # Given a binary which stores the __objc_classlist section in the __DATA segment
-        binary_with_data_classlist = MachoParser(
-            TestMachoBinary.THIN_PATH
-        ).get_arm64_slice()
+        binary_with_data_classlist = MachoParser(TestMachoBinary.THIN_PATH).get_arm64_slice()
 
         # If I read the __objc_classlist pointer section
-        locations, entries = binary_with_data_classlist.read_pointer_section(
-            "__objc_classlist"
-        )
+        locations, entries = binary_with_data_classlist.read_pointer_section("__objc_classlist")
         correct_locations = [0x100008178, 0x100008180, 0x100008188, 0x100008190]
         correct_entries = [0x100009120, 0x100009170, 0x1000091E8, 0x100009238]
 
@@ -163,14 +150,10 @@ class TestMachoBinary:
 
     def test_read_classlist_data_const_segment(self):
         # Given a binary which stores the __objc_classlist section in the __DATA_CONST segment
-        binary_with_data_classlist = MachoParser(
-            TestMachoBinary.CLASSLIST_DATA_CONST
-        ).get_arm64_slice()
+        binary_with_data_classlist = MachoParser(TestMachoBinary.CLASSLIST_DATA_CONST).get_arm64_slice()
 
         # If I read the __objc_classlist pointer section
-        locations, entries = binary_with_data_classlist.read_pointer_section(
-            "__objc_classlist"
-        )
+        locations, entries = binary_with_data_classlist.read_pointer_section("__objc_classlist")
         correct_locations = [0x100008098, 0x1000080A0, 0x1000080A8]
         correct_entries = [0x10000D3C0, 0x10000D438, 0x10000D488]
 
@@ -180,9 +163,7 @@ class TestMachoBinary:
 
     def test_function_starts_command(self):
         # Given a binary that contains functions
-        binary_with_functions = MachoParser(
-            TestMachoBinary.CLASSLIST_DATA_CONST
-        ).get_arm64_slice()
+        binary_with_functions = MachoParser(TestMachoBinary.CLASSLIST_DATA_CONST).get_arm64_slice()
         # And I get the function starts command
         function_starts = binary_with_functions._function_starts_cmd
         # The command has the expected attributes
@@ -195,9 +176,7 @@ class TestMachoBinary:
 
     def test_write_bytes_thin_physical(self):
         # Given a thin binary with file_type == 0x2
-        binary = MachoParser(
-            pathlib.Path(TestMachoBinary.CLASSLIST_DATA_CONST)
-        ).get_arm64_slice()
+        binary = MachoParser(pathlib.Path(TestMachoBinary.CLASSLIST_DATA_CONST)).get_arm64_slice()
         assert binary.file_type == 0x2
 
         # If I patch the non-virtual bytes of the file_type field to hold a different value
@@ -207,9 +186,7 @@ class TestMachoBinary:
         modified_binary = binary.write_bytes(new_file_type_bytes, 0x0C)
 
         # Then the modified binary's raw bytes contain the correct data
-        modified_header = modified_binary.get_contents_from_address(
-            0, 32, is_virtual=False
-        )
+        modified_header = modified_binary.get_contents_from_address(0, 32, is_virtual=False)
         assert modified_header == bytearray(
             b"\xcf\xfa\xed\xfe\x0c\x00\x00\x01\x00\x00\x00\x00\x05\x00\x00\x00\x18\x00\x00\x00H\x0b\x00\x00\x85\x00 \x00\x00\x00\x00\x00"
         )
@@ -218,23 +195,17 @@ class TestMachoBinary:
 
     def test_write_bytes_thin_virtual(self):
         # Given a thin binary with file_type == 0x2
-        binary = MachoParser(
-            pathlib.Path(TestMachoBinary.CLASSLIST_DATA_CONST)
-        ).get_arm64_slice()
+        binary = MachoParser(pathlib.Path(TestMachoBinary.CLASSLIST_DATA_CONST)).get_arm64_slice()
         assert binary.file_type == 0x2
 
         # If I patch the virtual bytes of the file_type field to hold a different value
         new_file_type_val = 10
         # This field is a 32-bit little-endian encoded int
         new_file_type_bytes = new_file_type_val.to_bytes(4, "little")
-        modified_binary = binary.write_bytes(
-            new_file_type_bytes, 0x10000000C, virtual=True
-        )
+        modified_binary = binary.write_bytes(new_file_type_bytes, 0x10000000C, virtual=True)
 
         # Then the modified binary's raw bytes contain the correct data
-        modified_header = modified_binary.get_contents_from_address(
-            0x100000000, 32, True
-        )
+        modified_header = modified_binary.get_contents_from_address(0x100000000, 32, True)
         assert modified_header == bytearray(
             b"\xcf\xfa\xed\xfe\x0c\x00\x00\x01\x00\x00\x00\x00\x0a\x00\x00\x00\x18\x00\x00\x00H\x0b\x00\x00\x85\x00 \x00\x00\x00\x00\x00"
         )
@@ -293,16 +264,11 @@ class TestMachoBinary:
             "/System/Library/Frameworks/Security.framework/Security",
             "/System/Library/Frameworks/UIKit.framework/UIKit",
         ]
-        found_dylibs = [
-            binary.dylib_name_for_library_ordinal(i + 1)
-            for i in range(len(binary.load_dylib_commands))
-        ]
+        found_dylibs = [binary.dylib_name_for_library_ordinal(i + 1) for i in range(len(binary.load_dylib_commands))]
         assert found_dylibs == original_dylibs
 
         # If I create a new binary with an inserted load command
-        modified_binary = binary.insert_load_dylib_cmd(
-            f"@rpath/Frameworks/Interject.framework/Interject"
-        )
+        modified_binary = binary.insert_load_dylib_cmd(f"@rpath/Frameworks/Interject.framework/Interject")
         modified_dylibs = [
             "/System/Library/Frameworks/Foundation.framework/Foundation",
             "/usr/lib/libobjc.A.dylib",
@@ -332,10 +298,7 @@ class TestMachoBinary:
 
     def test_write_thin_binary(self):
         binary = MachoParser(self.THIN_PATH).get_arm64_slice()
-        original_dylibs = [
-            binary.dylib_name_for_library_ordinal(i + 1)
-            for i in range(len(binary.load_dylib_commands))
-        ]
+        original_dylibs = [binary.dylib_name_for_library_ordinal(i + 1) for i in range(len(binary.load_dylib_commands))]
         # Given I add a load command to a binary
         new_dylib_name = "@rpath/Frameworks/Interject.framework/Interject"
         modified_binary = binary.insert_load_dylib_cmd(new_dylib_name)
@@ -357,19 +320,14 @@ class TestMachoBinary:
         # Given I add a load command to the arm64 slice of an armv7/arm64 FAT file
         parser = MachoParser(self.FAT_PATH)
         binary = parser.get_arm64_slice()
-        original_dylibs = [
-            binary.dylib_name_for_library_ordinal(i + 1)
-            for i in range(len(binary.load_dylib_commands))
-        ]
+        original_dylibs = [binary.dylib_name_for_library_ordinal(i + 1) for i in range(len(binary.load_dylib_commands))]
         new_dylib_name = "@rpath/Frameworks/Interject.framework/Interject"
         modified_binary = binary.insert_load_dylib_cmd(new_dylib_name)
 
         with TemporaryDirectory() as tempdir:
             output_binary_path = pathlib.Path(tempdir) / "modified_fat"
             # If I write the FAT to disk with both slices, then parse the on-disk version
-            MachoBinary.write_fat(
-                [parser.get_armv7_slice(), modified_binary], output_binary_path
-            )
+            MachoBinary.write_fat([parser.get_armv7_slice(), modified_binary], output_binary_path)
             on_disk_fat_parser = MachoParser(output_binary_path)
 
             assert len(on_disk_fat_parser.slices) == 2
@@ -383,20 +341,12 @@ class TestMachoBinary:
             assert arm64 is not None
             assert len(arm64.segments) == 4
             # And the arm64 segment contains the new load command
-            new_dylibs = [
-                arm64.dylib_name_for_library_ordinal(i + 1)
-                for i in range(len(arm64.load_dylib_commands))
-            ]
+            new_dylibs = [arm64.dylib_name_for_library_ordinal(i + 1) for i in range(len(arm64.load_dylib_commands))]
             assert new_dylibs == original_dylibs + [new_dylib_name]
 
     def test_get_dylib_id(self):
         # Given an executable binary, it has no dylib ID
         assert not MachoParser(self.THIN_PATH).get_arm64_slice().dylib_id()
         # Given a dylib, it has a dylib ID which is parsed correctly
-        expected_dylib_id = (
-            "@rpath/BroadSoftDialpadFramework.framework/BroadSoftDialpadFramework"
-        )
-        assert (
-            MachoParser(self.MULTIPLE_CONST_SECTIONS).get_arm64_slice().dylib_id()
-            == expected_dylib_id
-        )
+        expected_dylib_id = "@rpath/BroadSoftDialpadFramework.framework/BroadSoftDialpadFramework"
+        assert MachoParser(self.MULTIPLE_CONST_SECTIONS).get_arm64_slice().dylib_id() == expected_dylib_id

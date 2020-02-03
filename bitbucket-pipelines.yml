@@ -3,17 +3,17 @@ image: python:3.7
 pipelines:
   default:
     - parallel:
-        - step:
-            name: Code linting
-            caches:
-              - pip
-            script:
-              - pip install pipenv
-              - export PIP_PROCESS_DEPENDENCY_LINKS=1
-              - pipenv install --dev
-              - pipenv run invoke deps
-              - pipenv run invoke install
-              - pipenv run invoke check-standards
+      - step:
+          name: Code linting
+          caches:
+            - pip
+          script:
+            - pip install pipenv
+            - export PIP_PROCESS_DEPENDENCY_LINKS=1
+            - pipenv install --dev
+            - pipenv run invoke deps
+            - pipenv run invoke install
+            - pipenv run invoke check-standards
       - step:
           name: Test code
           caches:

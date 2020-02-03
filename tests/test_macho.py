@@ -3,8 +3,15 @@ from tempfile import TemporaryDirectory
 
 import pytest
 
-from strongarm.macho import BinaryEncryptedError, MachoBinary, MachoParser, NoEmptySpaceForLoadCommandError
-from strongarm.macho.macho_definitions import *
+from strongarm.macho import (
+    CPU_TYPE,
+    HEADER_FLAGS,
+    BinaryEncryptedError,
+    MachoBinary,
+    MachoParser,
+    MachoSegmentCommand64,
+    NoEmptySpaceForLoadCommandError,
+)
 
 
 class TestMachoBinary:
@@ -188,7 +195,7 @@ class TestMachoBinary:
         # Then the modified binary's raw bytes contain the correct data
         modified_header = modified_binary.get_contents_from_address(0, 32, is_virtual=False)
         assert modified_header == bytearray(
-            b"\xcf\xfa\xed\xfe\x0c\x00\x00\x01\x00\x00\x00\x00\x05\x00\x00\x00\x18\x00\x00\x00H\x0b\x00\x00\x85\x00 \x00\x00\x00\x00\x00"
+            b"\xcf\xfa\xed\xfe\x0c\x00\x00\x01\x00\x00\x00\x00\x05\x00\x00\x00\x18\x00\x00\x00H\x0b\x00\x00\x85\x00 \x00\x00\x00\x00\x00"  # noqa: E501
         )
         # And the MachoBinary attribute contains the correct value
         assert modified_binary.file_type == 0x5
@@ -207,7 +214,7 @@ class TestMachoBinary:
         # Then the modified binary's raw bytes contain the correct data
         modified_header = modified_binary.get_contents_from_address(0x100000000, 32, True)
         assert modified_header == bytearray(
-            b"\xcf\xfa\xed\xfe\x0c\x00\x00\x01\x00\x00\x00\x00\x0a\x00\x00\x00\x18\x00\x00\x00H\x0b\x00\x00\x85\x00 \x00\x00\x00\x00\x00"
+            b"\xcf\xfa\xed\xfe\x0c\x00\x00\x01\x00\x00\x00\x00\x0a\x00\x00\x00\x18\x00\x00\x00H\x0b\x00\x00\x85\x00 \x00\x00\x00\x00\x00"  # noqa: E501
         )
         # And the MachoBinary attribute contains the correct value
         assert modified_binary.file_type == 10

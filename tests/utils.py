@@ -22,24 +22,24 @@ def _compile_code(source_code: str, is_assembly: bool) -> Generator[pathlib.Path
         .balign 4
         .global _main
         .extern data_label
-        
+
         _main:
             {source_code}
             nop
             ret
-        
+
         text_label:
             .long 0xfeedface
-            
+
         .ltorg
         .end
-        
+
         .const
         .balign 0x1000  ; Align on a page boundary
         .global data_label
-        data_label: 
+        data_label:
             .long 0xcafebabe
-        
+
         .end
         """
     else:

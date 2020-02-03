@@ -127,6 +127,6 @@ def function_containing_asm(asm_source: str) -> Generator[Tuple[MachoAnalyzer, O
 @contextmanager
 def simulate_assembly(asm_source: str, expected_code_path_count=1) -> Generator[List[ExecContext], None, None]:
     with function_containing_asm(asm_source) as (analyzer, func):
-        sim = Simulator(analyzer, func, [func.start_address, func.end_address])
+        sim = Simulator(analyzer, func, [func.start_address, func.end_address - MachoBinary.BYTES_PER_INSTRUCTION])
         ctxs = sim.run()
         yield ctxs

@@ -21,21 +21,21 @@ class TestMachoAnalyzer:
 
     def test_imp_for_selref(self):
         # selref for -[DTLabel configureLabel]
-        imp_within_bin_selref = 0x100009078
+        imp_within_bin_selref = VirtualMemoryPointer(0x100009078)
         found_imp_address = self.analyzer.imp_for_selref(imp_within_bin_selref)
-        correct_imp_address = 0x100006284
+        correct_imp_address = VirtualMemoryPointer(0x100006284)
         assert found_imp_address == correct_imp_address
 
         # selref for -[UIFont systemFontOfSize:]
-        imp_outside_bin_selref = 0x100009088
+        imp_outside_bin_selref = VirtualMemoryPointer(0x100009088)
         assert self.analyzer.imp_for_selref(imp_outside_bin_selref) is None
 
         imp_nonexisting = None
         assert self.analyzer.imp_for_selref(imp_nonexisting) is None
 
     def test_find_function_boundary(self):
-        start_addr = 0x100006420
-        correct_end_addr = 0x100006530
+        start_addr = VirtualMemoryPointer(0x100006420)
+        correct_end_addr = VirtualMemoryPointer(0x100006530)
 
         found_instructions = self.analyzer.get_function_instructions(start_addr)
         assert len(found_instructions) == 69
@@ -56,8 +56,8 @@ class TestMachoAnalyzer:
         assert list(end_addresses) == correct_entry_points[1:] + [0x100006730]
 
     def test_get_function_end_address(self):
-        start_addr = 0x100006420
-        correct_end_addr = 0x100006530 + MachoBinary.BYTES_PER_INSTRUCTION
+        start_addr = VirtualMemoryPointer(0x100006420)
+        correct_end_addr = VirtualMemoryPointer(0x100006534)
 
         end_address = self.analyzer.get_function_end_address(start_addr)
         assert end_address == correct_end_addr

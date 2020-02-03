@@ -211,8 +211,76 @@ class MachoAnalyzer:
         objc_calls = [ObjcMsgSendXref(x[0], x[1], x[2], x[3], x[4]) for x in objc_calls]
         return objc_calls
 
-    def _compute_function_boundaries(self) -> Iterable[Tuple[VirtualMemoryPointer, VirtualMemoryPointer]]:
-        max_function_size = 0x2000
+    def _compute_function_basic_blocks(
+            self,
+            entry_point: VirtualMemoryPointer,
+            end_address: VirtualMemoryPointer,
+    ) -> Iterable[Tuple[VirtualMemoryPointer, VirtualMemoryPointer]]:
+        from strongarm.objc import ObjcUnconditionalBranchInstruction
+
+        bytecode = self.binary.get_content_from_virtual_address(
+            virtual_address=entry_point,
+            size=end_address-entry_point,
+        )
+        # Grab a chunk of code within which to search for a function boundary
+        disassembled_code = self.cs.disasm(bytecode, entry_point)
+
+        # Find the basic blocks in this code chunk which are before the next entry point
+        basic_block_starts = {entry_point}
+
+        branch_mnemonic_to_dest_addr_op_idx = {
+            **dict.fromkeys(ObjcUnconditionalBranchInstruction.UNCONDITIONAL_BRANCH_MNEMONICS, 0),
+            'cbz': 1,
+            'cbnz': 1,
+            'tbz': 2, 'tbnz': 2,
+            # No destination address available for these mnemonics
+            'br': -1, 'ret': -1,
+        }
+        for instr in disassembled_code:
+            # Ensure we're looking at a branch instruction and pull out the destination address
+            if instr.mnemonic not in branch_mnemonic_to_dest_addr_op_idx:
+                continue
+
+            dest_addr_op_idx = branch_mnemonic_to_dest_addr_op_idx[instr.mnemonic]
+            if dest_addr_op_idx < 0:
+                # Special instruction which does not have a destination address we can resolve
+                # "ret" always means EOF, "br" might always mean a local jump
+                basic_block_starts.add(VirtualMemoryPointer(instr.address + instr.size))
+            else:
+                destination_address = instr.operands[dest_addr_op_idx].value.imm
+
+                # Is it a branch to a local label within the function?
+                if entry_point <= destination_address <= end_address:
+                    basic_block_starts.add(VirtualMemoryPointer(instr.address + instr.size))
+                    basic_block_starts.add(VirtualMemoryPointer(destination_address))
+                    continue
+
+                # Unconditional branches always end a basic block, even if jumping somewhere outside the function
+                # (such as a tail call at the end of a code path)
+                if instr.mnemonic == 'b':
+                    basic_block_starts.add(VirtualMemoryPointer(instr.address + instr.size))
+
+                # If a function contains a stack canary, its last instruction will be a branch-with-link to
+                # __stack_chk_fail. A 'normal' branch-with-link would not be a sensible function-end, but a
+                # stack canary is special because it's guaranteed to trigger an exception.
+                # Handle this by assuming if we see a branch-with-link at the last instruction before the next entry-
+                # point, it's probably a stack-canary (and thus another basic-block boundary).
+                # We could make this heuristic stronger by parsing the instruction and checking if it jumps to the
+                # __stack_chk_fail symbol, but this likely gets the job done most of the time.
+                if instr.address == end_address - instr.size and instr.mnemonic == 'bl':
+                    basic_block_starts.add(VirtualMemoryPointer(instr.address + instr.size))
+
+        basic_block_ranges = pairwise(sorted(basic_block_starts))
+        return ((start, end) for start, end in basic_block_ranges)
+
+    def _build_function_boundaries_index(self) -> None:
+        """Iterate all the entry points listed in the binary metadata and compute the end-of-function address for each.
+        The end-of-function address for each entry point is then stored in a DB table.
+
+        To compute function boundaries, each function's basic blocks are determined. The end-address is then the
+        final address in the final basic block.
+        """
+        cursor = self._db_handle.cursor()
         sorted_entry_points = sorted(self.get_functions())
 
         # Computing a function boundaries uses the next entry point address as a hint. For the last entry point in the
@@ -227,59 +295,14 @@ class MachoAnalyzer:
             sorted_entry_points.append(VirtualMemoryPointer(section.end_address))
 
         for entry_point, end_address in pairwise(sorted_entry_points):
-            # First use the next function's entry point as an upper limit the end_address
-            end_address = min(end_address, entry_point + max_function_size)
-            # Use the end_address of the last basic block as the definitive end_address of the function
-            end_address = max(
-                (x + MachoBinary.BYTES_PER_INSTRUCTION for _, x in self._compute_function_basic_blocks(entry_point, end_address)),
-                default=end_address,
-            )
-            yield (entry_point, end_address)
-
-    def _compute_function_basic_blocks(
-            self,
-            entry_point: VirtualMemoryPointer,
-            end_address: VirtualMemoryPointer,
-    ) -> Iterable[Tuple[VirtualMemoryPointer, VirtualMemoryPointer]]:
-        from strongarm.objc import ObjcUnconditionalBranchInstruction
-
-        binary_content = self.binary.get_content_from_virtual_address(
-            virtual_address=entry_point,
-            size=end_address-entry_point,
-        )
-        # Grab a chunk of code within which to search for a function boundary
-        disassembled_code = self.cs.disasm(binary_content, entry_point)
-
-        # Find the basic blocks in this code chunk which are before the next entry point
-        basic_blocks_start = {entry_point}
-
-        for instr in disassembled_code:
-            # Grab the destination address of branch instructions
-            if instr.mnemonic in ObjcUnconditionalBranchInstruction.UNCONDITIONAL_BRANCH_MNEMONICS:
-                destination_address = instr.operands[0].value.imm
-            elif instr.mnemonic in ['cbz', 'cbnz']:
-                destination_address = instr.operands[1].value.imm
-            elif instr.mnemonic in ['tbz', 'tbnz']:
-                destination_address = instr.operands[2].value.imm
-            elif instr.mnemonic in ["br", "ret"]:
-                destination_address = -1
-            else:
-                # Not a branch instruction
+            # The end address of the function is the last instruction in the last basic block
+            basic_blocks = [x for x in self._compute_function_basic_blocks(entry_point, end_address)]
+            # If we found a function with no code, just skip it
+            # This can happen in the assembly unit tests, where we insert a jump to a dummy __text label
+            if len(basic_blocks) == 0:
                 continue
-
-            basic_blocks_start.add(VirtualMemoryPointer(instr.address + instr.size))
-
-            if entry_point <= destination_address < end_address:
-                basic_blocks_start.add(VirtualMemoryPointer(destination_address))
-
-        right_exclusive_basic_blocks = pairwise(sorted(basic_blocks_start))
-        return ((l, r - MachoBinary.BYTES_PER_INSTRUCTION) for l, r in right_exclusive_basic_blocks)
-
-    def _build_function_boundaries_index(self) -> None:
-        cursor = self._db_handle.executemany(
-            "INSERT INTO function_boundaries (entry_point, end_address) VALUES (?, ?)",
-            self._compute_function_boundaries(),
-        )
+            end_address = max((bb_end for _, bb_end in basic_blocks))
+            cursor.execute(f"INSERT INTO function_boundaries (entry_point, end_address) VALUES (?, ?)", (entry_point, end_address))
 
         with self._db_handle:
             cursor.close()
@@ -349,7 +372,7 @@ class MachoAnalyzer:
                     # If we're branching to a locally-implemented Objective-C method, set the `destination_addr`
                     # field to be the address of the local Objective-C entry point
                     # Additionally, in this case, include a 'function call' XRef. This enables getting all the callers
-                    # to a locally-implemented Objective-C method *or* C function via the `calls_to` API.
+                    # to a locally implemented Objective-C method *or* C function via the `calls_to` API.
                     selector = self.selector_for_selref(VirtualMemoryPointer(selref))
                     if selector and selector.implementation:
                         destination_address = selector.implementation

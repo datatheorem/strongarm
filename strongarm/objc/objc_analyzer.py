@@ -104,7 +104,8 @@ class ObjcFunctionAnalyzer:
         try:
             self.start_address = VirtualMemoryPointer(instructions[0].address)
             last_instruction = instructions[len(instructions) - 1]
-            self.end_address = VirtualMemoryPointer(last_instruction.address)
+            # The end-address is right-exclusive
+            self.end_address = VirtualMemoryPointer(last_instruction.address) + MachoBinary.BYTES_PER_INSTRUCTION
         except IndexError:
             # this method must have just been a stub with no real instructions!
             self.start_address = VirtualMemoryPointer(0)
@@ -393,7 +394,7 @@ class ObjcFunctionAnalyzer:
         """
         basic_blocks = self.macho_analyzer._compute_function_basic_blocks(
             self.start_address,
-            self.end_address + self.instructions[-1].size,
+            self.end_address,
         )
         return list(starmap(BasicBlock, basic_blocks))
 

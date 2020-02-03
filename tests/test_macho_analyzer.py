@@ -8,7 +8,6 @@ from strongarm.macho.macho_analyzer import (
     ObjcMsgSendXref,
     VirtualMemoryPointer,
 )
-from strongarm.macho.macho_binary import MachoBinary
 from strongarm.macho.macho_parse import MachoParser
 from strongarm.objc import (
     CodeSearch,

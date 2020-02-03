@@ -4,7 +4,7 @@ import pytest
 import pathlib
 
 from strongarm.macho.macho_parse import MachoParser
-from strongarm.macho.macho_analyzer import MachoAnalyzer, VirtualMemoryPointer
+from strongarm.macho.macho_analyzer import MachoAnalyzer, VirtualMemoryPointer, ObjcMsgSendXref
 from strongarm.macho.macho_binary import MachoBinary
 
 from strongarm.objc import CodeSearch, CodeSearchFunctionCallWithArguments
@@ -21,21 +21,21 @@ class TestMachoAnalyzer:
 
     def test_imp_for_selref(self):
         # selref for -[DTLabel configureLabel]
-        imp_within_bin_selref = 0x100009078
+        imp_within_bin_selref = VirtualMemoryPointer(0x100009078)
         found_imp_address = self.analyzer.imp_for_selref(imp_within_bin_selref)
-        correct_imp_address = 0x100006284
+        correct_imp_address = VirtualMemoryPointer(0x100006284)
         assert found_imp_address == correct_imp_address
 
         # selref for -[UIFont systemFontOfSize:]
-        imp_outside_bin_selref = 0x100009088
+        imp_outside_bin_selref = VirtualMemoryPointer(0x100009088)
         assert self.analyzer.imp_for_selref(imp_outside_bin_selref) is None
 
         imp_nonexisting = None
         assert self.analyzer.imp_for_selref(imp_nonexisting) is None
 
     def test_find_function_boundary(self):
-        start_addr = 0x100006420
-        correct_end_addr = 0x100006530
+        start_addr = VirtualMemoryPointer(0x100006420)
+        correct_end_addr = VirtualMemoryPointer(0x100006530)
 
         found_instructions = self.analyzer.get_function_instructions(start_addr)
         assert len(found_instructions) == 69
@@ -56,8 +56,8 @@ class TestMachoAnalyzer:
         assert list(end_addresses) == correct_entry_points[1:] + [0x100006730]
 
     def test_get_function_end_address(self):
-        start_addr = 0x100006420
-        correct_end_addr = 0x100006530 + MachoBinary.BYTES_PER_INSTRUCTION
+        start_addr = VirtualMemoryPointer(0x100006420)
+        correct_end_addr = VirtualMemoryPointer(0x100006534)
 
         end_address = self.analyzer.get_function_end_address(start_addr)
         assert end_address == correct_end_addr
@@ -362,6 +362,78 @@ class TestMachoAnalyzerDynStaticChecks:
             end_address = self.analyzer.get_function_end_address(entry_point)
             assert end_address == expected_end_address
 
+    def test_xref_objc_opt_new(self):
+        # Given I provide a binary which contains the code:
+        # _objc_opt_new(_OBJC_CLASS_$_ARSKView)
+        binary = MachoParser(
+            pathlib.Path(__file__).parent / "bin" / "iOS13_objc_opt"
+        ).get_arm64_slice()
+        analyzer = MachoAnalyzer.get_analyzer(binary)
+
+        # When I ask for XRefs to `ARSKView`
+        arskview_classref = analyzer.classref_for_class_name("_OBJC_CLASS_$_ARSKView")
+        assert arskview_classref
+        objc_calls = analyzer.objc_calls_to(
+            objc_classrefs=[arskview_classref],
+            objc_selrefs=[],
+            requires_class_and_sel_found=False,
+        )
+
+        # Then the code location is returned
+        assert len(objc_calls) == 1
+
+        call = objc_calls[0]
+        assert call == ObjcMsgSendXref(
+            caller_func_start_address=VirtualMemoryPointer(0x100006388),
+            caller_addr=VirtualMemoryPointer(0x1000063B4),
+            destination_addr=VirtualMemoryPointer(0x10000659C),
+            classref=VirtualMemoryPointer(0x10000D398),
+            selref=VirtualMemoryPointer(0x0),
+        )
+
+        # TODO(PT): Update this unit test once this functionality is added
+        # And when I ask for XRefs to `[ARSKView new]`
+        # Then the code location is returned
+
+        # And when I ask for XRefs to `new`
+        # Then the code location is returned
+
+    def test_xref_objc_opt_class(self):
+        # Given I provide a binary which contains the code:
+        # _objc_opt_class(_OBJC_CLASS_$_ARFaceTrackingConfiguration)
+        binary = MachoParser(
+            pathlib.Path(__file__).parent / "bin" / "iOS13_objc_opt"
+        ).get_arm64_slice()
+        analyzer = MachoAnalyzer.get_analyzer(binary)
+
+        # When I ask for XRefs to `ARSKView`
+        arfacetracking_classref = analyzer.classref_for_class_name(
+            "_OBJC_CLASS_$_ARFaceTrackingConfiguration"
+        )
+        assert arfacetracking_classref
+        objc_calls = analyzer.objc_calls_to(
+            objc_classrefs=[arfacetracking_classref],
+            objc_selrefs=[],
+            requires_class_and_sel_found=False,
+        )
+
+        # Then the code location is returned
+        assert len(objc_calls) == 1
+        assert objc_calls[0] == ObjcMsgSendXref(
+            caller_func_start_address=VirtualMemoryPointer(0x100006388),
+            caller_addr=VirtualMemoryPointer(0x10000639C),
+            destination_addr=VirtualMemoryPointer(0x100006590),
+            classref=VirtualMemoryPointer(0x10000D390),
+            selref=VirtualMemoryPointer(0x0),
+        )
+
+        # TODO(PT): Update this unit test once this functionality is added
+        # And when I ask for XRefs to `[ARFaceTrackingConfiguration class]`
+        # Then the code location is returned
+
+        # And when I ask for XRefs to `class`
+        # Then the code location is returned
+
 
 class TestMachoAnalyzerControlFlowTarget:
     FAT_PATH = pathlib.Path(__file__).parent / 'bin' / 'StrongarmControlFlowTarget'
@@ -374,7 +446,7 @@ class TestMachoAnalyzerControlFlowTarget:
     def test_get_function_end_address(self):
         test_cases = (
             # -[CFDataFlowMethods switchControlFlow] defined at 0x10000675c
-            (0x10000675c, 0x100006804),
+            (0x10000675c, 0x1000067f4),
         )
         for entry_point, expected_end_address in test_cases:
             end_address = self.analyzer.get_function_end_address(entry_point)

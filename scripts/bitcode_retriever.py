@@ -2,8 +2,8 @@
 `bitcode_retriever` is a utility to extract the XAR containing LLVM embedded in a 'Bitcode' Mach-O
 This implementation isn't feature-complete, but serves as an example of real API use.
 """
-import pathlib
 import argparse
+import pathlib
 
 from strongarm.macho import MachoParser
 

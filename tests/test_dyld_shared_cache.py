@@ -5,7 +5,8 @@ from pathlib import Path
 
 import pytest
 
-from strongarm.macho import DyldSharedCacheParser, MachoAnalyzer, VirtualMemoryPointer
+from strongarm.macho import (DyldSharedCacheParser, MachoAnalyzer,
+                             VirtualMemoryPointer)
 
 
 @pytest.mark.skipif(

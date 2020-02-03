@@ -2,35 +2,19 @@ import math
 from _ctypes import Structure
 from ctypes import c_uint32, c_uint64, sizeof
 from pathlib import Path
-from typing import TYPE_CHECKING, Any, List, Optional, Set, Tuple, Type, TypeVar
+from typing import (TYPE_CHECKING, Any, List, Optional, Set, Tuple, Type,
+                    TypeVar)
 
 from strongarm.debug_util import DebugUtil
 from strongarm.macho.arch_independent_structs import (
-    ArchIndependentStructure,
-    CFStringStruct,
-    DylibCommandStruct,
-    MachoDyldInfoCommandStruct,
-    MachoDysymtabCommandStruct,
-    MachoEncryptionInfoStruct,
-    MachoHeaderStruct,
-    MachoLinkeditDataCommandStruct,
-    MachoLoadCommandStruct,
-    MachoNlistStruct,
-    MachoSectionRawStruct,
-    MachoSegmentCommandStruct,
-    MachoSymtabCommandStruct,
-)
+    ArchIndependentStructure, CFStringStruct, DylibCommandStruct,
+    MachoDyldInfoCommandStruct, MachoDysymtabCommandStruct,
+    MachoEncryptionInfoStruct, MachoHeaderStruct,
+    MachoLinkeditDataCommandStruct, MachoLoadCommandStruct, MachoNlistStruct,
+    MachoSectionRawStruct, MachoSegmentCommandStruct, MachoSymtabCommandStruct)
 from strongarm.macho.macho_definitions import (  # XXX(PT): For load-dylib-command insertion. Should binary-modification helpers be refactored into their own module?
-    CPU_TYPE,
-    HEADER_FLAGS,
-    DylibCommand,
-    DylibStruct,
-    LcStrUnion,
-    MachArch,
-    MachoFileType,
-    StaticFilePointer,
-    VirtualMemoryPointer,
-)
+    CPU_TYPE, HEADER_FLAGS, DylibCommand, DylibStruct, LcStrUnion, MachArch,
+    MachoFileType, StaticFilePointer, VirtualMemoryPointer)
 from strongarm.macho.macho_load_commands import MachoLoadCommands
 
 if TYPE_CHECKING:

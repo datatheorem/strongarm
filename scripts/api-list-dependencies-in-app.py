@@ -1,8 +1,9 @@
 import os
 import sys
+from time import time
+
 from strongarm.macho import MachoParser
 
-from time import time
 start = time()
 
 folder = sys.argv[1]

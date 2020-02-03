@@ -4,13 +4,8 @@ from strongarm.debug_util import DebugUtil
 from strongarm.macho.macho_binary import MachoBinary
 from strongarm.macho.macho_definitions import StaticFilePointer
 
-from .codesign_definitions import (
-    CodesignBlobTypeEnum,
-    CSBlob,
-    CSBlobIndex,
-    CSCodeDirectory,
-    CSSuperblob,
-)
+from .codesign_definitions import (CodesignBlobTypeEnum, CSBlob, CSBlobIndex,
+                                   CSCodeDirectory, CSSuperblob)
 
 
 class CodesignParser:

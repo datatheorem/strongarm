@@ -9,37 +9,22 @@ from contextlib import closing
 from ctypes import sizeof
 from dataclasses import dataclass
 from itertools import tee
-from typing import (
-    TYPE_CHECKING,
-    Callable,
-    Dict,
-    Iterable,
-    List,
-    Optional,
-    Set,
-    Tuple,
-    TypeVar,
-)
+from typing import (TYPE_CHECKING, Callable, Dict, Iterable, List, Optional,
+                    Set, Tuple, TypeVar)
 
 from capstone import CS_ARCH_ARM64, CS_MODE_ARM, Cs, CsInsn
 
-from strongarm.macho.arch_independent_structs import (
-    CFString32,
-    CFString64,
-    CFStringStruct,
-)
+from strongarm.macho.arch_independent_structs import (CFString32, CFString64,
+                                                      CFStringStruct)
 from strongarm.macho.dyld_info_parser import DyldBoundSymbol, DyldInfoParser
 from strongarm.macho.macho_binary import InvalidAddressError, MachoBinary
 from strongarm.macho.macho_definitions import VirtualMemoryPointer
 from strongarm.macho.macho_imp_stubs import MachoImpStubsParser
 from strongarm.macho.macho_string_table_helper import MachoStringTableHelper
-from strongarm.macho.objc_runtime_data_parser import (
-    ObjcCategory,
-    ObjcClass,
-    ObjcProtocol,
-    ObjcRuntimeDataParser,
-    ObjcSelector,
-)
+from strongarm.macho.objc_runtime_data_parser import (ObjcCategory, ObjcClass,
+                                                      ObjcProtocol,
+                                                      ObjcRuntimeDataParser,
+                                                      ObjcSelector)
 from strongarm.macho.progress_bar import ConsoleProgressBar
 
 if TYPE_CHECKING:

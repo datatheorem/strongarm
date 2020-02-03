@@ -1,15 +1,6 @@
 import struct
-from ctypes import (
-    Structure,
-    Union,
-    c_char,
-    c_char_p,
-    c_int16,
-    c_uint8,
-    c_uint16,
-    c_uint32,
-    c_uint64,
-)
+from ctypes import (Structure, Union, c_char, c_char_p, c_int16, c_uint8,
+                    c_uint16, c_uint32, c_uint64)
 from enum import IntEnum
 from typing import TypeVar
 

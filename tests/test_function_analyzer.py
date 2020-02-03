@@ -4,25 +4,15 @@ from unittest import mock
 
 import pytest
 
-from strongarm.macho import (
-    MachoAnalyzer,
-    MachoParser,
-    ObjcClass,
-    ObjcSelector,
-    ObjcSelref,
-    VirtualMemoryPointer,
-)
-from strongarm.objc import (
-    CodeSearch,
-    CodeSearchFunctionCallWithArguments,
-    CodeSearchResultFunctionCallWithArguments,
-    ObjcFunctionAnalyzer,
-    ObjcInstruction,
-    ObjcMethodInfo,
-    ObjcUnconditionalBranchInstruction,
-    RegisterContentsType,
-)
-from strongarm.objc.objc_analyzer import _demangle_cpp_symbol, _is_mangled_cpp_symbol
+from strongarm.macho import (MachoAnalyzer, MachoParser, ObjcClass,
+                             ObjcSelector, ObjcSelref, VirtualMemoryPointer)
+from strongarm.objc import (CodeSearch, CodeSearchFunctionCallWithArguments,
+                            CodeSearchResultFunctionCallWithArguments,
+                            ObjcFunctionAnalyzer, ObjcInstruction,
+                            ObjcMethodInfo, ObjcUnconditionalBranchInstruction,
+                            RegisterContentsType)
+from strongarm.objc.objc_analyzer import (_demangle_cpp_symbol,
+                                          _is_mangled_cpp_symbol)
 
 
 class TestFunctionAnalyzer:

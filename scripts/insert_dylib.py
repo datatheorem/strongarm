@@ -1,10 +1,10 @@
 """Add a load command to a binary.
 This will invalidate the binary's load signature, if any.
 """
-import pathlib
 import argparse
+import pathlib
 
-from strongarm.macho import MachoParser, MachoBinary
+from strongarm.macho import MachoBinary, MachoParser
 
 
 def main():

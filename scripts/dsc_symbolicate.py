@@ -1,12 +1,13 @@
 """Generate a CSV symbol map from a dyld_shared_cache
 """
+import argparse
 import csv
 import logging
-import argparse
 from pathlib import Path
 from typing import List, Tuple
 
-from strongarm.macho import DyldSharedCacheParser, VirtualMemoryPointer, MachoAnalyzer
+from strongarm.macho import (DyldSharedCacheParser, MachoAnalyzer,
+                             VirtualMemoryPointer)
 
 
 def main():

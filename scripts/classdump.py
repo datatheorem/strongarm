@@ -1,11 +1,11 @@
 """Example implementation of `class-dump` using strongarm.
 This implementation isn't feature-complete, but serves as an example of real API use.
 """
-import re
-import pathlib
 import argparse
+import pathlib
+import re
 
-from strongarm.macho import MachoParser, MachoAnalyzer, CPU_TYPE
+from strongarm.macho import CPU_TYPE, MachoAnalyzer, MachoParser
 
 
 def _prototype_from_selector(sel: str) -> str:

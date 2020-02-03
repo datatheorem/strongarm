@@ -3,12 +3,8 @@ from tempfile import TemporaryDirectory
 
 import pytest
 
-from strongarm.macho import (
-    BinaryEncryptedError,
-    MachoBinary,
-    MachoParser,
-    NoEmptySpaceForLoadCommandError,
-)
+from strongarm.macho import (BinaryEncryptedError, MachoBinary, MachoParser,
+                             NoEmptySpaceForLoadCommandError)
 from strongarm.macho.macho_definitions import *
 
 

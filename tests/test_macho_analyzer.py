@@ -3,18 +3,12 @@ from typing import List
 
 import pytest
 
-from strongarm.macho.macho_analyzer import (
-    MachoAnalyzer,
-    ObjcMsgSendXref,
-    VirtualMemoryPointer,
-)
+from strongarm.macho.macho_analyzer import (MachoAnalyzer, ObjcMsgSendXref,
+                                            VirtualMemoryPointer)
 from strongarm.macho.macho_binary import MachoBinary
 from strongarm.macho.macho_parse import MachoParser
-from strongarm.objc import (
-    CodeSearch,
-    CodeSearchFunctionCallWithArguments,
-    ObjcFunctionAnalyzer,
-)
+from strongarm.objc import (CodeSearch, CodeSearchFunctionCallWithArguments,
+                            ObjcFunctionAnalyzer)
 
 
 class TestMachoAnalyzer:

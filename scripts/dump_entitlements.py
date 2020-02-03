@@ -1,7 +1,7 @@
 """Dump the entitlements of the provided binary.
 """
-import pathlib
 import argparse
+import pathlib
 
 from strongarm.macho import MachoParser
 

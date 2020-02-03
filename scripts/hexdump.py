@@ -1,8 +1,8 @@
 """Example implementation of `hexdump` using strongarm.
 This implementation isn't feature-complete, but serves as an example of real API use.
 """
-import pathlib
 import argparse
+import pathlib
 
 from strongarm.macho import MachoParser, StaticFilePointer
 

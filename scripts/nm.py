@@ -1,10 +1,10 @@
 """Example implementation of `nm` using strongarm.
 This implementation isn't feature-complete, but serves as an example of real API use.
 """
-import pathlib
 import argparse
+import pathlib
 
-from strongarm.macho import MachoParser, MachoBinary, MachoAnalyzer
+from strongarm.macho import MachoAnalyzer, MachoBinary, MachoParser
 
 
 def get_source_library_of_imported_symbol(analyzer: MachoAnalyzer, symbol_name: str) -> str:

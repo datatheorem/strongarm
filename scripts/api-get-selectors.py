@@ -1,8 +1,4 @@
-from strongarm.macho import (
-    MachoParser,
-    MachoAnalyzer,
-    CPU_TYPE
-)
+from strongarm.macho import CPU_TYPE, MachoAnalyzer, MachoParser
 
 
 def find_selector_implementations(binary):

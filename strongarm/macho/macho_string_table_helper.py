@@ -1,4 +1,4 @@
-from typing import Optional, Dict, List
+from typing import Dict, List, Optional
 
 from strongarm.macho.macho_binary import MachoBinary, VirtualMemoryPointer
 from strongarm.macho.macho_definitions import NLIST_NTYPE, NTYPE_VALUES
@@ -7,7 +7,8 @@ from strongarm.macho.macho_definitions import NLIST_NTYPE, NTYPE_VALUES
 class MachoStringTableEntry:
     """Class encapsulating an entry into the Mach-O string table
     """
-    __slots__ = ['start_idx', 'length', 'full_string']
+
+    __slots__ = ["start_idx", "length", "full_string"]
 
     def __init__(self, start_idx: int, length: int, content: str) -> None:
         self.start_idx = start_idx
@@ -18,19 +19,23 @@ class MachoStringTableEntry:
 class MachoStringTableHelper:
     """Class containing helper functions for processing different tables in a Mach-O
     """
+
     # TODO(PT): generalize the preprocessing of a string table where we efficiently map string start addresses to
     # full strings, so we don't need to do an O(n) search for a (struct __objc_data).name or something
 
     def __init__(self, binary: MachoBinary) -> None:
         self.binary = binary
-        self.string_table_entries = MachoStringTableHelper.transform_string_section(self.binary.get_raw_string_table())
+        self.string_table_entries = MachoStringTableHelper.transform_string_section(
+            self.binary.get_raw_string_table()
+        )
         self.imported_symbols: List[str] = []
         self.exported_symbols: Dict[VirtualMemoryPointer, str] = {}
         self.parse_sym_lists()
 
     @classmethod
-    def transform_string_section(cls,
-                                 strtab: List[int]) -> Dict[int, MachoStringTableEntry]:
+    def transform_string_section(
+        cls, strtab: List[int]
+    ) -> Dict[int, MachoStringTableEntry]:
         """Create more efficient representation of string table data
 
         Often, tables in a Mach-O will reference data within the string table.
@@ -56,7 +61,7 @@ class MachoStringTableHelper:
                 entry_end_idx = entry_start_idx + length
                 entry_byte_content = bytearray(strtab[entry_start_idx:entry_end_idx:])
                 try:
-                    entry_content = entry_byte_content.decode('utf-8')
+                    entry_content = entry_byte_content.decode("utf-8")
                 except UnicodeDecodeError:
                     # get a string literal of the raw bytes. 0x0080 -> "b'\\x00\\x80'"
                     entry_content = str(bytes(entry_byte_content))
@@ -72,7 +77,9 @@ class MachoStringTableHelper:
                 entry_start_idx = idx + 1
         return string_table_entries
 
-    def string_table_entry_for_strtab_index(self, start_idx: int) -> Optional[MachoStringTableEntry]:
+    def string_table_entry_for_strtab_index(
+        self, start_idx: int
+    ) -> Optional[MachoStringTableEntry]:
         """For a index in the packed character table, get the corresponding MachoStringTableEntry
 
         Returns:
@@ -110,7 +117,9 @@ class MachoStringTableHelper:
             elif symbol_type == NTYPE_VALUES.N_SECT:
                 self.exported_symbols[sym.n_value] = symbol_str
 
-    def get_symbol_name_for_address(self, address: VirtualMemoryPointer) -> Optional[str]:
+    def get_symbol_name_for_address(
+        self, address: VirtualMemoryPointer
+    ) -> Optional[str]:
         """ For an address of a function entrypoint, return the function's symbol name
         """
         if address in self.exported_symbols:

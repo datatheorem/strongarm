@@ -1,30 +1,25 @@
-from .register_contents import RegisterContents, RegisterContentsType
-
-from .objc_query import (
-    CodeSearch,
-    CodeSearchResult,
-    CodeSearchObjcCall,
-    CodeSearchRegisterContents,
-    CodeSearchInstructionMnemonic,
-    CodeSearchFunctionCallWithArguments,
-    CodeSearchResultFunctionCallWithArguments,
-
-    CFunctionArgAnyValue,
-)
-
+from .dataflow import get_register_contents_at_instruction_fast
 from .objc_analyzer import (
+    BasicBlock,
     ObjcFunctionAnalyzer,
-    RegisterContentsType,
-    RegisterContents,
     ObjcMethodInfo,
-    BasicBlock
+    RegisterContents,
+    RegisterContentsType,
 )
-
 from .objc_instruction import (
     ObjcBranchInstruction,
-    ObjcUnconditionalBranchInstruction,
     ObjcConditionalBranchInstruction,
-    ObjcInstruction
+    ObjcInstruction,
+    ObjcUnconditionalBranchInstruction,
 )
-
-from .dataflow import get_register_contents_at_instruction_fast
+from .objc_query import (
+    CFunctionArgAnyValue,
+    CodeSearch,
+    CodeSearchFunctionCallWithArguments,
+    CodeSearchInstructionMnemonic,
+    CodeSearchObjcCall,
+    CodeSearchRegisterContents,
+    CodeSearchResult,
+    CodeSearchResultFunctionCallWithArguments,
+)
+from .register_contents import RegisterContents, RegisterContentsType

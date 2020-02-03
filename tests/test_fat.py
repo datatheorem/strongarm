@@ -4,8 +4,8 @@ from strongarm.macho.macho_parse import MachoParser
 
 
 class TestFatMachO:
-    THIN_BIN_PATH = pathlib.Path(__file__).parent / 'bin' / 'StrongarmTarget'
-    FAT_BIN_PATH = pathlib.Path(__file__).parent / 'bin' / 'GammaRayTestBad'
+    THIN_BIN_PATH = pathlib.Path(__file__).parent / "bin" / "StrongarmTarget"
+    FAT_BIN_PATH = pathlib.Path(__file__).parent / "bin" / "GammaRayTestBad"
 
     def setup_method(self):
         self.thin_parser = MachoParser(TestFatMachO.THIN_BIN_PATH)

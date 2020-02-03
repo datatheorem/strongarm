@@ -1,18 +1,20 @@
-import shutil
 import hashlib
 import pathlib
+import shutil
 import subprocess
 from contextlib import contextmanager
 from tempfile import TemporaryDirectory
-from typing import Generator, Tuple, List
+from typing import Generator, List, Tuple
 
-from strongarm.macho import MachoParser, MachoBinary, MachoAnalyzer
+from strongarm.decompiler import ExecContext, Simulator
+from strongarm.macho import MachoAnalyzer, MachoBinary, MachoParser
 from strongarm.objc import ObjcFunctionAnalyzer
-from strongarm.decompiler import Simulator, ExecContext
 
 
 @contextmanager
-def _compile_code(source_code: str, is_assembly: bool) -> Generator[pathlib.Path, None, None]:
+def _compile_code(
+    source_code: str, is_assembly: bool
+) -> Generator[pathlib.Path, None, None]:
     """Compile the provided source code & yield the path to the compiled binary. The path is in a temporary directory.
     If is_assembly is set, the source code is treated as AArch64 assembly. Otherwise, as Objective-C source.
     """
@@ -81,7 +83,7 @@ def _compile_code(source_code: str, is_assembly: bool) -> Generator[pathlib.Path
             f"-framework Foundation "
             f"{source_filepath.as_posix()} -o {output_filepath.as_posix()}",
             shell=True,
-            stderr=subprocess.PIPE
+            stderr=subprocess.PIPE,
         )
         if ret.returncode:
             print(ret.stderr.decode())
@@ -90,8 +92,9 @@ def _compile_code(source_code: str, is_assembly: bool) -> Generator[pathlib.Path
 
 
 @contextmanager
-def binary_containing_code(source_code: str,
-                           is_assembly: bool) -> Generator[Tuple[MachoBinary, MachoAnalyzer], None, None]:
+def binary_containing_code(
+    source_code: str, is_assembly: bool
+) -> Generator[Tuple[MachoBinary, MachoAnalyzer], None, None]:
     """Provide an app package which contains the compiled source code.
     If is_assembly is set, the source code is treated as AArch64 assembly. Otherwise, as Objective-C source.
 
@@ -103,7 +106,9 @@ def binary_containing_code(source_code: str,
 
     # Do we need to compile this code, or is there a cached version available?
     code_hash = hashlib.md5(source_code.encode()).hexdigest()
-    compiled_artifacts_dir = pathlib.Path(__file__).parent / "bin" / "auto_compiled_binaries"
+    compiled_artifacts_dir = (
+        pathlib.Path(__file__).parent / "bin" / "auto_compiled_binaries"
+    )
     compiled_code_bin_path = compiled_artifacts_dir / str(code_hash)
     if not compiled_code_bin_path.exists():
         # Compile and cache this source code
@@ -116,17 +121,25 @@ def binary_containing_code(source_code: str,
 
 
 @contextmanager
-def function_containing_asm(asm_source: str) -> Generator[Tuple[MachoAnalyzer, ObjcFunctionAnalyzer], None, None]:
+def function_containing_asm(
+    asm_source: str
+) -> Generator[Tuple[MachoAnalyzer, ObjcFunctionAnalyzer], None, None]:
     with binary_containing_code(asm_source, is_assembly=True) as (binary, analyzer):
         # Assembly compiled with binary_containing_code is always placed in main()
-        main_addr = analyzer.callable_symbol_for_symbol_name('_main').address
+        main_addr = analyzer.callable_symbol_for_symbol_name("_main").address
         func = ObjcFunctionAnalyzer.get_function_analyzer(binary, main_addr)
         yield analyzer, func
 
 
 @contextmanager
-def simulate_assembly(asm_source: str, expected_code_path_count=1) -> Generator[List[ExecContext], None, None]:
+def simulate_assembly(
+    asm_source: str, expected_code_path_count=1
+) -> Generator[List[ExecContext], None, None]:
     with function_containing_asm(asm_source) as (analyzer, func):
-        sim = Simulator(analyzer, func, [func.start_address, func.end_address - MachoBinary.BYTES_PER_INSTRUCTION])
+        sim = Simulator(
+            analyzer,
+            func,
+            [func.start_address, func.end_address - MachoBinary.BYTES_PER_INSTRUCTION],
+        )
         ctxs = sim.run()
         yield ctxs

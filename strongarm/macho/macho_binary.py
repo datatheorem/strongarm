@@ -1,37 +1,35 @@
 import math
 from _ctypes import Structure
+from ctypes import c_uint32, c_uint64, sizeof
 from pathlib import Path
-from typing import List, Tuple, Any, Type, Optional, TypeVar, TYPE_CHECKING, Set
-
-from ctypes import c_uint64, c_uint32, sizeof
+from typing import TYPE_CHECKING, Any, List, Optional, Set, Tuple, Type, TypeVar
 
 from strongarm.debug_util import DebugUtil
-from strongarm.macho.macho_definitions import (
+from strongarm.macho.arch_independent_structs import (
+    ArchIndependentStructure,
+    CFStringStruct,
+    DylibCommandStruct,
+    MachoDyldInfoCommandStruct,
+    MachoDysymtabCommandStruct,
+    MachoEncryptionInfoStruct,
+    MachoHeaderStruct,
+    MachoLinkeditDataCommandStruct,
+    MachoLoadCommandStruct,
+    MachoNlistStruct,
+    MachoSectionRawStruct,
+    MachoSegmentCommandStruct,
+    MachoSymtabCommandStruct,
+)
+from strongarm.macho.macho_definitions import (  # XXX(PT): For load-dylib-command insertion. Should binary-modification helpers be refactored into their own module?
     CPU_TYPE,
-    MachArch,
     HEADER_FLAGS,
+    DylibCommand,
+    DylibStruct,
+    LcStrUnion,
+    MachArch,
     MachoFileType,
     StaticFilePointer,
     VirtualMemoryPointer,
-    # XXX(PT): For load-dylib-command insertion. Should binary-modification helpers be refactored into their own module?
-    LcStrUnion,
-    DylibStruct,
-    DylibCommand,
-)
-from strongarm.macho.arch_independent_structs import (
-    ArchIndependentStructure,
-    MachoHeaderStruct,
-    MachoSegmentCommandStruct,
-    MachoSectionRawStruct,
-    MachoEncryptionInfoStruct,
-    MachoNlistStruct,
-    CFStringStruct,
-    DylibCommandStruct,
-    MachoLoadCommandStruct,
-    MachoSymtabCommandStruct,
-    MachoDysymtabCommandStruct,
-    MachoDyldInfoCommandStruct,
-    MachoLinkeditDataCommandStruct,
 )
 from strongarm.macho.macho_load_commands import MachoLoadCommands
 
@@ -60,7 +58,9 @@ class InvalidAddressError(Exception):
 
 
 class MachoSection:
-    def __init__(self, binary: 'MachoBinary', section_command: MachoSectionRawStruct) -> None:
+    def __init__(
+        self, binary: "MachoBinary", section_command: MachoSectionRawStruct
+    ) -> None:
         self.cmd = section_command
         # ignore these types due to dynamic attributes of associated types
         self.content = binary.get_bytes(section_command.offset, section_command.size)
@@ -71,18 +71,9 @@ class MachoSection:
 
 
 class MachoBinary:
-    _MAG_64 = [
-        MachArch.MH_MAGIC_64,
-        MachArch.MH_CIGAM_64
-    ]
-    _MAG_32 = [
-        MachArch.MH_MAGIC,
-        MachArch.MH_CIGAM,
-    ]
-    _MAG_BIG_ENDIAN = [
-        MachArch.MH_CIGAM,
-        MachArch.MH_CIGAM_64,
-    ]
+    _MAG_64 = [MachArch.MH_MAGIC_64, MachArch.MH_CIGAM_64]
+    _MAG_32 = [MachArch.MH_MAGIC, MachArch.MH_CIGAM]
+    _MAG_BIG_ENDIAN = [MachArch.MH_CIGAM, MachArch.MH_CIGAM_64]
     SUPPORTED_MAG = _MAG_64 + _MAG_32
     BYTES_PER_INSTRUCTION = 4
 
@@ -124,7 +115,7 @@ class MachoBinary:
 
         # This kicks off the parse of the binary
         if not self.parse():
-            raise RuntimeError('Failed to parse Mach-O')
+            raise RuntimeError("Failed to parse Mach-O")
 
         self.platform_word_type = c_uint64 if self.is_64bit else c_uint32
         self.symtab_contents = self._get_symtab_contents()
@@ -138,23 +129,26 @@ class MachoBinary:
             False otherwise.
 
         """
-        DebugUtil.log(self, f'parsing Mach-O slice in {self.path}')
+        DebugUtil.log(self, f"parsing Mach-O slice in {self.path}")
 
         # Preliminary Mach-O parsing
         if not self.verify_magic():
-            DebugUtil.log(self, f'unsupported magic {hex(self.slice_magic)}')
+            DebugUtil.log(self, f"unsupported magic {hex(self.slice_magic)}")
             return False
 
         self.is_swap = self.should_swap_bytes()
         # Big endian binaries are currently unsupported
         if self.is_swap:
-            raise NotImplementedError(f'Big-endian binaries are unsupported')
+            raise NotImplementedError(f"Big-endian binaries are unsupported")
 
         self.is_64bit = self.magic_is_64()
 
         self.parse_header()
 
-        DebugUtil.log(self, f'header parsed. non-native endianness? {self.is_swap}. 64-bit? {self.is_64bit}')
+        DebugUtil.log(
+            self,
+            f"header parsed. non-native endianness? {self.is_swap}. 64-bit? {self.is_64bit}",
+        )
         return True
 
     @property
@@ -201,7 +195,9 @@ class MachoBinary:
         # load commands begin directly after Mach O header, so the offset is the size of the header
         load_commands_off = self.header.sizeof
 
-        self._load_commands_end_addr = load_commands_off + self.header.sizeofcmds  # type: ignore
+        self._load_commands_end_addr = (
+            load_commands_off + self.header.sizeofcmds
+        )  # type: ignore
         self._parse_load_commands(load_commands_off, self.header.ncmds)  # type: ignore
 
     def _parse_header_flags(self) -> None:
@@ -228,8 +224,10 @@ class MachoBinary:
         for i in range(ncmds):
             load_command = self.read_struct(offset, MachoLoadCommandStruct)
 
-            if load_command.cmd in [MachoLoadCommands.LC_SEGMENT,
-                                    MachoLoadCommands.LC_SEGMENT_64]:
+            if load_command.cmd in [
+                MachoLoadCommands.LC_SEGMENT,
+                MachoLoadCommands.LC_SEGMENT_64,
+            ]:
 
                 segment = self.read_struct(offset, MachoSegmentCommandStruct)
                 # TODO(PT) handle byte swap of segment if necessary
@@ -238,9 +236,13 @@ class MachoBinary:
 
             # some commands have their own structure that we interpret separately from a normal load command
             # if we want to interpret more commands in the future, this is the place to do it
-            elif load_command.cmd in [MachoLoadCommands.LC_ENCRYPTION_INFO,
-                                      MachoLoadCommands.LC_ENCRYPTION_INFO_64]:
-                self._encryption_info = self.read_struct(offset, MachoEncryptionInfoStruct)
+            elif load_command.cmd in [
+                MachoLoadCommands.LC_ENCRYPTION_INFO,
+                MachoLoadCommands.LC_ENCRYPTION_INFO_64,
+            ]:
+                self._encryption_info = self.read_struct(
+                    offset, MachoEncryptionInfoStruct
+                )
 
             elif load_command.cmd == MachoLoadCommands.LC_SYMTAB:
                 self._symtab = self.read_struct(offset, MachoSymtabCommandStruct)
@@ -248,18 +250,28 @@ class MachoBinary:
             elif load_command.cmd == MachoLoadCommands.LC_DYSYMTAB:
                 self._dysymtab = self.read_struct(offset, MachoDysymtabCommandStruct)
 
-            elif load_command.cmd in [MachoLoadCommands.LC_DYLD_INFO, MachoLoadCommands.LC_DYLD_INFO_ONLY]:
+            elif load_command.cmd in [
+                MachoLoadCommands.LC_DYLD_INFO,
+                MachoLoadCommands.LC_DYLD_INFO_ONLY,
+            ]:
                 self._dyld_info = self.read_struct(offset, MachoDyldInfoCommandStruct)
 
-            elif load_command.cmd in [MachoLoadCommands.LC_LOAD_DYLIB, MachoLoadCommands.LC_LOAD_WEAK_DYLIB]:
+            elif load_command.cmd in [
+                MachoLoadCommands.LC_LOAD_DYLIB,
+                MachoLoadCommands.LC_LOAD_WEAK_DYLIB,
+            ]:
                 dylib_load_command = self.read_struct(offset, DylibCommandStruct)
                 self.load_dylib_commands.append(dylib_load_command)
 
             elif load_command.cmd == MachoLoadCommands.LC_CODE_SIGNATURE:
-                self._code_signature_cmd = self.read_struct(offset, MachoLinkeditDataCommandStruct)
+                self._code_signature_cmd = self.read_struct(
+                    offset, MachoLinkeditDataCommandStruct
+                )
 
             elif load_command.cmd == MachoLoadCommands.LC_FUNCTION_STARTS:
-                self._function_starts_cmd = self.read_struct(offset, MachoLinkeditDataCommandStruct)
+                self._function_starts_cmd = self.read_struct(
+                    offset, MachoLinkeditDataCommandStruct
+                )
 
             elif load_command.cmd == MachoLoadCommands.LC_ID_DYLIB:
                 self._id_dylib_cmd = self.read_struct(offset, DylibCommandStruct)
@@ -269,10 +281,9 @@ class MachoBinary:
             # move to next load command in header
             offset += load_command.cmdsize
 
-    def read_struct(self,
-                    binary_offset: int,
-                    struct_type: Type[AIS],
-                    virtual: bool = False) -> AIS:
+    def read_struct(
+        self, binary_offset: int, struct_type: Type[AIS], virtual: bool = False
+    ) -> AIS:
         """Given an binary offset, return the structure it describes.
 
         Params:
@@ -285,10 +296,14 @@ class MachoBinary:
         """
 
         size = struct_type.struct_size(self.is_64bit)
-        data = self.get_contents_from_address(address=binary_offset, size=size, is_virtual=virtual)
+        data = self.get_contents_from_address(
+            address=binary_offset, size=size, is_virtual=virtual
+        )
         return struct_type(binary_offset, data, self.is_64bit)
 
-    def section_name_for_address(self, virt_addr: VirtualMemoryPointer) -> Optional[str]:
+    def section_name_for_address(
+        self, virt_addr: VirtualMemoryPointer
+    ) -> Optional[str]:
         """Given an address in the virtual address space, return the name of the section which contains it.
         """
         section = self.section_for_address(virt_addr)
@@ -296,7 +311,9 @@ class MachoBinary:
             return None
         return section.name.decode()
 
-    def section_for_address(self, virt_addr: VirtualMemoryPointer) -> Optional[MachoSection]:
+    def section_for_address(
+        self, virt_addr: VirtualMemoryPointer
+    ) -> Optional[MachoSection]:
         """Given an address in the virtual address space, return the section which contains it.
         """
         # invalid address?
@@ -320,11 +337,15 @@ class MachoBinary:
 
     def segment_for_index(self, segment_index: int) -> MachoSegmentCommandStruct:
         if segment_index < 0 or segment_index >= len(self.segments):
-            raise ValueError(f"segment_index ({segment_index}) out of bounds ({len(self.segments)}")
+            raise ValueError(
+                f"segment_index ({segment_index}) out of bounds ({len(self.segments)}"
+            )
         # PT: Segments are guaranteed to be sorted in the order they appear in the Mach-O header
         return self.segments[segment_index]
 
-    def segment_with_name(self, desired_segment_name: str) -> Optional[MachoSegmentCommandStruct]:
+    def segment_with_name(
+        self, desired_segment_name: str
+    ) -> Optional[MachoSegmentCommandStruct]:
         """Returns the segment with the provided name. Returns None if there's no such segment in the binary.
         """
         # TODO(PT): add unit test for this method
@@ -334,7 +355,9 @@ class MachoBinary:
                 return segment_cmd
         return None
 
-    def section_with_name(self, desired_section_name: str, parent_segment_name: str) -> Optional[MachoSection]:
+    def section_with_name(
+        self, desired_section_name: str, parent_segment_name: str
+    ) -> Optional[MachoSection]:
         """Retrieve the section with the provided name which is contained within the provided segment.
         Returns None if no such section exists.
         """
@@ -347,9 +370,9 @@ class MachoBinary:
                 return section
         return None
 
-    def _parse_sections_for_segment(self,
-                                    segment: MachoSegmentCommandStruct,
-                                    segment_offset: StaticFilePointer) -> None:
+    def _parse_sections_for_segment(
+        self, segment: MachoSegmentCommandStruct, segment_offset: StaticFilePointer
+    ) -> None:
         """Parse all sections contained within a Mach-O segment, and add them to our list of sections
 
         Args:
@@ -381,14 +404,18 @@ class MachoBinary:
 
         """
         if not self._virtual_base:
-            text_seg = self.segment_with_name('__TEXT')
+            text_seg = self.segment_with_name("__TEXT")
             if not text_seg:
-                raise RuntimeError(f'Could not find virtual base because binary has no __TEXT segment.')
+                raise RuntimeError(
+                    f"Could not find virtual base because binary has no __TEXT segment."
+                )
             self._virtual_base = VirtualMemoryPointer(text_seg.vmaddr)
 
         return self._virtual_base
 
-    def get_bytes(self, offset: StaticFilePointer, size: int, _translate_addr_to_file=False) -> bytearray:
+    def get_bytes(
+        self, offset: StaticFilePointer, size: int, _translate_addr_to_file=False
+    ) -> bytearray:
         """Retrieve bytes from Mach-O slice, taking into account that the slice could be at an offset within a FAT
 
         Args:
@@ -403,20 +430,28 @@ class MachoBinary:
 
         """
         if offset > 0x100000000:
-            raise InvalidAddressError(f'get_bytes() offset {hex(offset)} looks like a virtual address.'
-                                      f' Did you mean to use get_content_from_virtual_address?')
+            raise InvalidAddressError(
+                f"get_bytes() offset {hex(offset)} looks like a virtual address."
+                f" Did you mean to use get_content_from_virtual_address?"
+            )
         if offset < 0:
-            raise InvalidAddressError(f'get_bytes() passed negative offset: {hex(offset)}')
+            raise InvalidAddressError(
+                f"get_bytes() passed negative offset: {hex(offset)}"
+            )
         if _translate_addr_to_file:
-            raise ValueError(f"_translate_addr_to_file may only be used with dyld_shared_cache binaries")
+            raise ValueError(
+                f"_translate_addr_to_file may only be used with dyld_shared_cache binaries"
+            )
 
         # safeguard against reading from an encrypted segment of the binary
         if self.is_range_encrypted(offset, size):
-            raise BinaryEncryptedError(f'Cannot read encrypted'
-                                       f' range [{hex(int(self.encryption_info.cryptoff))}'
-                                       f' to {hex(int(self.encryption_info.cryptsize))}]')
+            raise BinaryEncryptedError(
+                f"Cannot read encrypted"
+                f" range [{hex(int(self.encryption_info.cryptoff))}"
+                f" to {hex(int(self.encryption_info.cryptsize))}]"
+            )
 
-        return bytearray(self._cached_binary[offset:offset + size])
+        return bytearray(self._cached_binary[offset : offset + size])
 
     def should_swap_bytes(self) -> bool:
         """Check whether self.slice_magic refers to a big-endian Mach-O binary
@@ -447,7 +482,7 @@ class MachoBinary:
             Array of Nlist64's representing binary's symbol table
 
         """
-        DebugUtil.log(self, f'parsing {self.symtab.nsyms} symtab entries')
+        DebugUtil.log(self, f"parsing {self.symtab.nsyms} symtab entries")
 
         symtab = []
         # start reading from symoff and increment by one Nlist64 each iteration
@@ -468,13 +503,17 @@ class MachoBinary:
 
         # indirect symtab is an array of uint32's
         for i in range(self.dysymtab.nindirectsyms):
-            indirect_symtab_entry = self.read_word(indirect_symtab_off, virtual=False, word_type=c_uint32)
+            indirect_symtab_entry = self.read_word(
+                indirect_symtab_off, virtual=False, word_type=c_uint32
+            )
             indirect_symtab.append(int(indirect_symtab_entry))
             # traverse to next pointer
             indirect_symtab_off += sizeof(c_uint32)
         return indirect_symtab
 
-    def file_offset_for_virtual_address(self, virtual_address: VirtualMemoryPointer) -> StaticFilePointer:
+    def file_offset_for_virtual_address(
+        self, virtual_address: VirtualMemoryPointer
+    ) -> StaticFilePointer:
         # if this address is within the initial Mach-O load commands, it must be handled seperately
         # this unslid virtual address is just a 'best guess' of the physical file address, and it'll be the correct
         # address if the virtual address was within the initial load commands
@@ -485,29 +524,41 @@ class MachoBinary:
 
         section_for_address = self.section_for_address(virtual_address)
         if not section_for_address:
-            raise RuntimeError(f'Could not map virtual address {hex(int(virtual_address))} to a section!')
+            raise RuntimeError(
+                f"Could not map virtual address {hex(int(virtual_address))} to a section!"
+            )
 
         # the virtual address is contained within a section's contents
         # use this formula to convert a virtual address within a section to the file offset:
         # https://reverseengineering.stackexchange.com/questions/8177/convert-mach-o-vm-address-to-file-offset
-        binary_address = (virtual_address - section_for_address.address) + section_for_address.offset
+        binary_address = (
+            virtual_address - section_for_address.address
+        ) + section_for_address.offset
         return StaticFilePointer(binary_address)
 
-    def get_content_from_virtual_address(self, virtual_address: VirtualMemoryPointer, size: int) -> bytearray:
+    def get_content_from_virtual_address(
+        self, virtual_address: VirtualMemoryPointer, size: int
+    ) -> bytearray:
         binary_address = self.file_offset_for_virtual_address(virtual_address)
         return self.get_bytes(binary_address, size)
 
-    def get_contents_from_address(self, address: int, size: int, is_virtual: bool = False) -> bytearray:
+    def get_contents_from_address(
+        self, address: int, size: int, is_virtual: bool = False
+    ) -> bytearray:
         """Get a bytesarray from a specified address, size and virtualness
         TODO(FS): change all methods that use addresses as ints to the VirtualAddress/StaticAddress class pair to better
          express intent
         """
         if is_virtual:
-            return self.get_content_from_virtual_address(VirtualMemoryPointer(address), size)
+            return self.get_content_from_virtual_address(
+                VirtualMemoryPointer(address), size
+            )
         else:
             return self.get_bytes(StaticFilePointer(address), size)
 
-    def get_full_string_from_start_address(self, start_address: int, virtual: bool = True) -> Optional[str]:
+    def get_full_string_from_start_address(
+        self, start_address: int, virtual: bool = True
+    ) -> Optional[str]:
         """Return a string containing the bytes from start_address up to the next NULL character
         This method will return None if the specified address does not point to a UTF-8 encoded string
         """
@@ -517,7 +568,9 @@ class MachoBinary:
 
         while not found_null_terminator:
             if virtual:
-                name_bytes = self.get_content_from_virtual_address(VirtualMemoryPointer(start_address), max_len)
+                name_bytes = self.get_content_from_virtual_address(
+                    VirtualMemoryPointer(start_address), max_len
+                )
             else:
                 name_bytes = self.get_bytes(StaticFilePointer(start_address), max_len)
             # search for null terminator in this content
@@ -536,7 +589,7 @@ class MachoBinary:
             else:
                 # read full string!
                 try:
-                    symbol_name = bytearray(symbol_name_characters).decode('UTF-8')
+                    symbol_name = bytearray(symbol_name_characters).decode("UTF-8")
                     return symbol_name
                 except UnicodeDecodeError:
                     # if decoding the string failed, we may have been passed an address which does not actually
@@ -553,7 +606,7 @@ class MachoBinary:
         if not section_name:
             return None
         # special case if this is a __cfstring entry
-        if section_name == '__cfstring':
+        if section_name == "__cfstring":
             # read bytes into CFString struct
             cfstring_ent = self.read_struct(address, CFStringStruct, virtual=True)
             # patch address to read string from to be the string literal address of this CFString
@@ -576,10 +629,15 @@ class MachoBinary:
         # if 2 ranges overlap, the end address of the first range will be greater than the start of the second, and
         # the end address of the second will be greater than the start of the first
         range1 = (offset, offset + size)
-        range2 = (self.encryption_info.cryptoff, self.encryption_info.cryptoff + self.encryption_info.cryptsize)
+        range2 = (
+            self.encryption_info.cryptoff,
+            self.encryption_info.cryptoff + self.encryption_info.cryptsize,
+        )
         return range1[1] >= range2[0] and range2[1] >= range1[0]
 
-    def dylib_for_library_ordinal(self, library_ordinal: int) -> Optional[DylibCommandStruct]:
+    def dylib_for_library_ordinal(
+        self, library_ordinal: int
+    ) -> Optional[DylibCommandStruct]:
         """Retrieve the library information for the 'library ordinal' value, or None if no entry exists there.
         Library ordinals are 1-indexed.
 
@@ -597,21 +655,25 @@ class MachoBinary:
         """
         source_dylib = self.dylib_for_library_ordinal(library_ordinal)
         if source_dylib:
-            source_name_addr = source_dylib.binary_offset + \
-                               source_dylib.dylib.name.offset + \
-                               self.get_virtual_base()
+            source_name_addr = (
+                source_dylib.binary_offset
+                + source_dylib.dylib.name.offset
+                + self.get_virtual_base()
+            )
             source_name = self.get_full_string_from_start_address(source_name_addr)
             if not source_name:
-                source_name = '<unknown dylib>'
+                source_name = "<unknown dylib>"
         else:
             # we have encountered binaries where the n_desc indicates a nonexistent library ordinal
             # Netflix.app/frameworks/widevine_cdm_sdk_oemcrypto_release.framework/widevine_cdm_sdk_oemcrypto_release
             # indicates an ordinal 254, when the binary only actually has 8 LC_LOAD_DYLIB commands.
             # if we encounter a buggy binary like this, just use a placeholder name
-            source_name = '<unknown dylib>'
+            source_name = "<unknown dylib>"
         return source_name
 
-    def read_pointer_section(self, section_name: str) -> Tuple[List[VirtualMemoryPointer], List[VirtualMemoryPointer]]:
+    def read_pointer_section(
+        self, section_name: str
+    ) -> Tuple[List[VirtualMemoryPointer], List[VirtualMemoryPointer]]:
         """Read all the pointers in a section
 
         It is the caller's responsibility to only call this with a `section_name` which indicates a section which should
@@ -628,7 +690,7 @@ class MachoBinary:
         entries: List[VirtualMemoryPointer] = []
 
         # PT: Assume a pointer-list-section will always be in __DATA or __DATA_CONST. True as far as I know.
-        for segment in ['__DATA', '__DATA_CONST']:
+        for segment in ["__DATA", "__DATA_CONST"]:
             section = self.section_with_name(section_name, segment)
             if section:
                 break
@@ -648,29 +710,32 @@ class MachoBinary:
             locations.append(VirtualMemoryPointer(section_base + pointer_off))
 
             data_end = pointer_off + sizeof(binary_word)
-            val = binary_word.from_buffer(bytearray(section_data[pointer_off:data_end])).value
+            val = binary_word.from_buffer(
+                bytearray(section_data[pointer_off:data_end])
+            ).value
             entries.append(VirtualMemoryPointer(val))
 
             pointer_off += sizeof(binary_word)
 
         return locations, entries
 
-    def read_word(self,
-                  address: int,
-                  virtual: bool = True,
-                  word_type: Any = None) -> int:
+    def read_word(
+        self, address: int, virtual: bool = True, word_type: Any = None
+    ) -> int:
         """Attempt to read a word from the binary at a virtual address.
         """
         if not word_type:
             word_type = self.platform_word_type
 
         if virtual:
-            file_bytes = self.get_content_from_virtual_address(VirtualMemoryPointer(address), sizeof(word_type))
+            file_bytes = self.get_content_from_virtual_address(
+                VirtualMemoryPointer(address), sizeof(word_type)
+            )
         else:
             file_bytes = self.get_bytes(StaticFilePointer(address), sizeof(word_type))
 
         if not file_bytes:
-            raise InvalidAddressError(f'Could not read word at address {hex(address)}')
+            raise InvalidAddressError(f"Could not read word at address {hex(address)}")
 
         return word_type.from_buffer(bytearray(file_bytes)).value
 
@@ -714,9 +779,10 @@ class MachoBinary:
         return self._code_signature_cmd
 
     @property
-    def _codesign_parser(self) -> 'CodesignParser':
+    def _codesign_parser(self) -> "CodesignParser":
         if not self.__codesign_parser:
             from strongarm.macho.codesign import CodesignParser
+
             self.__codesign_parser = CodesignParser(self)
         return self.__codesign_parser
 
@@ -735,7 +801,9 @@ class MachoBinary:
         """
         return self._codesign_parser.signing_team_id
 
-    def write_bytes(self, data: bytes, address: int, virtual: bool = False) -> 'MachoBinary':
+    def write_bytes(
+        self, data: bytes, address: int, virtual: bool = False
+    ) -> "MachoBinary":
         """Overwrite the data in the current binary with the provided data, returning a new modified binary.
         Note: This will invalidate the binary's code signature, if present.
         """
@@ -745,16 +813,20 @@ class MachoBinary:
         # If the above did not throw an exception, the provided address range is valid.
         file_offset = address
         if virtual:
-            file_offset = self.file_offset_for_virtual_address(VirtualMemoryPointer(address))
+            file_offset = self.file_offset_for_virtual_address(
+                VirtualMemoryPointer(address)
+            )
 
         # Create a new binary with the overwritten data
         new_binary_data = bytearray(len(self._cached_binary))
         new_binary_data[:] = self._cached_binary
-        new_binary_data[file_offset:file_offset + len(data)] = data
+        new_binary_data[file_offset : file_offset + len(data)] = data
 
         return MachoBinary(self.path, new_binary_data)
 
-    def write_struct(self, struct: Structure, address: int, virtual: bool = False) -> 'MachoBinary':
+    def write_struct(
+        self, struct: Structure, address: int, virtual: bool = False
+    ) -> "MachoBinary":
         """Serialize and write the provided structure the Mach-O slice, returning a new modified binary.
         Note: This will invalidate the binary's code signature, if present.
         """
@@ -762,7 +834,7 @@ class MachoBinary:
         # TODO(PT): byte order?
         return self.write_bytes(bytes(struct), address, virtual)
 
-    def insert_load_dylib_cmd(self, dylib_path: str) -> 'MachoBinary':
+    def insert_load_dylib_cmd(self, dylib_path: str) -> "MachoBinary":
         """Add a load command of the provided dylib path to the Mach-O header, returning a modified binary.
         This will increase mh_header->ncmds by 1, and mh_header->sizeofcmds by the size of the new load command,
         including the pathname.
@@ -770,16 +842,18 @@ class MachoBinary:
         Note: This will invalidate the binary's code signature, if present.
         """
         if not self.is_64bit:
-            raise RuntimeError(f'Inserting load commands is only support on 64-bit binaries')
+            raise RuntimeError(
+                f"Inserting load commands is only support on 64-bit binaries"
+            )
         if self.is_swap:
-            raise RuntimeError(f'Unsupported endianness')
+            raise RuntimeError(f"Unsupported endianness")
 
         load_cmd = DylibCommand()
         load_cmd.cmd = MachoLoadCommands.LC_LOAD_DYLIB
         sizeof_dylib_struct = sizeof(DylibStruct())
         sizeof_load_cmd = sizeof(load_cmd)
         # XXX(PT): The size of the command should be 0x20 + max(len(dylib_path), 0x20). Found experimentally.
-        dylib_path_bytes = bytes(dylib_path, 'utf8')
+        dylib_path_bytes = bytes(dylib_path, "utf8")
         load_cmd.cmdsize = sizeof_load_cmd + max(len(dylib_path_bytes), 0x20)
         # Align the size on an 8-byte boundary
         if load_cmd.cmdsize % 8:
@@ -803,14 +877,16 @@ class MachoBinary:
         # Check that there is enough emtpy space before the start of __text to insert a load command
         load_commands_end = self.header.sizeof + self.header.sizeofcmds
         string_end = load_commands_end + load_cmd.cmdsize
-        text_section = self.section_with_name('__text', '__TEXT')
+        text_section = self.section_with_name("__text", "__TEXT")
         if text_section and string_end >= text_section.offset:
             raise NoEmptySpaceForLoadCommandError()
 
         # Add the load command to the end of the Mach-O header
         modified_binary = self.write_struct(load_cmd, load_commands_end)
         # Write the dylib path directly after the load cmd
-        modified_binary = modified_binary.write_bytes(dylib_path_bytes, load_commands_end + sizeof_dylib_struct)
+        modified_binary = modified_binary.write_bytes(
+            dylib_path_bytes, load_commands_end + sizeof_dylib_struct
+        )
 
         # Increase mh_header->ncmds by 1
         bumped_ncmds = self.header.ncmds + 1
@@ -826,7 +902,9 @@ class MachoBinary:
         bumped_sizeofcmds_bytes = bumped_sizeofcmds.to_bytes(4, "little")
         # The sizeofcmds field is located at the binary head, plus the offset of the field into the mh_header structure
         sizeofcmds_address = MachoHeaderStruct._64_BIT_STRUCT.sizeofcmds.offset
-        modified_binary = modified_binary.write_bytes(bumped_sizeofcmds_bytes, sizeofcmds_address)
+        modified_binary = modified_binary.write_bytes(
+            bumped_sizeofcmds_bytes, sizeofcmds_address
+        )
 
         # All done
         return modified_binary
@@ -835,17 +913,22 @@ class MachoBinary:
         """Write the in-memory Mach-O slice to the provided path.
         """
         # Pass 'x' so the call will throw an exception if the path already exists
-        with open(path, 'xb') as out_file:
+        with open(path, "xb") as out_file:
             out_file.write(self._cached_binary)
 
     @staticmethod
-    def write_fat(slices: List['MachoBinary'], path: Path) -> None:
+    def write_fat(slices: List["MachoBinary"], path: Path) -> None:
         """Write a list of Mach-O slices into a FAT file at the provided path.
         """
-        from strongarm.macho.macho_definitions import MachoFatHeader, MachoFatArch, MachArch, swap32
+        from strongarm.macho.macho_definitions import (
+            MachoFatHeader,
+            MachoFatArch,
+            MachArch,
+            swap32,
+        )
 
         if any(x.is_swap for x in slices):
-            raise RuntimeError(f'Unsupported endianness')
+            raise RuntimeError(f"Unsupported endianness")
 
         # Write the FAT header
         fat_header = MachoFatHeader()
@@ -854,7 +937,7 @@ class MachoBinary:
         file_data = bytearray(bytes(fat_header))
 
         # Write a fat-arch structure for each binary slice
-        arch_to_binaries: List[Tuple[MachoFatArch, 'MachoBinary']] = []
+        arch_to_binaries: List[Tuple[MachoFatArch, "MachoBinary"]] = []
         page_size = 0x4000
         for binary in slices:
             arch = MachoFatArch()
@@ -866,7 +949,9 @@ class MachoBinary:
             arch_to_binaries.append((arch, binary))
 
         # Figure out where to place each binary in the file
-        speculative_data_end = len(file_data) + (sizeof(MachoFatArch) * len(arch_to_binaries))
+        speculative_data_end = len(file_data) + (
+            sizeof(MachoFatArch) * len(arch_to_binaries)
+        )
         for arch, binary in arch_to_binaries:
             # Find the nearest page boundary
             speculative_data_end = (speculative_data_end + page_size) & ~(page_size - 1)
@@ -881,7 +966,7 @@ class MachoBinary:
         # The FAT header is a list of 32-bit ints
         for idx in range(len(file_data))[::4]:
             # Reverse the bytes of this int
-            file_data[idx:idx + 4] = bytearray(reversed(file_data[idx:idx + 4]))
+            file_data[idx : idx + 4] = bytearray(reversed(file_data[idx : idx + 4]))
 
         # We now know the final file size, and where each slice should be placed
         # Zero-fill the rest of the file, and copy in each slice
@@ -889,11 +974,11 @@ class MachoBinary:
         speculative_data_end = (speculative_data_end + page_size) & ~(page_size - 1)
         file_data += bytearray(speculative_data_end - len(file_data))
         for arch, binary in arch_to_binaries:
-            file_data[arch.offset:arch.offset + arch.size] = binary._cached_binary
+            file_data[arch.offset : arch.offset + arch.size] = binary._cached_binary
 
         # The output file has been constructed. Write it to disk
         # Pass 'x' so the call will throw an exception if the path already exists
-        with open(path, 'xb') as out_file:
+        with open(path, "xb") as out_file:
             out_file.write(file_data)
 
     def get_functions(self) -> Set[VirtualMemoryPointer]:
@@ -903,6 +988,7 @@ class MachoBinary:
         """
         # TODO(PT): move read_uleb somewhere else
         from .dyld_info_parser import DyldInfoParser
+
         if self._functions_list:
             return self._functions_list
 
@@ -935,10 +1021,12 @@ class MachoBinary:
         if not self._id_dylib_cmd:
             return None
 
-        dylib_name_addr = self._id_dylib_cmd.binary_offset + \
-                          self._id_dylib_cmd.dylib.name.offset + \
-                          self.get_virtual_base()
+        dylib_name_addr = (
+            self._id_dylib_cmd.binary_offset
+            + self._id_dylib_cmd.dylib.name.offset
+            + self.get_virtual_base()
+        )
         dylib_name = self.get_full_string_from_start_address(dylib_name_addr)
         if not dylib_name:
-            dylib_name = '<unknown dylib>'
+            dylib_name = "<unknown dylib>"
         return dylib_name

@@ -234,7 +234,7 @@ class MachoAnalyzer:
             'cbnz': 1,
             'tbz': 2, 'tbnz': 2,
             # No destination address available for these mnemonics
-            'br': -1, 'ret': -1,
+            'br': None, 'ret': None,
         }
         for instr in disassembled_code:
             # Ensure we're looking at a branch instruction and pull out the destination address
@@ -242,7 +242,7 @@ class MachoAnalyzer:
                 continue
 
             dest_addr_op_idx = branch_mnemonic_to_dest_addr_op_idx[instr.mnemonic]
-            if dest_addr_op_idx < 0:
+            if dest_addr_op_idx is None:
                 # Special instruction which does not have a destination address we can resolve
                 # "ret" always means EOF, "br" might always mean a local jump
                 basic_block_starts.add(VirtualMemoryPointer(instr.address + instr.size))
@@ -270,8 +270,8 @@ class MachoAnalyzer:
                 if instr.address == end_address - instr.size and instr.mnemonic == 'bl':
                     basic_block_starts.add(VirtualMemoryPointer(instr.address + instr.size))
 
-        basic_block_ranges = pairwise(sorted(basic_block_starts))
-        return ((start, end) for start, end in basic_block_ranges)
+        # Convert basic-block starts to [start, end] pairs
+        return pairwise(sorted(basic_block_starts))
 
     def _build_function_boundaries_index(self) -> None:
         """Iterate all the entry points listed in the binary metadata and compute the end-of-function address for each.

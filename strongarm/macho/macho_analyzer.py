@@ -700,7 +700,8 @@ class MachoAnalyzer:
         For each search which is executed, this method will invoke the CodeSearchCallback provided when the search
         was requested, with the List of CodeSearchResult's which were found.
         """
-        from strongarm.objc.objc_analyzer import ObjcFunctionAnalyzer
+        from strongarm.objc.objc_analyzer import ObjcFunctionAnalyzer  # noqa: F811
+
         # If there are no queued code searches, we have nothing to do
         queued_searches = self._queued_code_searches
         if not len(queued_searches):

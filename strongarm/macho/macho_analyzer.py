@@ -234,7 +234,7 @@ class MachoAnalyzer:
             'cbnz': 1,
             'tbz': 2, 'tbnz': 2,
             # No destination address available for these mnemonics
-            'br': -1, 'ret': -1,
+            'br': None, 'ret': None,
         }
         for instr in disassembled_code:
             # Ensure we're looking at a branch instruction and pull out the destination address
@@ -242,7 +242,7 @@ class MachoAnalyzer:
                 continue
 
             dest_addr_op_idx = branch_mnemonic_to_dest_addr_op_idx[instr.mnemonic]
-            if dest_addr_op_idx < 0:
+            if dest_addr_op_idx is None:
                 # Special instruction which does not have a destination address we can resolve
                 # "ret" always means EOF, "br" might always mean a local jump
                 basic_block_starts.add(VirtualMemoryPointer(instr.address + instr.size))
@@ -270,8 +270,8 @@ class MachoAnalyzer:
                 if instr.address == end_address - instr.size and instr.mnemonic == 'bl':
                     basic_block_starts.add(VirtualMemoryPointer(instr.address + instr.size))
 
-        basic_block_ranges = pairwise(sorted(basic_block_starts))
-        return ((start, end) for start, end in basic_block_ranges)
+        # Convert basic-block starts to [start, end] pairs
+        return pairwise(sorted(basic_block_starts))
 
     def _build_function_boundaries_index(self) -> None:
         """Iterate all the entry points listed in the binary metadata and compute the end-of-function address for each.
@@ -326,61 +326,123 @@ class MachoAnalyzer:
             raise NotImplementedError(f'{self.binary.path} has no imported _objc_msgSend symbol')
         objc_msgsend_addr = objc_msgsend_symbol.address
 
+        # Some special selectors have a fast-path, _objc_opt_<selector>, that was added in iOS 13
+        # The _objc_opt_* call is emitted instead of _objc_msgSend when the class has not re-implemented the selector.
+        # In other words, these fast-paths are only used if the default NSObject implementation will be called
+        # Found with: $ nm "/usr/lib/libobjc.A.dylib" | grep "objc_opt"
+        objc_opt_function_names = [
+            '_objc_opt_class',
+            '_objc_opt_isKindOfClass',
+            '_objc_opt_new',
+            '_objc_opt_respondsToSelector',
+            '_objc_opt_self'
+        ]
+        objc_opt_function_addrs: List[VirtualMemoryPointer] = []
+        for func_name in objc_opt_function_names:
+            # A callable symbol is only present if the function has been used in this binary
+            sym = self.callable_symbol_for_symbol_name(func_name)
+            if sym:
+                objc_opt_function_addrs.append(sym.address)
+            else:
+                objc_opt_function_addrs.append(VirtualMemoryPointer(-1))
+        objc_function_addrs = objc_opt_function_addrs + [objc_msgsend_addr]
+
         for entry_point, end_address in self.get_function_boundaries():
             function_size = end_address - entry_point
 
             # Iterate the disassembled code
-            disassembled_code = self.disassemble_region(entry_point, function_size)
+            try:
+                disassembled_code = self.disassemble_region(entry_point, function_size)
+            except DisassemblyFailedError:
+                # Skip code regions containing invalid bytecode
+                continue
+
             function_branches = []
             objc_calls = []
             func_analyzer = None
             for instr in disassembled_code:
                 # Is it an unconditional branch instruction?
-                if instr.mnemonic not in ObjcUnconditionalBranchInstruction.UNCONDITIONAL_BRANCH_MNEMONICS:
+                if (
+                    instr.mnemonic
+                    not in ObjcUnconditionalBranchInstruction.UNCONDITIONAL_BRANCH_MNEMONICS
+                ):
                     continue
 
                 # Record that the branch receiver has an XRef from this instruction
                 destination_address = instr.operands[0].value.imm
-                if destination_address != objc_msgsend_addr:
-                    # Branch to any address other than _objc_msgSend
-                    # Could be an imported C function, a local C function, a block, etc.
-                    xref = (destination_address, instr.address, entry_point)
-                    function_branches.append(xref)
 
-                else:
-                    # Branch to _objc_msgSend
-                    from strongarm.objc import RegisterContentsType, ObjcFunctionAnalyzer
+                if destination_address in objc_function_addrs:
+                    # Branch to function in the _objc_* family
+                    from strongarm.objc import (
+                        RegisterContentsType,
+                        ObjcFunctionAnalyzer,
+                    )
 
                     if not func_analyzer:
-                        func_analyzer = ObjcFunctionAnalyzer.get_function_analyzer(self.binary, entry_point)
+                        func_analyzer = ObjcFunctionAnalyzer.get_function_analyzer(
+                            self.binary, entry_point
+                        )
 
                     parsed_instr = ObjcUnconditionalBranchInstruction.parse_instruction(
-                        func_analyzer,
-                        instr,
-                        patch_msgSend_destination=False
+                        func_analyzer, instr, patch_msgSend_destination=False
                     )
-                    classref_reg = func_analyzer.get_register_contents_at_instruction('x0', parsed_instr)
+
                     classref = 0x0
+                    selref = 0x0
+
+                    classref_reg = func_analyzer.get_register_contents_at_instruction(
+                        "x0", parsed_instr
+                    )
                     if classref_reg.type == RegisterContentsType.IMMEDIATE:
                         classref = classref_reg.value
 
-                    selref_reg = func_analyzer.get_register_contents_at_instruction('x1', parsed_instr)
-                    selref = 0x0
-                    if selref_reg.type == RegisterContentsType.IMMEDIATE:
-                        selref = selref_reg.value
+                    if destination_address == objc_msgsend_addr:
+                        # Branch to _objc_msgSend
+                        selref_reg = func_analyzer.get_register_contents_at_instruction(
+                            "x1", parsed_instr
+                        )
+                        if selref_reg.type == RegisterContentsType.IMMEDIATE:
+                            selref = selref_reg.value
 
-                    # If we're branching to a locally-implemented Objective-C method, set the `destination_addr`
-                    # field to be the address of the local Objective-C entry point
-                    # Additionally, in this case, include a 'function call' XRef. This enables getting all the callers
-                    # to a locally implemented Objective-C method *or* C function via the `calls_to` API.
-                    selector = self.selector_for_selref(VirtualMemoryPointer(selref))
-                    if selector and selector.implementation:
-                        destination_address = selector.implementation
-                        function_call_xref = (destination_address, instr.address, entry_point)
-                        function_branches.append(function_call_xref)
+                        # If we're branching to a locally-implemented Objective-C method, set the `destination_addr`
+                        # field to be the address of the local Objective-C entry point
+                        # Additionally, in this case, include a 'function call' XRef. This enables getting all the
+                        # callers to a locally-implemented Objective-C method *or* C function via the `calls_to` API.
+                        # TODO(PT): Re-evaluate whether this is necessary or if the objc_calls_to() API is sufficient
+                        selector = self.selector_for_selref(
+                            VirtualMemoryPointer(selref)
+                        )
+                        if selector and selector.implementation:
+                            destination_address = selector.implementation
+                            function_call_xref = (
+                                destination_address,
+                                instr.address,
+                                entry_point,
+                            )
+                            function_branches.append(function_call_xref)
+                    else:
+                        # Branch to _objc_opt*. Even though the specific _objc_opt_* function tells us which method is
+                        # being invoked, we can't fill in the XRef's selref.
+                        # Consider a call to _objc_opt_new(_OBJC_CLASS_$_MyClass). We see that the class is being sent
+                        # @selector(new), but we can't fill in the `new` selref in the XRef because there is no
+                        # guarantee that `new` will be in the binary's selref table unless it's used with
+                        # _objc_msgSend elsewhere.
+                        pass
 
-                    objc_call = (int(destination_address), instr.address, entry_point, int(classref), int(selref))
+                    objc_call = (
+                        int(destination_address),
+                        instr.address,
+                        entry_point,
+                        int(classref),
+                        int(selref),
+                    )
                     objc_calls.append(objc_call)
+
+                else:
+                    # Non-ObjC function call, i.e. a branch to any address other than _objc_msgSend/_objc_opt_*
+                    # Could be an imported C function, a local C function, a block, etc.
+                    xref = (destination_address, instr.address, entry_point)
+                    function_branches.append(xref)
 
             # Add each branch in this source function to the SQLite db
             # TODO(PT): After discussion with Fede, we can condense this into one table.
@@ -389,15 +451,19 @@ class MachoAnalyzer:
             # Additionally, if `is_local` is set *and* `is_objc` set, there may be some other field for the entry point
             # to the locally implemented ObjC method.
             for xref in function_branches:
-                c.execute(f"INSERT INTO function_calls VALUES ({xref[0]}, {xref[1]}, {xref[2]})")
+                c.execute(
+                    "INSERT INTO function_calls VALUES (?, ?, ?)", (xref[0], xref[1], xref[2])
+                )
             for objc_call in objc_calls:
-                c.execute(f"INSERT INTO objc_msgSends "
-                          f"VALUES ({objc_call[0]}, {objc_call[1]}, {objc_call[2]}, {objc_call[3]}, {objc_call[4]})")
+                c.execute(
+                    "INSERT INTO objc_msgSends "
+                    "VALUES (?, ?, ?, ?, ?)", (objc_call[0], objc_call[1], objc_call[2], objc_call[3], objc_call[4])
+                )
 
         self._db_handle.commit()
         self._has_computed_call_xrefs = True
         end_time = time.time()
-        logging.debug(f'Finding call xrefs took {end_time - start_time} seconds')
+        logging.debug(f"Finding call xrefs took {end_time - start_time} seconds")
 
     @classmethod
     def clear_cache(cls) -> None:
@@ -405,7 +471,7 @@ class MachoAnalyzer:
         This can be used when you are finished analyzing a binary set and don't want to retain the cached data in memory
         """
         for binary, analyzer in cls._ANALYZER_CACHE.items():
-            logging.debug(f'Deleting db {analyzer._db_path}...')
+            logging.debug(f"Deleting db {analyzer._db_path}...")
             analyzer._db_handle.close()
             shutil.rmtree(analyzer._db_tempdir.as_posix())
 
@@ -418,7 +484,7 @@ class MachoAnalyzer:
         return self._objc_helper
 
     @classmethod
-    def get_analyzer(cls, binary: MachoBinary) -> 'MachoAnalyzer':
+    def get_analyzer(cls, binary: MachoBinary) -> "MachoAnalyzer":
         """Get a cached analyzer for a given MachoBinary
         """
         if binary in cls._ANALYZER_CACHE:
@@ -426,9 +492,12 @@ class MachoAnalyzer:
             return cls._ANALYZER_CACHE[binary]
         return MachoAnalyzer(binary)
 
-    def method_info_for_entry_point(self, entry_point: VirtualMemoryPointer) -> Optional['ObjcMethodInfo']:
+    def method_info_for_entry_point(
+        self, entry_point: VirtualMemoryPointer
+    ) -> Optional["ObjcMethodInfo"]:
         # TODO(PT): This should return any symbol name, not just Obj-C methods
         from strongarm.objc.objc_analyzer import ObjcMethodInfo
+
         for objc_cls in self.objc_classes():
             for sel in objc_cls.selectors:
                 if sel.implementation == entry_point:
@@ -893,10 +962,10 @@ class MachoAnalyzer:
         # Process __imp_stubs
         imported_bound_symbols = self.imp_stubs_to_symbol_names
         for imp_stub_addr, symbol_name in imported_bound_symbols.items():
-            c.execute(f"INSERT INTO named_callable_symbols VALUES (1, {imp_stub_addr}, '{symbol_name}')")
+            c.execute("INSERT INTO named_callable_symbols VALUES (1, ?, ?)", (imp_stub_addr, symbol_name))
 
         # Process the symbols defined in the binary
         for callable_addr, symbol_name in self.exported_symbol_pointers_to_names.items():
-            c.execute(f"INSERT INTO named_callable_symbols VALUES (0, {callable_addr}, '{symbol_name}')")
+            c.execute("INSERT INTO named_callable_symbols VALUES (0, ?, ?)", (callable_addr, symbol_name))
 
         self._db_handle.commit()

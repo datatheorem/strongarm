@@ -4,7 +4,7 @@ import pytest
 import pathlib
 
 from strongarm.macho.macho_parse import MachoParser
-from strongarm.macho.macho_analyzer import MachoAnalyzer, VirtualMemoryPointer
+from strongarm.macho.macho_analyzer import MachoAnalyzer, VirtualMemoryPointer, ObjcMsgSendXref
 from strongarm.macho.macho_binary import MachoBinary
 
 from strongarm.objc import CodeSearch, CodeSearchFunctionCallWithArguments
@@ -361,6 +361,78 @@ class TestMachoAnalyzerDynStaticChecks:
         for entry_point, expected_end_address in test_cases:
             end_address = self.analyzer.get_function_end_address(entry_point)
             assert end_address == expected_end_address
+
+    def test_xref_objc_opt_new(self):
+        # Given I provide a binary which contains the code:
+        # _objc_opt_new(_OBJC_CLASS_$_ARSKView)
+        binary = MachoParser(
+            pathlib.Path(__file__).parent / "bin" / "iOS13_objc_opt"
+        ).get_arm64_slice()
+        analyzer = MachoAnalyzer.get_analyzer(binary)
+
+        # When I ask for XRefs to `ARSKView`
+        arskview_classref = analyzer.classref_for_class_name("_OBJC_CLASS_$_ARSKView")
+        assert arskview_classref
+        objc_calls = analyzer.objc_calls_to(
+            objc_classrefs=[arskview_classref],
+            objc_selrefs=[],
+            requires_class_and_sel_found=False,
+        )
+
+        # Then the code location is returned
+        assert len(objc_calls) == 1
+
+        call = objc_calls[0]
+        assert call == ObjcMsgSendXref(
+            caller_func_start_address=VirtualMemoryPointer(0x100006388),
+            caller_addr=VirtualMemoryPointer(0x1000063B4),
+            destination_addr=VirtualMemoryPointer(0x10000659C),
+            classref=VirtualMemoryPointer(0x10000D398),
+            selref=VirtualMemoryPointer(0x0),
+        )
+
+        # TODO(PT): Update this unit test once this functionality is added
+        # And when I ask for XRefs to `[ARSKView new]`
+        # Then the code location is returned
+
+        # And when I ask for XRefs to `new`
+        # Then the code location is returned
+
+    def test_xref_objc_opt_class(self):
+        # Given I provide a binary which contains the code:
+        # _objc_opt_class(_OBJC_CLASS_$_ARFaceTrackingConfiguration)
+        binary = MachoParser(
+            pathlib.Path(__file__).parent / "bin" / "iOS13_objc_opt"
+        ).get_arm64_slice()
+        analyzer = MachoAnalyzer.get_analyzer(binary)
+
+        # When I ask for XRefs to `ARSKView`
+        arfacetracking_classref = analyzer.classref_for_class_name(
+            "_OBJC_CLASS_$_ARFaceTrackingConfiguration"
+        )
+        assert arfacetracking_classref
+        objc_calls = analyzer.objc_calls_to(
+            objc_classrefs=[arfacetracking_classref],
+            objc_selrefs=[],
+            requires_class_and_sel_found=False,
+        )
+
+        # Then the code location is returned
+        assert len(objc_calls) == 1
+        assert objc_calls[0] == ObjcMsgSendXref(
+            caller_func_start_address=VirtualMemoryPointer(0x100006388),
+            caller_addr=VirtualMemoryPointer(0x10000639C),
+            destination_addr=VirtualMemoryPointer(0x100006590),
+            classref=VirtualMemoryPointer(0x10000D390),
+            selref=VirtualMemoryPointer(0x0),
+        )
+
+        # TODO(PT): Update this unit test once this functionality is added
+        # And when I ask for XRefs to `[ARFaceTrackingConfiguration class]`
+        # Then the code location is returned
+
+        # And when I ask for XRefs to `class`
+        # Then the code location is returned
 
 
 class TestMachoAnalyzerControlFlowTarget:

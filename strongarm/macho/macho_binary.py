@@ -20,7 +20,7 @@ from strongarm.macho.arch_independent_structs import (
     MachoSegmentCommandStruct,
     MachoSymtabCommandStruct,
 )
-from strongarm.macho.macho_definitions import (  # XXX(PT): For load-dylib-command insertion. Should binary-modification helpers be refactored into their own module?
+from strongarm.macho.macho_definitions import (
     CPU_TYPE,
     HEADER_FLAGS,
     DylibCommand,
@@ -826,7 +826,7 @@ class MachoBinary:
     def write_fat(slices: List["MachoBinary"], path: Path) -> None:
         """Write a list of Mach-O slices into a FAT file at the provided path.
         """
-        from strongarm.macho.macho_definitions import MachoFatHeader, MachoFatArch, MachArch, swap32
+        from strongarm.macho.macho_definitions import MachoFatHeader, MachoFatArch, MachArch
 
         if any(x.is_swap for x in slices):
             raise RuntimeError(f"Unsupported endianness")

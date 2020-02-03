@@ -1,14 +1,14 @@
-import shutil
 import hashlib
 import pathlib
+import shutil
 import subprocess
 from contextlib import contextmanager
 from tempfile import TemporaryDirectory
-from typing import Generator, Tuple, List
+from typing import Generator, List, Tuple
 
-from strongarm.macho import MachoParser, MachoBinary, MachoAnalyzer
+from strongarm.decompiler import ExecContext, Simulator
+from strongarm.macho import MachoAnalyzer, MachoBinary, MachoParser
 from strongarm.objc import ObjcFunctionAnalyzer
-from strongarm.decompiler import Simulator, ExecContext
 
 
 @contextmanager
@@ -22,24 +22,24 @@ def _compile_code(source_code: str, is_assembly: bool) -> Generator[pathlib.Path
         .balign 4
         .global _main
         .extern data_label
-        
+
         _main:
             {source_code}
             nop
             ret
-        
+
         text_label:
             .long 0xfeedface
-            
+
         .ltorg
         .end
-        
+
         .const
         .balign 0x1000  ; Align on a page boundary
         .global data_label
-        data_label: 
+        data_label:
             .long 0xcafebabe
-        
+
         .end
         """
     else:
@@ -81,7 +81,7 @@ def _compile_code(source_code: str, is_assembly: bool) -> Generator[pathlib.Path
             f"-framework Foundation "
             f"{source_filepath.as_posix()} -o {output_filepath.as_posix()}",
             shell=True,
-            stderr=subprocess.PIPE
+            stderr=subprocess.PIPE,
         )
         if ret.returncode:
             print(ret.stderr.decode())
@@ -90,8 +90,9 @@ def _compile_code(source_code: str, is_assembly: bool) -> Generator[pathlib.Path
 
 
 @contextmanager
-def binary_containing_code(source_code: str,
-                           is_assembly: bool) -> Generator[Tuple[MachoBinary, MachoAnalyzer], None, None]:
+def binary_containing_code(
+    source_code: str, is_assembly: bool
+) -> Generator[Tuple[MachoBinary, MachoAnalyzer], None, None]:
     """Provide an app package which contains the compiled source code.
     If is_assembly is set, the source code is treated as AArch64 assembly. Otherwise, as Objective-C source.
 
@@ -119,7 +120,7 @@ def binary_containing_code(source_code: str,
 def function_containing_asm(asm_source: str) -> Generator[Tuple[MachoAnalyzer, ObjcFunctionAnalyzer], None, None]:
     with binary_containing_code(asm_source, is_assembly=True) as (binary, analyzer):
         # Assembly compiled with binary_containing_code is always placed in main()
-        main_addr = analyzer.callable_symbol_for_symbol_name('_main').address
+        main_addr = analyzer.callable_symbol_for_symbol_name("_main").address
         func = ObjcFunctionAnalyzer.get_function_analyzer(binary, main_addr)
         yield analyzer, func
 

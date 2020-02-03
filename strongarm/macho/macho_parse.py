@@ -1,15 +1,9 @@
+from ctypes import c_uint32, sizeof
 from pathlib import Path
-from typing import Optional, List
-from ctypes import sizeof, c_uint32
+from typing import List, Optional
 
 from strongarm.macho.macho_binary import MachoBinary
-from strongarm.macho.macho_definitions import (
-    swap32,
-    MachArch,
-    MachoFatArch,
-    MachoFatHeader,
-    StaticFilePointer,
-)
+from strongarm.macho.macho_definitions import MachArch, MachoFatArch, MachoFatHeader, StaticFilePointer, swap32
 
 
 class ArchitectureNotSupportedError(Exception):
@@ -17,21 +11,9 @@ class ArchitectureNotSupportedError(Exception):
 
 
 class MachoParser:
-    _FAT_MAGIC = [
-        MachArch.FAT_MAGIC,
-        MachArch.FAT_CIGAM,
-    ]
-    _MACHO_MAGIC = [
-        MachArch.MH_MAGIC,
-        MachArch.MH_CIGAM,
-        MachArch.MH_MAGIC_64,
-        MachArch.MH_CIGAM_64,
-    ]
-    _BIG_ENDIAN_MAG = [
-        MachArch.FAT_CIGAM,
-        MachArch.MH_CIGAM,
-        MachArch.MH_CIGAM_64,
-    ]
+    _FAT_MAGIC = [MachArch.FAT_MAGIC, MachArch.FAT_CIGAM]
+    _MACHO_MAGIC = [MachArch.MH_MAGIC, MachArch.MH_CIGAM, MachArch.MH_MAGIC_64, MachArch.MH_CIGAM_64]
+    _BIG_ENDIAN_MAG = [MachArch.FAT_CIGAM, MachArch.MH_CIGAM, MachArch.MH_CIGAM_64]
 
     _SUPPORTED_SLICE_MAG = MachoBinary.SUPPORTED_MAG
 
@@ -88,14 +70,14 @@ class MachoParser:
         """
         # sanity check
         if not self._check_is_macho_header(fileoff):
-            raise RuntimeError(f'Parsing error: data at file offset {hex(int(fileoff))} was not a valid Mach-O slice!')
+            raise RuntimeError(f"Parsing error: data at file offset {hex(int(fileoff))} was not a valid Mach-O slice!")
 
         slice_data = self.get_bytes(fileoff, slice_size)
         attempt = MachoBinary(self.path, slice_data)
 
         # if the MachoBinary does not have a header, there was a problem parsing it
         if not attempt.header:
-            raise RuntimeError('parsed MachoBinary missing Mach-O header field')
+            raise RuntimeError("parsed MachoBinary missing Mach-O header field")
         self.slices.append(attempt)
 
     def parse_fat_header(self) -> None:
@@ -104,7 +86,7 @@ class MachoParser:
         """
         # sanity check
         if self._check_is_macho_header(StaticFilePointer(0)):
-            raise RuntimeError('Parsing error: Expected FAT header but found incorrect magic!')
+            raise RuntimeError("Parsing error: Expected FAT header but found incorrect magic!")
 
         # start reading from the start of the file
         read_off = 0
@@ -115,7 +97,7 @@ class MachoParser:
 
         # remember to swap fields if file contains non-native byte order
         if self.is_swapped:
-            self.header.nfat_arch = swap32(self.header.nfat_arch)   # type: ignore
+            self.header.nfat_arch = swap32(self.header.nfat_arch)  # type: ignore
 
         for i in range(self.header.nfat_arch):  # type: ignore
             arch_bytes = self.get_bytes(StaticFilePointer(read_off), sizeof(MachoFatArch))
@@ -200,6 +182,6 @@ class MachoParser:
             Byte list representing contents of file at provided address
 
         """
-        with open(self.path, 'rb') as binary_file:
+        with open(self.path, "rb") as binary_file:
             binary_file.seek(offset)
             return binary_file.read(size)

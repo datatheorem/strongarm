@@ -1,45 +1,37 @@
-import sys
-import pathlib
-import logging
 import argparse
-from typing import Text, List
+import logging
+import pathlib
+import sys
+from typing import List, Text
 
-from strongarm.debug_util import DebugUtil
-from strongarm.macho import (
-    MachoParser,
-    MachoBinary,
-    MachoAnalyzer,
-    VirtualMemoryPointer
-)
 from strongarm.cli.utils import (
-    pick_macho_slice,
-    disassemble_method,
     disassemble_function,
+    disassemble_method,
+    pick_macho_slice,
+    print_analyzer_classes,
+    print_analyzer_exported_symbols,
+    print_analyzer_imported_symbols,
+    print_analyzer_methods,
+    print_analyzer_protocols,
     print_binary_info,
     print_binary_load_commands,
-    print_binary_segments,
     print_binary_sections,
-    print_analyzer_imported_symbols,
-    print_analyzer_exported_symbols,
-    print_analyzer_methods,
-    print_analyzer_classes,
-    print_analyzer_protocols,
-    print_selector
+    print_binary_segments,
+    print_selector,
 )
+from strongarm.debug_util import DebugUtil
+from strongarm.macho import MachoAnalyzer, MachoBinary, MachoParser, VirtualMemoryPointer
 
 
 def print_header(args: argparse.Namespace) -> None:
-    header_lines = [
-        f'\nstrongarm - Mach-O analyzer',
-        f'{args.binary_path}',
-    ]
+    header_lines = [f"\nstrongarm - Mach-O analyzer", f"{args.binary_path}"]
     # find longest line
     longest_line_len = 0
     for line in header_lines:
         longest_line_len = max(longest_line_len, len(line))
     # add a line of hyphens, where the hyphen count matches the longest line
-    header_lines.append('-' * longest_line_len)
-    header_lines.append('')
+    header_lines.append("-" * longest_line_len)
+    header_lines.append("")
 
     # print header
     for line in header_lines:
@@ -52,40 +44,40 @@ class InfoCommand:
         self.analyzer = analyzer
 
         self.commands = {
-            'all': (self.run_all_commands, None),
-            'metadata': (print_binary_info, self.binary),
-            'segments': (print_binary_segments, self.binary),
-            'sections': (print_binary_sections, self.binary),
-            'loads': (print_binary_load_commands, self.binary),
-            'classes': (print_analyzer_classes, self.analyzer),
-            'protocols': (print_analyzer_protocols, self.analyzer),
-            'methods': (print_analyzer_methods, self.analyzer),
-            'imports': (print_analyzer_imported_symbols, self.analyzer),
-            'exports': (print_analyzer_exported_symbols, self.analyzer),
+            "all": (self.run_all_commands, None),
+            "metadata": (print_binary_info, self.binary),
+            "segments": (print_binary_segments, self.binary),
+            "sections": (print_binary_sections, self.binary),
+            "loads": (print_binary_load_commands, self.binary),
+            "classes": (print_analyzer_classes, self.analyzer),
+            "protocols": (print_analyzer_protocols, self.analyzer),
+            "methods": (print_analyzer_methods, self.analyzer),
+            "imports": (print_analyzer_imported_symbols, self.analyzer),
+            "exports": (print_analyzer_exported_symbols, self.analyzer),
         }
 
     def description(self) -> str:
-        rep = 'Read binary information. info '
+        rep = "Read binary information. info "
         for cmd in self.commands.keys():
-            rep += f'[{cmd}] '
+            rep += f"[{cmd}] "
         return rep
 
     def run_all_commands(self) -> None:
         for cmd in self.commands.keys():
-            if cmd == 'all':
+            if cmd == "all":
                 continue
             self.run_command(cmd)
 
     def run_command(self, cmd: Text) -> None:
-        if cmd == 'all':
+        if cmd == "all":
             self.run_all_commands()
             return
 
         if cmd not in self.commands:
-            print(f'Unknown argument supplied to info: {cmd}')
+            print(f"Unknown argument supplied to info: {cmd}")
             return
         func, arg = self.commands[cmd]
-        func(arg)   # type: ignore
+        func(arg)  # type: ignore
 
 
 class StrongarmShell:
@@ -94,20 +86,20 @@ class StrongarmShell:
         self.analyzer = analyzer
 
         self.commands = {
-            'help': ('Display available commands', self.help),
-            'exit': ('Exit interactive shell', self.exit),
-            'info': (InfoCommand(self.binary, self.analyzer).description(), self.info),
-            'sels': ('List selectors implemented by a class. sels [class]', self.selectors),
-            'disasm': ('Decompile a given selector. disasm [sel]', self.disasm),
-            'disasm_f': ('Decompile a given selector. disasm [sel]', self.disasm_f),
-            'dump': ('Hex dump a memory address. dump [size] [virtual address]', self.dump_memory),
+            "help": ("Display available commands", self.help),
+            "exit": ("Exit interactive shell", self.exit),
+            "info": (InfoCommand(self.binary, self.analyzer).description(), self.info),
+            "sels": ("List selectors implemented by a class. sels [class]", self.selectors),
+            "disasm": ("Decompile a given selector. disasm [sel]", self.disasm),
+            "disasm_f": ("Decompile a given selector. disasm [sel]", self.disasm_f),
+            "dump": ("Hex dump a memory address. dump [size] [virtual address]", self.dump_memory),
         }
-        print('strongarm interactive shell\nType \'help\' for available commands.')
+        print("strongarm interactive shell\nType 'help' for available commands.")
         self.active = True
 
     def dump_memory(self, args: List[str]) -> None:
         def err() -> None:
-            print('Usage: dump [size] [virtual address]')
+            print("Usage: dump [size] [virtual address]")
             return
 
         if len(args) < 2:
@@ -116,7 +108,7 @@ class StrongarmShell:
             dump_size = int(args[0], 10)
             address = int(args[1], 16)
         except ValueError as e:
-            print(f'Failed to interpret address: {e}')
+            print(f"Failed to interpret address: {e}")
             return err()
 
         binary_data = self.binary.get_content_from_virtual_address(VirtualMemoryPointer(address), dump_size)
@@ -128,29 +120,29 @@ class StrongarmShell:
             if current_index >= dump_size:
                 break
             # grab the next grouping of bytes
-            byte_region = binary_data[current_index:current_index+region_size]
+            byte_region = binary_data[current_index : current_index + region_size]
 
             region_start = address + current_index
             region_start_str = hex(region_start)
-            print(region_start_str, end='\t\t')
+            print(region_start_str, end="\t\t")
 
-            ascii_rep = '|'
+            ascii_rep = "|"
             for idx, byte in enumerate(byte_region):
-                print('{:02x}'.format(byte), end=' ')
+                print("{:02x}".format(byte), end=" ")
                 # indent every 8 bytes
                 if idx > 0 and (idx + 1) % 8 == 0:
-                    print('\t', end='')
+                    print("\t", end="")
 
-                ascii_byte = chr(byte) if 32 <= byte < 127 else '.'
+                ascii_byte = chr(byte) if 32 <= byte < 127 else "."
                 ascii_rep += ascii_byte
-            ascii_rep += '|'
+            ascii_rep += "|"
             print(ascii_rep)
 
             current_index += region_size
 
     def selectors(self, args: List[str]) -> None:
         if not len(args):
-            print('Usage: sels [class]')
+            print("Usage: sels [class]")
             return
 
         class_name = args[0]
@@ -165,7 +157,7 @@ class StrongarmShell:
 
     def disasm(self, args: List[str]) -> None:
         if not len(args):
-            print('Usage: disasm [sel]')
+            print("Usage: disasm [sel]")
             return
 
         sel_name = args[0]
@@ -179,37 +171,36 @@ class StrongarmShell:
 
     def disasm_f(self, args: List[str]) -> None:
         if not len(args):
-            print('Usage: disasm [sel]')
+            print("Usage: disasm [sel]")
             return
 
         disassembled_str = disassemble_function(self.binary, VirtualMemoryPointer(args[0], 16))
         print(disassembled_str)
 
     def help(self, args: List[str]) -> None:
-        print('Commands\n'
-              '----------------')
+        print("Commands\n" "----------------")
         for name, (description, funcptr) in self.commands.items():
-            print(f'{name}: {description}')
+            print(f"{name}: {description}")
 
     def info(self, args: List[str]) -> None:
         info_cmd = InfoCommand(self.binary, self.analyzer)
         if not len(args):
-            print('No option provided')
+            print("No option provided")
             print(info_cmd.description())
         for option in args:
             info_cmd.run_command(option)
 
     def exit(self, args: List[str]) -> None:
-        print('Quitting...')
+        print("Quitting...")
         self.active = False
 
     def run_command(self, user_input: Text) -> bool:
-        components = user_input.split(' ')
+        components = user_input.split(" ")
         cmd_name = components[0]
         cmd_args = components[1:]
 
         if cmd_name not in self.commands:
-            print(f'Unknown command: \'{cmd_name}\'. Type \'help\' for available commands.')
+            print(f"Unknown command: '{cmd_name}'. Type 'help' for available commands.")
             return self.active
 
         func = self.commands[cmd_name][1]
@@ -217,7 +208,7 @@ class StrongarmShell:
         return self.active
 
     def process_command(self) -> bool:
-        user_input = input('strongarm$ ')
+        user_input = input("strongarm$ ")
         return self.run_command(user_input)
 
 
@@ -231,15 +222,9 @@ def main() -> None:
     script = False
     # end of config
 
-    arg_parser = argparse.ArgumentParser(description='Mach-O Analyzer')
-    arg_parser.add_argument(
-        '--verbose', action='store_true', help=
-        'Output extra info while analyzing'
-    )
-    arg_parser.add_argument(
-        'binary_path', metavar='binary_path', type=str, help=
-        'Path to binary to analyze'
-    )
+    arg_parser = argparse.ArgumentParser(description="Mach-O Analyzer")
+    arg_parser.add_argument("--verbose", action="store_true", help="Output extra info while analyzing")
+    arg_parser.add_argument("binary_path", metavar="binary_path", type=str, help="Path to binary to analyze")
     args = arg_parser.parse_args()
 
     def configure_logger() -> None:
@@ -248,9 +233,10 @@ def main() -> None:
 
         ch = logging.StreamHandler(sys.stdout)
         ch.setLevel(logging.INFO)
-        formatter = logging.Formatter('%(asctime)s - %(name)s - %(levelname)s - %(message)s')
+        formatter = logging.Formatter("%(asctime)s - %(name)s - %(levelname)s - %(message)s")
         ch.setFormatter(formatter)
         root.addHandler(ch)
+
     configure_logger()
 
     if args.verbose:
@@ -261,29 +247,29 @@ def main() -> None:
     parser = MachoParser(pathlib.Path(args.binary_path))
 
     # print slice info
-    print('Slices:')
+    print("Slices:")
     for macho_slice in parser.slices:
-        print(f'\t{macho_slice.cpu_type.name} Mach-O slice')
+        print(f"\t{macho_slice.cpu_type.name} Mach-O slice")
 
     binary = pick_macho_slice(parser)
-    print('Reading {} slice\n\n'.format(binary.cpu_type.name))
+    print("Reading {} slice\n\n".format(binary.cpu_type.name))
 
     analyzer = MachoAnalyzer.get_analyzer(binary)
     shell = StrongarmShell(binary, analyzer)
 
     if script:
-        print(f'Running provided script...\n\n')
+        print(f"Running provided script...\n\n")
         strongarm_script(binary, analyzer)
     else:
-        autorun_cmd = 'info metadata segments sections loads'
-        print(f'Auto-running \'{autorun_cmd}\'\n\n')
+        autorun_cmd = "info metadata segments sections loads"
+        print(f"Auto-running '{autorun_cmd}'\n\n")
         shell.run_command(autorun_cmd)
 
         # this will return False once the shell exists
         while shell.process_command():
             pass
-    print('May your arms be beefy and your binaries unencrypted')
+    print("May your arms be beefy and your binaries unencrypted")
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     main()

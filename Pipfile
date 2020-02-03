@@ -11,6 +11,9 @@ mypy = "*"
 flake8 = "*"
 invoke = "*"
 pytest = "*"
+autoflake = "*"
+isort = "*"
+black = "==19.3b0"
 
 [requires]
 python_version = "3.7"

@@ -1,26 +1,17 @@
 """Add a load command to a binary.
 This will invalidate the binary's load signature, if any.
 """
-import pathlib
 import argparse
+import pathlib
 
-from strongarm.macho import MachoParser, MachoBinary
+from strongarm.macho import MachoBinary, MachoParser
 
 
 def main():
-    arg_parser = argparse.ArgumentParser(description='Add a load command to a binary')
-    arg_parser.add_argument(
-        'binary_path', type=str, help=
-        'Path to binary'
-    )
-    arg_parser.add_argument(
-        'output_path', type=str, help=
-        'Path to write the modified binary (must not already exist)'
-    )
-    arg_parser.add_argument(
-        'load_path', type=str, help=
-        'The dylib load path to be added to the binary'
-    )
+    arg_parser = argparse.ArgumentParser(description="Add a load command to a binary")
+    arg_parser.add_argument("binary_path", type=str, help="Path to binary")
+    arg_parser.add_argument("output_path", type=str, help="Path to write the modified binary (must not already exist)")
+    arg_parser.add_argument("load_path", type=str, help="The dylib load path to be added to the binary")
     args = arg_parser.parse_args()
 
     parser = MachoParser(pathlib.Path(args.binary_path))
@@ -37,5 +28,5 @@ def main():
     MachoBinary.write_fat(modified_binaries, pathlib.Path(args.output_path))
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     main()

@@ -1,10 +1,17 @@
-import pytest
 import pathlib
 from tempfile import TemporaryDirectory
 
-from strongarm.macho.macho_definitions import *
-from strongarm.macho import MachoParser, NoEmptySpaceForLoadCommandError, MachoBinary
-from strongarm.macho import BinaryEncryptedError
+import pytest
+
+from strongarm.macho import (
+    CPU_TYPE,
+    HEADER_FLAGS,
+    BinaryEncryptedError,
+    MachoBinary,
+    MachoParser,
+    MachoSegmentCommand64,
+    NoEmptySpaceForLoadCommandError,
+)
 
 
 class TestMachoBinary:
@@ -102,7 +109,7 @@ class TestMachoBinary:
         assert not (HEADER_FLAGS.ROOT_SAFE in self.binary.header_flags)
 
     def test_get_symtab_contents(self):
-        from pprint import pprint
+        pass
 
         symtabs = self.binary.symtab_contents
         assert len(symtabs) == 32
@@ -172,7 +179,7 @@ class TestMachoBinary:
         assert function_starts.dataoff == 0x10680
         assert function_starts.datasize == 0x18
         assert function_starts.sizeof == 0x10
-        assert function_starts.binary_offset == 0xb38
+        assert function_starts.binary_offset == 0xB38
 
     def test_write_bytes_thin_physical(self):
         # Given a thin binary with file_type == 0x2
@@ -188,7 +195,7 @@ class TestMachoBinary:
         # Then the modified binary's raw bytes contain the correct data
         modified_header = modified_binary.get_contents_from_address(0, 32, is_virtual=False)
         assert modified_header == bytearray(
-            b"\xcf\xfa\xed\xfe\x0c\x00\x00\x01\x00\x00\x00\x00\x05\x00\x00\x00\x18\x00\x00\x00H\x0b\x00\x00\x85\x00 \x00\x00\x00\x00\x00"
+            b"\xcf\xfa\xed\xfe\x0c\x00\x00\x01\x00\x00\x00\x00\x05\x00\x00\x00\x18\x00\x00\x00H\x0b\x00\x00\x85\x00 \x00\x00\x00\x00\x00"  # noqa: E501
         )
         # And the MachoBinary attribute contains the correct value
         assert modified_binary.file_type == 0x5
@@ -207,7 +214,7 @@ class TestMachoBinary:
         # Then the modified binary's raw bytes contain the correct data
         modified_header = modified_binary.get_contents_from_address(0x100000000, 32, True)
         assert modified_header == bytearray(
-            b"\xcf\xfa\xed\xfe\x0c\x00\x00\x01\x00\x00\x00\x00\x0a\x00\x00\x00\x18\x00\x00\x00H\x0b\x00\x00\x85\x00 \x00\x00\x00\x00\x00"
+            b"\xcf\xfa\xed\xfe\x0c\x00\x00\x01\x00\x00\x00\x00\x0a\x00\x00\x00\x18\x00\x00\x00H\x0b\x00\x00\x85\x00 \x00\x00\x00\x00\x00"  # noqa: E501
         )
         # And the MachoBinary attribute contains the correct value
         assert modified_binary.file_type == 10
@@ -257,36 +264,38 @@ class TestMachoBinary:
         # Given a binary with some known load-commands
         binary = MachoParser(self.CLASSLIST_DATA_CONST).get_arm64_slice()
         original_dylibs = [
-            '/System/Library/Frameworks/Foundation.framework/Foundation',
-            '/usr/lib/libobjc.A.dylib',
-            '/usr/lib/libSystem.B.dylib',
-            '/System/Library/Frameworks/CoreFoundation.framework/CoreFoundation',
-            '/System/Library/Frameworks/Security.framework/Security',
-            '/System/Library/Frameworks/UIKit.framework/UIKit',
+            "/System/Library/Frameworks/Foundation.framework/Foundation",
+            "/usr/lib/libobjc.A.dylib",
+            "/usr/lib/libSystem.B.dylib",
+            "/System/Library/Frameworks/CoreFoundation.framework/CoreFoundation",
+            "/System/Library/Frameworks/Security.framework/Security",
+            "/System/Library/Frameworks/UIKit.framework/UIKit",
         ]
         found_dylibs = [binary.dylib_name_for_library_ordinal(i + 1) for i in range(len(binary.load_dylib_commands))]
         assert found_dylibs == original_dylibs
 
         # If I create a new binary with an inserted load command
-        modified_binary = binary.insert_load_dylib_cmd(f'@rpath/Frameworks/Interject.framework/Interject')
+        modified_binary = binary.insert_load_dylib_cmd(f"@rpath/Frameworks/Interject.framework/Interject")
         modified_dylibs = [
-            '/System/Library/Frameworks/Foundation.framework/Foundation',
-            '/usr/lib/libobjc.A.dylib',
-            '/usr/lib/libSystem.B.dylib',
-            '/System/Library/Frameworks/CoreFoundation.framework/CoreFoundation',
-            '/System/Library/Frameworks/Security.framework/Security',
-            '/System/Library/Frameworks/UIKit.framework/UIKit',
-            '@rpath/Frameworks/Interject.framework/Interject'
+            "/System/Library/Frameworks/Foundation.framework/Foundation",
+            "/usr/lib/libobjc.A.dylib",
+            "/usr/lib/libSystem.B.dylib",
+            "/System/Library/Frameworks/CoreFoundation.framework/CoreFoundation",
+            "/System/Library/Frameworks/Security.framework/Security",
+            "/System/Library/Frameworks/UIKit.framework/UIKit",
+            "@rpath/Frameworks/Interject.framework/Interject",
         ]
-        found_dylibs = [modified_binary.dylib_name_for_library_ordinal(i + 1) for i in
-                        range(len(modified_binary.load_dylib_commands))]
+        found_dylibs = [
+            modified_binary.dylib_name_for_library_ordinal(i + 1)
+            for i in range(len(modified_binary.load_dylib_commands))
+        ]
         assert found_dylibs == modified_dylibs
 
     def test_no_space_for_new_load_command(self):
         # Given a binary with 0x5630 bytes of free space at the end of the Mach-O header
         binary = MachoParser(self.THIN_PATH).get_arm64_slice()
 
-        dylib_path = '@rpath/load_cmd_with_32_chrcters'
+        dylib_path = "@rpath/load_cmd_with_32_chrcters"
         # If I have a dylib load command which will take up `0x20 + len(dylib_path) = 0x38` bytes
         # Then I should be able to add this load command exactly 344 times before the binary runs out of space
         for _ in range(344):
@@ -298,18 +307,20 @@ class TestMachoBinary:
         binary = MachoParser(self.THIN_PATH).get_arm64_slice()
         original_dylibs = [binary.dylib_name_for_library_ordinal(i + 1) for i in range(len(binary.load_dylib_commands))]
         # Given I add a load command to a binary
-        new_dylib_name = '@rpath/Frameworks/Interject.framework/Interject'
+        new_dylib_name = "@rpath/Frameworks/Interject.framework/Interject"
         modified_binary = binary.insert_load_dylib_cmd(new_dylib_name)
 
         with TemporaryDirectory() as tempdir:
-            output_binary_path = pathlib.Path(tempdir) / 'modified_binary'
+            output_binary_path = pathlib.Path(tempdir) / "modified_binary"
             # If I write the binary to disk, then parse the on-disk version
             modified_binary.write_binary(output_binary_path)
             on_disk_binary = MachoParser(output_binary_path).get_arm64_slice()
 
             # Then the new on-disk binary contains the modification
-            new_dylibs = [on_disk_binary.dylib_name_for_library_ordinal(i + 1) for i in
-                          range(len(on_disk_binary.load_dylib_commands))]
+            new_dylibs = [
+                on_disk_binary.dylib_name_for_library_ordinal(i + 1)
+                for i in range(len(on_disk_binary.load_dylib_commands))
+            ]
             assert new_dylibs == original_dylibs + [new_dylib_name]
 
     def test_write_fat_binary(self):
@@ -317,11 +328,11 @@ class TestMachoBinary:
         parser = MachoParser(self.FAT_PATH)
         binary = parser.get_arm64_slice()
         original_dylibs = [binary.dylib_name_for_library_ordinal(i + 1) for i in range(len(binary.load_dylib_commands))]
-        new_dylib_name = '@rpath/Frameworks/Interject.framework/Interject'
+        new_dylib_name = "@rpath/Frameworks/Interject.framework/Interject"
         modified_binary = binary.insert_load_dylib_cmd(new_dylib_name)
 
         with TemporaryDirectory() as tempdir:
-            output_binary_path = pathlib.Path(tempdir) / 'modified_fat'
+            output_binary_path = pathlib.Path(tempdir) / "modified_fat"
             # If I write the FAT to disk with both slices, then parse the on-disk version
             MachoBinary.write_fat([parser.get_armv7_slice(), modified_binary], output_binary_path)
             on_disk_fat_parser = MachoParser(output_binary_path)
@@ -337,13 +348,12 @@ class TestMachoBinary:
             assert arm64 is not None
             assert len(arm64.segments) == 4
             # And the arm64 segment contains the new load command
-            new_dylibs = [arm64.dylib_name_for_library_ordinal(i + 1) for i in
-                          range(len(arm64.load_dylib_commands))]
+            new_dylibs = [arm64.dylib_name_for_library_ordinal(i + 1) for i in range(len(arm64.load_dylib_commands))]
             assert new_dylibs == original_dylibs + [new_dylib_name]
 
     def test_get_dylib_id(self):
         # Given an executable binary, it has no dylib ID
         assert not MachoParser(self.THIN_PATH).get_arm64_slice().dylib_id()
         # Given a dylib, it has a dylib ID which is parsed correctly
-        expected_dylib_id = '@rpath/BroadSoftDialpadFramework.framework/BroadSoftDialpadFramework'
+        expected_dylib_id = "@rpath/BroadSoftDialpadFramework.framework/BroadSoftDialpadFramework"
         assert MachoParser(self.MULTIPLE_CONST_SECTIONS).get_arm64_slice().dylib_id() == expected_dylib_id

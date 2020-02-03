@@ -4,13 +4,7 @@ from strongarm.debug_util import DebugUtil
 from strongarm.macho.macho_binary import MachoBinary
 from strongarm.macho.macho_definitions import StaticFilePointer
 
-from .codesign_definitions import (
-    CodesignBlobTypeEnum,
-    CSBlob,
-    CSSuperblob,
-    CSCodeDirectory,
-    CSBlobIndex
-)
+from .codesign_definitions import CodesignBlobTypeEnum, CSBlob, CSBlobIndex, CSCodeDirectory, CSSuperblob
 
 
 class CodesignParser:
@@ -23,7 +17,7 @@ class CodesignParser:
 
     def __init__(self, binary: MachoBinary) -> None:
         self.binary = binary
-        self.entitlements: bytearray = bytearray(b'<plist></plist>')
+        self.entitlements: bytearray = bytearray(b"<plist></plist>")
         self.signing_identifier: Optional[str] = None
         self.signing_team_id: Optional[str] = None
 
@@ -38,7 +32,7 @@ class CodesignParser:
         """Read a 32-bit word from the file offset in big-endian order.
         """
         word_bytes = self.binary.get_bytes(offset, 4)
-        word = int.from_bytes(word_bytes, byteorder='big')
+        word = int.from_bytes(word_bytes, byteorder="big")
         return word
 
     def parse_codesign_blob(self, file_offset: StaticFilePointer) -> None:
@@ -62,7 +56,7 @@ class CodesignParser:
             pass
         else:
             # unknown magic
-            DebugUtil.log(self, f'Unknown CodeSign blob magic @ {hex(file_offset)}: {hex(magic)}')
+            DebugUtil.log(self, f"Unknown CodeSign blob magic @ {hex(file_offset)}: {hex(magic)}")
 
     def parse_superblob(self, file_offset: StaticFilePointer) -> None:
         """Parse a codesign 'superblob' at the provided file offset.
@@ -73,7 +67,7 @@ class CodesignParser:
         internal_file_offset = int(file_offset)
         superblob = self.binary.read_struct(internal_file_offset, CSSuperblob)
         if superblob.magic != CodesignBlobTypeEnum.CSMAGIC_EMBEDDED_SIGNATURE:
-            raise RuntimeError(f'Can blobs other than embedded signatures be superblobs? {hex(superblob.magic)}')
+            raise RuntimeError(f"Can blobs other than embedded signatures be superblobs? {hex(superblob.magic)}")
 
         # move past the superblob header to the first index struct entry
         internal_file_offset += superblob.sizeof
@@ -94,14 +88,16 @@ class CodesignParser:
         """Get the human-readable blob type from the `type` field in a CSBlobIndex.
         """
         # cs_blobs.h
-        blob_types = {0: 'Code Directory',
-                      1: 'Info slot',
-                      2: 'Requirement Set',
-                      3: 'Resource Directory',
-                      4: 'Application',
-                      5: 'Embedded Entitlements',
-                      0x1000: 'Alternate Code Directory',
-                      0x10000: 'CMS Signature'}
+        blob_types = {
+            0: "Code Directory",
+            1: "Info slot",
+            2: "Requirement Set",
+            3: "Resource Directory",
+            4: "Application",
+            5: "Embedded Entitlements",
+            0x1000: "Alternate Code Directory",
+            0x10000: "CMS Signature",
+        }
         return blob_types[blob_index.type]
 
     def parse_csblob_index(self, file_offset: StaticFilePointer) -> CSBlobIndex:
@@ -130,20 +126,20 @@ class CodesignParser:
             self.signing_team_id = team_id_string
 
     def print_code_directory(self, code_dir: CSCodeDirectory) -> None:
-        print(f'CodeDirectory @ {hex(code_dir.binary_offset)}')
-        print(f'-----------------------')
-        print(f'Version: {hex(code_dir.version)}')
-        print(f'Flags: {hex(code_dir.flags)}')
-        print(f'Hash offset: {hex(code_dir.hash_offset)}')
-        print(f'Identifier offset: {hex(code_dir.identifier_offset)}')
-        print(f'Special slots count: {code_dir.special_slots_count}')
-        print(f'Code limit: {hex(code_dir.code_limit)}')
-        print(f'Hash size: {hex(code_dir.hash_size)}')
-        print(f'Hash type: {hex(code_dir.hash_type)}')
-        print(f'Platform: {hex(code_dir.platform)}')
-        print(f'Page size: {hex(code_dir.page_size)}')
-        print(f'Scatter offset: {hex(code_dir.scatter_offset)}')
-        print(f'Team offset: {hex(code_dir.team_offset)}')
+        print(f"CodeDirectory @ {hex(code_dir.binary_offset)}")
+        print(f"-----------------------")
+        print(f"Version: {hex(code_dir.version)}")
+        print(f"Flags: {hex(code_dir.flags)}")
+        print(f"Hash offset: {hex(code_dir.hash_offset)}")
+        print(f"Identifier offset: {hex(code_dir.identifier_offset)}")
+        print(f"Special slots count: {code_dir.special_slots_count}")
+        print(f"Code limit: {hex(code_dir.code_limit)}")
+        print(f"Hash size: {hex(code_dir.hash_size)}")
+        print(f"Hash type: {hex(code_dir.hash_type)}")
+        print(f"Platform: {hex(code_dir.platform)}")
+        print(f"Page size: {hex(code_dir.page_size)}")
+        print(f"Scatter offset: {hex(code_dir.scatter_offset)}")
+        print(f"Team offset: {hex(code_dir.team_offset)}")
         print()
 
     def parse_entitlements(self, file_offset: StaticFilePointer) -> bytearray:
@@ -152,7 +148,7 @@ class CodesignParser:
         """
         entitlements_blob = self.binary.read_struct(file_offset, CSBlob)
         if entitlements_blob.magic != CodesignBlobTypeEnum.CSMAGIC_EMBEDDED_ENTITLEMENTS:
-            raise RuntimeError(f'incorrect magic for embedded entitlements: {hex(entitlements_blob.magic)}')
+            raise RuntimeError(f"incorrect magic for embedded entitlements: {hex(entitlements_blob.magic)}")
 
         blob_end = entitlements_blob.binary_offset + entitlements_blob.length
 

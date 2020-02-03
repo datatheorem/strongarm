@@ -16,7 +16,7 @@ class TestMachoStringParser:
         # The exported symbols from the binary
         found_exported = self.string_helper.exported_symbols
         # Matches the expected value
-        expected = {4294967296: '__mh_execute_header'}
+        expected = {4294967296: "__mh_execute_header"}
         assert found_exported == expected
 
     def test_imported_symbol_list(self):

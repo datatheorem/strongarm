@@ -1,31 +1,23 @@
 import functools
 from itertools import starmap
-from typing import List, Tuple, Optional
 from subprocess import check_output
+from typing import List, Optional
 
 from capstone import CsInsn
 
 from strongarm.debug_util import DebugUtil
 from strongarm.macho import MachoBinary, VirtualMemoryPointer
 
-from .objc_instruction import (
-    ObjcInstruction,
-    ObjcBranchInstruction,
-    ObjcUnconditionalBranchInstruction
-)
-from .objc_query import (
-    CodeSearch,
-    CodeSearchResult
-)
-
-from .register_contents import RegisterContents, RegisterContentsType
 from .dataflow import get_register_contents_at_instruction_fast
+from .objc_instruction import ObjcBranchInstruction, ObjcInstruction, ObjcUnconditionalBranchInstruction
+from .objc_query import CodeSearch, CodeSearchResult
+from .register_contents import RegisterContents, RegisterContentsType
 
 
 def _is_mangled_cpp_symbol(symbol_name: str) -> bool:
     """Return whether a symbol name appears to be a mangled C++ symbol.
     """
-    return any(symbol_name.startswith(prefix) for prefix in ['_Z', '__Z', '___Z'])
+    return any(symbol_name.startswith(prefix) for prefix in ["_Z", "__Z", "___Z"])
 
 
 def _demangle_cpp_symbol(cpp_symbol: str) -> str:
@@ -39,27 +31,27 @@ def _demangle_cpp_symbol(cpp_symbol: str) -> str:
     # Linux's c++filt doesn't like the clang-specific "_block_invoke" which is tacked onto ObjC++ blocks.
     # Trim this off and add it back after demangling the symbol
     is_block = False
-    block_index = ''
-    if '_block_invoke' in cpp_symbol:
+    block_index = ""
+    if "_block_invoke" in cpp_symbol:
         is_block = True
-        cpp_symbol, block_index_str = cpp_symbol.split('_block_invoke')
+        cpp_symbol, block_index_str = cpp_symbol.split("_block_invoke")
         # Some blocks have an index
         if block_index_str.isnumeric():
-            block_index = f' {int(block_index_str)}'
+            block_index = f" {int(block_index_str)}"
 
     # XXX(PT): We observe that c++filt doesn't work if there are too many leading underscores
     # Try demangling multiple times, trimming a leading underscore each time until success (up to 3 times)
     for _ in range(3):
         # If demangling fails, allow the exception to propagate up. This can alert us to scanner issues.
-        demangled_symbol = check_output(f'c++filt -_ {cpp_symbol}', shell=True).decode().strip()
+        demangled_symbol = check_output(f"c++filt -_ {cpp_symbol}", shell=True).decode().strip()
         # Was the symbol demangled?
         if demangled_symbol != cpp_symbol:
             if is_block:
-                demangled_symbol = f'block{block_index} in {demangled_symbol}'
+                demangled_symbol = f"block{block_index} in {demangled_symbol}"
             return demangled_symbol
         else:
             # Trim an underscore and try again if possible
-            if not cpp_symbol.startswith('_'):
+            if not cpp_symbol.startswith("_"):
                 break
             cpp_symbol = cpp_symbol[1:]
 
@@ -69,15 +61,16 @@ def _demangle_cpp_symbol(cpp_symbol: str) -> str:
 
 class ObjcMethodInfo:
     from strongarm.macho import ObjcClass, ObjcSelector
-    __slots__ = ['objc_class', 'objc_sel', 'imp_addr']
 
-    def __init__(self, objc_class: 'ObjcClass', objc_sel: 'ObjcSelector', imp: Optional[VirtualMemoryPointer]) -> None:
+    __slots__ = ["objc_class", "objc_sel", "imp_addr"]
+
+    def __init__(self, objc_class: "ObjcClass", objc_sel: "ObjcSelector", imp: Optional[VirtualMemoryPointer]) -> None:
         self.objc_class = objc_class
         self.objc_sel = objc_sel
         self.imp_addr = imp
 
     def __repr__(self) -> str:
-        return f'-[{self.objc_class.name} {self.objc_sel.name}]'
+        return f"-[{self.objc_class.name} {self.objc_sel.name}]"
 
 
 class BasicBlock:
@@ -101,6 +94,7 @@ class ObjcFunctionAnalyzer:
 
     def __init__(self, binary: MachoBinary, instructions: List[CsInsn], method_info: ObjcMethodInfo = None) -> None:
         from strongarm.macho import MachoAnalyzer
+
         try:
             self.start_address = VirtualMemoryPointer(instructions[0].address)
             last_instruction = instructions[len(instructions) - 1]
@@ -156,18 +150,18 @@ class ObjcFunctionAnalyzer:
             output: string to output to debug log
         """
         if not len(self.instructions):
-            DebugUtil.log(self, f'func(stub) {output}')
+            DebugUtil.log(self, f"func(stub) {output}")
         else:
             func_base = self.start_address
             instruction_address = func_base + (idx * MachoBinary.BYTES_PER_INSTRUCTION)
-            DebugUtil.log(self, f'func({hex(int(instruction_address))}) {output}')
+            DebugUtil.log(self, f"func({hex(int(instruction_address))}) {output}")
 
     def get_symbol_name(self) -> str:
         """Return a objective-c class/method, c function, or sub_address-style string representing the name of
             this block of code.
         """
         if self.method_info:
-            return f'-[{self.method_info.objc_class.name} {self.method_info.objc_sel.name}]'
+            return f"-[{self.method_info.objc_class.name} {self.method_info.objc_sel.name}]"
         else:
             # Not an Objective-C method. Try to find a symbol name that matches the address
             strtbl_sym_name = self.macho_analyzer.crossref_helper.get_symbol_name_for_address(
@@ -184,10 +178,10 @@ class ObjcFunctionAnalyzer:
         # Fallback
         # We don't want to format the procedure as sub_<address>, because we use the output of this method to
         # report code locations, and the address of the same procedure might change between subsequent binary builds.
-        return '_unsymbolicated_function'
+        return "_unsymbolicated_function"
 
     @classmethod
-    def get_function_analyzer(cls, binary: MachoBinary, start_address: VirtualMemoryPointer) -> 'ObjcFunctionAnalyzer':
+    def get_function_analyzer(cls, binary: MachoBinary, start_address: VirtualMemoryPointer) -> "ObjcFunctionAnalyzer":
         """Get the shared analyzer for the function at start_address in the binary.
 
         This method uses a cached MachoAnalyzer if available, which is more efficient than analyzing the
@@ -202,14 +196,15 @@ class ObjcFunctionAnalyzer:
             An ObjcFunctionAnalyzer suitable for introspecting a block of code.
         """
         from strongarm.macho.macho_analyzer import MachoAnalyzer
+
         analyzer = MachoAnalyzer.get_analyzer(binary)
         instructions = analyzer.get_function_instructions(start_address)
         return ObjcFunctionAnalyzer(binary, instructions)
 
     @classmethod
-    def get_function_analyzer_for_method(cls,
-                                         binary: MachoBinary,
-                                         method_info: ObjcMethodInfo) -> 'ObjcFunctionAnalyzer':
+    def get_function_analyzer_for_method(
+        cls, binary: MachoBinary, method_info: ObjcMethodInfo
+    ) -> "ObjcFunctionAnalyzer":
         """Get the shared analyzer describing an Objective-C method within the Mach-O binary
         This method performs the same caching as get_function_analyzer()
 
@@ -225,19 +220,20 @@ class ObjcFunctionAnalyzer:
         """
         # TODO(PT): it seems like this & related methods should be moved to MachoAnalyzer
         if not method_info.imp_addr:
-            raise ValueError(f'Could not get method implementation address for {method_info}')
+            raise ValueError(f"Could not get method implementation address for {method_info}")
 
         from strongarm.macho.macho_analyzer import MachoAnalyzer
+
         analyzer = MachoAnalyzer.get_analyzer(binary)
         instructions = analyzer.get_function_instructions(method_info.imp_addr)
         return ObjcFunctionAnalyzer(binary, instructions, method_info=method_info)
 
     @classmethod
-    def get_function_analyzer_for_signature(cls,
-                                            binary: MachoBinary,
-                                            class_name: str,
-                                            sel_name: str) -> 'ObjcFunctionAnalyzer':
+    def get_function_analyzer_for_signature(
+        cls, binary: MachoBinary, class_name: str, sel_name: str
+    ) -> "ObjcFunctionAnalyzer":
         from strongarm.macho.macho_analyzer import MachoAnalyzer
+
         analyzer = MachoAnalyzer.get_analyzer(binary)
         for objc_cls in analyzer.objc_classes():
             if objc_cls.name == class_name:
@@ -246,7 +242,7 @@ class ObjcFunctionAnalyzer:
                         # XXX(PT): where are the method info's normally stored? Can we grab it from there?
                         method_info = ObjcMethodInfo(objc_cls, sel, sel.implementation)
                         return ObjcFunctionAnalyzer.get_function_analyzer_for_method(binary, method_info)
-        raise RuntimeError(f'No found function analyzer for -[{class_name} {sel_name}]')
+        raise RuntimeError(f"No found function analyzer for -[{class_name} {sel_name}]")
 
     @property
     def call_targets(self) -> List[ObjcBranchInstruction]:
@@ -260,17 +256,17 @@ class ObjcFunctionAnalyzer:
         branches_in_function: List[ObjcBranchInstruction] = []
         for idx, instr in enumerate(self.instructions):
             if ObjcBranchInstruction.is_branch_instruction(instr):
-                branches_in_function.append(ObjcBranchInstruction.parse_instruction(
-                    self, 
-                    instr,
-                    container_function_boundary=(self.start_address, self.end_address)
-                ))
+                branches_in_function.append(
+                    ObjcBranchInstruction.parse_instruction(
+                        self, instr, container_function_boundary=(self.start_address, self.end_address)
+                    )
+                )
 
         self._call_targets = branches_in_function
         return self._call_targets
 
     @property
-    def function_call_targets(self) -> List['ObjcFunctionAnalyzer']:
+    def function_call_targets(self) -> List["ObjcFunctionAnalyzer"]:
         """Find List of function analyzers representing functions reachable from the source function.
 
         This excludes other branch destinations, such as objc_msgSend calls to methods implemented outside this
@@ -346,7 +342,7 @@ class ObjcFunctionAnalyzer:
         Returns:
             Formatted string representing instruction
         """
-        return f'{hex(int(instr.address))}:\t{instr.mnemonic}\t{instr.op_str}'
+        return f"{hex(int(instr.address))}:\t{instr.mnemonic}\t{instr.op_str}"
 
     def is_local_branch(self, branch_instruction: ObjcBranchInstruction) -> bool:
         # if there's no destination address, the destination is outside the binary, and it couldn't possible be local
@@ -360,12 +356,12 @@ class ObjcFunctionAnalyzer:
         The caller is responsible for ensuring this is called at an _objc_msgSend call site.
         """
         if msgsend_instr.raw_instr.mnemonic not in ObjcUnconditionalBranchInstruction.UNCONDITIONAL_BRANCH_MNEMONICS:
-            raise ValueError('get_objc_selref() called on non-branch instruction')
+            raise ValueError("get_objc_selref() called on non-branch instruction")
 
         # at an _objc_msgSend call site, the selref is in x1
-        contents = self.get_register_contents_at_instruction('x1', msgsend_instr)
+        contents = self.get_register_contents_at_instruction("x1", msgsend_instr)
         if contents.type != RegisterContentsType.IMMEDIATE:
-            raise RuntimeError(f'could not determine selref ptr, origates in function arg (type {contents.type.name})')
+            raise RuntimeError(f"could not determine selref ptr, origates in function arg (type {contents.type.name})")
         return VirtualMemoryPointer(contents.value)
 
     @functools.lru_cache(maxsize=100)
@@ -383,7 +379,7 @@ class ObjcFunctionAnalyzer:
 
         return get_register_contents_at_instruction_fast(register, self, instruction, dataflow_space_start)
 
-    def _find_basic_blocks(self) -> List['BasicBlock']:
+    def _find_basic_blocks(self) -> List["BasicBlock"]:
         """Locate the basic-block-boundaries within the source function.
         A 'basic block' is a unit of assembly code with no branching except for the last instruction.
         In other words, it is the smallest unit of callable code - a subroutine.
@@ -392,11 +388,8 @@ class ObjcFunctionAnalyzer:
         Returns:
             a List of objects encapsulating the basic block boundaries.
         """
-        basic_blocks = self.macho_analyzer._compute_function_basic_blocks(
-            self.start_address,
-            self.end_address,
-        )
+        basic_blocks = self.macho_analyzer._compute_function_basic_blocks(self.start_address, self.end_address)
         return list(starmap(BasicBlock, basic_blocks))
 
     def __repr__(self) -> str:
-        return f'({self.get_symbol_name()} @ {self.start_address})'
+        return f"({self.get_symbol_name()} @ {self.start_address})"

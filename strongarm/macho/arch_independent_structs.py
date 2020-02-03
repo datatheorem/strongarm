@@ -40,7 +40,12 @@ from strongarm.macho.macho_definitions import (
 
 # create type alias for the following classes that inherit from ArchIndependentStructure
 if TYPE_CHECKING:
-    from .codesign.codesign_definitions import CSBlobStruct, CSSuperblobStruct, CSCodeDirectoryStruct, CSBlobIndexStruct
+    from .codesign.codesign_definitions import (  # noqa: F401
+        CSBlobStruct,
+        CSSuperblobStruct,
+        CSCodeDirectoryStruct,
+        CSBlobIndexStruct,
+    )
 
 # Create type alias for the following classes that inherit from ArchIndependentStructure
 _32_BIT_STRUCT_ALIAS = Union[

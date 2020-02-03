@@ -310,8 +310,6 @@ class ObjcRuntimeDataParser:
             superclass = self.objc_class_for_classlist_pointer(super_classref)
             if not superclass:
                 continue
-            # logging.debug(f'@interface {objc_class.name} : {superclass.name} inheriting {len(superclass.ivars)} ivars,'
-            #               f' {len(superclass.selectors)} selectors, {len(superclass.protocols)} protocols')
             objc_class.ivars += superclass.ivars
             objc_class.selectors += superclass.selectors
             objc_class.protocols += superclass.protocols

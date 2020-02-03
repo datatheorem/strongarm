@@ -29,7 +29,7 @@ from strongarm.macho.objc_runtime_data_parser import (
 from strongarm.macho.progress_bar import ConsoleProgressBar
 
 if TYPE_CHECKING:
-    from strongarm.objc import ObjcFunctionAnalyzer, ObjcMethodInfo, CodeSearch, CodeSearchResult
+    from strongarm.objc import ObjcFunctionAnalyzer, ObjcMethodInfo, CodeSearch, CodeSearchResult  # noqa: F401
 
 
 _T = TypeVar("_T")
@@ -116,8 +116,6 @@ class MachoAnalyzer:
     _ANALYZER_CACHE: Dict[MachoBinary, "MachoAnalyzer"] = {}
 
     def __init__(self, binary: MachoBinary) -> None:
-        from strongarm.objc import CodeSearch
-
         self.binary = binary
         self.cs = Cs(CS_ARCH_ARM64, CS_MODE_ARM)
         self.cs.detail = True
@@ -371,7 +369,7 @@ class MachoAnalyzer:
 
                 if destination_address in objc_function_addrs:
                     # Branch to function in the _objc_* family
-                    from strongarm.objc import RegisterContentsType, ObjcFunctionAnalyzer
+                    from strongarm.objc import RegisterContentsType, ObjcFunctionAnalyzer  # noqa: F811
 
                     if not func_analyzer:
                         func_analyzer = ObjcFunctionAnalyzer.get_function_analyzer(self.binary, entry_point)
@@ -626,7 +624,7 @@ class MachoAnalyzer:
         Returns:
             A list of ObjcFunctionAnalyzers corresponding to each found implementation of the provided selector.
         """
-        from strongarm.objc import ObjcFunctionAnalyzer  # type: ignore
+        from strongarm.objc import ObjcFunctionAnalyzer  # noqa: F811
 
         implementation_analyzers = []
         imp_addresses = self.get_method_imp_addresses(selector)
@@ -702,8 +700,6 @@ class MachoAnalyzer:
         For each search which is executed, this method will invoke the CodeSearchCallback provided when the search
         was requested, with the List of CodeSearchResult's which were found.
         """
-        from strongarm.objc import ObjcFunctionAnalyzer  # type: ignore
-
         # If there are no queued code searches, we have nothing to do
         queued_searches = self._queued_code_searches
         if not len(queued_searches):

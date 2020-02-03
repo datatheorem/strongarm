@@ -214,7 +214,7 @@ class ObjcUnconditionalBranchInstruction(ObjcBranchInstruction):
                 self.destination_address = selector.implementation
             self.selref = selector.selref
             self.selector = selector
-        except RuntimeError as e:
+        except RuntimeError:
             # TODO(PT): Should this ever be hit?
             self.is_external_objc_call = True
             self.destination_address = VirtualMemoryPointer(0)

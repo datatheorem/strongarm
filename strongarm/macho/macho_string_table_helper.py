@@ -64,9 +64,6 @@ class MachoStringTableHelper:
 
                 # record in list
                 ent = MachoStringTableEntry(entry_start_idx, length, entry_content)
-                # max to ensure there's at least 1 entry in list, even if this string entry is just a null char
-                # also, add 1 entry for null character
-                count_to_include = max(1, length + 1)
                 string_table_entries[entry_start_idx] = ent
 
                 # move to starting index of next string

@@ -15,7 +15,6 @@ from strongarm.macho import (
     VirtualMemoryPointer,
 )
 from strongarm.objc import (
-    BasicBlock,
     ObjcBranchInstruction,
     ObjcFunctionAnalyzer,
     ObjcInstruction,
@@ -139,7 +138,6 @@ def disassemble_method(binary: MachoBinary, method: ObjcMethodInfo) -> str:
 
 
 def print_instr(instr: ObjcInstruction) -> None:
-    raw_instr = instr.raw_instr
     instruction_string = ""
     instruction_string += f"\t{hex(instr.address)}\t\t{instr.raw_instr.mnemonic}"
 

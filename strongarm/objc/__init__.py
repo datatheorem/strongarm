@@ -1,5 +1,5 @@
 from .dataflow import get_register_contents_at_instruction_fast
-from .objc_analyzer import BasicBlock, ObjcFunctionAnalyzer, ObjcMethodInfo, RegisterContents, RegisterContentsType
+from .objc_analyzer import BasicBlock, ObjcFunctionAnalyzer, ObjcMethodInfo
 from .objc_instruction import (
     ObjcBranchInstruction,
     ObjcConditionalBranchInstruction,

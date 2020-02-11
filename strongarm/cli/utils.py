@@ -1,5 +1,5 @@
 import re
-from typing import List
+from typing import List, Optional
 
 from capstone import CsInsn
 from capstone.arm64 import ARM64_OP_IMM, ARM64_OP_MEM, ARM64_OP_REG, Arm64Op
@@ -9,6 +9,8 @@ from strongarm.macho import (
     MachoAnalyzer,
     MachoBinary,
     MachoParser,
+    MachoSection,
+    MachoSegment,
     ObjcCategory,
     ObjcClass,
     ObjcSelector,
@@ -107,10 +109,14 @@ def format_instruction_arg(instruction: CsInsn, arg: Arm64Op) -> str:
 
 
 def args_from_sel_name(sel: str) -> List[str]:
-    sel_components = sel.split(":")
     sel_args = ["self", f"@selector({sel})"]
+    if ":" not in sel:
+        return sel_args
+
+    sel_components = sel.split(":")
     for component in sel_components:
         if not len(component):
+            sel_args.append("")
             continue
         # extract the last capitalized word
         split = re.findall("[A-Z][^A-Z]*", component)
@@ -159,6 +165,7 @@ def annotate_instruction(function_analyzer: ObjcFunctionAnalyzer, sel_args: List
         annotation += "#\t"
         if function_analyzer.is_local_branch(wrapped_branch_instr):
             annotation += StringPalette.ANNOTATION(f"jump loc_{hex(wrapped_branch_instr.destination_address)}")
+
         elif wrapped_instr.symbol:
             annotation += StringPalette.ANNOTATION(wrapped_instr.symbol)
 
@@ -182,6 +189,7 @@ def annotate_instruction(function_analyzer: ObjcFunctionAnalyzer, sel_args: List
 
                     annotation += StringPalette.STRING(method_arg_string)
                 annotation += ");"
+
         else:
             annotation += StringPalette.ANNOTATION(f"({hex(instr.address)})(")
             arg_count = 4
@@ -279,15 +287,29 @@ def print_binary_segments(binary: MachoBinary) -> None:
     print("\nSegments:")
     for cmd in binary.segments:
         virtual_loc = f"[{format(cmd.vmaddr, '#011x')} - {format(cmd.vmaddr + cmd.vmsize, '#011x')}]"
-        file_loc = f"[{format(cmd.fileoff, '#011x')} - {format(cmd.fileoff + cmd.filesize, '#011x')}]"
-        print(f"\t{virtual_loc} (file {file_loc}) {cmd.segname.decode()}")
+        file_loc = f"[{format(cmd.offset, '#011x')} - {format(cmd.offset + cmd.size, '#011x')}]"
+        print(f"\t{virtual_loc} (file {file_loc}) {cmd.name}")
 
 
 def print_binary_sections(binary: MachoBinary) -> None:
     print("\nSections:")
+
+    def segment_for_section(section: MachoSection) -> Optional[MachoSegment]:
+        for seg in binary.segments:
+            if seg.vmaddr <= section.address < seg.vmaddr + seg.vmsize:
+                return seg
+        else:
+            # raise IndexError(f'Section {section} out of bounds of segments')
+            return None
+
     for cmd in binary.sections:
-        section_name = cmd.name.decode()
-        print(f"\t[{hex(cmd.address)} - {hex(cmd.end_address)}] {section_name}")
+        segment = segment_for_section(cmd)
+        if segment:
+            segment_name = segment.name
+        else:
+            segment_name = "<unknown>"
+        section_name = cmd.name
+        print(f"\t[{hex(cmd.address)} - {hex(cmd.end_address)}] {section_name} ({segment_name})")
 
 
 def print_analyzer_imported_symbols(analyzer: MachoAnalyzer) -> None:
@@ -352,8 +374,13 @@ def print_analyzer_protocols(analyzer: MachoAnalyzer) -> None:
 
 
 def print_raw_strings(binary: MachoBinary) -> None:
-    print("\nStrings:")
     strings_section = binary.section_with_name("__cstring", "__TEXT")
-    strings = strings_section.content.decode().split(chr(0))
-    for string in strings:
-        print(f"\t{string}")
+    if strings_section is None:
+        return
+
+    print("\nStrings:")
+    for string in strings_section.content.split(b"\0"):
+        try:
+            print(f"\t{string.decode()}")
+        except UnicodeDecodeError:
+            print(f"\t{string}")

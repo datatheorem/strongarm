@@ -29,7 +29,7 @@ from strongarm.macho.objc_runtime_data_parser import (
 from strongarm.macho.progress_bar import ConsoleProgressBar
 
 if TYPE_CHECKING:
-    from strongarm.objc import ObjcFunctionAnalyzer, ObjcMethodInfo, CodeSearch, CodeSearchResult  # noqa: F401
+    from strongarm.objc import ObjcFunctionAnalyzer, ObjcMethodInfo, CodeSearch, CodeSearchResult
 
 
 _T = TypeVar("_T")

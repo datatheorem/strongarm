@@ -223,14 +223,14 @@ class TestMachoBinary:
         # Given a thin binary with certain values for its first segment
         binary = MachoParser(pathlib.Path(TestMachoBinary.THIN_PATH)).get_arm64_slice()
         segment = binary.segments[0]
-        assert segment.segname == b"__PAGEZERO"
+        assert segment.name == "__PAGEZERO"
         assert segment.vmaddr == 0x0
         assert segment.vmsize == 0x100000000
-        assert segment.fileoff == 0x0
-        assert segment.filesize == 0x0
+        assert segment.offset == 0x0
+        assert segment.size == 0x0
         assert segment.maxprot == 0
         assert segment.initprot == 0
-        assert segment.nsects == 0
+        assert segment.section_count == 0
         assert segment.flags == 0
 
         # If I create a new structure and overwrite the original structure with it
@@ -248,16 +248,16 @@ class TestMachoBinary:
         new_segment.flags = 8
 
         # Then we get a MachoBinary which can be successfully parsed, and contains the modified structure
-        modified_binary = binary.write_struct(new_segment, segment.binary_offset)
+        modified_binary = binary.write_struct(new_segment, segment.cmd.binary_offset)
         segment = modified_binary.segments[0]
-        assert segment.segname == b"__FAKESEG"
+        assert segment.name == "__FAKESEG"
         assert segment.vmaddr == 0x111
         assert segment.vmsize == 0x222
-        assert segment.fileoff == 0x333
-        assert segment.filesize == 0x444
+        assert segment.offset == 0x333
+        assert segment.size == 0x444
         assert segment.maxprot == 5
         assert segment.initprot == 6
-        assert segment.nsects == 7
+        assert segment.section_count == 7
         assert segment.flags == 8
 
     def test_add_load_command(self):

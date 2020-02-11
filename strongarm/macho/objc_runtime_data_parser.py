@@ -212,50 +212,51 @@ class ObjcRuntimeDataParser:
             self._selref_ptr_to_selector_map[selref_ptr] = ObjcSelector(selector_string, wrapped_selref, None)
 
     def selector_for_selref(self, selref_addr: VirtualMemoryPointer) -> Optional[ObjcSelector]:
-        if selref_addr in self._selref_ptr_to_selector_map:
-            return self._selref_ptr_to_selector_map[selref_addr]
+        selector = self._selref_ptr_to_selector_map.get(selref_addr)
+        if selector is not None:
+            return selector
 
         # selref wasn't referenced in classes implemented within the binary
         # make sure it's a valid selref
-        selref = [x for x in self._selector_literal_ptr_to_selref_map.values() if x.source_address == selref_addr]
-        if not len(selref):
-            return None
-        _selref = selref[0]
+        selref = next(
+            (x for x in self._selector_literal_ptr_to_selref_map.values() if x.source_address == selref_addr), None
+        )
+        if selref is not None:
+            # Therefore, the selref must refer to a selector which is defined outside this binary
+            # this is fine, just construct an ObjcSelector with what we know
+            return ObjcSelector(selref.selector_literal, selref, None)
 
-        # therefore, the _selref must refer to a selector which is defined outside this binary
-        # this is fine, just construct an ObjcSelector with what we know
-        sel = ObjcSelector(_selref.selector_literal, _selref, None)
-        return sel
+        else:
+            return None
 
     def selector_for_selector_literal(self, literal_addr: VirtualMemoryPointer) -> Optional[ObjcSelector]:
-        return self.selector_for_selref(self._selector_literal_ptr_to_selref_map[literal_addr].source_address)
+        selector_literal = self._selector_literal_ptr_to_selref_map.get(literal_addr)
+        if selector_literal is not None:
+            return self.selector_for_selref(selector_literal.source_address)
+        else:
+            return None
 
     def selrefs_to_selectors(self) -> Dict[VirtualMemoryPointer, ObjcSelector]:
         return self._selref_ptr_to_selector_map
 
     def selref_for_selector_name(self, selector_name: str) -> Optional[VirtualMemoryPointer]:
-        selref_list = [
-            x for x in self._selref_ptr_to_selector_map if self._selref_ptr_to_selector_map[x].name == selector_name
-        ]
-        if len(selref_list):
-            return selref_list[0]
-        return None
+        return next(
+            (selref for selref, selector in self._selref_ptr_to_selector_map.items() if selector.name == selector_name),
+            None,
+        )
 
     def get_method_imp_addresses(self, selector: str) -> List[VirtualMemoryPointer]:
         """Given a selector, return a list of virtual addresses corresponding to the start of each IMP for that SEL
         """
-        imp_addresses = []
-        for objc_class in self.classes:
-            for objc_sel in objc_class.selectors:
-                if objc_sel.name == selector:
-                    if objc_sel.implementation:
-                        imp_addresses.append(objc_sel.implementation)
-        return imp_addresses
+        return [
+            objc_sel.implementation
+            for objc_class in self.classes
+            for objc_sel in objc_class.selectors
+            if objc_sel.name == selector and objc_sel.implementation
+        ]
 
     def objc_class_for_classlist_pointer(self, classlist_ptr: VirtualMemoryPointer) -> Optional[ObjcClass]:
-        if classlist_ptr not in self._classrefs_to_objc_classes:
-            return None
-        return self._classrefs_to_objc_classes[classlist_ptr]
+        return self._classrefs_to_objc_classes.get(classlist_ptr)
 
     def _parse_objc_classes(self) -> List[ObjcClass]:
         """Read Objective-C class data in __objc_classlist, __objc_data to get classes and selectors in binary

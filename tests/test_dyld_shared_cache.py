@@ -7,16 +7,16 @@ import pytest
 
 from strongarm.macho import DyldSharedCacheParser, MachoAnalyzer, VirtualMemoryPointer
 
+# XXX(PT): This test suite expects to run on a mounted IPSW of iOS 12.1.1 iPad 6 WiFi
+_FIRMWARE_ROOT = Path("/") / "Volumes" / "PeaceC16C50.J71bJ72bJ71sJ72sJ71tJ72tOS"
+_DSC_PATH = _FIRMWARE_ROOT / "System" / "Library" / "Caches" / "com.apple.dyld" / "dyld_shared_cache_arm64"
 
-@pytest.mark.skipif("CI" in os.environ, reason="Cannot run dyld_shared_cache tests in CI")
+
+@pytest.mark.skipif("CI" in os.environ or not _DSC_PATH.exists(), reason="Cannot run dyld_shared_cache tests in CI")
 class TestDyldSharedCache:
-    # XXX(PT): This test suite expects to run on a mounted IPSW of iOS 12.1.1 iPad 6 WiFi
-    _FIRMWARE_ROOT = Path("/") / "Volumes" / "PeaceC16C50.J71bJ72bJ71sJ72sJ71tJ72tOS"
-    DSC_PATH = _FIRMWARE_ROOT / "System" / "Library" / "Caches" / "com.apple.dyld" / "dyld_shared_cache_arm64"
-
     @pytest.fixture
     def dyld_shared_cache(self) -> DyldSharedCacheParser:
-        return DyldSharedCacheParser(self.DSC_PATH)
+        return DyldSharedCacheParser(_DSC_PATH)
 
     def test_parses_dsc_maps(self, dyld_shared_cache):
         # Ensure the structures at the start of the DSC were parsed exactly as expected

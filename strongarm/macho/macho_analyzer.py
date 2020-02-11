@@ -157,6 +157,9 @@ class MachoAnalyzer:
         # Done setting up, store this analyzer in class cache
         MachoAnalyzer._ANALYZER_CACHE[binary] = self
 
+    def __repr__(self) -> str:
+        return f"<MachoAnalyzer binary={self.binary.path.as_posix()}>"
+
     def calls_to(self, address: VirtualMemoryPointer) -> List[CallerXRef]:
         """Return the list of code-locations within the binary which branch to the provided address.
         """

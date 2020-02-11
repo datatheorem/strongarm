@@ -6,7 +6,7 @@ from typing import List, Optional
 from capstone import CsInsn
 
 from strongarm.debug_util import DebugUtil
-from strongarm.macho import MachoBinary, VirtualMemoryPointer
+from strongarm.macho import MachoBinary, ObjcClass, ObjcSelector, VirtualMemoryPointer
 
 from .dataflow import get_register_contents_at_instruction_fast
 from .objc_instruction import ObjcBranchInstruction, ObjcInstruction, ObjcUnconditionalBranchInstruction
@@ -60,11 +60,10 @@ def _demangle_cpp_symbol(cpp_symbol: str) -> str:
 
 
 class ObjcMethodInfo:
-    from strongarm.macho import ObjcClass, ObjcSelector
 
     __slots__ = ["objc_class", "objc_sel", "imp_addr"]
 
-    def __init__(self, objc_class: "ObjcClass", objc_sel: "ObjcSelector", imp: Optional[VirtualMemoryPointer]) -> None:
+    def __init__(self, objc_class: ObjcClass, objc_sel: ObjcSelector, imp: Optional[VirtualMemoryPointer]) -> None:
         self.objc_class = objc_class
         self.objc_sel = objc_sel
         self.imp_addr = imp

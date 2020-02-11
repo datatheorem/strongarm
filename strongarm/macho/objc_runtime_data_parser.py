@@ -19,63 +19,27 @@ from strongarm.macho.macho_binary import MachoBinary
 from strongarm.macho.macho_definitions import VirtualMemoryPointer
 
 
-class ObjcClass:
-    __slots__ = ["raw_struct", "name", "selectors", "ivars", "protocols", "super_classref"]
+class ObjcSelref:
+    __slots__ = ["source_address", "destination_address", "selector_literal"]
 
     def __init__(
-        self,
-        raw_struct: ArchIndependentStructure,
-        name: str,
-        selectors: List["ObjcSelector"],
-        ivars: List["ObjcIvar"] = None,
-        protocols: List["ObjcProtocol"] = None,
-        super_classref: Optional[VirtualMemoryPointer] = None,
+        self, source_address: VirtualMemoryPointer, destination_address: VirtualMemoryPointer, selector_literal: str
     ) -> None:
-        self.name = name
-        self.selectors = selectors
-        self.raw_struct = raw_struct
-        self.ivars = ivars if ivars else []
-        self.protocols = protocols if protocols else []
-        self.super_classref = super_classref
+        self.source_address = source_address
+        self.destination_address = destination_address
+        self.selector_literal = selector_literal
 
     def __repr__(self) -> str:
-        return f"_OBJC_CLASS_$_{self.name}"
-
-
-class ObjcCategory(ObjcClass):
-    __slots__ = ["raw_struct", "name", "base_class", "category_name", "selectors", "ivars", "protocols"]
-
-    def __init__(
-        self,
-        raw_struct: ObjcCategoryRawStruct,
-        base_class: str,
-        category_name: str,
-        selectors: List["ObjcSelector"],
-        ivars: List["ObjcIvar"] = None,
-        protocols: List["ObjcProtocol"] = None,
-    ) -> None:
-        self.base_class = base_class
-        self.category_name = category_name
-
-        # ObjcCategory.name includes the base class + the cat-name
-        # That way, callers don't need to check the ObjcClass instance type to get the 'right' value
-        full_name = f"{base_class} ({category_name})"
-        super().__init__(raw_struct, full_name, selectors, ivars, protocols)
-
-    def __repr__(self) -> str:
-        return f"_OBJC_CATEGORY_$_{self.base_class}_({self.category_name})"
-
-
-class ObjcProtocol(ObjcClass):
-    pass
+        return (
+            f"<ObjcSelref source=0x{self.source_address:x} dest=0x{self.destination_address:x}"
+            f" sel={self.selector_literal}>"
+        )
 
 
 class ObjcSelector:
     __slots__ = ["name", "selref", "implementation", "is_external_definition"]
 
-    def __init__(
-        self, name: str, selref: Optional["ObjcSelref"], implementation: Optional[VirtualMemoryPointer]
-    ) -> None:
+    def __init__(self, name: str, selref: Optional[ObjcSelref], implementation: Optional[VirtualMemoryPointer]) -> None:
         self.name = name
         self.selref = selref
         self.implementation = implementation
@@ -106,15 +70,67 @@ class ObjcIvar:
     __repr__ = __str__
 
 
-class ObjcSelref:
-    __slots__ = ["source_address", "destination_address", "selector_literal"]
+class ObjcClass:
+    __slots__ = ["raw_struct", "name", "selectors", "ivars", "protocols", "super_classref"]
 
     def __init__(
-        self, source_address: VirtualMemoryPointer, destination_address: VirtualMemoryPointer, selector_literal: str
+        self,
+        raw_struct: ArchIndependentStructure,
+        name: str,
+        selectors: List[ObjcSelector],
+        ivars: List[ObjcIvar] = None,
+        protocols: List["ObjcProtocol"] = None,
+        super_classref: Optional[VirtualMemoryPointer] = None,
     ) -> None:
-        self.source_address = source_address
-        self.destination_address = destination_address
-        self.selector_literal = selector_literal
+        self.name = name
+        self.selectors = selectors
+        self.raw_struct = raw_struct
+        self.ivars = ivars if ivars else []
+        self.protocols = protocols if protocols else []
+        self.super_classref = super_classref
+
+    def __str__(self) -> str:
+        return f"_OBJC_CLASS_$_{self.name}"
+
+    def __repr__(self) -> str:
+        return (
+            f"<@class {self.name}"
+            f" sel_count={len(self.selectors)} ivar_count={len(self.ivars)} protocol_count={len(self.protocols)}>"
+        )
+
+
+class ObjcProtocol(ObjcClass):
+    pass
+
+
+class ObjcCategory(ObjcClass):
+    __slots__ = ["raw_struct", "name", "base_class", "category_name", "selectors", "ivars", "protocols"]
+
+    def __init__(
+        self,
+        raw_struct: ObjcCategoryRawStruct,
+        base_class: str,
+        category_name: str,
+        selectors: List[ObjcSelector],
+        ivars: List[ObjcIvar] = None,
+        protocols: List[ObjcProtocol] = None,
+    ) -> None:
+        self.base_class = base_class
+        self.category_name = category_name
+
+        # ObjcCategory.name includes the base class + the cat-name
+        # That way, callers don't need to check the ObjcClass instance type to get the 'right' value
+        full_name = f"{base_class} ({category_name})"
+        super().__init__(raw_struct, full_name, selectors, ivars, protocols)
+
+    def __str__(self) -> str:
+        return f"_OBJC_CATEGORY_$_{self.base_class}_({self.category_name})"
+
+    def __repr__(self) -> str:
+        return (
+            f"<@class {self.base_class} ({self.category_name})"
+            f" sel_count={len(self.selectors)} ivar_count={len(self.ivars)} protocol_count={len(self.protocols)}>"
+        )
 
 
 class ObjcRuntimeDataParser:

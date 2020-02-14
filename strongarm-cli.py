@@ -59,11 +59,10 @@ class InfoCommand:
         }
 
     def description(self) -> str:
-        rep = "Read binary information. info " + " ".join([f"[{cmd}]" for cmd in self.commands.keys()])
-        return rep
+        return "Read binary information. info " + " ".join(f"[{cmd}]" for cmd in self.commands)
 
     def run_all_commands(self) -> None:
-        for cmd in self.commands.keys():
+        for cmd in self.commands:
             if cmd == "all":
                 continue
             self.run_command(cmd)

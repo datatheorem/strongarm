@@ -878,7 +878,7 @@ class MachoAnalyzer:
 
         return None
 
-    def stringref_for_string(self, string: str) -> Optional[int]:
+    def stringref_for_string(self, string: str) -> Optional[VirtualMemoryPointer]:
         """Try to find the stringref for a provided string.
         If the string is not present in the binary, this method returns None.
 

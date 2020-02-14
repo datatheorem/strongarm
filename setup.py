@@ -7,7 +7,7 @@ from strongarm import __version__
 
 
 class CapstoneBuild(build_ext):
-    def run(self):
+    def run(self) -> None:
         call(["/bin/sh", "./install_dependencies.sh"])
         super(CapstoneBuild, self).run()
 

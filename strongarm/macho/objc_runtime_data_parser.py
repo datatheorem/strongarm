@@ -2,6 +2,8 @@ import logging
 from ctypes import c_uint32, sizeof
 from typing import Dict, List, Optional
 
+from more_itertools import first_true
+
 from strongarm.debug_util import DebugUtil
 from strongarm.macho.arch_independent_structs import (
     ArchIndependentStructure,
@@ -218,9 +220,9 @@ class ObjcRuntimeDataParser:
 
         # selref wasn't referenced in classes implemented within the binary
         # make sure it's a valid selref
-        selref = next(
-            (x for x in self._selector_literal_ptr_to_selref_map.values() if x.source_address == selref_addr), None
-        )
+        selrefs = self._selector_literal_ptr_to_selref_map.values()
+        selref = first_true(iter(selrefs), pred=lambda x: x.source_address == selref_addr, default=None)
+
         if selref is not None:
             # Therefore, the selref must refer to a selector which is defined outside this binary
             # this is fine, just construct an ObjcSelector with what we know

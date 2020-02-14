@@ -409,7 +409,7 @@ class MachoBinary:
 
         return self._virtual_base
 
-    def get_bytes(self, offset: StaticFilePointer, size: int, _translate_addr_to_file=False) -> bytearray:
+    def get_bytes(self, offset: StaticFilePointer, size: int, _translate_addr_to_file: bool = False) -> bytearray:
         """Retrieve bytes from Mach-O slice, taking into account that the slice could be at an offset within a FAT
 
         Args:

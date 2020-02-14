@@ -39,9 +39,6 @@ __pycache__/
 # VSCode
 .vscode
 
-# Theos
-.theos
-
 # Resources
 *.tar.gz
 pip-selfcheck.json

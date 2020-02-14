@@ -285,31 +285,16 @@ def print_binary_load_commands(binary: MachoBinary) -> None:
 
 def print_binary_segments(binary: MachoBinary) -> None:
     print("\nSegments:")
-    for cmd in binary.segments:
-        virtual_loc = f"[{cmd.vmaddr:#011x} - {cmd.vmaddr + cmd.vmsize:#011x}]"
-        file_loc = f"[{cmd.offset:#011x} - {cmd.offset + cmd.size:#011x}]"
-        print(f"\t{virtual_loc} (file {file_loc}) {cmd.name}")
+    for segment in binary.segments:
+        virtual_loc = f"[{segment.vmaddr:#011x} - {segment.vmaddr + segment.vmsize:#011x}]"
+        file_loc = f"[{segment.offset:#011x} - {segment.offset + segment.size:#011x}]"
+        print(f"\t{virtual_loc} (file {file_loc}) {segment.name}")
 
 
 def print_binary_sections(binary: MachoBinary) -> None:
     print("\nSections:")
-
-    def segment_for_section(section: MachoSection) -> Optional[MachoSegment]:
-        for seg in binary.segments:
-            if seg.vmaddr <= section.address < seg.vmaddr + seg.vmsize:
-                return seg
-        else:
-            # raise IndexError(f'Section {section} out of bounds of segments')
-            return None
-
-    for cmd in binary.sections:
-        segment = segment_for_section(cmd)
-        if segment:
-            segment_name = segment.name
-        else:
-            segment_name = "<unknown>"
-        section_name = cmd.name
-        print(f"\t[{hex(cmd.address)} - {hex(cmd.end_address)}] {section_name} ({segment_name})")
+    for section in binary.sections:
+        print(f"\t[{hex(section.address)} - {hex(section.end_address)}] {section.name} ({section.segment.name})")
 
 
 def print_analyzer_imported_symbols(analyzer: MachoAnalyzer) -> None:

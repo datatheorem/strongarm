@@ -1,5 +1,5 @@
 import re
-from typing import List, Optional
+from typing import List
 
 from capstone import CsInsn
 from capstone.arm64 import ARM64_OP_IMM, ARM64_OP_MEM, ARM64_OP_REG, Arm64Op
@@ -9,8 +9,6 @@ from strongarm.macho import (
     MachoAnalyzer,
     MachoBinary,
     MachoParser,
-    MachoSection,
-    MachoSegment,
     ObjcCategory,
     ObjcClass,
     ObjcSelector,

@@ -33,4 +33,5 @@ setup(
     cmdclass={"build_ext": CapstoneBuild},
     install_requires=["capstone"],
     package_data={"strongarm": ["py.typed"]},
+    data_files=[("", ["LICENSE.txt"])],
 )

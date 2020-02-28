@@ -9,6 +9,7 @@ from strongarm.objc import (
     CodeSearch,
     CodeSearchFunctionCallWithArguments,
     CodeSearchResultFunctionCallWithArguments,
+    ObjcBranchInstruction,
     ObjcFunctionAnalyzer,
     ObjcInstruction,
     ObjcMethodInfo,
@@ -87,7 +88,11 @@ class TestFunctionAnalyzer:
             result = results[0]
             assert result.found_instruction.address == 0x100006254
             assert result.found_instruction.symbol == "_objc_msgSendSuper2"
+
+            assert isinstance(result.found_instruction, ObjcBranchInstruction)
+            assert result.found_instruction.selector is not None
             assert result.found_instruction.selector.name == "initWithFrame:"
+            assert result.found_instruction.selref is not None
             assert result.found_instruction.selref.selector_literal == "initWithFrame:"
             assert result.found_instruction.selref.source_address == 0x100009070
 

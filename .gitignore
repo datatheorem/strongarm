@@ -1,13 +1,43 @@
+# Virtual env
+.venv
+
+# Byte-compiled
+__pycache__/
+
+# mypy
+.mypy_cache/
+
+# pytest
+.pytest_cache/
+
+# coverage
+.coverage
+
 # Distribution / packaging
 .Python
-bin/
-include/
-lib/
-dist/
-build/
+/bin/
+/include/
+/lib/
+/build/
+/dist/
 
-# Pycharms
+# eggs
+*.egg-info/
+
+# macOS
+.DS_Store
+
+# Xcode
+*.xcbuild
+*.xccheckout
+*.xcuserdata
+*.xcuserstate
+
+# Pycharm
 .idea
+
+# VSCode
+.vscode
 
 # Resources
 *.tar.gz
@@ -20,9 +50,3 @@ pip-selfcheck.json
 # Installer logs
 pip-log.txt
 pip-delete-this-directory.txt
-
-# eggs
-strongarm.egg-info/
-
-# mypy
-.mypy_cache/

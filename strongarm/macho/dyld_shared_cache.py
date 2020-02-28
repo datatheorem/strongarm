@@ -249,7 +249,7 @@ class DyldSharedCacheBinary(MachoBinary):
         # Translate into the global DSC file
         return self.dyld_shared_cache_parser.translate_virtual_address_to_static(virtual_address)
 
-    def get_bytes(self, offset: StaticFilePointer, size: int, _translate_addr_to_file=True) -> bytearray:
+    def get_bytes(self, offset: StaticFilePointer, size: int, _translate_addr_to_file: bool = True) -> bytearray:
         # There are two possibilities: The requested data is "binary-local", meaning it's within the __TEXT buffer
         # backing this object. Or, the requested data is somewhere within the global DSC.
         # It would be clear which is the case from the calling context. For example, if the pointer comes from

@@ -21,6 +21,9 @@ class ObjcInstruction:
         self.is_msgSend_call: bool = False
         self.symbol: Optional[str] = None
 
+    def __repr__(self) -> str:
+        return f"<ObjcInstruction {self.symbol} at 0x{self.address:x}>"
+
     @classmethod
     def is_vector_register(cls, reg_name: str) -> bool:
         """Returns True if the register refers to a vector register; False otherwise.

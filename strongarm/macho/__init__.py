@@ -29,6 +29,7 @@ from .macho_binary import (
     LoadCommandMissingError,
     MachoBinary,
     MachoSection,
+    MachoSegment,
     NoEmptySpaceForLoadCommandError,
 )
 from .macho_definitions import (
@@ -129,6 +130,7 @@ __all__ = [
     "LoadCommandMissingError",
     "MachoBinary",
     "MachoSection",
+    "MachoSegment",
     "NoEmptySpaceForLoadCommandError",
     "CPU_TYPE",
     "HEADER_FLAGS",

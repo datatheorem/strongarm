@@ -7,13 +7,14 @@ name = "pypi"
 capstone = "*"
 
 [dev-packages]
-mypy = "*"
-flake8 = "*"
+# Packages for developing
 invoke = "*"
-pytest = "*"
+flake8 = "*"
 autoflake = "*"
 isort = "*"
 black = "==19.3b0"
+mypy = "*"
+pytest = "*"
 
 [requires]
 python_version = "3.7"

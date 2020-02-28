@@ -107,10 +107,14 @@ def format_instruction_arg(instruction: CsInsn, arg: Arm64Op) -> str:
 
 
 def args_from_sel_name(sel: str) -> List[str]:
-    sel_components = sel.split(":")
     sel_args = ["self", f"@selector({sel})"]
+    if ":" not in sel:
+        return sel_args
+
+    sel_components = sel.split(":")
     for component in sel_components:
         if not len(component):
+            sel_args.append("")
             continue
         # extract the last capitalized word
         split = re.findall("[A-Z][^A-Z]*", component)
@@ -138,11 +142,11 @@ def disassemble_method(binary: MachoBinary, method: ObjcMethodInfo) -> str:
 
 
 def print_instr(instr: ObjcInstruction) -> None:
-    instruction_string = ""
-    instruction_string += f"\t{hex(instr.address)}\t\t{instr.raw_instr.mnemonic}"
+    raw_instr = instr.raw_instr
+    instruction_string = f"\t{hex(instr.address)}\t\t{raw_instr.mnemonic}"
 
     # Add each arg to the string
-    instruction_string += ", ".join([format_instruction_arg(instr.raw_instr, arg) for arg in instr.raw_instr.operands])
+    instruction_string += ", ".join([format_instruction_arg(raw_instr, arg) for arg in raw_instr.operands])
     print(instruction_string)
 
 
@@ -159,14 +163,14 @@ def annotate_instruction(function_analyzer: ObjcFunctionAnalyzer, sel_args: List
         annotation += "#\t"
         if function_analyzer.is_local_branch(wrapped_branch_instr):
             annotation += StringPalette.ANNOTATION(f"jump loc_{hex(wrapped_branch_instr.destination_address)}")
+
         elif wrapped_instr.symbol:
             annotation += StringPalette.ANNOTATION(wrapped_instr.symbol)
 
             if not wrapped_branch_instr.selector:
                 annotation += StringPalette.ANNOTATION("();")
             else:
-                args = f"(id, @selector({wrapped_branch_instr.selector.name})"
-                annotation += StringPalette.ANNOTATION_ARGS(args)
+                annotation += StringPalette.ANNOTATION_ARGS(f"(id, @selector({wrapped_branch_instr.selector.name})")
 
                 # Figure out argument count passed to selector
                 arg_count = wrapped_branch_instr.selector.name.count(":")
@@ -183,6 +187,7 @@ def annotate_instruction(function_analyzer: ObjcFunctionAnalyzer, sel_args: List
 
                     annotation += StringPalette.STRING(method_arg_string)
                 annotation += ");"
+
         else:
             annotation += StringPalette.ANNOTATION(f"({hex(instr.address)})(")
             arg_count = 4
@@ -242,20 +247,19 @@ def disassemble_function(
     basic_block_boundaries_set = set(basic_block_boundaries_flat)
 
     for instr in function_analyzer.instructions:
-        instruction_string = ""
+        line = ""
         # Add visual indicator if this is a basic block boundary
         if instr.address in basic_block_boundaries_set:
-            instruction_string += StringPalette.BASIC_BLOCK(f"--- loc_{hex(instr.address)} ----------\n")
+            line += StringPalette.BASIC_BLOCK(f"--- loc_{hex(instr.address)} ----------\n")
 
-        instruction_string += (
-            f"\t{StringPalette.ADDRESS(hex(instr.address))}\t" f"\t{StringPalette.MNEMONIC(instr.mnemonic)} "
-        )
-
-        # Add each arg to the string
-        instruction_string += ", ".join([format_instruction_arg(instr, x) for x in instr.operands])
-
-        instruction_string += annotate_instruction(function_analyzer, sel_args, instr)
-        disassembled_text.append(instruction_string)
+        lines = [
+            StringPalette.ADDRESS(hex(instr.address)),
+            StringPalette.MNEMONIC(f"{instr.mnemonic:5}"),
+            ", ".join([format_instruction_arg(instr, x) for x in instr.operands]),
+            annotate_instruction(function_analyzer, sel_args, instr),
+        ]
+        line += "\t" + "\t".join(lines)
+        disassembled_text.append(line)
 
     return "\n".join(disassembled_text)
 
@@ -279,17 +283,16 @@ def print_binary_load_commands(binary: MachoBinary) -> None:
 
 def print_binary_segments(binary: MachoBinary) -> None:
     print("\nSegments:")
-    for cmd in binary.segments:
-        file_loc = f"[{format(cmd.fileoff, '#011x')} - {format(cmd.fileoff + cmd.filesize, '#011x')}]"
-        virtual_loc = f"[{format(cmd.vmaddr, '#011x')} - {format(cmd.vmaddr + cmd.vmsize, '#011x')}]"
-        print(f"\t{virtual_loc} (file {file_loc}) {cmd.segname}")
+    for segment in binary.segments:
+        virtual_loc = f"[{segment.vmaddr:#011x} - {segment.vmaddr + segment.vmsize:#011x}]"
+        file_loc = f"[{segment.offset:#011x} - {segment.offset + segment.size:#011x}]"
+        print(f"\t{virtual_loc} (file {file_loc}) {segment.name}")
 
 
 def print_binary_sections(binary: MachoBinary) -> None:
     print("\nSections:")
-    for cmd in binary.sections:
-        section_name = cmd.name.decode()
-        print(f"\t[{hex(cmd.address)} - {hex(cmd.end_address)}] {section_name}")
+    for section in binary.sections:
+        print(f"\t[{hex(section.address)} - {hex(section.end_address)}] {section.name} ({section.segment.name})")
 
 
 def print_analyzer_imported_symbols(analyzer: MachoAnalyzer) -> None:
@@ -307,8 +310,8 @@ def print_analyzer_imported_symbols(analyzer: MachoAnalyzer) -> None:
 
 def print_analyzer_exported_symbols(analyzer: MachoAnalyzer) -> None:
     print("\tExported symbols:")
-    for exported_sym in analyzer.exported_symbol_names_to_pointers.keys():
-        print(f"\t\t{exported_sym}")
+    for exported_sym, exported_addr in analyzer.exported_symbol_names_to_pointers.items():
+        print(f"\t\t{exported_sym}: {hex(exported_addr)}")
 
 
 def print_selector(objc_class: ObjcClass, selector: ObjcSelector) -> None:
@@ -334,6 +337,7 @@ def print_analyzer_methods(analyzer: MachoAnalyzer) -> None:
 def print_analyzer_classes(analyzer: MachoAnalyzer) -> None:
     print("\nObjective-C Classes:")
     classes = analyzer.objc_classes()
+    classes = sorted(classes, key=lambda c: c.name)
     for objc_class in classes:
         # Belongs to a class or category?
         if isinstance(objc_class, ObjcCategory):
@@ -347,5 +351,19 @@ def print_analyzer_classes(analyzer: MachoAnalyzer) -> None:
 def print_analyzer_protocols(analyzer: MachoAnalyzer) -> None:
     print("\nProtocols conformed to within the binary:")
     protocols = analyzer.get_conformed_protocols()
+    protocols = sorted(protocols, key=lambda p: p.name)
     for protocol in protocols:
         print(f"\t{protocol.name}: {len(protocol.selectors)} selectors")
+
+
+def print_raw_strings(binary: MachoBinary) -> None:
+    strings_section = binary.section_with_name("__cstring", "__TEXT")
+    if strings_section is None:
+        return
+
+    print("\nStrings:")
+    for string in strings_section.content.split(b"\0"):
+        try:
+            print(f"\t{string.decode()}")
+        except UnicodeDecodeError:
+            print(f"\t{string}")

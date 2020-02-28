@@ -112,6 +112,7 @@ def binary_containing_code(
             shutil.copy(temp_compiled_bin, compiled_code_bin_path)
 
     binary = MachoParser(compiled_code_bin_path).get_arm64_slice()
+    assert binary is not None
     analyzer = MachoAnalyzer.get_analyzer(binary)
     yield binary, analyzer
 
@@ -120,13 +121,16 @@ def binary_containing_code(
 def function_containing_asm(asm_source: str) -> Generator[Tuple[MachoAnalyzer, ObjcFunctionAnalyzer], None, None]:
     with binary_containing_code(asm_source, is_assembly=True) as (binary, analyzer):
         # Assembly compiled with binary_containing_code is always placed in main()
-        main_addr = analyzer.callable_symbol_for_symbol_name("_main").address
+        callable_symbol = analyzer.callable_symbol_for_symbol_name("_main")
+        assert callable_symbol is not None
+
+        main_addr = callable_symbol.address
         func = ObjcFunctionAnalyzer.get_function_analyzer(binary, main_addr)
         yield analyzer, func
 
 
 @contextmanager
-def simulate_assembly(asm_source: str, expected_code_path_count=1) -> Generator[List[ExecContext], None, None]:
+def simulate_assembly(asm_source: str, _expected_code_path_count: int = 1) -> Generator[List[ExecContext], None, None]:
     with function_containing_asm(asm_source) as (analyzer, func):
         sim = Simulator(analyzer, func, [func.start_address, func.end_address - MachoBinary.BYTES_PER_INSTRUCTION])
         ctxs = sim.run()

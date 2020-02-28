@@ -40,11 +40,13 @@ AIS = TypeVar("AIS", bound=ArchIndependentStructure)
 
 
 class BinaryEncryptedError(Exception):
-    pass
+    """Raised when the binary is encrypted.
+    """
 
 
 class LoadCommandMissingError(Exception):
-    pass
+    """Raised when the binary is missing a load command.
+    """
 
 
 class NoEmptySpaceForLoadCommandError(Exception):
@@ -53,19 +55,61 @@ class NoEmptySpaceForLoadCommandError(Exception):
 
 
 class InvalidAddressError(Exception):
-    """Raised when a client asks for bytes at an address outside the binary
+    """Raised when a client asks for bytes at an address outside the binary.
     """
 
 
+class MachoSegment:
+    def __init__(self, binary: "MachoBinary", segment_command: MachoSegmentCommandStruct) -> None:
+        self.cmd = segment_command
+
+        self.content = binary.get_bytes(segment_command.fileoff, segment_command.filesize)
+        self.name = segment_command.segname.decode()
+        self.sizeof = segment_command.sizeof
+
+        self.vmaddr = segment_command.vmaddr
+        self.vmsize = segment_command.vmsize
+        self.vm_end_address = self.vmaddr + self.vmsize
+
+        self.offset = segment_command.fileoff
+        self.size = segment_command.filesize
+        self.end_address = self.offset + self.size
+
+        self.section_count = segment_command.nsects
+        self.sections: List["MachoSection"] = []
+
+        self.maxprot = segment_command.maxprot
+        self.initprot = segment_command.initprot
+        self.flags = segment_command.flags
+
+    def __repr__(self) -> str:
+        virtual_loc = f"[0x{self.vmaddr:011x} - 0x{self.vm_end_address:011x}]"
+        file_loc = f"[0x{self.offset:011x} - 0x{self.end_address:011x}]"
+        return f"<MachoSegment {virtual_loc} (file {file_loc}) {self.name} ({self.section_count} sections)>"
+
+
 class MachoSection:
-    def __init__(self, binary: "MachoBinary", section_command: MachoSectionRawStruct) -> None:
+    def __init__(self, binary: "MachoBinary", section_command: MachoSectionRawStruct, segment: MachoSegment) -> None:
         self.cmd = section_command
+        self.segment = segment
+
         # ignore these types due to dynamic attributes of associated types
         self.content = binary.get_bytes(section_command.offset, section_command.size)
-        self.name = section_command.sectname
+        self.name = section_command.sectname.decode()
+        self.segment_name = section_command.segname.decode()
         self.address = section_command.addr
+        self.size = section_command.size
+        self.end_address = self.address + self.size
         self.offset = section_command.offset
-        self.end_address = self.address + section_command.size
+
+        self.align = section_command.align
+        self.reloff = section_command.reloff
+        self.nreloc = section_command.nreloc
+        self.flags = section_command.flags
+
+    def __repr__(self) -> str:
+        virtual_loc = f"[0x{self.address:011x} - 0x{self.end_address:011x}]"
+        return f'<MachoSection {virtual_loc} "{self.name}" ("{self.segment_name}")>'
 
 
 class MachoBinary:
@@ -96,7 +140,7 @@ class MachoBinary:
         self._virtual_base: Optional[VirtualMemoryPointer] = None
 
         # Segment and section commands from Mach-O header
-        self.segments: List[MachoSegmentCommandStruct] = []
+        self.segments: List[MachoSegment] = []
         self.sections: List[MachoSection] = []
         # Interesting Mach-O sections
         self._dysymtab: Optional[MachoDysymtabCommandStruct] = None
@@ -119,6 +163,9 @@ class MachoBinary:
         self.symtab_contents = self._get_symtab_contents()
         DebugUtil.log(self, f"parsed symtab, len = {len(self.symtab_contents)}")
 
+    def __repr__(self) -> str:
+        return f"<MachoBinary binary={self.path}>"
+
     def parse(self) -> bool:
         """Attempt to parse the provided file info as a Mach-O slice
 
@@ -127,7 +174,7 @@ class MachoBinary:
             False otherwise.
 
         """
-        DebugUtil.log(self, f"parsing Mach-O slice in {self.path}")
+        # DebugUtil.log(self, f"parsing Mach-O slice @ {hex(int(self._offset_within_fat))} in {self.path}")
 
         # Preliminary Mach-O parsing
         if not self.verify_magic():
@@ -218,9 +265,9 @@ class MachoBinary:
             load_command = self.read_struct(offset, MachoLoadCommandStruct)
 
             if load_command.cmd in [MachoLoadCommands.LC_SEGMENT, MachoLoadCommands.LC_SEGMENT_64]:
-
-                segment = self.read_struct(offset, MachoSegmentCommandStruct)
+                segment_command = self.read_struct(offset, MachoSegmentCommandStruct)
                 # TODO(PT) handle byte swap of segment if necessary
+                segment = MachoSegment(self, segment_command)
                 self.segments.append(segment)
                 self._parse_sections_for_segment(segment, offset)
 
@@ -278,7 +325,7 @@ class MachoBinary:
         section = self.section_for_address(virt_addr)
         if not section:
             return None
-        return section.name.decode()
+        return section.name
 
     def section_for_address(self, virt_addr: VirtualMemoryPointer) -> Optional[MachoSection]:
         """Given an address in the virtual address space, return the section which contains it.
@@ -302,55 +349,47 @@ class MachoBinary:
         # guess by using the highest-addressed section we've seen
         return max_section
 
-    def segment_for_index(self, segment_index: int) -> MachoSegmentCommandStruct:
-        if segment_index < 0 or segment_index >= len(self.segments):
+    def segment_for_index(self, segment_index: int) -> MachoSegment:
+        if 0 <= segment_index < len(self.segments):
+            # PT: Segments are guaranteed to be sorted in the order they appear in the Mach-O header
+            return self.segments[segment_index]
+        else:
             raise ValueError(f"segment_index ({segment_index}) out of bounds ({len(self.segments)}")
-        # PT: Segments are guaranteed to be sorted in the order they appear in the Mach-O header
-        return self.segments[segment_index]
 
-    def segment_with_name(self, desired_segment_name: str) -> Optional[MachoSegmentCommandStruct]:
+    def segment_with_name(self, desired_segment_name: str) -> Optional[MachoSegment]:
         """Returns the segment with the provided name. Returns None if there's no such segment in the binary.
         """
         # TODO(PT): add unit test for this method
-        for segment_cmd in self.segments:
-            segment_name = segment_cmd.segname.decode()
-            if segment_name == desired_segment_name:
-                return segment_cmd
-        return None
+        return next((s for s in self.segments if s.name == desired_segment_name), None)
 
     def section_with_name(self, desired_section_name: str, parent_segment_name: str) -> Optional[MachoSection]:
         """Retrieve the section with the provided name which is contained within the provided segment.
         Returns None if no such section exists.
         """
-        for section in self.sections:
-            section_name = section.name.decode()
-            if section_name == desired_section_name:
-                if section.cmd.segname.decode() != parent_segment_name:
-                    # Correct section name but wrong segment -- keep looking
-                    continue
-                return section
+        segment = self.segment_with_name(parent_segment_name)
+        if segment:
+            return next((s for s in segment.sections if s.name == desired_section_name), None)
         return None
 
-    def _parse_sections_for_segment(
-        self, segment: MachoSegmentCommandStruct, segment_offset: StaticFilePointer
-    ) -> None:
+    def _parse_sections_for_segment(self, segment: MachoSegment, segment_offset: StaticFilePointer) -> None:
         """Parse all sections contained within a Mach-O segment, and add them to our list of sections
 
         Args:
             segment: The segment command whose sections should be read
             segment_offset: The offset within the file that the segment command is located at
         """
-        if not segment.nsects:
+        if not segment.section_count:
             return
 
         # The first section of this segment begins directly after the segment
         section_offset = segment_offset + segment.sizeof
-        for i in range(segment.nsects):
+        for i in range(segment.section_count):
             # Read section header from file
             # TODO(PT): handle byte swap of segment
             section_command = self.read_struct(section_offset, MachoSectionRawStruct)
             # Encapsulate header and content into one object, and store that
-            section = MachoSection(self, section_command)
+            section = MachoSection(self, section_command, segment)
+            segment.sections.append(section)
             # Add to list of sections within the Mach-O
             self.sections.append(section)
 
@@ -372,7 +411,7 @@ class MachoBinary:
 
         return self._virtual_base
 
-    def get_bytes(self, offset: StaticFilePointer, size: int, _translate_addr_to_file=False) -> bytearray:
+    def get_bytes(self, offset: StaticFilePointer, size: int, _translate_addr_to_file: bool = False) -> bytearray:
         """Retrieve bytes from Mach-O slice, taking into account that the slice could be at an offset within a FAT
 
         Args:
@@ -524,7 +563,7 @@ class MachoBinary:
             else:
                 # read full string!
                 try:
-                    symbol_name = bytearray(symbol_name_characters).decode("UTF-8")
+                    symbol_name = bytearray(symbol_name_characters).decode()
                     return symbol_name
                 except UnicodeDecodeError:
                     # if decoding the string failed, we may have been passed an address which does not actually

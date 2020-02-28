@@ -2,6 +2,8 @@ import logging
 from ctypes import c_uint32, sizeof
 from typing import Dict, List, Optional
 
+from more_itertools import first_true
+
 from strongarm.debug_util import DebugUtil
 from strongarm.macho.arch_independent_structs import (
     ArchIndependentStructure,
@@ -19,63 +21,27 @@ from strongarm.macho.macho_binary import MachoBinary
 from strongarm.macho.macho_definitions import VirtualMemoryPointer
 
 
-class ObjcClass:
-    __slots__ = ["raw_struct", "name", "selectors", "ivars", "protocols", "super_classref"]
+class ObjcSelref:
+    __slots__ = ["source_address", "destination_address", "selector_literal"]
 
     def __init__(
-        self,
-        raw_struct: ArchIndependentStructure,
-        name: str,
-        selectors: List["ObjcSelector"],
-        ivars: List["ObjcIvar"] = None,
-        protocols: List["ObjcProtocol"] = None,
-        super_classref: Optional[VirtualMemoryPointer] = None,
+        self, source_address: VirtualMemoryPointer, destination_address: VirtualMemoryPointer, selector_literal: str
     ) -> None:
-        self.name = name
-        self.selectors = selectors
-        self.raw_struct = raw_struct
-        self.ivars = ivars if ivars else []
-        self.protocols = protocols if protocols else []
-        self.super_classref = super_classref
+        self.source_address = source_address
+        self.destination_address = destination_address
+        self.selector_literal = selector_literal
 
     def __repr__(self) -> str:
-        return f"_OBJC_CLASS_$_{self.name}"
-
-
-class ObjcCategory(ObjcClass):
-    __slots__ = ["raw_struct", "name", "base_class", "category_name", "selectors", "ivars", "protocols"]
-
-    def __init__(
-        self,
-        raw_struct: ObjcCategoryRawStruct,
-        base_class: str,
-        category_name: str,
-        selectors: List["ObjcSelector"],
-        ivars: List["ObjcIvar"] = None,
-        protocols: List["ObjcProtocol"] = None,
-    ) -> None:
-        self.base_class = base_class
-        self.category_name = category_name
-
-        # ObjcCategory.name includes the base class + the cat-name
-        # That way, callers don't need to check the ObjcClass instance type to get the 'right' value
-        full_name = f"{base_class} ({category_name})"
-        super().__init__(raw_struct, full_name, selectors, ivars, protocols)
-
-    def __repr__(self) -> str:
-        return f"_OBJC_CATEGORY_$_{self.base_class}_({self.category_name})"
-
-
-class ObjcProtocol(ObjcClass):
-    pass
+        return (
+            f"<ObjcSelref source=0x{self.source_address:x} dest=0x{self.destination_address:x}"
+            f" sel={self.selector_literal}>"
+        )
 
 
 class ObjcSelector:
     __slots__ = ["name", "selref", "implementation", "is_external_definition"]
 
-    def __init__(
-        self, name: str, selref: Optional["ObjcSelref"], implementation: Optional[VirtualMemoryPointer]
-    ) -> None:
+    def __init__(self, name: str, selref: Optional[ObjcSelref], implementation: Optional[VirtualMemoryPointer]) -> None:
         self.name = name
         self.selref = selref
         self.implementation = implementation
@@ -106,15 +72,67 @@ class ObjcIvar:
     __repr__ = __str__
 
 
-class ObjcSelref:
-    __slots__ = ["source_address", "destination_address", "selector_literal"]
+class ObjcClass:
+    __slots__ = ["raw_struct", "name", "selectors", "ivars", "protocols", "super_classref"]
 
     def __init__(
-        self, source_address: VirtualMemoryPointer, destination_address: VirtualMemoryPointer, selector_literal: str
+        self,
+        raw_struct: ArchIndependentStructure,
+        name: str,
+        selectors: List[ObjcSelector],
+        ivars: List[ObjcIvar] = None,
+        protocols: List["ObjcProtocol"] = None,
+        super_classref: Optional[VirtualMemoryPointer] = None,
     ) -> None:
-        self.source_address = source_address
-        self.destination_address = destination_address
-        self.selector_literal = selector_literal
+        self.name = name
+        self.selectors = selectors
+        self.raw_struct = raw_struct
+        self.ivars = ivars if ivars else []
+        self.protocols = protocols if protocols else []
+        self.super_classref = super_classref
+
+    def __str__(self) -> str:
+        return f"_OBJC_CLASS_$_{self.name}"
+
+    def __repr__(self) -> str:
+        return (
+            f"<@class {self.name}"
+            f" sel_count={len(self.selectors)} ivar_count={len(self.ivars)} protocol_count={len(self.protocols)}>"
+        )
+
+
+class ObjcProtocol(ObjcClass):
+    pass
+
+
+class ObjcCategory(ObjcClass):
+    __slots__ = ["raw_struct", "name", "base_class", "category_name", "selectors", "ivars", "protocols"]
+
+    def __init__(
+        self,
+        raw_struct: ObjcCategoryRawStruct,
+        base_class: str,
+        category_name: str,
+        selectors: List[ObjcSelector],
+        ivars: List[ObjcIvar] = None,
+        protocols: List[ObjcProtocol] = None,
+    ) -> None:
+        self.base_class = base_class
+        self.category_name = category_name
+
+        # ObjcCategory.name includes the base class + the cat-name
+        # That way, callers don't need to check the ObjcClass instance type to get the 'right' value
+        full_name = f"{base_class} ({category_name})"
+        super().__init__(raw_struct, full_name, selectors, ivars, protocols)
+
+    def __str__(self) -> str:
+        return f"_OBJC_CATEGORY_$_{self.base_class}_({self.category_name})"
+
+    def __repr__(self) -> str:
+        return (
+            f"<@class {self.base_class} ({self.category_name})"
+            f" sel_count={len(self.selectors)} ivar_count={len(self.ivars)} protocol_count={len(self.protocols)}>"
+        )
 
 
 class ObjcRuntimeDataParser:
@@ -196,50 +214,51 @@ class ObjcRuntimeDataParser:
             self._selref_ptr_to_selector_map[selref_ptr] = ObjcSelector(selector_string, wrapped_selref, None)
 
     def selector_for_selref(self, selref_addr: VirtualMemoryPointer) -> Optional[ObjcSelector]:
-        if selref_addr in self._selref_ptr_to_selector_map:
-            return self._selref_ptr_to_selector_map[selref_addr]
+        selector = self._selref_ptr_to_selector_map.get(selref_addr)
+        if selector is not None:
+            return selector
 
         # selref wasn't referenced in classes implemented within the binary
         # make sure it's a valid selref
-        selref = [x for x in self._selector_literal_ptr_to_selref_map.values() if x.source_address == selref_addr]
-        if not len(selref):
-            return None
-        _selref = selref[0]
+        selrefs = self._selector_literal_ptr_to_selref_map.values()
+        selref = first_true(iter(selrefs), pred=lambda x: x.source_address == selref_addr, default=None)
 
-        # therefore, the _selref must refer to a selector which is defined outside this binary
-        # this is fine, just construct an ObjcSelector with what we know
-        sel = ObjcSelector(_selref.selector_literal, _selref, None)
-        return sel
+        if selref is not None:
+            # Therefore, the selref must refer to a selector which is defined outside this binary
+            # this is fine, just construct an ObjcSelector with what we know
+            return ObjcSelector(selref.selector_literal, selref, None)
+
+        else:
+            return None
 
     def selector_for_selector_literal(self, literal_addr: VirtualMemoryPointer) -> Optional[ObjcSelector]:
-        return self.selector_for_selref(self._selector_literal_ptr_to_selref_map[literal_addr].source_address)
+        selector_literal = self._selector_literal_ptr_to_selref_map.get(literal_addr)
+        if selector_literal is not None:
+            return self.selector_for_selref(selector_literal.source_address)
+        else:
+            return None
 
     def selrefs_to_selectors(self) -> Dict[VirtualMemoryPointer, ObjcSelector]:
         return self._selref_ptr_to_selector_map
 
     def selref_for_selector_name(self, selector_name: str) -> Optional[VirtualMemoryPointer]:
-        selref_list = [
-            x for x in self._selref_ptr_to_selector_map if self._selref_ptr_to_selector_map[x].name == selector_name
-        ]
-        if len(selref_list):
-            return selref_list[0]
-        return None
+        return next(
+            (selref for selref, selector in self._selref_ptr_to_selector_map.items() if selector.name == selector_name),
+            None,
+        )
 
     def get_method_imp_addresses(self, selector: str) -> List[VirtualMemoryPointer]:
         """Given a selector, return a list of virtual addresses corresponding to the start of each IMP for that SEL
         """
-        imp_addresses = []
-        for objc_class in self.classes:
-            for objc_sel in objc_class.selectors:
-                if objc_sel.name == selector:
-                    if objc_sel.implementation:
-                        imp_addresses.append(objc_sel.implementation)
-        return imp_addresses
+        return [
+            objc_sel.implementation
+            for objc_class in self.classes
+            for objc_sel in objc_class.selectors
+            if objc_sel.name == selector and objc_sel.implementation
+        ]
 
     def objc_class_for_classlist_pointer(self, classlist_ptr: VirtualMemoryPointer) -> Optional[ObjcClass]:
-        if classlist_ptr not in self._classrefs_to_objc_classes:
-            return None
-        return self._classrefs_to_objc_classes[classlist_ptr]
+        return self._classrefs_to_objc_classes.get(classlist_ptr)
 
     def _parse_objc_classes(self) -> List[ObjcClass]:
         """Read Objective-C class data in __objc_classlist, __objc_data to get classes and selectors in binary

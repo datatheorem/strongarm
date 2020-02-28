@@ -17,6 +17,7 @@ from strongarm.cli.utils import (
     print_binary_load_commands,
     print_binary_sections,
     print_binary_segments,
+    print_raw_strings,
     print_selector,
 )
 from strongarm.debug_util import DebugUtil
@@ -54,16 +55,14 @@ class InfoCommand:
             "methods": (print_analyzer_methods, self.analyzer),
             "imports": (print_analyzer_imported_symbols, self.analyzer),
             "exports": (print_analyzer_exported_symbols, self.analyzer),
+            "strings": (print_raw_strings, self.binary),
         }
 
     def description(self) -> str:
-        rep = "Read binary information. info "
-        for cmd in self.commands.keys():
-            rep += f"[{cmd}] "
-        return rep
+        return "Read binary information. info " + " ".join(f"[{cmd}]" for cmd in self.commands)
 
     def run_all_commands(self) -> None:
-        for cmd in self.commands.keys():
+        for cmd in self.commands:
             if cmd == "all":
                 continue
             self.run_command(cmd)
@@ -76,6 +75,7 @@ class InfoCommand:
         if cmd not in self.commands:
             print(f"Unknown argument supplied to info: {cmd}")
             return
+
         func, arg = self.commands[cmd]
         func(arg)  # type: ignore
 
@@ -94,7 +94,8 @@ class StrongarmShell:
             "disasm_f": ("Decompile a given selector. disasm [sel]", self.disasm_f),
             "dump": ("Hex dump a memory address. dump [size] [virtual address]", self.dump_memory),
         }
-        print("strongarm interactive shell\nType 'help' for available commands.")
+        print("strongarm interactive shell")
+        print("Type 'help' for available commands.")
         self.active = True
 
     def dump_memory(self, args: List[str]) -> None:
@@ -177,8 +178,9 @@ class StrongarmShell:
         disassembled_str = disassemble_function(self.binary, VirtualMemoryPointer(args[0], 16))
         print(disassembled_str)
 
-    def help(self, args: List[str]) -> None:
-        print("Commands\n" "----------------")
+    def help(self, _args: List[str]) -> None:
+        print("Commands")
+        print("----------------")
         for name, (description, funcptr) in self.commands.items():
             print(f"{name}: {description}")
 
@@ -190,7 +192,7 @@ class StrongarmShell:
         for option in args:
             info_cmd.run_command(option)
 
-    def exit(self, args: List[str]) -> None:
+    def exit(self, _args: List[str]) -> None:
         print("Quitting...")
         self.active = False
 
@@ -252,7 +254,7 @@ def main() -> None:
         print(f"\t{macho_slice.cpu_type.name} Mach-O slice")
 
     binary = pick_macho_slice(parser)
-    print("Reading {} slice\n\n".format(binary.cpu_type.name))
+    print(f"Reading {binary.cpu_type.name} slice\n\n")
 
     analyzer = MachoAnalyzer.get_analyzer(binary)
     shell = StrongarmShell(binary, analyzer)

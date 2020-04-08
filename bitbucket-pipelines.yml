@@ -13,7 +13,7 @@ pipelines:
             - pipenv install --dev
             - pipenv run invoke deps
             - pipenv run invoke install
-            - pipenv run invoke check-standards
+            - pipenv run invoke autoformat-lint
       - step:
           name: Test code
           caches:

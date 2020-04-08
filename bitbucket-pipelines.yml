@@ -11,7 +11,6 @@ pipelines:
             - pip install pipenv
             - export PIP_PROCESS_DEPENDENCY_LINKS=1
             - pipenv install --dev
-            - pipenv run invoke deps
             - pipenv run invoke install
             - pipenv run invoke autoformat-lint
       - step:
@@ -22,7 +21,6 @@ pipelines:
             - pip install pipenv
             - export PIP_PROCESS_DEPENDENCY_LINKS=1
             - pipenv install --dev
-            - pipenv run invoke deps
             - pipenv run invoke install
             - pipenv run invoke test
       - step:
@@ -32,6 +30,4 @@ pipelines:
           script:
             - pip install invoke pipenv pytest mypy flake8
             - python setup.py install
-            - # Build the dataflow module
-            - python setup.py build_ext --inplace
             - invoke test

@@ -4,14 +4,14 @@ from subprocess import check_output
 from typing import List, Optional
 
 from capstone import CsInsn
+from strongarm_dataflow.dataflow import get_register_contents_at_instruction_fast
+from strongarm_dataflow.register_contents import RegisterContents, RegisterContentsType
 
 from strongarm.debug_util import DebugUtil
 from strongarm.macho import MachoBinary, ObjcClass, ObjcSelector, VirtualMemoryPointer
 
-from .dataflow import get_register_contents_at_instruction_fast
 from .objc_instruction import ObjcBranchInstruction, ObjcInstruction, ObjcUnconditionalBranchInstruction
 from .objc_query import CodeSearch, CodeSearchResult
-from .register_contents import RegisterContents, RegisterContentsType
 
 
 def _is_mangled_cpp_symbol(symbol_name: str) -> bool:

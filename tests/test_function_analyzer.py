@@ -6,9 +6,6 @@ import pytest
 
 from strongarm.macho import MachoAnalyzer, MachoParser, ObjcClass, ObjcSelector, ObjcSelref, VirtualMemoryPointer
 from strongarm.objc import (
-    CodeSearch,
-    CodeSearchFunctionCallWithArguments,
-    CodeSearchResultFunctionCallWithArguments,
     ObjcBranchInstruction,
     ObjcFunctionAnalyzer,
     ObjcInstruction,
@@ -67,39 +64,6 @@ class TestFunctionAnalyzer:
                 if target.is_external_c_call:
                     correct_sym_name = external_targets[target.destination_address]
                     assert target.symbol == correct_sym_name
-
-    def test_search_selector(self):
-        selref = self.analyzer.selref_for_selector_name("initWithFrame:")
-        assert selref
-
-        query = CodeSearchFunctionCallWithArguments(
-            self.binary,
-            ObjcUnconditionalBranchInstruction.OBJC_MSGSEND_FUNCTIONS,
-            {
-                # arg 1 will contain the selref being messaged
-                1: [selref]
-            },
-        )
-
-        def process_results(
-            analyzer: MachoAnalyzer, search: CodeSearch, results: List[CodeSearchResultFunctionCallWithArguments]
-        ) -> None:
-            assert len(results) == 1
-            result = results[0]
-            assert result.found_instruction.address == 0x100006254
-            assert result.found_instruction.symbol == "_objc_msgSendSuper2"
-
-            assert isinstance(result.found_instruction, ObjcBranchInstruction)
-            assert result.found_instruction.selector is not None
-            assert result.found_instruction.selector.name == "initWithFrame:"
-            assert result.found_instruction.selref is not None
-            assert result.found_instruction.selref.selector_literal == "initWithFrame:"
-            assert result.found_instruction.selref.source_address == 0x100009070
-
-            assert result.found_function.start_address == 0x100006228
-
-        self.analyzer.queue_code_search(query, process_results)
-        self.analyzer.search_all_code()
 
     def test_get_register_contents_at_instruction(self):
         from strongarm.objc import RegisterContentsType

@@ -5,7 +5,7 @@ import pytest
 
 from strongarm.macho.macho_analyzer import MachoAnalyzer, ObjcMsgSendXref, VirtualMemoryPointer
 from strongarm.macho.macho_parse import MachoParser
-from strongarm.objc import CodeSearch, CodeSearchFunctionCallWithArguments, ObjcFunctionAnalyzer
+from strongarm.objc import ObjcFunctionAnalyzer
 
 
 class TestMachoAnalyzer:
@@ -261,29 +261,6 @@ class TestMachoAnalyzer:
         caller_func = ObjcFunctionAnalyzer.get_function_analyzer_for_method(self.analyzer.binary, method_info)
         assert caller_func.method_info.objc_class.name == "DTLabel"
         assert caller_func.method_info.objc_sel.name == "logLabel"
-
-    def test_read_xref_in_search_callback(self):
-        # Given I queue a CodeSearch which accesses XRef data
-
-        def callback(analyzer: MachoAnalyzer, search: CodeSearch, results: List):
-            # When I access XRef data within the callback
-            # Then I can read valid data, because the XRef callback should have been invoked first.
-            xrefs = self.analyzer.calls_to(VirtualMemoryPointer(0x100006748))
-            assert len(xrefs) == 1
-            xref = xrefs[0]
-
-            method_info = self.analyzer.method_info_for_entry_point(xref.caller_func_start_address)
-            assert method_info
-            caller_func = ObjcFunctionAnalyzer.get_function_analyzer_for_method(self.analyzer.binary, method_info)
-            # TODO(PT): ObjcFunctionAnalyzer.get_function_analyzer* should return singletons
-            assert caller_func.method_info is not None
-            assert caller_func.method_info.objc_class.name == "DTLabel"
-            assert caller_func.method_info.objc_sel.name == "logLabel"
-            assert caller_func.start_address == VirtualMemoryPointer(0x100006308)
-            assert xref.caller_addr == 0x100006350
-
-        self.analyzer.queue_code_search(CodeSearchFunctionCallWithArguments(self.binary, [], {}), callback)
-        self.analyzer.search_all_code()
 
     def test_find_symbols_by_address(self):
         # Given I provide a locally-defined callable symbol (__mh_execute_header)

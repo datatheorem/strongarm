@@ -11,7 +11,6 @@ from strongarm.debug_util import DebugUtil
 from strongarm.macho import MachoBinary, ObjcClass, ObjcSelector, VirtualMemoryPointer
 
 from .objc_instruction import ObjcBranchInstruction, ObjcInstruction, ObjcUnconditionalBranchInstruction
-from .objc_query import CodeSearch, CodeSearchResult
 
 
 def _is_mangled_cpp_symbol(symbol_name: str) -> bool:
@@ -287,19 +286,6 @@ class ObjcFunctionAnalyzer:
             call_targets.append(ObjcFunctionAnalyzer.get_function_analyzer(self.binary, target.destination_address))
         return call_targets
 
-    def search_code(self, code_search: CodeSearch) -> List[CodeSearchResult]:
-        """Given a CodeSearch object describing rules for matching code, return a List of CodeSearchResult's
-        encapsulating instructions which match the described set of conditions.
-        """
-        from .objc_query import CodeSearchResult
-
-        search_results: List[CodeSearchResult] = []
-        for instruction in self.instructions:
-            result = code_search.satisfied(self, instruction)
-            if result:
-                search_results.append(result)
-        return search_results
-
     def get_local_branches(self) -> List[ObjcBranchInstruction]:
         """Return all instructions in the analyzed function representing a branch to a destination within the function
         """
@@ -309,29 +295,6 @@ class ObjcFunctionAnalyzer:
             if self.is_local_branch(target):
                 local_branches.append(target)
         return local_branches
-
-    def search_call_graph(self, code_search: CodeSearch) -> List[CodeSearchResult]:
-        """Search the entire executable code graph beginning from this function analyzer for a query.
-
-        Given a CodeSearch object describing rules for matching code, return a List of CodeSearchResult's
-        encapsulating instructions which match the described set of conditions.
-
-        The search space of this method is all functions which are reachable from any code path from the source function
-        analyzer.
-        """
-        functions_to_search = [self]
-        reachable_functions = self.function_call_targets
-        while len(reachable_functions) > 0:
-            function_analyzer = reachable_functions[0]
-            reachable_functions.remove(function_analyzer)
-            functions_to_search.append(function_analyzer)
-            reachable_functions += function_analyzer.function_call_targets
-
-        search_results: List[CodeSearchResult] = []
-        for func in functions_to_search:
-            subsearch = func.search_code(code_search)
-            search_results += subsearch
-        return search_results
 
     @classmethod
     def format_instruction(cls, instr: CsInsn) -> str:

@@ -4,9 +4,8 @@ import shutil
 import subprocess
 from contextlib import contextmanager
 from tempfile import TemporaryDirectory
-from typing import Generator, List, Tuple
+from typing import Generator, Tuple
 
-from strongarm.decompiler import ExecContext, Simulator
 from strongarm.macho import MachoAnalyzer, MachoBinary, MachoParser
 from strongarm.objc import ObjcFunctionAnalyzer
 
@@ -46,7 +45,7 @@ def _compile_code(source_code: str, is_assembly: bool) -> Generator[pathlib.Path
         wrapped_source = f"""
         #import <Foundation/Foundation.h>
 
-        // Provide this dummy function in case any simulator tests want to use it
+        // Provide this dummy function in case any test wants to use it
         void UnsafeFunc(NSDictionary* d) {{}}
 
         // Provide a dummy class which unit test code is placed within
@@ -127,11 +126,3 @@ def function_containing_asm(asm_source: str) -> Generator[Tuple[MachoAnalyzer, O
         main_addr = callable_symbol.address
         func = ObjcFunctionAnalyzer.get_function_analyzer(binary, main_addr)
         yield analyzer, func
-
-
-@contextmanager
-def simulate_assembly(asm_source: str, _expected_code_path_count: int = 1) -> Generator[List[ExecContext], None, None]:
-    with function_containing_asm(asm_source) as (analyzer, func):
-        sim = Simulator(analyzer, func, [func.start_address, func.end_address - MachoBinary.BYTES_PER_INSTRUCTION])
-        ctxs = sim.run()
-        yield ctxs

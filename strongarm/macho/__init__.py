@@ -22,7 +22,7 @@ from .arch_independent_structs import (
 )
 from .dyld_info_parser import BindOpcode, DyldBoundSymbol, DyldInfoParser
 from .dyld_shared_cache import DyldSharedCacheBinary, DyldSharedCacheParser
-from .macho_analyzer import CallerXRef, CodeSearchCallback, MachoAnalyzer, ObjcMsgSendXref
+from .macho_analyzer import CallerXRef, MachoAnalyzer, ObjcMsgSendXref
 from .macho_binary import (
     BinaryEncryptedError,
     InvalidAddressError,
@@ -122,7 +122,6 @@ __all__ = [
     "DyldSharedCacheBinary",
     "DyldSharedCacheParser",
     "CallerXRef",
-    "CodeSearchCallback",
     "MachoAnalyzer",
     "ObjcMsgSendXref",
     "BinaryEncryptedError",

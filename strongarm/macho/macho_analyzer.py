@@ -29,14 +29,11 @@ from strongarm.macho.objc_runtime_data_parser import (
 from strongarm.macho.progress_bar import ConsoleProgressBar
 
 if TYPE_CHECKING:
-    from strongarm.objc import ObjcFunctionAnalyzer, ObjcMethodInfo, CodeSearch, CodeSearchResult  # noqa: F401
+    from strongarm.objc import ObjcFunctionAnalyzer, ObjcMethodInfo # noqa: F401
 
 
 _T = TypeVar("_T")
 
-# Callback invoked when the results for a previously queued CodeSearch have been found.
-# This will be dispatched some time after MachoAnalyzer.search_all_code() is called
-CodeSearchCallback = Callable[["MachoAnalyzer", "CodeSearch", List["CodeSearchResult"]], None]
 
 ANALYZER_SQL_SCHEMA = """
     CREATE TABLE function_boundaries(
@@ -101,12 +98,6 @@ class CallableSymbol:
     symbol_name: str
 
 
-@dataclass
-class CodeSearchRequest:
-    search: "CodeSearch"
-    callback: CodeSearchCallback
-
-
 class MachoAnalyzer:
     # This class does expensive one-time cross-referencing operations
     # Therefore, we want only one instance to exist for any MachoBinary
@@ -133,14 +124,8 @@ class MachoAnalyzer:
         self._objc_helper: Optional[ObjcRuntimeDataParser] = None
         self._objc_method_list: List[ObjcMethodInfo] = []
 
-        # For efficiency, API clients submit several CodeSearch's to be performed in a batch, instead of sequentially.
-        # Iterating the binary's code is an expensive operation, and this allows us to do it just once.
-        # This map is where we store the CodeSearch's that are waiting to be executed, and the
-        # callbacks which should be invoked once results are found.
-        self._queued_code_searches: List[CodeSearchRequest] = []
-
         # Use a temporary database to store cross-referenced data. This provides constant-time lookups for things like
-        # finding all the calls to a particular function. In the past, CodeSearch would be used for the same purpose.
+        # finding all the calls to a particular function.
         self._has_computed_call_xrefs = False
         self._db_tempdir = pathlib.Path(tempfile.mkdtemp())
         self._db_path = self._db_tempdir / "strongarm.db"
@@ -679,87 +664,6 @@ class MachoAnalyzer:
             return None
 
         return VirtualMemoryPointer(results[0])
-
-    def queue_code_search(self, code_search: "CodeSearch", callback: CodeSearchCallback) -> None:
-        """Enqueue a CodeSearch. It will be ran when `search_all_code` runs. `callback` will then be invoked.
-        The search space is all known Objective-C entry points within the binary.
-
-        A CodeSearch describes criteria for matching code. A CodeSearchResult encapsulates a CPU instruction and its
-        containing source function which matches the criteria of the search.
-
-        Once the CodeSearch has been run over the binary, the `callback` will be invoked, passing the relevant
-        info about the discovered code.
-        """
-        # logging.info(f'{self.binary.path.name} enqueuing CodeSearch {code_search}. Will invoke {callback}')
-        self._queued_code_searches.append(CodeSearchRequest(code_search, callback))
-
-    def search_all_code(self, display_progress: bool = True) -> None:
-        """Iterate every function in the binary, and run each pending CodeSearch over them.
-        The search space is all known entry points within the binary.
-
-        A CodeSearch describes criteria for matching code. A CodeSearchResult encapsulates a CPU instruction and its
-        containing source function which matches the criteria of the search.
-
-        For each search which is executed, this method will invoke the CodeSearchCallback provided when the search
-        was requested, with the List of CodeSearchResult's which were found.
-        """
-        from strongarm.objc.objc_analyzer import ObjcFunctionAnalyzer  # noqa: F811
-
-        # If there are no queued code searches, we have nothing to do
-        queued_searches = self._queued_code_searches
-        if not len(queued_searches):
-            return
-
-        logging.info(f"Running {len(queued_searches)} code searches on {self.binary.path.name}")
-
-        entry_point_list = self.get_functions()
-        search_results: List[List[CodeSearchResult]] = [[] for _ in range(len(queued_searches))]
-
-        # Searching all code can be a time-consumptive operation. Provide UI feedback on the progress.
-        # This displays a progress bar to stdout. The progress bar will be erased when the context manager exits.
-        code_size = self.binary.slice_filesize / 1024 / 1024
-        with ConsoleProgressBar(
-            prefix=f"{self.binary.path.stem} CodeSearch {int(code_size)}mb", enabled=display_progress
-        ) as progress_bar:
-
-            # Build analyzers for function entry points.
-            for i, entry_address in enumerate(entry_point_list):
-                try:
-                    # Try to find a method-info with a matching address
-                    matched_method_info = None
-                    for method_info in self.get_objc_methods():
-                        if method_info.imp_addr == entry_address:
-                            matched_method_info = method_info
-                            break
-                    if matched_method_info:
-                        function_analyzer = ObjcFunctionAnalyzer.get_function_analyzer_for_method(
-                            self.binary, matched_method_info
-                        )
-                    else:
-                        function_analyzer = ObjcFunctionAnalyzer.get_function_analyzer(self.binary, entry_address)
-                except DisassemblyFailedError as e:
-                    logging.error(f"Failed to disassemble function {hex(entry_address)}: {str(e)}")
-                    continue
-
-                # Run every code search on this function and record their respective results
-                for idx, request in enumerate(queued_searches):
-                    search_results[idx] += function_analyzer.search_code(request.search)
-
-                progress_bar.set_progress(i / len(entry_point_list))
-
-        # Invoke every callback with their respective search results
-        for request, results in zip(queued_searches, search_results):
-            # Remove the CodeSearch from the waiting queue before dispatching the callback
-            # This ensures that if the callback runs another CodeSearch, the queue will be in the right state.
-            self._queued_code_searches.remove(request)
-            try:
-                request.callback(self, request.search, results)  # type: ignore
-            except Exception as e:
-                logging.exception(f"CodeSearch callback raised {type(e)}: {e}")
-                continue
-
-        # We've completed all of the waiting code searches. Drain the queue
-        self._queued_code_searches.clear()
 
     def class_name_for_class_pointer(self, classref: VirtualMemoryPointer) -> Optional[str]:
         """Given a classref, return the name of the class.

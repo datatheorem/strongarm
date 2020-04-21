@@ -1,16 +1,13 @@
 import pathlib
-from typing import List
 from unittest import mock
 
 import pytest
 
 from strongarm.macho import MachoAnalyzer, MachoParser, ObjcClass, ObjcSelector, ObjcSelref, VirtualMemoryPointer
 from strongarm.objc import (
-    ObjcBranchInstruction,
     ObjcFunctionAnalyzer,
     ObjcInstruction,
     ObjcMethodInfo,
-    ObjcUnconditionalBranchInstruction,
     RegisterContentsType,
 )
 from strongarm.objc.objc_analyzer import _demangle_cpp_symbol, _is_mangled_cpp_symbol
@@ -18,7 +15,7 @@ from strongarm.objc.objc_analyzer import _demangle_cpp_symbol, _is_mangled_cpp_s
 
 class TestFunctionAnalyzer:
     FAT_PATH = pathlib.Path(__file__).parent / "bin" / "StrongarmTarget"
-    DIGITAL_ADVISORY_PATH = pathlib.Path(__file__).parent / "bin" / "DigitalAdvisorySolutions"
+    TEST_BINARY_PATH = pathlib.Path(__file__).parent / "bin" / "TestBinary1"
 
     OBJC_RETAIN_STUB_ADDR = 0x1000067CC
     SEC_TRUST_EVALUATE_STUB_ADDR = 0x100006760
@@ -84,7 +81,7 @@ class TestFunctionAnalyzer:
         # Given I provide assembly where an address is loaded via a page load + page offset, using the same register
         # 0x000000010000428c    adrp       x1, #0x10011a000
         # 0x0000000100004290    add        x1, x1, #0x9c8
-        binary = MachoParser(TestFunctionAnalyzer.DIGITAL_ADVISORY_PATH).get_arm64_slice()
+        binary = MachoParser(TestFunctionAnalyzer.TEST_BINARY_PATH).get_arm64_slice()
 
         function_analyzer = ObjcFunctionAnalyzer.get_function_analyzer_for_signature(
             binary, "AppDelegate", "application:didFinishLaunchingWithOptions:"

@@ -16,7 +16,7 @@ def find_selector_implementations(binary):
         )
 
 
-parser = MachoParser("./tests/bin/GammaRayTestBad")
+parser = MachoParser("./tests/bin/TestBinary4")
 binary_64 = parser.get_arm64_slice()
 binary_32 = parser.get_armv7_slice()
 for binary in [binary_64, binary_32]:  # equivalent to parser.slices

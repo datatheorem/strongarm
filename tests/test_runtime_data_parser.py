@@ -6,8 +6,8 @@ from strongarm.macho import MachoParser, ObjcCategory, ObjcRuntimeDataParser
 
 class TestObjcRuntimeDataParser:
     FAT_PATH = pathlib.Path(__file__).parent / "bin" / "StrongarmTarget"
-    CATEGORY_PATH = pathlib.Path(__file__).parent / "bin" / "DigitalAdvisorySolutions"
-    PROTOCOL_32BIT_PATH = pathlib.Path(__file__).parent / "bin" / "USPossibilities"
+    CATEGORY_PATH = pathlib.Path(__file__).parent / "bin" / "TestBinary1"
+    PROTOCOL_32BIT_PATH = pathlib.Path(__file__).parent / "bin" / "Protocol32Bit"
 
     def test_path_for_external_symbol(self):
         parser = MachoParser(TestObjcRuntimeDataParser.FAT_PATH)

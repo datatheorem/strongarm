@@ -6,7 +6,7 @@ from strongarm.macho.macho_parse import MachoParser
 
 class TestDyldInfoParser:
     BINARY1_PATH = pathlib.Path(__file__).parent / "bin" / "StrongarmTarget"
-    BINARY2_PATH = pathlib.Path(__file__).parent / "bin" / "GammaRayTestBad"
+    BINARY2_PATH = pathlib.Path(__file__).parent / "bin" / "TestBinary4"
 
     def test_identify_imported_symbols_1(self):
         parser = MachoParser(TestDyldInfoParser.BINARY1_PATH)
@@ -79,7 +79,7 @@ class TestDyldInfoParser:
         binary = parser.get_arm64_slice()
         analyzer = MachoAnalyzer.get_analyzer(binary)
 
-        # GammaRayTestBad's dyld binding opcodes utilize BIND_OPCODE_DO_BIND_ADD_ADDR_ULEB
+        # TestBinary4's dyld binding opcodes utilize BIND_OPCODE_DO_BIND_ADD_ADDR_ULEB
         # which previously had a bug where we didn't increment the data pointer after binding
 
         # verify data is correct

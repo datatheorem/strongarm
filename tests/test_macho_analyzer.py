@@ -255,8 +255,6 @@ class TestMachoAnalyzer:
         assert method_info
 
         # TODO(PT): ObjcFunctionAnalyzer.get_function_analyzer* should return singletons
-        from strongarm.objc import ObjcFunctionAnalyzer
-
         caller_func = ObjcFunctionAnalyzer.get_function_analyzer_for_method(self.analyzer.binary, method_info)
         assert caller_func.method_info.objc_class.name == "DTLabel"
         assert caller_func.method_info.objc_sel.name == "logLabel"

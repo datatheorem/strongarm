@@ -9,7 +9,7 @@ from contextlib import closing
 from ctypes import sizeof
 from dataclasses import dataclass
 from itertools import tee
-from typing import TYPE_CHECKING, Callable, Dict, Iterable, List, Optional, Set, Tuple, TypeVar
+from typing import TYPE_CHECKING, Dict, Iterable, List, Optional, Set, Tuple, TypeVar
 
 from capstone import CS_ARCH_ARM64, CS_MODE_ARM, Cs, CsInsn
 
@@ -26,7 +26,6 @@ from strongarm.macho.objc_runtime_data_parser import (
     ObjcRuntimeDataParser,
     ObjcSelector,
 )
-from strongarm.macho.progress_bar import ConsoleProgressBar
 
 if TYPE_CHECKING:
     from strongarm.objc import ObjcFunctionAnalyzer, ObjcMethodInfo # noqa: F401

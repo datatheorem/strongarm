@@ -4,12 +4,7 @@ from unittest import mock
 import pytest
 
 from strongarm.macho import MachoAnalyzer, MachoParser, ObjcClass, ObjcSelector, ObjcSelref, VirtualMemoryPointer
-from strongarm.objc import (
-    ObjcFunctionAnalyzer,
-    ObjcInstruction,
-    ObjcMethodInfo,
-    RegisterContentsType,
-)
+from strongarm.objc import ObjcFunctionAnalyzer, ObjcInstruction, ObjcMethodInfo, RegisterContentsType
 from strongarm.objc.objc_analyzer import _demangle_cpp_symbol, _is_mangled_cpp_symbol
 
 

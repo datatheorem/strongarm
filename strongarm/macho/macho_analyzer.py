@@ -28,7 +28,7 @@ from strongarm.macho.objc_runtime_data_parser import (
 )
 
 if TYPE_CHECKING:
-    from strongarm.objc import ObjcFunctionAnalyzer, ObjcMethodInfo # noqa: F401
+    from strongarm.objc import ObjcFunctionAnalyzer, ObjcMethodInfo  # noqa: F401
 
 
 _T = TypeVar("_T")

@@ -1,7 +1,7 @@
 {
     "_meta": {
         "hash": {
-            "sha256": "b1006c1a088cdefb17d54a7587dde54c1cfdfaac8bd2adf723e55f6ce293f899"
+            "sha256": "86c88c6357e66751bd6d3819193f8177423e1f4444084dfb9c2fc488b22692a2"
         },
         "pipfile-spec": 6,
         "requires": {
@@ -28,7 +28,7 @@
             "version": "==4.0.1"
         },
         "strongarm-dataflow": {
-            "git": "ssh://git@bitbucket.org/datatheorem/strongarm-dataflow.git",
+            "git": "ssh://git@bitbucket.org/datatheorem/strongarm_dataflow.git",
             "ref": "2105a9b5d60514c02d5fda93718120f9daaeffa5"
         }
     },

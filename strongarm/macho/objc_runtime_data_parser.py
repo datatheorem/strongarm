@@ -353,7 +353,7 @@ class ObjcRuntimeDataParser:
             raw_struct = objc_class_or_category.raw_struct
             # This method uses the fact that `struct __objc_data.superclass` and `struct __objc_category.base_class`
             # have the same memory layout, being placed one 64-bit word after the start of the structure.
-            base_class_field_addr = raw_struct.binary_offset + sizeof(c_uint64)
+            base_class_field_addr = VirtualMemoryPointer(raw_struct.binary_offset + sizeof(c_uint64))
 
             # If the base class is an imported classref, the imported classref will be bound to its runtime load address
             # by dyld. Look up whether we have an import-binding for the `base_class` field of this structure.
@@ -368,7 +368,8 @@ class ObjcRuntimeDataParser:
                     base_class_name = addr_to_class_names[dereferenced_classref]
                 else:
                     logging.error(
-                        f"Failed to find a corresponding ObjC class for ref {dereferenced_classref} from {objc_class_or_category}"
+                        f"Failed to find a corresponding ObjC class for ref {dereferenced_classref} from "
+                        f"{objc_class_or_category}"
                     )
                     base_class_name = "$_Unknown_Class"
 

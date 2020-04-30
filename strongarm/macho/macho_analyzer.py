@@ -662,28 +662,44 @@ class MachoAnalyzer:
         """Given a classref, return the name of the class.
         This method will handle classes implemented within the binary and imported classes.
         """
+        # Did the caller provide a classref for an imported class?
         if classref in self.imported_symbols_to_symbol_names:
-            # imported class
             return self.imported_symbols_to_symbol_names[classref]
 
-        # otherwise, the class is implemented within a binary and we have an ObjcClass for it
-        try:
-            class_location = self.binary.read_word(classref)
-        except InvalidAddressError:
-            # invalid classref
-            return None
+        # The class is implemented within the binary and has an associated ObjcClass object
+        # We could have been passed either a classref pointer in __objc_classrefs, or the direct address of
+        # an __objc_data structure in __objc_const. Try both variants to search for the associated class.
 
-        local_class = [x for x in self.objc_classes() if x.raw_struct.binary_offset == class_location]
+        # First, check if we were provided with the address of an __objc_data struct in __objc_data representing
+        # the class.
+        local_class = [x for x in self.objc_classes() if x.raw_struct.binary_offset == classref]
         if len(local_class):
+            assert len(local_class) == 1
             return local_class[0].name
 
-        # invalid classref
+        # Then, check if we were passed a classref pointer in __objc_classrefs
+        try:
+            dereferenced_classref = VirtualMemoryPointer(self.binary.read_word(classref))
+        except InvalidAddressError:
+            # Invalid classref
+            return None
+
+        local_class = [x for x in self.objc_classes() if x.raw_struct.binary_offset == dereferenced_classref]
+        if len(local_class):
+            assert len(local_class) == 1
+            return local_class[0].name
+
+        # Invalid classref
         return None
 
     def classref_for_class_name(self, class_name: str) -> Optional[VirtualMemoryPointer]:
         """Given a class name, try to find a classref for it.
         """
-        classrefs = [addr for addr, name in self.imported_symbols_to_symbol_names.items() if name == class_name]
+        classrefs = [
+            addr
+            for addr, name in self.imported_symbols_to_symbol_names.items()
+            if name == class_name and self.binary.section_name_for_address(addr) == "__objc_classrefs"
+        ]
         if len(classrefs):
             return classrefs[0]
 

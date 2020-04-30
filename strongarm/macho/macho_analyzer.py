@@ -111,7 +111,7 @@ class MachoAnalyzer:
         self.cs.detail = True
 
         # Worker to parse dyld bytecode stream and extract dyld stub addresses to the DyldBoundSymbol they represent
-        self._dyld_info_parser: Optional[DyldInfoParser] = None
+        self.dyld_info_parser = DyldInfoParser(self.binary)
         # Each __stubs function calls a single dyld stub address, which has a corresponding DyldBoundSymbol.
         # Map of each __stub function to the associated name of the DyldBoundSymbol
         self._imported_symbol_addresses_to_names: Dict[VirtualMemoryPointer, str] = {}
@@ -478,12 +478,6 @@ class MachoAnalyzer:
         """Return the List of protocols to which code within the binary conforms
         """
         return self.objc_helper.protocols
-
-    @property
-    def dyld_info_parser(self) -> DyldInfoParser:
-        if not self._dyld_info_parser:
-            self._dyld_info_parser = DyldInfoParser(self.binary)
-        return self._dyld_info_parser
 
     @property
     def dyld_bound_symbols(self) -> Dict[VirtualMemoryPointer, DyldBoundSymbol]:

@@ -440,7 +440,7 @@ class MachoAnalyzer:
     @property
     def objc_helper(self) -> ObjcRuntimeDataParser:
         if not self._objc_helper:
-            self._objc_helper = ObjcRuntimeDataParser(self.binary)
+            self._objc_helper = ObjcRuntimeDataParser(self.binary, self.dyld_info_parser)
         return self._objc_helper
 
     @classmethod

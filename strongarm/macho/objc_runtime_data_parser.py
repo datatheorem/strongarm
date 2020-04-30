@@ -1,10 +1,10 @@
 import logging
-from ctypes import c_uint32, sizeof
+from ctypes import c_uint32, c_uint64, sizeof
 from typing import Dict, List, Optional
 
 from more_itertools import first_true
 
-from strongarm.debug_util import DebugUtil
+from strongarm.macho import DyldInfoParser
 from strongarm.macho.arch_independent_structs import (
     ArchIndependentStructure,
     ObjcCategoryRawStruct,
@@ -73,7 +73,7 @@ class ObjcIvar:
 
 
 class ObjcClass:
-    __slots__ = ["raw_struct", "name", "selectors", "ivars", "protocols", "super_classref"]
+    __slots__ = ["raw_struct", "name", "selectors", "ivars", "protocols", "super_classref", "superclass_name"]
 
     def __init__(
         self,
@@ -83,6 +83,7 @@ class ObjcClass:
         ivars: List[ObjcIvar] = None,
         protocols: List["ObjcProtocol"] = None,
         super_classref: Optional[VirtualMemoryPointer] = None,
+        superclass_name: Optional[str] = None,
     ) -> None:
         self.name = name
         self.selectors = selectors
@@ -90,13 +91,14 @@ class ObjcClass:
         self.ivars = ivars if ivars else []
         self.protocols = protocols if protocols else []
         self.super_classref = super_classref
+        self.superclass_name = superclass_name
 
     def __str__(self) -> str:
-        return f"_OBJC_CLASS_$_{self.name}"
+        return f"ObjcClass({self.name} : {self.superclass_name})"
 
     def __repr__(self) -> str:
         return (
-            f"<@class {self.name}"
+            f"<@class {self.name} : {self.superclass_name}"
             f" sel_count={len(self.selectors)} ivar_count={len(self.ivars)} protocol_count={len(self.protocols)}>"
         )
 

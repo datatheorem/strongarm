@@ -128,7 +128,7 @@ class ObjcCategory(ObjcClass):
         super().__init__(raw_struct, full_name, selectors, ivars, protocols)
 
     def __str__(self) -> str:
-        return f"_OBJC_CATEGORY_$_{self.base_class}_({self.category_name})"
+        return f"ObjcCategory({self.base_class} ({self.category_name}))"
 
     def __repr__(self) -> str:
         return (
@@ -138,23 +138,23 @@ class ObjcCategory(ObjcClass):
 
 
 class ObjcRuntimeDataParser:
-    def __init__(self, binary: MachoBinary) -> None:
+    def __init__(self, binary: MachoBinary, dyld_info_parser: DyldInfoParser) -> None:
         self.binary = binary
-        DebugUtil.log(self, "Parsing ObjC runtime info... (this may take a while)")
+        logging.debug(self, f"Parsing ObjC runtime info of {self.binary}...")
 
-        DebugUtil.log(self, "Step 1: Parsing selrefs...")
+        logging.debug(self, "Step 1: Parsing selrefs...")
         self._selref_ptr_to_selector_map: Dict[VirtualMemoryPointer, ObjcSelector] = {}
         self._selector_literal_ptr_to_selref_map: Dict[VirtualMemoryPointer, ObjcSelref] = {}
         # This populates self._selector_literal_ptr_to_selref_map and self._selref_ptr_to_selector_map
         self._parse_selrefs()
 
-        DebugUtil.log(self, "Step 2: Parsing classes, categories, and protocols...")
+        logging.debug(self, "Step 2: Parsing classes, categories, and protocols...")
         self._classrefs_to_objc_classes: Dict[VirtualMemoryPointer, ObjcClass] = {}
         # This populates self._classrefs_to_objc_classes
-        self.classes = self._parse_class_and_category_info()
+        self.classes = self._parse_class_and_category_info(dyld_info_parser)
         self.protocols = self._parse_global_protocol_info()
 
-        DebugUtil.log(self, "Step 3: Resolving symbol name to source dylib map...")
+        logging.debug(self, "Step 3: Resolving symbol name to source dylib map...")
         self._sym_to_dylib_path = self._parse_linked_dylib_symbols()
 
     def _parse_linked_dylib_symbols(self) -> Dict[str, str]:
@@ -265,7 +265,7 @@ class ObjcRuntimeDataParser:
     def _parse_objc_classes(self) -> List[ObjcClass]:
         """Read Objective-C class data in __objc_classlist, __objc_data to get classes and selectors in binary
         """
-        DebugUtil.log(self, "Cross-referencing __objc_classlist, __objc_class, and __objc_data entries...")
+        logging.debug(self, "Cross-referencing __objc_classlist, __objc_class, and __objc_data entries...")
         parsed_objc_classes = []
         classlist_pointers = self._get_classlist_pointers()
         for ptr in classlist_pointers:
@@ -303,7 +303,7 @@ class ObjcRuntimeDataParser:
         return parsed_objc_classes
 
     def _parse_objc_categories(self) -> List[ObjcCategory]:
-        DebugUtil.log(self, "Cross referencing __objc_catlist, __objc_category, and __objc_data entries...")
+        logging.debug(self, "Cross referencing __objc_catlist, __objc_category, and __objc_data entries...")
         parsed_categories = []
         category_pointers = self._get_catlist_pointers()
         for ptr in category_pointers:
@@ -313,7 +313,7 @@ class ObjcRuntimeDataParser:
                 parsed_categories.append(parsed_category)
         return parsed_categories
 
-    def _parse_class_and_category_info(self) -> List[ObjcClass]:
+    def _parse_class_and_category_info(self, dyld_info_parser: DyldInfoParser) -> List[ObjcClass]:
         """Parse classes and categories referenced by __objc_classlist and __objc_catlist
         """
         classes: List[ObjcClass] = []
@@ -321,6 +321,8 @@ class ObjcRuntimeDataParser:
         classes += self._parse_objc_categories()
         # Link superclass methods into their subclasses
         self._add_superclass_methods_to_subclasses()
+        # Link superclasses of classes and base-classes of categories
+        self._add_superclass_or_base_class_name_to_classes(classes, dyld_info_parser)
         return classes
 
     def _add_superclass_methods_to_subclasses(self) -> None:
@@ -335,10 +337,52 @@ class ObjcRuntimeDataParser:
             objc_class.selectors += superclass.selectors
             objc_class.protocols += superclass.protocols
 
+    def _add_superclass_or_base_class_name_to_classes(
+        self, classes: List[ObjcClass], dyld_info_parser: DyldInfoParser
+    ) -> None:
+        """Iterate each ObjC class/category, and backfill its superclass/base_class name, respectively.
+
+        Linking super/base_classes needs two data-sources, depending on whether the super/base_class is imported or not:
+        - To retrieve the class names of imported super/base classes, this needs the map of bound dyld symbols
+        - To retrieve the class names of locally implemented classes, this needs the full list of ObjcClasses
+        """
+        # For efficiency, build a map of (struct address -> class name)
+        addr_to_class_names = {x.raw_struct.binary_offset: x.name for x in classes}
+
+        for objc_class_or_category in classes:
+            raw_struct = objc_class_or_category.raw_struct
+            # This method uses the fact that `struct __objc_data.superclass` and `struct __objc_category.base_class`
+            # have the same memory layout, being placed one 64-bit word after the start of the structure.
+            base_class_field_addr = raw_struct.binary_offset + sizeof(c_uint64)
+
+            # If the base class is an imported classref, the imported classref will be bound to its runtime load address
+            # by dyld. Look up whether we have an import-binding for the `base_class` field of this structure.
+            if base_class_field_addr in dyld_info_parser.dyld_stubs_to_symbols:
+                imported_base_class_sym = dyld_info_parser.dyld_stubs_to_symbols[base_class_field_addr]
+                base_class_name = imported_base_class_sym.name
+
+            else:
+                dereferenced_classref = VirtualMemoryPointer(self.binary.read_word(base_class_field_addr))
+                # The base class is implemented in this binary, and we should have a corresponding ObjcClass object.
+                if dereferenced_classref in addr_to_class_names:
+                    base_class_name = addr_to_class_names[dereferenced_classref]
+                else:
+                    logging.error(
+                        f"Failed to find a corresponding ObjC class for ref {dereferenced_classref} from {objc_class_or_category}"
+                    )
+                    base_class_name = "$_Unknown_Class"
+
+            if isinstance(objc_class_or_category, ObjcCategory):
+                objc_class_or_category.base_class = base_class_name
+                # Update the name attribute to hold the parsed category name
+                objc_class_or_category.name = f"{base_class_name} ({objc_class_or_category.category_name})"
+            else:
+                objc_class_or_category.superclass_name = base_class_name
+
     def _parse_global_protocol_info(self) -> List[ObjcProtocol]:
         """Parse protocols which code in the app conforms to, referenced by __objc_protolist
         """
-        DebugUtil.log(self, "Cross referencing __objc_protolist, __objc_protocol, and __objc_data entries...")
+        logging.debug(self, "Cross referencing __objc_protolist, __objc_protocol, and __objc_data entries...")
         protocol_pointers = self._get_protolist_pointers()
         return self._parse_protocol_ptr_list(protocol_pointers)
 
@@ -430,10 +474,11 @@ class ObjcRuntimeDataParser:
 
         selectors: List[ObjcSelector] = []
         protocols: List[ObjcProtocol] = []
-        # TODO(PT): if we want to parse the name of the base class, grab the destination pointer from entries in
-        # __objc_classrefs; this will be the same as the address in .base_class, and by cross-reffing we can get the
-        # name of the class symbol (like _OBJC_CLASS_$_NSURLRequest)
-        base_class = "$_Unknown_Class"
+
+        # The class-name will be overwritten later in the parse. See self._add_superclass_or_base_class_name_to_classes
+        placeholder_class_name = (
+            f"<Base class of {symbol_name} category @ {objc_category_struct.binary_offset} will be populated later>"
+        )
 
         # if the class implements no methods, the pointer to method list will be the null pointer
         # TODO(PT): we could add some flag to keep track of whether a given sel is an instance or class method
@@ -446,7 +491,7 @@ class ObjcRuntimeDataParser:
             protocol_pointers = self._protolist_ptr_to_protocol_ptr_list(objc_category_struct.base_protocols)
             protocols += self._parse_protocol_ptr_list(protocol_pointers)
 
-        return ObjcCategory(objc_category_struct, base_class, symbol_name, selectors, protocols=protocols)
+        return ObjcCategory(objc_category_struct, placeholder_class_name, symbol_name, selectors, protocols=protocols)
 
     def _parse_objc_data_entry(
         self, objc_class_struct: ObjcClassRawStruct, objc_data_struct: ObjcDataRawStruct
@@ -548,7 +593,7 @@ class ObjcRuntimeDataParser:
             # TODO(PT): sometimes we'll get addresses passed to this method that are actually struct __objc_method
             # entries, rather than struct __objc_data entries. Investigate why this is.
             # This was observed on a 32bit binary, Esquire2
-            DebugUtil.log(
+            logging.debug(
                 self,
                 f"caught ObjcDataRaw struct with invalid fields at {hex(int(objc_class.data))}."
                 f" data->name = {hex(data_entry.name)}",

@@ -140,21 +140,21 @@ class ObjcCategory(ObjcClass):
 class ObjcRuntimeDataParser:
     def __init__(self, binary: MachoBinary, dyld_info_parser: DyldInfoParser) -> None:
         self.binary = binary
-        logging.debug(self, f"Parsing ObjC runtime info of {self.binary}...")
+        logging.debug(f"Parsing ObjC runtime info of {self.binary}...")
 
-        logging.debug(self, "Step 1: Parsing selrefs...")
+        logging.debug("Step 1: Parsing selrefs...")
         self._selref_ptr_to_selector_map: Dict[VirtualMemoryPointer, ObjcSelector] = {}
         self._selector_literal_ptr_to_selref_map: Dict[VirtualMemoryPointer, ObjcSelref] = {}
         # This populates self._selector_literal_ptr_to_selref_map and self._selref_ptr_to_selector_map
         self._parse_selrefs()
 
-        logging.debug(self, "Step 2: Parsing classes, categories, and protocols...")
+        logging.debug("Step 2: Parsing classes, categories, and protocols...")
         self._classrefs_to_objc_classes: Dict[VirtualMemoryPointer, ObjcClass] = {}
         # This populates self._classrefs_to_objc_classes
         self.classes = self._parse_class_and_category_info(dyld_info_parser)
         self.protocols = self._parse_global_protocol_info()
 
-        logging.debug(self, "Step 3: Resolving symbol name to source dylib map...")
+        logging.debug("Step 3: Resolving symbol name to source dylib map...")
         self._sym_to_dylib_path = self._parse_linked_dylib_symbols()
 
     def _parse_linked_dylib_symbols(self) -> Dict[str, str]:
@@ -265,7 +265,7 @@ class ObjcRuntimeDataParser:
     def _parse_objc_classes(self) -> List[ObjcClass]:
         """Read Objective-C class data in __objc_classlist, __objc_data to get classes and selectors in binary
         """
-        logging.debug(self, "Cross-referencing __objc_classlist, __objc_class, and __objc_data entries...")
+        logging.debug("Cross-referencing __objc_classlist, __objc_class, and __objc_data entries...")
         parsed_objc_classes = []
         classlist_pointers = self._get_classlist_pointers()
         for ptr in classlist_pointers:
@@ -303,7 +303,7 @@ class ObjcRuntimeDataParser:
         return parsed_objc_classes
 
     def _parse_objc_categories(self) -> List[ObjcCategory]:
-        logging.debug(self, "Cross referencing __objc_catlist, __objc_category, and __objc_data entries...")
+        logging.debug("Cross referencing __objc_catlist, __objc_category, and __objc_data entries...")
         parsed_categories = []
         category_pointers = self._get_catlist_pointers()
         for ptr in category_pointers:
@@ -383,7 +383,7 @@ class ObjcRuntimeDataParser:
     def _parse_global_protocol_info(self) -> List[ObjcProtocol]:
         """Parse protocols which code in the app conforms to, referenced by __objc_protolist
         """
-        logging.debug(self, "Cross referencing __objc_protolist, __objc_protocol, and __objc_data entries...")
+        logging.debug("Cross referencing __objc_protolist, __objc_protocol, and __objc_data entries...")
         protocol_pointers = self._get_protolist_pointers()
         return self._parse_protocol_ptr_list(protocol_pointers)
 
@@ -595,7 +595,6 @@ class ObjcRuntimeDataParser:
             # entries, rather than struct __objc_data entries. Investigate why this is.
             # This was observed on a 32bit binary, Esquire2
             logging.debug(
-                self,
                 f"caught ObjcDataRaw struct with invalid fields at {hex(int(objc_class.data))}."
                 f" data->name = {hex(data_entry.name)}",
             )

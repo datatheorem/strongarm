@@ -1,5 +1,6 @@
 import pathlib
 
+from strongarm.macho import VirtualMemoryPointer
 from strongarm.macho.macho_analyzer import MachoAnalyzer
 from strongarm.macho.macho_parse import MachoParser
 
@@ -68,12 +69,6 @@ class TestDyldInfoParser:
             if "_OBJC_CLASS_$_" in symbol_name:
                 assert analyzer.class_name_for_class_pointer(imported_pointer) == symbol_name
 
-                # some symbols have multiple imported pointers, so just make sure when we lookup pointer it's the same
-                # symbol name.
-                returned_pointer = analyzer.classref_for_class_name(symbol_name)
-                check = correct_imported_symbols[returned_pointer]
-                assert check == symbol_name
-
     def test_identify_imported_symbols_2(self):
         parser = MachoParser(TestDyldInfoParser.BINARY2_PATH)
         binary = parser.get_arm64_slice()
@@ -82,5 +77,13 @@ class TestDyldInfoParser:
         # TestBinary4's dyld binding opcodes utilize BIND_OPCODE_DO_BIND_ADD_ADDR_ULEB
         # which previously had a bug where we didn't increment the data pointer after binding
 
-        # verify data is correct
-        assert analyzer.classref_for_class_name("_OBJC_CLASS_$_UIAlertView") == 0x100212338
+        # Bound symbol in ObjC category in __objc_const
+        assert (
+            analyzer.imported_symbols_to_symbol_names[VirtualMemoryPointer(0x100212338)] == "_OBJC_CLASS_$_UIAlertView"
+        )
+        # Bound classref in __objc_classrefs
+        assert (
+            analyzer.imported_symbols_to_symbol_names[VirtualMemoryPointer(0x10026AE40)] == "_OBJC_CLASS_$_UIAlertView"
+        )
+        # This API should return the classref, not the bound class in the category definition
+        assert analyzer.classref_for_class_name("_OBJC_CLASS_$_UIAlertView") == VirtualMemoryPointer(0x10026AE40)

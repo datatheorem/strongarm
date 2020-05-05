@@ -1,10 +1,14 @@
 import pathlib
+from contextlib import contextmanager
+from typing import Generator, Tuple
 
 import pytest
 
+from strongarm.macho import MachoBinary, ObjcCategory
 from strongarm.macho.macho_analyzer import MachoAnalyzer, ObjcMsgSendXref, VirtualMemoryPointer
 from strongarm.macho.macho_parse import MachoParser
 from strongarm.objc import ObjcFunctionAnalyzer
+from tests.utils import binary_containing_code
 
 
 class TestMachoAnalyzer:
@@ -472,6 +476,132 @@ class TestMachoAnalyzerDynStaticChecks:
 
         # And when I ask for XRefs to `class`
         # Then the code location is returned
+
+    @contextmanager
+    def uiwebview_bound_symbol_collision(self) -> Generator[Tuple[MachoBinary, MachoAnalyzer], None, None]:
+        """Yields a binary/analyzer pair that contains two dyld bound symbols for _OBJC_CLASS_$_UIWebView.
+        One binding points to the base class of an Objective-C category, and one points to a classref used to perform
+        an _objc_msgSend call.
+        """
+        with binary_containing_code(
+            code_inside_objc_class="""
+            - (instancetype)initWithValue:(NSInteger)value {
+                if ((self = [super init])) {
+                    NSLog(@"value: %d", value);
+                }
+            }
+            - (void)useWebView {
+                // Use a UIWebView to make sure there's a UIWebView classref in the binary
+                UIWebView* wv = [[UIWebView alloc] initWithFrame:CGRectZero];
+                [wv myCategoryMethod];
+            }
+            - (void)useThisClass {
+                SourceClass* sc = [[SourceClass alloc] initWithValue:5];
+                NSLog(@"sc: %@", sc);
+            }
+            """,
+            is_assembly=False,
+            code_outside_objc_class="""
+            @interface UIWebView (LocalCategory)
+            - (void)myCategoryMethod;
+            @end
+            @implementation UIWebView (LocalCategory)
+            - (void)myCategoryMethod {
+                NSLog(@"category code");
+            }
+            @end
+            @interface LocalClass2 : SourceClass
+            - (void)newMethod;
+            @end
+            @implementation LocalClass2
+            - (void)newMethod {
+                LocalClass2* sc = [[LocalClass2 alloc] initWithValue:5];
+            }
+            - (instancetype)initWithValue:(NSInteger)value {
+                if ((self = [super init])) {
+                    NSLog(@"value: %d", value);
+                }
+            }
+            @end
+            """,
+        ) as (binary, analyzer):
+            yield binary, analyzer
+
+    def test_returns_imported_classref_with_multiple_bound_addresses(self):
+        # Given a binary that contains multiple dyld bindings for _OBJC_CLASS_$_UIWebView
+        with self.uiwebview_bound_symbol_collision() as (binary, analyzer):
+            uiwebview_bindings = [
+                addr
+                for addr, name in analyzer.imported_symbols_to_symbol_names.items()
+                if name == "_OBJC_CLASS_$_UIWebView"
+            ]
+            # And the binding in __objc_const is placed before the binding in __objc_classrefs
+            objc_const_binding = VirtualMemoryPointer(0x10000C048)
+            objc_classrefs_binding = VirtualMemoryPointer(0x10000C250)
+
+            uiwebview_bindings = [
+                addr
+                for addr, name in analyzer.imported_symbols_to_symbol_names.items()
+                if name == "_OBJC_CLASS_$_UIWebView"
+            ]
+            assert uiwebview_bindings == [objc_const_binding, objc_classrefs_binding]
+
+            # When the classref for UIWebView is queried
+            uiwebview_classref = analyzer.classref_for_class_name("_OBJC_CLASS_$_UIWebView")
+            # Then the address of the bound symbol in __objc_classrefs is returned
+            # (The address of the bound symbol in __objc_const should not be returned by this API)
+            assert uiwebview_classref == objc_classrefs_binding
+
+    def test_class_name_for_class_pointer(self):
+        # Given a binary that contains imported and local class names
+        with self.uiwebview_bound_symbol_collision() as (binary, analyzer):
+            # When I ask for the class name of a binding in __objc_const (the base class of a category)
+            # Then the correct imported class name is returned
+            assert analyzer.class_name_for_class_pointer(VirtualMemoryPointer(0x10000C048)) == "_OBJC_CLASS_$_UIWebView"
+
+            # When I ask for the class name of a binding in __objc_classrefs (a classref used for _objc_msgSend)
+            # Then the correct imported class name is returned
+            assert analyzer.class_name_for_class_pointer(VirtualMemoryPointer(0x10000C250)) == "_OBJC_CLASS_$_UIWebView"
+
+            # When I ask for the class name of a binding in __objc_data (the superclass of a local class)
+            # Then the correct imported class name is returned
+            assert analyzer.class_name_for_class_pointer(VirtualMemoryPointer(0x10000C2F0)) == "_OBJC_CLASS_$_NSObject"
+
+            # When I ask for the class name of a locally implemented class using the __objc_data pointer
+            # Then the correct locally defined class name is returned
+            assert analyzer.class_name_for_class_pointer(VirtualMemoryPointer(0x10000C270)) == "LocalClass2"
+            assert analyzer.class_name_for_class_pointer(VirtualMemoryPointer(0x10000C2E8)) == "SourceClass"
+
+            # When I ask for the class name of a locally implemented class using the __objc_classrefs pointer
+            # Then the correct locally defined class name is returned
+            assert analyzer.class_name_for_class_pointer(VirtualMemoryPointer(0x10000C248)) == "LocalClass2"
+            assert analyzer.class_name_for_class_pointer(VirtualMemoryPointer(0x10000C258)) == "SourceClass"
+
+            # When I ask for the name of a category referencing an imported base class using the __objc_const struct
+            # Then the correct name is returned
+            assert (
+                analyzer.class_name_for_class_pointer(VirtualMemoryPointer(0x10000C040))
+                == "_OBJC_CLASS_$_UIWebView (LocalCategory)"
+            )
+
+    def test_parse_superclass_and_category_base(self):
+        # Given a binary that contains locally defined classes and categories
+        # That inherit from local and imported symbols
+        with self.uiwebview_bound_symbol_collision() as (binary, analyzer):
+            class_superclass_pairs = []
+            # When the name and super/base-class name of each class is read
+            for objc_cls in analyzer.objc_classes():
+                if isinstance(objc_cls, ObjcCategory):
+                    class_superclass_pairs.append((objc_cls.category_name, objc_cls.base_class))
+                else:
+                    class_superclass_pairs.append((objc_cls.name, objc_cls.superclass_name))
+
+            # Then the super/base-class names are correctly parsed
+            assert class_superclass_pairs == [
+                ("LocalClass2", "SourceClass"),
+                ("SourceClass", "_OBJC_CLASS_$_NSObject"),
+                ("LocalCategory", "_OBJC_CLASS_$_UIWebView"),
+            ]
 
 
 class TestMachoAnalyzerControlFlowTarget:

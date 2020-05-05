@@ -484,7 +484,7 @@ class TestMachoAnalyzerDynStaticChecks:
         an _objc_msgSend call.
         """
         with binary_containing_code(
-            source_code="""
+            code_inside_objc_class="""
             - (instancetype)initWithValue:(NSInteger)value {
                 if ((self = [super init])) {
                     NSLog(@"value: %d", value);
@@ -501,7 +501,7 @@ class TestMachoAnalyzerDynStaticChecks:
             }
             """,
             is_assembly=False,
-            source_code_outside_classdef="""
+            code_outside_objc_class="""
             @interface UIWebView (LocalCategory)
             - (void)myCategoryMethod;
             @end

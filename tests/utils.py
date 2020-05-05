@@ -11,7 +11,9 @@ from strongarm.objc import ObjcFunctionAnalyzer
 
 
 @contextmanager
-def _compile_code(source_code: str, is_assembly: bool, code_outside_objc_class="") -> Generator[pathlib.Path, None, None]:
+def _compile_code(
+    source_code: str, is_assembly: bool, code_outside_objc_class=""
+) -> Generator[pathlib.Path, None, None]:
     """Compile the provided source code & yield the path to the compiled binary. The path is in a temporary directory.
     If is_assembly is set, the source code is treated as AArch64 assembly. Otherwise, as Objective-C source.
     """

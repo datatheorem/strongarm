@@ -596,7 +596,7 @@ class ObjcRuntimeDataParser:
             # This was observed on a 32bit binary, Esquire2
             logging.debug(
                 f"caught ObjcDataRaw struct with invalid fields at {hex(int(objc_class.data))}."
-                f" data->name = {hex(data_entry.name)}",
+                f" data->name = {hex(data_entry.name)}"
             )
             return None
         return data_entry

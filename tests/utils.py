@@ -4,18 +4,23 @@ import shutil
 import subprocess
 from contextlib import contextmanager
 from tempfile import TemporaryDirectory
-from typing import Generator, List, Tuple
+from typing import Generator, Tuple
 
-from strongarm.decompiler import ExecContext, Simulator
 from strongarm.macho import MachoAnalyzer, MachoBinary, MachoParser
 from strongarm.objc import ObjcFunctionAnalyzer
 
 
 @contextmanager
-def _compile_code(source_code: str, is_assembly: bool) -> Generator[pathlib.Path, None, None]:
+def _compile_code(
+    source_code: str, is_assembly: bool, code_outside_objc_class=""
+) -> Generator[pathlib.Path, None, None]:
     """Compile the provided source code & yield the path to the compiled binary. The path is in a temporary directory.
     If is_assembly is set, the source code is treated as AArch64 assembly. Otherwise, as Objective-C source.
     """
+    # We can only use code_outside_objc_class if the provided source_code is ObjC code, not assembly
+    if is_assembly and len(code_outside_objc_class):
+        raise ValueError(f"Can't use code_outside_objc_class when the input code is assembly")
+
     if is_assembly:
         wrapped_source = f"""
         .text
@@ -45,13 +50,18 @@ def _compile_code(source_code: str, is_assembly: bool) -> Generator[pathlib.Path
     else:
         wrapped_source = f"""
         #import <Foundation/Foundation.h>
+        #import <UIKit/UIKit.h>
+        #import <CoreGraphics/CoreGraphics.h>
 
-        // Provide this dummy function in case any simulator tests want to use it
+        // Provide this dummy function in case any test wants to use it
         void UnsafeFunc(NSDictionary* d) {{}}
 
         // Provide a dummy class which unit test code is placed within
         @interface SourceClass : NSObject
         @end
+
+        // Allow unit tests to define code outside a class definition
+        {code_outside_objc_class}
 
         @implementation SourceClass
 
@@ -79,6 +89,8 @@ def _compile_code(source_code: str, is_assembly: bool) -> Generator[pathlib.Path
             f"xcrun -sdk iphoneos "
             f"clang -arch arm64 "
             f"-framework Foundation "
+            f"-framework CoreGraphics "
+            f"-framework UIKit "
             f"{source_filepath.as_posix()} -o {output_filepath.as_posix()}",
             shell=True,
             stderr=subprocess.PIPE,
@@ -91,10 +103,13 @@ def _compile_code(source_code: str, is_assembly: bool) -> Generator[pathlib.Path
 
 @contextmanager
 def binary_containing_code(
-    source_code: str, is_assembly: bool
+    code_inside_objc_class: str, is_assembly: bool, code_outside_objc_class=""
 ) -> Generator[Tuple[MachoBinary, MachoAnalyzer], None, None]:
     """Provide an app package which contains the compiled source code.
     If is_assembly is set, the source code is treated as AArch64 assembly. Otherwise, as Objective-C source.
+
+    The provided source code is embedded within a class definition.
+    If you need to embed code outside a class definition, pass it as code_outside_objc_class.
 
     This method will cache the compiled binary in tests/bin/source_code_test_binaries.
     This facilitates running the unit tests using this mechanism in Pipelines.
@@ -103,12 +118,14 @@ def binary_containing_code(
     # Add a cleanup task to identify these unused binaries and delete them.
 
     # Do we need to compile this code, or is there a cached version available?
-    code_hash = hashlib.md5(source_code.encode()).hexdigest()
+    code_hash = hashlib.md5(f"{code_inside_objc_class}{code_outside_objc_class}".encode()).hexdigest()
     compiled_artifacts_dir = pathlib.Path(__file__).parent / "bin" / "auto_compiled_binaries"
     compiled_code_bin_path = compiled_artifacts_dir / str(code_hash)
     if not compiled_code_bin_path.exists():
         # Compile and cache this source code
-        with _compile_code(source_code, is_assembly) as temp_compiled_bin:
+        with _compile_code(
+            code_inside_objc_class, is_assembly, code_outside_objc_class=code_outside_objc_class
+        ) as temp_compiled_bin:
             shutil.copy(temp_compiled_bin, compiled_code_bin_path)
 
     binary = MachoParser(compiled_code_bin_path).get_arm64_slice()
@@ -127,11 +144,3 @@ def function_containing_asm(asm_source: str) -> Generator[Tuple[MachoAnalyzer, O
         main_addr = callable_symbol.address
         func = ObjcFunctionAnalyzer.get_function_analyzer(binary, main_addr)
         yield analyzer, func
-
-
-@contextmanager
-def simulate_assembly(asm_source: str, _expected_code_path_count: int = 1) -> Generator[List[ExecContext], None, None]:
-    with function_containing_asm(asm_source) as (analyzer, func):
-        sim = Simulator(analyzer, func, [func.start_address, func.end_address - MachoBinary.BYTES_PER_INSTRUCTION])
-        ctxs = sim.run()
-        yield ctxs

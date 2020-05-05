@@ -16,12 +16,12 @@ from strongarm.macho import (
 
 class TestMachoBinary:
     THIN_PATH = pathlib.Path(__file__).parent / "bin" / "StrongarmTarget"
-    FAT_PATH = pathlib.Path(__file__).parent / "bin" / "GammaRayTestBad"
-    ENCRYPTED_PATH = pathlib.Path(__file__).parent / "bin" / "RxTest"
+    FAT_PATH = pathlib.Path(__file__).parent / "bin" / "TestBinary4"
+    ENCRYPTED_PATH = pathlib.Path(__file__).parent / "bin" / "EncryptedBinary"
     # Found within this app: https://pythia.sourcetheorem.com/mobile_app_scans/5196911454191616
-    MULTIPLE_CONST_SECTIONS = pathlib.Path(__file__).parent / "bin" / "BroadSoftDialpadFramework"
+    MULTIPLE_CONST_SECTIONS = pathlib.Path(__file__).parent / "bin" / "MultipleConstSections"
     # Test binary from Eric for the secure enclave check
-    CLASSLIST_DATA_CONST = pathlib.Path(__file__).parent / "bin" / "CKTest2"
+    CLASSLIST_DATA_CONST = pathlib.Path(__file__).parent / "bin" / "ClasslistDataConst"
 
     def setup_method(self):
         self.parser = MachoParser(pathlib.Path(TestMachoBinary.THIN_PATH))

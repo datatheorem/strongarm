@@ -1,18 +1,19 @@
 import pathlib
 from typing import List
 
-from strongarm.macho import MachoParser, ObjcCategory, ObjcRuntimeDataParser
+from strongarm.macho import DyldInfoParser, MachoParser, ObjcCategory, ObjcRuntimeDataParser
 
 
 class TestObjcRuntimeDataParser:
     FAT_PATH = pathlib.Path(__file__).parent / "bin" / "StrongarmTarget"
-    CATEGORY_PATH = pathlib.Path(__file__).parent / "bin" / "DigitalAdvisorySolutions"
-    PROTOCOL_32BIT_PATH = pathlib.Path(__file__).parent / "bin" / "USPossibilities"
+    CATEGORY_PATH = pathlib.Path(__file__).parent / "bin" / "TestBinary1"
+    PROTOCOL_32BIT_PATH = pathlib.Path(__file__).parent / "bin" / "Protocol32Bit"
 
     def test_path_for_external_symbol(self):
         parser = MachoParser(TestObjcRuntimeDataParser.FAT_PATH)
         binary = parser.slices[0]
-        objc_parser = ObjcRuntimeDataParser(binary)
+        dyld_info_parser = DyldInfoParser(binary)
+        objc_parser = ObjcRuntimeDataParser(binary, dyld_info_parser)
 
         correct_map = {
             "_NSLog": "/System/Library/Frameworks/Foundation.framework/Foundation",
@@ -49,7 +50,8 @@ class TestObjcRuntimeDataParser:
     def test_find_categories(self):
         parser = MachoParser(TestObjcRuntimeDataParser.CATEGORY_PATH)
         binary = parser.slices[0]
-        objc_parser = ObjcRuntimeDataParser(binary)
+        dyld_info_parser = DyldInfoParser(binary)
+        objc_parser = ObjcRuntimeDataParser(binary, dyld_info_parser)
 
         # extract category list
         category_classes = [x for x in objc_parser.classes if isinstance(x, ObjcCategory)]
@@ -58,8 +60,9 @@ class TestObjcRuntimeDataParser:
         assert len(category_classes) == 9
 
         # look at one category
-        category = [x for x in category_classes if x.name == "$_Unknown_Class (DataController)"][0]
-        assert category.base_class == "$_Unknown_Class"
+        print(category_classes)
+        category = [x for x in category_classes if x.name == "_OBJC_CLASS_$_NSURLRequest (DataController)"][0]
+        assert category.base_class == "_OBJC_CLASS_$_NSURLRequest"
         assert category.category_name == "DataController"
         assert len(category.selectors) == 1
         selector = category.selectors[0]
@@ -69,7 +72,8 @@ class TestObjcRuntimeDataParser:
     def test_parse_ivars(self):
         parser = MachoParser(TestObjcRuntimeDataParser.CATEGORY_PATH)
         binary = parser.get_arm64_slice()
-        objc_parser = ObjcRuntimeDataParser(binary)
+        dyld_info_parser = DyldInfoParser(binary)
+        objc_parser = ObjcRuntimeDataParser(binary, dyld_info_parser)
 
         # Given I read a class with a known ivar layout
         cls = [x for x in objc_parser.classes if x.name == "AamvaPDF417"][0]
@@ -98,7 +102,8 @@ class TestObjcRuntimeDataParser:
     def test_find_protocols(self):
         parser = MachoParser(TestObjcRuntimeDataParser.FAT_PATH)
         binary = parser.get_arm64_slice()
-        objc_parser = ObjcRuntimeDataParser(binary)
+        dyld_info_parser = DyldInfoParser(binary)
+        objc_parser = ObjcRuntimeDataParser(binary, dyld_info_parser)
 
         protocols = objc_parser.protocols
         assert len(protocols) == 3
@@ -110,7 +115,8 @@ class TestObjcRuntimeDataParser:
     def test_parse_protocol(self):
         parser = MachoParser(TestObjcRuntimeDataParser.FAT_PATH)
         binary = parser.get_arm64_slice()
-        objc_parser = ObjcRuntimeDataParser(binary)
+        dyld_info_parser = DyldInfoParser(binary)
+        objc_parser = ObjcRuntimeDataParser(binary, dyld_info_parser)
 
         protocols = objc_parser.protocols
         # look at one protocol
@@ -133,7 +139,8 @@ class TestObjcRuntimeDataParser:
 
         parser = MachoParser(TestObjcRuntimeDataParser.CATEGORY_PATH)
         binary = parser.get_arm64_slice()
-        objc_parser = ObjcRuntimeDataParser(binary)
+        dyld_info_parser = DyldInfoParser(binary)
+        objc_parser = ObjcRuntimeDataParser(binary, dyld_info_parser)
 
         check_class_conformed_protocols(
             "CDVInAppBrowserViewController",
@@ -148,7 +155,8 @@ class TestObjcRuntimeDataParser:
     def test_protocol_32bit(self):
         parser = MachoParser(TestObjcRuntimeDataParser.PROTOCOL_32BIT_PATH)
         binary = parser.get_armv7_slice()
-        objc_parser = ObjcRuntimeDataParser(binary)
+        dyld_info_parser = DyldInfoParser(binary)
+        objc_parser = ObjcRuntimeDataParser(binary, dyld_info_parser)
         assert len(objc_parser.classes) == 66
         test_cls = [x for x in objc_parser.classes if x.name == "Pepsico_iPhoneAppDelegate"][0]
         assert len(test_cls.protocols) == 2

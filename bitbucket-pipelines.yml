@@ -11,27 +11,34 @@ pipelines:
             - pip install pipenv
             - export PIP_PROCESS_DEPENDENCY_LINKS=1
             - pipenv install --dev
-            - pipenv run invoke deps
             - pipenv run invoke install
-            - pipenv run invoke check-standards
+            - pipenv run invoke autoformat-lint
       - step:
-          name: Test code
+          name: Test (via Pipenv)
           caches:
             - pip
           script:
             - pip install pipenv
             - export PIP_PROCESS_DEPENDENCY_LINKS=1
             - pipenv install --dev
-            - pipenv run invoke deps
             - pipenv run invoke install
             - pipenv run invoke test
       - step:
-          name: Test installation
+          name: Test (via setuptools)
           caches:
             - pip
           script:
+            # Update before install packages
+            - apt-get update
+            - pip install --upgrade pip pipenv
             - pip install invoke pipenv pytest mypy flake8
-            - python setup.py install
-            - # Build the dataflow module
-            - python setup.py build_ext --inplace
+            # Version info
+            - python --version
+            - pip --version
+            - pipenv --version
+            # Use pip instead of `python setup.py install`. For some reason, Pip can handle the git dependencies, but
+            # not `setup.py install`, even if setuptools is fully up-to-date?
+            #
+            # Using pip and not pipenv here to ensure that setup.py's deps are what is used
+            - pip install .
             - invoke test

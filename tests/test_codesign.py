@@ -5,7 +5,7 @@ from strongarm.macho.codesign import CodesignParser
 
 
 class TestCodeSignParser:
-    TARGET_PATH = pathlib.Path(__file__).parent / "bin" / "DigitalAdvisorySolutions"
+    TARGET_PATH = pathlib.Path(__file__).parent / "bin" / "TestBinary1"
 
     def setup_method(self):
         parser = MachoParser(TestCodeSignParser.TARGET_PATH)

@@ -1,27 +1,16 @@
 import pathlib
-from typing import List
 from unittest import mock
 
 import pytest
 
 from strongarm.macho import MachoAnalyzer, MachoParser, ObjcClass, ObjcSelector, ObjcSelref, VirtualMemoryPointer
-from strongarm.objc import (
-    CodeSearch,
-    CodeSearchFunctionCallWithArguments,
-    CodeSearchResultFunctionCallWithArguments,
-    ObjcBranchInstruction,
-    ObjcFunctionAnalyzer,
-    ObjcInstruction,
-    ObjcMethodInfo,
-    ObjcUnconditionalBranchInstruction,
-    RegisterContentsType,
-)
+from strongarm.objc import ObjcFunctionAnalyzer, ObjcInstruction, ObjcMethodInfo, RegisterContentsType
 from strongarm.objc.objc_analyzer import _demangle_cpp_symbol, _is_mangled_cpp_symbol
 
 
 class TestFunctionAnalyzer:
     FAT_PATH = pathlib.Path(__file__).parent / "bin" / "StrongarmTarget"
-    DIGITAL_ADVISORY_PATH = pathlib.Path(__file__).parent / "bin" / "DigitalAdvisorySolutions"
+    TEST_BINARY_PATH = pathlib.Path(__file__).parent / "bin" / "TestBinary1"
 
     OBJC_RETAIN_STUB_ADDR = 0x1000067CC
     SEC_TRUST_EVALUATE_STUB_ADDR = 0x100006760
@@ -68,39 +57,6 @@ class TestFunctionAnalyzer:
                     correct_sym_name = external_targets[target.destination_address]
                     assert target.symbol == correct_sym_name
 
-    def test_search_selector(self):
-        selref = self.analyzer.selref_for_selector_name("initWithFrame:")
-        assert selref
-
-        query = CodeSearchFunctionCallWithArguments(
-            self.binary,
-            ObjcUnconditionalBranchInstruction.OBJC_MSGSEND_FUNCTIONS,
-            {
-                # arg 1 will contain the selref being messaged
-                1: [selref]
-            },
-        )
-
-        def process_results(
-            analyzer: MachoAnalyzer, search: CodeSearch, results: List[CodeSearchResultFunctionCallWithArguments]
-        ) -> None:
-            assert len(results) == 1
-            result = results[0]
-            assert result.found_instruction.address == 0x100006254
-            assert result.found_instruction.symbol == "_objc_msgSendSuper2"
-
-            assert isinstance(result.found_instruction, ObjcBranchInstruction)
-            assert result.found_instruction.selector is not None
-            assert result.found_instruction.selector.name == "initWithFrame:"
-            assert result.found_instruction.selref is not None
-            assert result.found_instruction.selref.selector_literal == "initWithFrame:"
-            assert result.found_instruction.selref.source_address == 0x100009070
-
-            assert result.found_function.start_address == 0x100006228
-
-        self.analyzer.queue_code_search(query, process_results)
-        self.analyzer.search_all_code()
-
     def test_get_register_contents_at_instruction(self):
         from strongarm.objc import RegisterContentsType
 
@@ -120,7 +76,7 @@ class TestFunctionAnalyzer:
         # Given I provide assembly where an address is loaded via a page load + page offset, using the same register
         # 0x000000010000428c    adrp       x1, #0x10011a000
         # 0x0000000100004290    add        x1, x1, #0x9c8
-        binary = MachoParser(TestFunctionAnalyzer.DIGITAL_ADVISORY_PATH).get_arm64_slice()
+        binary = MachoParser(TestFunctionAnalyzer.TEST_BINARY_PATH).get_arm64_slice()
 
         function_analyzer = ObjcFunctionAnalyzer.get_function_analyzer_for_signature(
             binary, "AppDelegate", "application:didFinishLaunchingWithOptions:"

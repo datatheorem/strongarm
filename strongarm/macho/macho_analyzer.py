@@ -9,7 +9,7 @@ from contextlib import closing
 from ctypes import sizeof
 from dataclasses import dataclass
 from itertools import tee
-from typing import TYPE_CHECKING, Callable, Dict, Iterable, List, Optional, Set, Tuple, TypeVar
+from typing import TYPE_CHECKING, Dict, Iterable, List, Optional, Set, Tuple, TypeVar
 
 from capstone import CS_ARCH_ARM64, CS_MODE_ARM, Cs, CsInsn
 
@@ -26,17 +26,13 @@ from strongarm.macho.objc_runtime_data_parser import (
     ObjcRuntimeDataParser,
     ObjcSelector,
 )
-from strongarm.macho.progress_bar import ConsoleProgressBar
 
 if TYPE_CHECKING:
-    from strongarm.objc import ObjcFunctionAnalyzer, ObjcMethodInfo, CodeSearch, CodeSearchResult  # noqa: F401
+    from strongarm.objc import ObjcFunctionAnalyzer, ObjcMethodInfo  # noqa: F401
 
 
 _T = TypeVar("_T")
 
-# Callback invoked when the results for a previously queued CodeSearch have been found.
-# This will be dispatched some time after MachoAnalyzer.search_all_code() is called
-CodeSearchCallback = Callable[["MachoAnalyzer", "CodeSearch", List["CodeSearchResult"]], None]
 
 ANALYZER_SQL_SCHEMA = """
     CREATE TABLE function_boundaries(
@@ -101,12 +97,6 @@ class CallableSymbol:
     symbol_name: str
 
 
-@dataclass
-class CodeSearchRequest:
-    search: "CodeSearch"
-    callback: CodeSearchCallback
-
-
 class MachoAnalyzer:
     # This class does expensive one-time cross-referencing operations
     # Therefore, we want only one instance to exist for any MachoBinary
@@ -121,7 +111,7 @@ class MachoAnalyzer:
         self.cs.detail = True
 
         # Worker to parse dyld bytecode stream and extract dyld stub addresses to the DyldBoundSymbol they represent
-        self._dyld_info_parser: Optional[DyldInfoParser] = None
+        self.dyld_info_parser = DyldInfoParser(self.binary)
         # Each __stubs function calls a single dyld stub address, which has a corresponding DyldBoundSymbol.
         # Map of each __stub function to the associated name of the DyldBoundSymbol
         self._imported_symbol_addresses_to_names: Dict[VirtualMemoryPointer, str] = {}
@@ -133,14 +123,8 @@ class MachoAnalyzer:
         self._objc_helper: Optional[ObjcRuntimeDataParser] = None
         self._objc_method_list: List[ObjcMethodInfo] = []
 
-        # For efficiency, API clients submit several CodeSearch's to be performed in a batch, instead of sequentially.
-        # Iterating the binary's code is an expensive operation, and this allows us to do it just once.
-        # This map is where we store the CodeSearch's that are waiting to be executed, and the
-        # callbacks which should be invoked once results are found.
-        self._queued_code_searches: List[CodeSearchRequest] = []
-
         # Use a temporary database to store cross-referenced data. This provides constant-time lookups for things like
-        # finding all the calls to a particular function. In the past, CodeSearch would be used for the same purpose.
+        # finding all the calls to a particular function.
         self._has_computed_call_xrefs = False
         self._db_tempdir = pathlib.Path(tempfile.mkdtemp())
         self._db_path = self._db_tempdir / "strongarm.db"
@@ -456,7 +440,7 @@ class MachoAnalyzer:
     @property
     def objc_helper(self) -> ObjcRuntimeDataParser:
         if not self._objc_helper:
-            self._objc_helper = ObjcRuntimeDataParser(self.binary)
+            self._objc_helper = ObjcRuntimeDataParser(self.binary, self.dyld_info_parser)
         return self._objc_helper
 
     @classmethod
@@ -494,12 +478,6 @@ class MachoAnalyzer:
         """Return the List of protocols to which code within the binary conforms
         """
         return self.objc_helper.protocols
-
-    @property
-    def dyld_info_parser(self) -> DyldInfoParser:
-        if not self._dyld_info_parser:
-            self._dyld_info_parser = DyldInfoParser(self.binary)
-        return self._dyld_info_parser
 
     @property
     def dyld_bound_symbols(self) -> Dict[VirtualMemoryPointer, DyldBoundSymbol]:
@@ -680,113 +658,48 @@ class MachoAnalyzer:
 
         return VirtualMemoryPointer(results[0])
 
-    def queue_code_search(self, code_search: "CodeSearch", callback: CodeSearchCallback) -> None:
-        """Enqueue a CodeSearch. It will be ran when `search_all_code` runs. `callback` will then be invoked.
-        The search space is all known Objective-C entry points within the binary.
-
-        A CodeSearch describes criteria for matching code. A CodeSearchResult encapsulates a CPU instruction and its
-        containing source function which matches the criteria of the search.
-
-        Once the CodeSearch has been run over the binary, the `callback` will be invoked, passing the relevant
-        info about the discovered code.
-        """
-        # logging.info(f'{self.binary.path.name} enqueuing CodeSearch {code_search}. Will invoke {callback}')
-        self._queued_code_searches.append(CodeSearchRequest(code_search, callback))
-
-    def search_all_code(self, display_progress: bool = True) -> None:
-        """Iterate every function in the binary, and run each pending CodeSearch over them.
-        The search space is all known entry points within the binary.
-
-        A CodeSearch describes criteria for matching code. A CodeSearchResult encapsulates a CPU instruction and its
-        containing source function which matches the criteria of the search.
-
-        For each search which is executed, this method will invoke the CodeSearchCallback provided when the search
-        was requested, with the List of CodeSearchResult's which were found.
-        """
-        from strongarm.objc.objc_analyzer import ObjcFunctionAnalyzer  # noqa: F811
-
-        # If there are no queued code searches, we have nothing to do
-        queued_searches = self._queued_code_searches
-        if not len(queued_searches):
-            return
-
-        logging.info(f"Running {len(queued_searches)} code searches on {self.binary.path.name}")
-
-        entry_point_list = self.get_functions()
-        search_results: List[List[CodeSearchResult]] = [[] for _ in range(len(queued_searches))]
-
-        # Searching all code can be a time-consumptive operation. Provide UI feedback on the progress.
-        # This displays a progress bar to stdout. The progress bar will be erased when the context manager exits.
-        code_size = self.binary.slice_filesize / 1024 / 1024
-        with ConsoleProgressBar(
-            prefix=f"{self.binary.path.stem} CodeSearch {int(code_size)}mb", enabled=display_progress
-        ) as progress_bar:
-
-            # Build analyzers for function entry points.
-            for i, entry_address in enumerate(entry_point_list):
-                try:
-                    # Try to find a method-info with a matching address
-                    matched_method_info = None
-                    for method_info in self.get_objc_methods():
-                        if method_info.imp_addr == entry_address:
-                            matched_method_info = method_info
-                            break
-                    if matched_method_info:
-                        function_analyzer = ObjcFunctionAnalyzer.get_function_analyzer_for_method(
-                            self.binary, matched_method_info
-                        )
-                    else:
-                        function_analyzer = ObjcFunctionAnalyzer.get_function_analyzer(self.binary, entry_address)
-                except DisassemblyFailedError as e:
-                    logging.error(f"Failed to disassemble function {hex(entry_address)}: {str(e)}")
-                    continue
-
-                # Run every code search on this function and record their respective results
-                for idx, request in enumerate(queued_searches):
-                    search_results[idx] += function_analyzer.search_code(request.search)
-
-                progress_bar.set_progress(i / len(entry_point_list))
-
-        # Invoke every callback with their respective search results
-        for request, results in zip(queued_searches, search_results):
-            # Remove the CodeSearch from the waiting queue before dispatching the callback
-            # This ensures that if the callback runs another CodeSearch, the queue will be in the right state.
-            self._queued_code_searches.remove(request)
-            try:
-                request.callback(self, request.search, results)  # type: ignore
-            except Exception as e:
-                logging.exception(f"CodeSearch callback raised {type(e)}: {e}")
-                continue
-
-        # We've completed all of the waiting code searches. Drain the queue
-        self._queued_code_searches.clear()
-
     def class_name_for_class_pointer(self, classref: VirtualMemoryPointer) -> Optional[str]:
         """Given a classref, return the name of the class.
         This method will handle classes implemented within the binary and imported classes.
         """
+        # Did the caller provide a classref for an imported class?
         if classref in self.imported_symbols_to_symbol_names:
-            # imported class
             return self.imported_symbols_to_symbol_names[classref]
 
-        # otherwise, the class is implemented within a binary and we have an ObjcClass for it
-        try:
-            class_location = self.binary.read_word(classref)
-        except InvalidAddressError:
-            # invalid classref
-            return None
+        # The class is implemented within the binary and has an associated ObjcClass object
+        # We could have been passed either a classref pointer in __objc_classrefs, or the direct address of
+        # an __objc_data structure in __objc_const. Try both variants to search for the associated class.
 
-        local_class = [x for x in self.objc_classes() if x.raw_struct.binary_offset == class_location]
+        # First, check if we were provided with the address of an __objc_data struct in __objc_data representing
+        # the class.
+        local_class = [x for x in self.objc_classes() if x.raw_struct.binary_offset == classref]
         if len(local_class):
+            assert len(local_class) == 1
             return local_class[0].name
 
-        # invalid classref
+        # Then, check if we were passed a classref pointer in __objc_classrefs
+        try:
+            dereferenced_classref = VirtualMemoryPointer(self.binary.read_word(classref))
+        except InvalidAddressError:
+            # Invalid classref
+            return None
+
+        local_class = [x for x in self.objc_classes() if x.raw_struct.binary_offset == dereferenced_classref]
+        if len(local_class):
+            assert len(local_class) == 1
+            return local_class[0].name
+
+        # Invalid classref
         return None
 
     def classref_for_class_name(self, class_name: str) -> Optional[VirtualMemoryPointer]:
         """Given a class name, try to find a classref for it.
         """
-        classrefs = [addr for addr, name in self.imported_symbols_to_symbol_names.items() if name == class_name]
+        classrefs = [
+            addr
+            for addr, name in self.imported_symbols_to_symbol_names.items()
+            if name == class_name and self.binary.section_name_for_address(addr) == "__objc_classrefs"
+        ]
         if len(classrefs):
             return classrefs[0]
 

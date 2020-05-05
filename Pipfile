@@ -5,6 +5,7 @@ name = "pypi"
 
 [packages]
 capstone = "*"
+strongarm_dataflow = {git = "ssh://git@bitbucket.org/datatheorem/strongarm_dataflow.git", ref = "1.0.0"}
 
 [dev-packages]
 # Packages for developing

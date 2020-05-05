@@ -1,6 +1,5 @@
 import pathlib
 from pkgutil import iter_modules
-from sys import platform
 from typing import List
 
 from invoke import Context, task
@@ -12,22 +11,9 @@ def _get_python_modules() -> List[str]:
 
 
 @task
-def deps(ctx):
-    # type: (Context) -> None
-    if platform == "darwin":
-        # On macOS - assuming we are going to be running the CLI
-        ctx.run("brew install capstone")
-    if platform == "linux":
-        # On macOS - assuming we are going to be running the CI
-        ctx.run("apt-get update")
-        ctx.run("apt-get install libcapstone3 libcapstone-dev -y --allow-unauthenticated")
-
-
-@task
 def install(ctx):
     # type: (Context) -> None
     ctx.run("python setup.py install")
-    ctx.run("python setup.py build_ext --inplace")
 
 
 @task
@@ -38,7 +24,7 @@ def test(ctx):
 
 
 @task
-def check_standards(ctx):
+def autoformat_lint(ctx):
     # type: (Context) -> None
     """Check formatting of the code
     """
@@ -68,7 +54,7 @@ def check_standards(ctx):
 
 
 @task
-def standards(ctx):
+def autoformat(ctx):
     # type: (Context) -> None
     """Run auto-formatting tools
     """

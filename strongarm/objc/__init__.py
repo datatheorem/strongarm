@@ -1,4 +1,7 @@
-from .dataflow import get_register_contents_at_instruction_fast
+# Re-export symbols from from the sequestered strongarm_dataflow module
+from strongarm_dataflow.dataflow import get_register_contents_at_instruction_fast
+from strongarm_dataflow.register_contents import RegisterContents, RegisterContentsType
+
 from .objc_analyzer import BasicBlock, ObjcFunctionAnalyzer, ObjcMethodInfo
 from .objc_instruction import (
     ObjcBranchInstruction,
@@ -6,17 +9,6 @@ from .objc_instruction import (
     ObjcInstruction,
     ObjcUnconditionalBranchInstruction,
 )
-from .objc_query import (
-    CFunctionArgAnyValue,
-    CodeSearch,
-    CodeSearchFunctionCallWithArguments,
-    CodeSearchInstructionMnemonic,
-    CodeSearchObjcCall,
-    CodeSearchRegisterContents,
-    CodeSearchResult,
-    CodeSearchResultFunctionCallWithArguments,
-)
-from .register_contents import RegisterContents, RegisterContentsType
 
 __all__ = [
     "get_register_contents_at_instruction_fast",
@@ -29,14 +21,4 @@ __all__ = [
     "ObjcConditionalBranchInstruction",
     "ObjcInstruction",
     "ObjcUnconditionalBranchInstruction",
-    "CFunctionArgAnyValue",
-    "CodeSearch",
-    "CodeSearchFunctionCallWithArguments",
-    "CodeSearchInstructionMnemonic",
-    "CodeSearchObjcCall",
-    "CodeSearchRegisterContents",
-    "CodeSearchResult",
-    "CodeSearchResultFunctionCallWithArguments",
-    "RegisterContents",
-    "RegisterContentsType",
 ]

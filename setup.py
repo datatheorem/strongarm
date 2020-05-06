@@ -11,8 +11,9 @@ setup(
     packages=find_packages(exclude=["tests"]),
     install_requires=[
         "capstone",
+        "more_itertools",
         "strongarm_dataflow @ git+ssh://git@bitbucket.org/datatheorem/strongarm_dataflow.git@1.0.0",
-    ],
+],
     package_data={"strongarm": ["py.typed"]},
     data_files=[("", ["LICENSE.txt"])],
 )

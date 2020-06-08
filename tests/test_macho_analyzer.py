@@ -603,6 +603,159 @@ class TestMachoAnalyzerDynStaticChecks:
                 ("LocalCategory", "_OBJC_CLASS_$_UIWebView"),
             ]
 
+    def test_find_string_xref(self):
+        # Given a binary that accesses different constant strings throughout the code
+        source_code = """
+        - (void)method1 {
+            NSLog(@"ConstString1");
+        }     
+        - (void)method2 {
+            NSString* x = [NSString stringWithFormat:@"ConstString2"];
+        }
+        - (void)method3 {
+            NSDateFormatter* dateFormatter = [[NSDateFormatter alloc] init];
+            dateFormatter.dateFormat = @"ConstString3";
+        }  
+        """
+        with binary_containing_code(source_code, is_assembly=False) as (binary, analyzer):
+            # When I ask for the XRefs to each string
+            # Then every XRef is correctly shown
+            #
+            # The exact string load addr comes from checking the compiled binary, but check against the expected
+            # methods each XRef should be contained within
+            string_to_xrefs = {
+                "ConstString1": [
+                    (
+                        ObjcFunctionAnalyzer.get_function_analyzer_for_signature(
+                            binary, "SourceClass", "method1"
+                        ).start_address,
+                        VirtualMemoryPointer(0x100007DFC),
+                    )
+                ],
+                "ConstString2": [
+                    (
+                        ObjcFunctionAnalyzer.get_function_analyzer_for_signature(
+                            binary, "SourceClass", "method2"
+                        ).start_address,
+                        VirtualMemoryPointer(0x100007E40),
+                    )
+                ],
+                "ConstString3": [
+                    (
+                        ObjcFunctionAnalyzer.get_function_analyzer_for_signature(
+                            binary, "SourceClass", "method3"
+                        ).start_address,
+                        VirtualMemoryPointer(0x100007E88),
+                    )
+                ],
+            }
+
+            for string, expected_xrefs in string_to_xrefs.items():
+                xrefs = analyzer.string_xrefs_to(string)
+                assert xrefs == expected_xrefs
+
+    def test_find_string_xref__multiple_xrefs(self):
+        # Given a binary that accesses the same constant string in multiple locations
+        source_code = """
+        - (void)method1 {
+            printf([@"ConstString1" utf8String]);
+        }     
+        - (void)method2 {
+            NSLog(@"The constant string is: %@", @"ConstString1");
+        }
+        - (void)method3 {
+            NSDateFormatter* dateFormatter = [[NSDateFormatter alloc] init];
+            dateFormatter.dateFormat = @"ConstString1";
+        }  
+        """
+        with binary_containing_code(source_code, is_assembly=False) as (binary, analyzer):
+            # When I ask for XRefs to the constant string
+            # Then every location that loads the string is correctly shown
+            xrefs = sorted(analyzer.string_xrefs_to("ConstString1"))
+            expected_xrefs = sorted(
+                [
+                    (
+                        ObjcFunctionAnalyzer.get_function_analyzer_for_signature(
+                            binary, "SourceClass", "method1"
+                        ).start_address,
+                        VirtualMemoryPointer(0x100007DDC),
+                    ),
+                    (
+                        ObjcFunctionAnalyzer.get_function_analyzer_for_signature(
+                            binary, "SourceClass", "method2"
+                        ).start_address,
+                        VirtualMemoryPointer(0x100007E24),
+                    ),
+                    (
+                        ObjcFunctionAnalyzer.get_function_analyzer_for_signature(
+                            binary, "SourceClass", "method3"
+                        ).start_address,
+                        VirtualMemoryPointer(0x100007E74),
+                    ),
+                ]
+            )
+            assert xrefs == expected_xrefs
+
+    def test_find_string_xref__ignores_unrelated_constant_data(self):
+        # Given a binary that contains static variables stored as constant data
+        source_code = """
+        static char const1[256] = {0};
+        static int const2 = 42;
+        static char* const3 = "hello world";
+        
+        - (void)method1 {
+            NSString* x = [NSString stringWithFormat:@"ConstString1"];
+            NSLog(@"%s %d %s", const1, const2, const3);
+        }     
+        """
+        with binary_containing_code(source_code, is_assembly=False) as (binary, analyzer):
+            # When I ask for the XRefs to a string
+            # Then the XRef generator is not confused by the constant data
+            # (The string XRef heuristic doesn't match the constant data)
+            # And the XRef is correctly shown
+            xrefs = analyzer.string_xrefs_to("ConstString1")
+            expected_xrefs = [
+                (
+                    ObjcFunctionAnalyzer.get_function_analyzer_for_signature(
+                        binary, "SourceClass", "method1"
+                    ).start_address,
+                    VirtualMemoryPointer(0x100007E98),
+                )
+            ]
+            assert xrefs == expected_xrefs
+
+    @pytest.mark.skip(reason="Generating XRefs to strings in static variables / constant data is not yet supported")
+    def test_find_string_xref__finds_string_in_constant_data(self):
+        # Given a binary that stores a string in a static var (constant data), then uses the string via the static var
+        source_code = """
+        static NSString* staticStr = @"ConstString1";
+        - (void)method1 {
+            printf([staticStr utf8String]);
+        }     
+        - (void)method2 {
+            NSLog(@"The static string is: %@", staticStr);
+        }
+        """
+        with binary_containing_code(source_code, is_assembly=False) as (binary, analyzer):
+            # When I ask for the XRefs to each string
+            # Then every XRef is correctly shown
+            xrefs = analyzer.string_xrefs_to("ConstString1")
+            expected_xrefs = [
+                (
+                    ObjcFunctionAnalyzer.get_function_analyzer_for_signature(
+                        binary, "SourceClass", "method1"
+                    ).start_address,
+                    VirtualMemoryPointer(0x100007E74),
+                ),
+                (
+                    ObjcFunctionAnalyzer.get_function_analyzer_for_signature(
+                        binary, "SourceClass", "method2"
+                    ).start_address,
+                    VirtualMemoryPointer(0x100007EB0),
+                ),
+            ]
+            assert xrefs == expected_xrefs
+
 
 class TestMachoAnalyzerControlFlowTarget:
     FAT_PATH = pathlib.Path(__file__).parent / "bin" / "StrongarmControlFlowTarget"

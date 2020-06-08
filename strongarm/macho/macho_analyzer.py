@@ -8,10 +8,11 @@ import time
 from contextlib import closing
 from ctypes import sizeof
 from dataclasses import dataclass
-from itertools import tee
 from typing import TYPE_CHECKING, Dict, Iterable, List, Optional, Set, Tuple, TypeVar
 
 from capstone import CS_ARCH_ARM64, CS_MODE_ARM, Cs, CsInsn
+from capstone.arm64_const import ARM64_OP_IMM
+from more_itertools import pairwise, peekable
 
 from strongarm.macho.arch_independent_structs import CFString32, CFString64, CFStringStruct
 from strongarm.macho.dyld_info_parser import DyldBoundSymbol, DyldInfoParser

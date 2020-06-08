@@ -363,7 +363,7 @@ class MachoAnalyzer:
 
         if candidate_cfstring_addr:
             cfstring = self.binary.read_string_at_address(candidate_cfstring_addr)
-            if cfstring:
+            if cfstring and candidate_load_addr:
                 return candidate_load_addr, cfstring
 
         return None

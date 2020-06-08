@@ -61,7 +61,7 @@ ANALYZER_SQL_SCHEMA = """
         address INT,
         symbol_name TEXT
     );
-    
+
     CREATE TABLE string_xrefs(
         string_literal TEXT,
         accessor_address INT,

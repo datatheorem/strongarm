@@ -608,14 +608,14 @@ class TestMachoAnalyzerDynStaticChecks:
         source_code = """
         - (void)method1 {
             NSLog(@"ConstString1");
-        }     
+        }
         - (void)method2 {
             NSString* x = [NSString stringWithFormat:@"ConstString2"];
         }
         - (void)method3 {
             NSDateFormatter* dateFormatter = [[NSDateFormatter alloc] init];
             dateFormatter.dateFormat = @"ConstString3";
-        }  
+        }
         """
         with binary_containing_code(source_code, is_assembly=False) as (binary, analyzer):
             # When I ask for the XRefs to each string
@@ -659,14 +659,14 @@ class TestMachoAnalyzerDynStaticChecks:
         source_code = """
         - (void)method1 {
             printf([@"ConstString1" utf8String]);
-        }     
+        }
         - (void)method2 {
             NSLog(@"The constant string is: %@", @"ConstString1");
         }
         - (void)method3 {
             NSDateFormatter* dateFormatter = [[NSDateFormatter alloc] init];
             dateFormatter.dateFormat = @"ConstString1";
-        }  
+        }
         """
         with binary_containing_code(source_code, is_assembly=False) as (binary, analyzer):
             # When I ask for XRefs to the constant string
@@ -702,11 +702,11 @@ class TestMachoAnalyzerDynStaticChecks:
         static char const1[256] = {0};
         static int const2 = 42;
         static char* const3 = "hello world";
-        
+
         - (void)method1 {
             NSString* x = [NSString stringWithFormat:@"ConstString1"];
             NSLog(@"%s %d %s", const1, const2, const3);
-        }     
+        }
         """
         with binary_containing_code(source_code, is_assembly=False) as (binary, analyzer):
             # When I ask for the XRefs to a string
@@ -731,7 +731,7 @@ class TestMachoAnalyzerDynStaticChecks:
         static NSString* staticStr = @"ConstString1";
         - (void)method1 {
             printf([staticStr utf8String]);
-        }     
+        }
         - (void)method2 {
             NSLog(@"The static string is: %@", staticStr);
         }

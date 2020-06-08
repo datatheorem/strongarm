@@ -724,7 +724,7 @@ class TestMachoAnalyzerDynStaticChecks:
             ]
             assert xrefs == expected_xrefs
 
-    @pytest.mark.skip(reason="Generating XRefs to strings in static variables / constant data is not yet supported")
+    @pytest.mark.xfail(reason="Generating XRefs to strings in static variables / constant data is not yet supported")
     def test_find_string_xref__finds_string_in_constant_data(self):
         # Given a binary that stores a string in a static var (constant data), then uses the string via the static var
         source_code = """

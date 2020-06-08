@@ -64,12 +64,6 @@ ANALYZER_SQL_SCHEMA = """
 """
 
 
-def pairwise(iterable: Iterable[_T]) -> Iterable[Tuple[_T, _T]]:
-    a, b = tee(iterable)
-    next(b, None)
-    return zip(a, b)
-
-
 class DisassemblyFailedError(Exception):
     """Raised when Capstone fails to disassemble a bytecode sequence.
     """
@@ -96,6 +90,17 @@ class CallableSymbol:
     address: VirtualMemoryPointer
     is_imported: bool
     symbol_name: str
+
+
+def _requires_xrefs_computed(func):
+    @functools.wraps(func)
+    def wrap(self, *args, **kwargs):
+        if not self._has_computed_xrefs:
+            logging.info(f"called {func.__name__} before XRefs were computed, computing now...")
+            self._build_xref_tables()
+        return func(self, *args, **kwargs)
+
+    return wrap
 
 
 class MachoAnalyzer:
@@ -145,17 +150,16 @@ class MachoAnalyzer:
     def __repr__(self) -> str:
         return f"<MachoAnalyzer binary={self.binary.path.as_posix()}>"
 
+    @_requires_xrefs_computed
     def calls_to(self, address: VirtualMemoryPointer) -> List[CallerXRef]:
         """Return the list of code-locations within the binary which branch to the provided address.
         """
-        if not self._has_computed_call_xrefs:
-            self._build_branch_xrefs_index()
-
         c = self._db_handle.cursor()
         xrefs = c.execute(f"SELECT * from function_calls WHERE destination_address={int(address)}").fetchall()
         xrefs = [CallerXRef(x[0], x[1], x[2]) for x in xrefs]
         return xrefs
 
+    @_requires_xrefs_computed
     def objc_calls_to(
         self,
         objc_classrefs: List[VirtualMemoryPointer],
@@ -170,9 +174,6 @@ class MachoAnalyzer:
         Otherwise, a call-site will be yielded if one of the classrefs *or* one of the selrefs are messaged
         at a call site.
         """
-        if not self._has_computed_call_xrefs:
-            self._build_branch_xrefs_index()
-
         c = self._db_handle.cursor()
 
         # Do we require the classref and selref being messaged to both be messaged at the same call site?

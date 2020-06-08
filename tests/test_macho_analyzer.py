@@ -724,6 +724,16 @@ class TestMachoAnalyzerDynStaticChecks:
             ]
             assert xrefs == expected_xrefs
 
+    def test_find_string_xref__adr_pattern(self):
+        # Given a binary that references a static string
+        # And the binary was compiled such that the string is loaded via the `adr` pattern
+        binary = MachoParser(pathlib.Path(__file__).parent / "bin" / "TestBinary5").get_arm64_slice()
+        analyzer = MachoAnalyzer.get_analyzer(binary)
+        # When I ask for the XRefs to the string
+        xrefs = analyzer.string_xrefs_to("DELETE FROM testfairy WHERE id = %d;")
+        # Then the code location is correctly shown
+        assert xrefs == [(VirtualMemoryPointer(0x10003ABE8), VirtualMemoryPointer(0x10003ACB0))]
+
     @pytest.mark.xfail(reason="Generating XRefs to strings in static variables / constant data is not yet supported")
     def test_find_string_xref__finds_string_in_constant_data(self):
         # Given a binary that stores a string in a static var (constant data), then uses the string via the static var

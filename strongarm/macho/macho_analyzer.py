@@ -339,22 +339,32 @@ class MachoAnalyzer:
         String-loads require multiple instructions to complete (first, loading a page, then, loading a page offset).
         This method returns the last instruction in the string load, to match other disassemblers like Hopper and IDA.
         """
-        # Is the code loading a CFString? Check this using a heuristic that matches code like:
-        # 0x10000a264 adrp x2, #0x1001f7000
-        # 0x10000a268 add x2, x2, #0xc00 @“Reachable via WiFi”
-        # This pattern is used to load any constant word, so we throw away matches that don't point to CFStrings
+        # Is the code loading a CFString? Check this using a few heuristics that match data loads
+        # These patterns are used to load any constant word, so we throw away matches that don't point to CFStrings
+        candidate_cfstring_addr, candidate_load_addr = None, None
         if current_instr.mnemonic == "adrp":
+            # 0x10000a264 adrp x2, #0x1001f7000
+            # 0x10000a268 add x2, x2, #0xc00 ; @"Reachable via WiFi"
             next_instr = peekable_function_code.peek()
             if next_instr.mnemonic == "add":
                 if current_instr.operands[1].type == ARM64_OP_IMM and next_instr.operands[2].type == ARM64_OP_IMM:
                     # We've found a constant word load
                     page_base = current_instr.operands[1].value.imm
                     page_offset = next_instr.operands[2].value.imm
-                    cfstring_candidate_addr = VirtualMemoryPointer(page_base + page_offset)
-                    cfstring = self.binary.read_string_at_address(cfstring_candidate_addr)
-                    if cfstring:
-                        # The second instruction is the one that "completes" the string load
-                        return VirtualMemoryPointer(next_instr.address), cfstring
+                    candidate_cfstring_addr = VirtualMemoryPointer(page_base + page_offset)
+                    # The second instruction is the one that "completes" the string load
+                    candidate_load_addr = VirtualMemoryPointer(next_instr.address)
+
+        elif current_instr.mnemonic == "adr":
+            # 0x10003acb0 adr x2, #0x1000e5e70 ; @"DELETE FROM testfairy WHERE id = %d;"
+            if current_instr.operands[1].type == ARM64_OP_IMM:
+                candidate_cfstring_addr = VirtualMemoryPointer(current_instr.operands[1].value.imm)
+                candidate_load_addr = VirtualMemoryPointer(current_instr.address)
+
+        if candidate_cfstring_addr:
+            cfstring = self.binary.read_string_at_address(candidate_cfstring_addr)
+            if cfstring:
+                return candidate_load_addr, cfstring
 
         return None
 
@@ -895,8 +905,8 @@ class MachoAnalyzer:
         Returns a tuple of (function entry point, instruction which completes the string load)
         """
         c = self._db_handle.cursor()
-        string_xrefs = c.execute("SELECT * from string_xrefs WHERE string_literal=?", (string_literal,)).fetchall()
-        string_xrefs = [(VirtualMemoryPointer(x[2]), VirtualMemoryPointer(x[1])) for x in string_xrefs]
+        xrefs_query = c.execute("SELECT * from string_xrefs WHERE string_literal=?", (string_literal,)).fetchall()
+        string_xrefs = [(VirtualMemoryPointer(x[2]), VirtualMemoryPointer(x[1])) for x in xrefs_query]
         return string_xrefs
 
     def _build_callable_symbol_index(self) -> None:

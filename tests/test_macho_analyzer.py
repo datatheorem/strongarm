@@ -766,6 +766,60 @@ class TestMachoAnalyzerDynStaticChecks:
             ]
             assert xrefs == expected_xrefs
 
+    def test_find_string_xref__cstring(self):
+        # Given a binary that accesses different C constant strings throughout the code
+        source_code = """
+        - (void)method1 {
+            printf("ConstString1");
+        }
+        - (void)method2 {
+            printf("ConstString1");
+        }
+        - (void)method3 {
+            printf("ConstString2");
+            [NSString stringWithFormat:@"ConstString3"];
+        }
+        """
+        with binary_containing_code(source_code, is_assembly=False) as (binary, analyzer):
+            # When I ask for the XRefs to each string
+            # Then every XRef is correctly shown, even thouth the strings are C strings and not CFStrings
+            string_to_xrefs = {
+                "ConstString1": [
+                    (
+                        ObjcFunctionAnalyzer.get_function_analyzer_for_signature(
+                            binary, "SourceClass", "method2"
+                        ).start_address,
+                        VirtualMemoryPointer(0x100007E70),
+                    ),
+                    (
+                        ObjcFunctionAnalyzer.get_function_analyzer_for_signature(
+                            binary, "SourceClass", "method1"
+                        ).start_address,
+                        VirtualMemoryPointer(0x100007E44),
+                    ),
+                ],
+                "ConstString2": [
+                    (
+                        ObjcFunctionAnalyzer.get_function_analyzer_for_signature(
+                            binary, "SourceClass", "method3"
+                        ).start_address,
+                        VirtualMemoryPointer(0x100007E9C),
+                    )
+                ],
+                "ConstString3": [
+                    (
+                        ObjcFunctionAnalyzer.get_function_analyzer_for_signature(
+                            binary, "SourceClass", "method3"
+                        ).start_address,
+                        VirtualMemoryPointer(0x100007EC0),
+                    )
+                ],
+            }
+
+            for string, expected_xrefs in string_to_xrefs.items():
+                xrefs = analyzer.string_xrefs_to(string)
+                assert xrefs == expected_xrefs
+
 
 class TestMachoAnalyzerControlFlowTarget:
     FAT_PATH = pathlib.Path(__file__).parent / "bin" / "StrongarmControlFlowTarget"

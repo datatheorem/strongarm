@@ -328,18 +328,21 @@ class MachoAnalyzer:
         objc_function_addrs = objc_opt_function_addrs + [objc_msgsend_addr]
         return objc_msgsend_addr, objc_function_addrs
 
-    def _get_loaded_cfstring(
+    def _get_loaded_string(
         self, peekable_function_code: peekable, current_instr: CsInsn
     ) -> Optional[Tuple[VirtualMemoryPointer, str]]:
-        """If the provided code is loading a CFString, return a tuple of the string load address and the loaded string.
+        """If the provided code is loading a String, return a tuple of the string load address and the loaded string.
         Returns None otherwise.
+
+        This yields both C strings and CFStrings, as they're loaded via the same pattern (the pattern is in fact the
+        same for all constant-data loads).
 
         String-loads require multiple instructions to complete (first, loading a page, then, loading a page offset).
         This method returns the last instruction in the string load, to match other disassemblers like Hopper and IDA.
         """
-        # Is the code loading a CFString? Check this using a few heuristics that match data loads
-        # These patterns are used to load any constant word, so we throw away matches that don't point to CFStrings
-        candidate_cfstring_addr, candidate_load_addr = None, None
+        # Is the code loading a string? Check this using a few heuristics that match data loads
+        # These patterns are used to load any constant word, so we throw away matches that don't point to strings
+        candidate_string_addr, candidate_load_addr = None, None
         if current_instr.mnemonic == "adrp":
             # 0x10000a264 adrp x2, #0x1001f7000
             # 0x10000a268 add x2, x2, #0xc00 ; @"Reachable via WiFi"
@@ -349,20 +352,20 @@ class MachoAnalyzer:
                     # We've found a constant word load
                     page_base = current_instr.operands[1].value.imm
                     page_offset = next_instr.operands[2].value.imm
-                    candidate_cfstring_addr = VirtualMemoryPointer(page_base + page_offset)
+                    candidate_string_addr = VirtualMemoryPointer(page_base + page_offset)
                     # The second instruction is the one that "completes" the string load
                     candidate_load_addr = VirtualMemoryPointer(next_instr.address)
 
         elif current_instr.mnemonic == "adr":
             # 0x10003acb0 adr x2, #0x1000e5e70 ; @"DELETE FROM testfairy WHERE id = %d;"
             if current_instr.operands[1].type == ARM64_OP_IMM:
-                candidate_cfstring_addr = VirtualMemoryPointer(current_instr.operands[1].value.imm)
+                candidate_string_addr = VirtualMemoryPointer(current_instr.operands[1].value.imm)
                 candidate_load_addr = VirtualMemoryPointer(current_instr.address)
 
-        if candidate_cfstring_addr:
-            cfstring = self.binary.read_string_at_address(candidate_cfstring_addr)
-            if cfstring and candidate_load_addr:
-                return candidate_load_addr, cfstring
+        if candidate_string_addr:
+            string = self.binary.read_string_at_address(candidate_string_addr)
+            if string and candidate_load_addr:
+                return candidate_load_addr, string
 
         return None
 
@@ -395,7 +398,7 @@ class MachoAnalyzer:
 
             function_branches = []
             objc_calls = []
-            cfstring_accesses = []
+            string_accesses = []
             func_analyzer = None
 
             peekable_code_in_func = peekable(disassembled_code)
@@ -403,11 +406,11 @@ class MachoAnalyzer:
                 # Is it a non-branching instruction?
                 if instr.mnemonic not in ObjcUnconditionalBranchInstruction.UNCONDITIONAL_BRANCH_MNEMONICS:
                     # Is it part of a string-load?
-                    cfstring_load_tup = self._get_loaded_cfstring(peekable_code_in_func, instr)
-                    if cfstring_load_tup is not None:
-                        load_addr, cfstring = cfstring_load_tup
-                        cfstring_access = (cfstring, load_addr, entry_point)
-                        cfstring_accesses.append(cfstring_access)
+                    string_load_tup = self._get_loaded_string(peekable_code_in_func, instr)
+                    if string_load_tup is not None:
+                        load_addr, string = string_load_tup
+                        string_access = (string, load_addr, entry_point)
+                        string_accesses.append(string_access)
 
                     continue
 
@@ -470,7 +473,7 @@ class MachoAnalyzer:
             # Add each branch and xref in this source function to the SQLite db
             c.executemany("INSERT INTO function_calls VALUES (?, ?, ?)", function_branches)
             c.executemany("INSERT INTO objc_msgSends VALUES (?, ?, ?, ?, ?)", objc_calls)
-            c.executemany("INSERT INTO string_xrefs VALUES (?, ?, ?)", cfstring_accesses)
+            c.executemany("INSERT INTO string_xrefs VALUES (?, ?, ?)", string_accesses)
 
         self._db_handle.commit()
         self._has_computed_xrefs = True
@@ -896,7 +899,7 @@ class MachoAnalyzer:
 
     @_requires_xrefs_computed
     def string_xrefs_to(self, string_literal: str) -> List[Tuple[VirtualMemoryPointer, VirtualMemoryPointer]]:
-        """Retrieve each code location that loads the provided CFString.
+        """Retrieve each code location that loads the provided (C or CF) string.
         Returns a tuple of (function entry point, instruction which completes the string load)
         """
         c = self._db_handle.cursor()

@@ -141,9 +141,7 @@ class MachoAnalyzer:
         self._db_tempdir = pathlib.Path(tempfile.mkdtemp())
         self._db_path = self._db_tempdir / "strongarm.db"
         self._db_handle = sqlite3.connect(self._db_path.as_posix())
-
         cursor = self._db_handle.executescript(ANALYZER_SQL_SCHEMA)
-
         with self._db_handle:
             cursor.close()
 
@@ -470,12 +468,9 @@ class MachoAnalyzer:
                     function_branches.append(xref)
 
             # Add each branch and xref in this source function to the SQLite db
-            for xref in function_branches:
-                c.execute("INSERT INTO function_calls VALUES (?, ?, ?)", xref)
-            for objc_call in objc_calls:
-                c.execute("INSERT INTO objc_msgSends VALUES (?, ?, ?, ?, ?)", objc_call)
-            for string_load in cfstring_accesses:
-                c.execute("INSERT INTO string_xrefs VALUES (?, ?, ?)", string_load)
+            c.executemany("INSERT INTO function_calls VALUES (?, ?, ?)", function_branches)
+            c.executemany("INSERT INTO objc_msgSends VALUES (?, ?, ?, ?, ?)", objc_calls)
+            c.executemany("INSERT INTO string_xrefs VALUES (?, ?, ?)", cfstring_accesses)
 
         self._db_handle.commit()
         self._has_computed_xrefs = True
@@ -916,12 +911,15 @@ class MachoAnalyzer:
         c = self._db_handle.cursor()
 
         # Process __imp_stubs
-        imported_bound_symbols = self.imp_stubs_to_symbol_names
-        for imp_stub_addr, symbol_name in imported_bound_symbols.items():
-            c.execute("INSERT INTO named_callable_symbols VALUES (1, ?, ?)", (imp_stub_addr, symbol_name))
+        imp_stub_addr_and_symbol_name = (
+            (stub_addr, sym_name) for stub_addr, sym_name in self.imp_stubs_to_symbol_names.items()
+        )
+        c.executemany("INSERT INTO named_callable_symbols VALUES (1, ?, ?)", imp_stub_addr_and_symbol_name)
 
         # Process the symbols defined in the binary
-        for (callable_addr, symbol_name) in self.exported_symbol_pointers_to_names.items():
-            c.execute("INSERT INTO named_callable_symbols VALUES (0, ?, ?)", (callable_addr, symbol_name))
+        callable_addr_and_sym_name = (
+            (callable_addr, sym_name) for callable_addr, sym_name in self.exported_symbol_pointers_to_names.items()
+        )
+        c.executemany("INSERT INTO named_callable_symbols VALUES (0, ?, ?)", callable_addr_and_sym_name)
 
         self._db_handle.commit()

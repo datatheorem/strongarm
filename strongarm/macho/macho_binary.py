@@ -579,6 +579,9 @@ class MachoBinary:
         # no section found?
         if not section_name:
             return None
+        # some sections will never contain a string literal and can cause errors if we try to read a string from them
+        if section_name in ["__bss"]:
+            return None
         # special case if this is a __cfstring entry
         if section_name == "__cfstring":
             # read bytes into CFString struct

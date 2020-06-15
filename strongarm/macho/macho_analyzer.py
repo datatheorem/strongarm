@@ -907,6 +907,18 @@ class MachoAnalyzer:
         string_xrefs = [(VirtualMemoryPointer(x[2]), VirtualMemoryPointer(x[1])) for x in xrefs_query]
         return string_xrefs
 
+    @_requires_xrefs_computed
+    def strings_in_func(self, func_addr: VirtualMemoryPointer) -> List[Tuple[VirtualMemoryPointer, str]]:
+        """Fetch the list of strings referenced by the provided function.
+        Returns a tuple of (instruction that completes the string load, loaded string literal)
+        """
+        c = self._db_handle.cursor()
+        xrefs_query: Iterable[Tuple[str, int, int]] = c.execute(
+            "SELECT * from string_xrefs WHERE accessor_func_start_address=?", (func_addr,)
+        ).fetchall()
+        string_loads = [(VirtualMemoryPointer(x[1]), x[0]) for x in xrefs_query]
+        return string_loads
+
     def _build_callable_symbol_index(self) -> None:
         """Build a database index for every callable symbol to symbol name.
         This index includes both imported and exported symbols.

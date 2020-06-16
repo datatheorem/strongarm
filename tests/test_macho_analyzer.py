@@ -14,12 +14,12 @@ from tests.utils import binary_containing_code
 class TestMachoAnalyzer:
     FAT_PATH = pathlib.Path(__file__).parent / "bin" / "StrongarmTarget"
 
-    def setup_method(self):
+    def setup_method(self) -> None:
         parser = MachoParser(self.FAT_PATH)
         self.binary = parser.slices[0]
         self.analyzer = MachoAnalyzer.get_analyzer(self.binary)
 
-    def test_imp_for_selref(self):
+    def test_imp_for_selref(self) -> None:
         # selref for -[DTLabel configureLabel]
         imp_within_bin_selref = VirtualMemoryPointer(0x100009078)
         found_imp_address = self.analyzer.imp_for_selref(imp_within_bin_selref)
@@ -31,9 +31,9 @@ class TestMachoAnalyzer:
         assert self.analyzer.imp_for_selref(imp_outside_bin_selref) is None
 
         imp_nonexisting = None
-        assert self.analyzer.imp_for_selref(imp_nonexisting) is None
+        assert self.analyzer.imp_for_selref(imp_nonexisting) is None  # type: ignore
 
-    def test_find_function_boundary(self):
+    def test_find_function_boundary(self) -> None:
         start_addr = VirtualMemoryPointer(0x100006420)
         correct_end_addr = VirtualMemoryPointer(0x100006530)
 
@@ -42,7 +42,7 @@ class TestMachoAnalyzer:
         found_end_addr = found_instructions[-1].address
         assert found_end_addr == correct_end_addr
 
-    def test_get_function_boundaries(self):
+    def test_get_function_boundaries(self) -> None:
         correct_entry_points = [
             0x100006228,
             0x100006284,
@@ -69,14 +69,14 @@ class TestMachoAnalyzer:
         assert list(entry_points) == correct_entry_points
         assert list(end_addresses) == correct_entry_points[1:] + [0x100006730]
 
-    def test_get_function_end_address(self):
+    def test_get_function_end_address(self) -> None:
         start_addr = VirtualMemoryPointer(0x100006420)
         correct_end_addr = VirtualMemoryPointer(0x100006534)
 
         end_address = self.analyzer.get_function_end_address(start_addr)
         assert end_address == correct_end_addr
 
-    def test_find_imported_symbols(self):
+    def test_find_imported_symbols(self) -> None:
         correct_imported_symbols = [
             "_NSClassFromString",
             "_NSLog",
@@ -114,17 +114,17 @@ class TestMachoAnalyzer:
         # so, sort the arrays before comparing them
         assert sorted(found_imported_symbols) == sorted(correct_imported_symbols)
 
-    def test_find_exported_symbols(self):
+    def test_find_exported_symbols(self) -> None:
         assert self.analyzer.exported_symbol_pointers_to_names == {4294967296: "__mh_execute_header"}
         assert self.analyzer.exported_symbol_names_to_pointers == {"__mh_execute_header": 4294967296}
 
-    def test_cached_analyzer(self):
+    def test_cached_analyzer(self) -> None:
         # there should only be one MachoAnalyzer for a given MachoBinary
         analyzer1 = MachoAnalyzer.get_analyzer(self.binary)
         analyzer2 = MachoAnalyzer.get_analyzer(self.binary)
         assert analyzer1 == analyzer2
 
-    def test_external_symbol_addr_map(self):
+    def test_external_symbol_addr_map(self) -> None:
         sym_map = self.analyzer.dyld_bound_symbols
         imported_syms = self.analyzer.imported_symbols
         # make sure all the symbols listed in imported_symbols are present here
@@ -138,7 +138,7 @@ class TestMachoAnalyzer:
         for call_destination in call_destinations:
             assert call_destination in sym_map.keys()
 
-    def test_find_dyld_bound_symbols(self):
+    def test_find_dyld_bound_symbols(self) -> None:
         bound_symbols = self.analyzer.dyld_bound_symbols
         correct_bound_symbols = {
             0x1000090F8: "_OBJC_CLASS_$_NSURLCredential",
@@ -191,35 +191,38 @@ class TestMachoAnalyzer:
         }
         assert sorted(bound_symbols) == sorted(correct_bound_symbols)
 
-    def test_symbol_name_for_branch_destination(self):
+    def test_symbol_name_for_branch_destination(self) -> None:
         # bogus destination
         with pytest.raises(RuntimeError):
-            self.analyzer.symbol_name_for_branch_destination(0xDEADBEEF)
+            self.analyzer.symbol_name_for_branch_destination(VirtualMemoryPointer(0xDEADBEEF))
 
         # objc_msgSend
-        assert self.analyzer.symbol_name_for_branch_destination(0x10000676C) == "_UIApplicationMain"
+        assert (
+            self.analyzer.symbol_name_for_branch_destination(VirtualMemoryPointer(0x10000676C)) == "_UIApplicationMain"
+        )
 
-    def test_selref_to_name_map(self):
-        correct_selref_to_imp_map = {
+    def test_selref_to_name_map(self) -> None:
+        correct_selref_to_imp_map_raw = {
             0x100009070: 0x100006228,
             0x100009078: 0x100006284,
             0x1000090B8: 0x1000063E8,
             0x1000090B0: 0x1000063B0,
         }
+        correct_selref_to_imp_map = {VirtualMemoryPointer(k): v for k, v in correct_selref_to_imp_map_raw.items()}
+
         # did analyzer map all selrefs?
         for selref in correct_selref_to_imp_map:
             assert self.analyzer.imp_for_selref(selref) == correct_selref_to_imp_map[selref]
 
         # can we get an IMP from a selref?
-        assert self.analyzer.imp_for_selref(0x100009070) == 0x100006228
+        assert self.analyzer.imp_for_selref(VirtualMemoryPointer(0x100009070)) == 0x100006228
 
         # nonexistent or missing selref handled correctly?
-        assert self.analyzer.imp_for_selref(None) is None
-        assert self.analyzer.imp_for_selref(0xDEADBEEF) is None
+        assert self.analyzer.imp_for_selref(VirtualMemoryPointer(0xDEADBEEF)) is None
 
         # TODO(PT): handle checking selref which is defined outside binary
 
-    def test_read_imported_symbol_pointers(self):
+    def test_read_imported_symbol_pointers(self) -> None:
         # Given the binary's imported symbol pointers are the following values
         # Given the binary contains imported symbol stubs with the following values
         correct_imp_stub_address_to_sym_name = {
@@ -246,7 +249,7 @@ class TestMachoAnalyzer:
         # Then I find the correct data
         assert found_imp_stub_to_sym_name == correct_imp_stub_address_to_sym_name
 
-    def test_read_xref(self):
+    def test_read_xref(self) -> None:
         # When I ask for an XRef
         # Then I get the correct data
         xrefs = self.analyzer.calls_to(VirtualMemoryPointer(0x100006748))
@@ -260,15 +263,17 @@ class TestMachoAnalyzer:
 
         # TODO(PT): ObjcFunctionAnalyzer.get_function_analyzer* should return singletons
         caller_func = ObjcFunctionAnalyzer.get_function_analyzer_for_method(self.analyzer.binary, method_info)
+        assert caller_func.method_info
         assert caller_func.method_info.objc_class.name == "DTLabel"
         assert caller_func.method_info.objc_sel.name == "logLabel"
 
-    def test_find_symbols_by_address(self):
+    def test_find_symbols_by_address(self) -> None:
         # Given I provide a locally-defined callable symbol (__mh_execute_header)
         # If I ask for the information about this symbol
         addr = VirtualMemoryPointer(0x100000000)
         symbol = self.analyzer.callable_symbol_for_address(addr)
         # Then it is reported correctly
+        assert symbol
         assert symbol.is_imported is False
         assert symbol.address == addr
         assert symbol.symbol_name == "__mh_execute_header"
@@ -278,6 +283,7 @@ class TestMachoAnalyzer:
         addr = VirtualMemoryPointer(0x1000067A8)
         symbol = self.analyzer.callable_symbol_for_address(addr)
         # Then it is reported correctly
+        assert symbol
         assert symbol.is_imported is True
         assert symbol.address == addr
         assert symbol.symbol_name == "_objc_msgSend"
@@ -288,11 +294,12 @@ class TestMachoAnalyzer:
         # Then no named symbol is returned
         assert symbol is None
 
-    def test_find_symbols_by_name(self):
+    def test_find_symbols_by_name(self) -> None:
         # Given I provide a locally-defined callable symbol (__mh_execute_header)
         # If I ask for the information about this symbol
         symbol = self.analyzer.callable_symbol_for_symbol_name("__mh_execute_header")
         # Then it is reported correctly
+        assert symbol
         assert symbol.is_imported is False
         assert symbol.address == VirtualMemoryPointer(0x100000000)
         assert symbol.symbol_name == "__mh_execute_header"
@@ -301,6 +308,7 @@ class TestMachoAnalyzer:
         # If I ask for the information about this symbol
         symbol = self.analyzer.callable_symbol_for_symbol_name("_objc_msgSend")
         # Then it is reported correctly
+        assert symbol
         assert symbol.is_imported is True
         assert symbol.address == VirtualMemoryPointer(0x1000067A8)
         assert symbol.symbol_name == "_objc_msgSend"
@@ -314,12 +322,12 @@ class TestMachoAnalyzer:
 class TestMachoAnalyzerDynStaticChecks:
     FAT_PATH = pathlib.Path(__file__).parent / "bin" / "DynStaticChecks"
 
-    def setup_method(self):
+    def setup_method(self) -> None:
         parser = MachoParser(self.FAT_PATH)
         self.binary = parser.slices[0]
         self.analyzer = MachoAnalyzer.get_analyzer(self.binary)
 
-    def test_get_function_boundaries(self):
+    def test_get_function_boundaries(self) -> None:
         correct_entry_points = [
             0x100007B1C,
             0x100007BD8,
@@ -400,7 +408,7 @@ class TestMachoAnalyzerDynStaticChecks:
         assert list(entry_points) == correct_entry_points
         assert list(end_addresses) == correct_entry_points[1:] + [0x100009EA8]
 
-    def test_get_function_end_address(self):
+    def test_get_function_end_address(self) -> None:
         test_cases = (
             # -[PTObjectTracking earlyReturn] defined at 0x100008e4c
             (0x100008E4C, 0x100008F3C),
@@ -412,13 +420,14 @@ class TestMachoAnalyzerDynStaticChecks:
             (0x100009604, 0x100009688),
         )
         for entry_point, expected_end_address in test_cases:
-            end_address = self.analyzer.get_function_end_address(entry_point)
+            end_address = self.analyzer.get_function_end_address(VirtualMemoryPointer(entry_point))
             assert end_address == expected_end_address
 
-    def test_xref_objc_opt_new(self):
+    def test_xref_objc_opt_new(self) -> None:
         # Given I provide a binary which contains the code:
         # _objc_opt_new(_OBJC_CLASS_$_ARSKView)
         binary = MachoParser(pathlib.Path(__file__).parent / "bin" / "iOS13_objc_opt").get_arm64_slice()
+        assert binary
         analyzer = MachoAnalyzer.get_analyzer(binary)
 
         # When I ask for XRefs to `ARSKView`
@@ -447,10 +456,11 @@ class TestMachoAnalyzerDynStaticChecks:
         # And when I ask for XRefs to `new`
         # Then the code location is returned
 
-    def test_xref_objc_opt_class(self):
+    def test_xref_objc_opt_class(self) -> None:
         # Given I provide a binary which contains the code:
         # _objc_opt_class(_OBJC_CLASS_$_ARFaceTrackingConfiguration)
         binary = MachoParser(pathlib.Path(__file__).parent / "bin" / "iOS13_objc_opt").get_arm64_slice()
+        assert binary
         analyzer = MachoAnalyzer.get_analyzer(binary)
 
         # When I ask for XRefs to `ARSKView`
@@ -527,7 +537,7 @@ class TestMachoAnalyzerDynStaticChecks:
         ) as (binary, analyzer):
             yield binary, analyzer
 
-    def test_returns_imported_classref_with_multiple_bound_addresses(self):
+    def test_returns_imported_classref_with_multiple_bound_addresses(self) -> None:
         # Given a binary that contains multiple dyld bindings for _OBJC_CLASS_$_UIWebView
         with self.uiwebview_bound_symbol_collision() as (binary, analyzer):
             uiwebview_bindings = [
@@ -539,11 +549,6 @@ class TestMachoAnalyzerDynStaticChecks:
             objc_const_binding = VirtualMemoryPointer(0x10000C048)
             objc_classrefs_binding = VirtualMemoryPointer(0x10000C250)
 
-            uiwebview_bindings = [
-                addr
-                for addr, name in analyzer.imported_symbols_to_symbol_names.items()
-                if name == "_OBJC_CLASS_$_UIWebView"
-            ]
             assert uiwebview_bindings == [objc_const_binding, objc_classrefs_binding]
 
             # When the classref for UIWebView is queried
@@ -552,7 +557,7 @@ class TestMachoAnalyzerDynStaticChecks:
             # (The address of the bound symbol in __objc_const should not be returned by this API)
             assert uiwebview_classref == objc_classrefs_binding
 
-    def test_class_name_for_class_pointer(self):
+    def test_class_name_for_class_pointer(self) -> None:
         # Given a binary that contains imported and local class names
         with self.uiwebview_bound_symbol_collision() as (binary, analyzer):
             # When I ask for the class name of a binding in __objc_const (the base class of a category)
@@ -584,7 +589,7 @@ class TestMachoAnalyzerDynStaticChecks:
                 == "_OBJC_CLASS_$_UIWebView (LocalCategory)"
             )
 
-    def test_parse_superclass_and_category_base(self):
+    def test_parse_superclass_and_category_base(self) -> None:
         # Given a binary that contains locally defined classes and categories
         # That inherit from local and imported symbols
         with self.uiwebview_bound_symbol_collision() as (binary, analyzer):
@@ -594,6 +599,7 @@ class TestMachoAnalyzerDynStaticChecks:
                 if isinstance(objc_cls, ObjcCategory):
                     class_superclass_pairs.append((objc_cls.category_name, objc_cls.base_class))
                 else:
+                    assert objc_cls.superclass_name
                     class_superclass_pairs.append((objc_cls.name, objc_cls.superclass_name))
 
             # Then the super/base-class names are correctly parsed
@@ -603,7 +609,7 @@ class TestMachoAnalyzerDynStaticChecks:
                 ("LocalCategory", "_OBJC_CLASS_$_UIWebView"),
             ]
 
-    def test_find_string_xref(self):
+    def test_find_string_xref(self) -> None:
         # Given a binary that accesses different constant strings throughout the code
         source_code = """
         - (void)method1 {
@@ -654,7 +660,7 @@ class TestMachoAnalyzerDynStaticChecks:
                 xrefs = analyzer.string_xrefs_to(string)
                 assert xrefs == expected_xrefs
 
-    def test_find_string_xref__multiple_xrefs(self):
+    def test_find_string_xref__multiple_xrefs(self) -> None:
         # Given a binary that accesses the same constant string in multiple locations
         source_code = """
         - (void)method1 {
@@ -696,7 +702,7 @@ class TestMachoAnalyzerDynStaticChecks:
             )
             assert xrefs == expected_xrefs
 
-    def test_find_string_xref__ignores_unrelated_constant_data(self):
+    def test_find_string_xref__ignores_unrelated_constant_data(self) -> None:
         # Given a binary that contains static variables stored as constant data
         source_code = """
         static char const1[256] = {0};
@@ -724,10 +730,11 @@ class TestMachoAnalyzerDynStaticChecks:
             ]
             assert xrefs == expected_xrefs
 
-    def test_find_string_xref__adr_pattern(self):
+    def test_find_string_xref__adr_pattern(self) -> None:
         # Given a binary that references a static string
         # And the binary was compiled such that the string is loaded via the `adr` pattern
         binary = MachoParser(pathlib.Path(__file__).parent / "bin" / "TestBinary5").get_arm64_slice()
+        assert binary
         analyzer = MachoAnalyzer.get_analyzer(binary)
         # When I ask for the XRefs to the string
         xrefs = analyzer.string_xrefs_to("DELETE FROM testfairy WHERE id = %d;")
@@ -735,7 +742,7 @@ class TestMachoAnalyzerDynStaticChecks:
         assert xrefs == [(VirtualMemoryPointer(0x10003ABE8), VirtualMemoryPointer(0x10003ACB0))]
 
     @pytest.mark.xfail(reason="Generating XRefs to strings in static variables / constant data is not yet supported")
-    def test_find_string_xref__finds_string_in_constant_data(self):
+    def test_find_string_xref__finds_string_in_constant_data(self) -> None:
         # Given a binary that stores a string in a static var (constant data), then uses the string via the static var
         source_code = """
         static NSString* staticStr = @"ConstString1";
@@ -766,7 +773,7 @@ class TestMachoAnalyzerDynStaticChecks:
             ]
             assert xrefs == expected_xrefs
 
-    def test_find_string_xref__cstring(self):
+    def test_find_string_xref__cstring(self) -> None:
         # Given a binary that accesses different C constant strings throughout the code
         source_code = """
         - (void)method1 {
@@ -824,16 +831,16 @@ class TestMachoAnalyzerDynStaticChecks:
 class TestMachoAnalyzerControlFlowTarget:
     FAT_PATH = pathlib.Path(__file__).parent / "bin" / "StrongarmControlFlowTarget"
 
-    def setup_method(self):
+    def setup_method(self) -> None:
         parser = MachoParser(self.FAT_PATH)
         self.binary = parser.slices[0]
         self.analyzer = MachoAnalyzer.get_analyzer(self.binary)
 
-    def test_get_function_end_address(self):
+    def test_get_function_end_address(self) -> None:
         test_cases = (
             # -[CFDataFlowMethods switchControlFlow] defined at 0x10000675c
             (0x10000675C, 0x1000067F4),
         )
         for entry_point, expected_end_address in test_cases:
-            end_address = self.analyzer.get_function_end_address(entry_point)
+            end_address = self.analyzer.get_function_end_address(VirtualMemoryPointer(entry_point))
             assert end_address == expected_end_address

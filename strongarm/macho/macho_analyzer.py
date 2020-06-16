@@ -8,7 +8,7 @@ import time
 from contextlib import closing
 from ctypes import sizeof
 from dataclasses import dataclass
-from typing import TYPE_CHECKING, Dict, Iterable, List, Optional, Set, Tuple, TypeVar
+from typing import TYPE_CHECKING, Any, Callable, Dict, Iterable, List, Optional, Set, Tuple, TypeVar
 
 from capstone import CS_ARCH_ARM64, CS_MODE_ARM, Cs, CsInsn
 from capstone.arm64_const import ARM64_OP_IMM
@@ -98,9 +98,9 @@ class CallableSymbol:
     symbol_name: str
 
 
-def _requires_xrefs_computed(func):
+def _requires_xrefs_computed(func: Callable) -> Callable:
     @functools.wraps(func)
-    def wrap(self, *args, **kwargs):
+    def wrap(self: "MachoAnalyzer", *args: Any, **kwargs: Any) -> Callable:
         if not self._has_computed_xrefs:
             logging.info(f"called {func.__name__} before XRefs were computed, computing now...")
             self._build_xref_tables()
@@ -159,9 +159,8 @@ class MachoAnalyzer:
         """Return the list of code-locations within the binary which branch to the provided address.
         """
         c = self._db_handle.cursor()
-        xrefs = c.execute(f"SELECT * from function_calls WHERE destination_address={int(address)}").fetchall()
-        xrefs = [CallerXRef(x[0], x[1], x[2]) for x in xrefs]
-        return xrefs
+        xrefs = c.execute("SELECT * from function_calls WHERE destination_address=?", (int(address),)).fetchall()
+        return [CallerXRef(x[0], x[1], x[2]) for x in xrefs]
 
     @_requires_xrefs_computed
     def objc_calls_to(
@@ -178,29 +177,26 @@ class MachoAnalyzer:
         Otherwise, a call-site will be yielded if one of the classrefs *or* one of the selrefs are messaged
         at a call site.
         """
-        c = self._db_handle.cursor()
+
+        class_refs_int_list = ", ".join(str(int(x)) for x in objc_classrefs)
+        sel_refs_int_list = ", ".join(str(int(x)) for x in objc_selrefs)
 
         # Do we require the classref and selref being messaged to both be messaged at the same call site?
-        if not requires_class_and_sel_found:
-            # The classref and selref don't both need to be present to yield a match
-            objc_calls = c.execute(
-                f"SELECT * from objc_msgSends "
-                f'WHERE classref IN ({", ".join([str(int(x)) for x in objc_classrefs])})'
-            ).fetchall()
-
-            objc_calls += c.execute(
-                f"SELECT * from objc_msgSends " f'WHERE selref IN ({", ".join([str(int(x)) for x in objc_selrefs])})'
-            ).fetchall()
-
-        else:
+        if requires_class_and_sel_found:
             # The classref and selref must both be present to yield a match
-            objc_calls = c.execute(
-                f"SELECT * from objc_msgSends "
-                f'WHERE classref IN ({", ".join([str(int(x)) for x in objc_classrefs])}) '
-                f'AND selref IN ({", ".join([str(int(x)) for x in objc_selrefs])})'
-            ).fetchall()
-        objc_calls = [ObjcMsgSendXref(x[0], x[1], x[2], x[3], x[4]) for x in objc_calls]
-        return objc_calls
+            query = (
+                f"SELECT * from objc_msgSends"
+                f" WHERE classref IN ({class_refs_int_list}) AND selref IN ({sel_refs_int_list})"
+            )
+        else:
+            # The classref and selref don't both need to be present to yield a match
+            query = (
+                f"SELECT * from objc_msgSends"
+                f" WHERE classref IN ({class_refs_int_list}) OR selref IN ({sel_refs_int_list})"
+            )
+
+        objc_calls = self._db_handle.execute(query)
+        return [ObjcMsgSendXref(x[0], x[1], x[2], x[3], x[4]) for x in objc_calls]
 
     def _compute_function_basic_blocks(
         self, entry_point: VirtualMemoryPointer, end_address: VirtualMemoryPointer
@@ -293,7 +289,7 @@ class MachoAnalyzer:
                 continue
             end_address = max((bb_end for _, bb_end in basic_blocks))
             cursor.execute(
-                f"INSERT INTO function_boundaries (entry_point, end_address) VALUES (?, ?)", (entry_point, end_address)
+                "INSERT INTO function_boundaries (entry_point, end_address) VALUES (?, ?)", (entry_point, end_address)
             )
 
         with self._db_handle:
@@ -378,7 +374,7 @@ class MachoAnalyzer:
         from strongarm.objc import ObjcUnconditionalBranchInstruction
 
         if self._has_computed_xrefs:
-            logging.error(f"Already computed xrefs, why was _build_xref_tables called again?")
+            logging.error("Already computed xrefs, why was _build_xref_tables called again?")
             return
 
         c = self._db_handle.cursor()

@@ -8,12 +8,12 @@ from strongarm.macho.macho_parse import MachoParser
 class TestFunctionBoundary:
     FAT_PATH = pathlib.Path(__file__).parent / "bin" / "StrongarmTarget"
 
-    def setup_method(self):
+    def setup_method(self) -> None:
         parser = MachoParser(TestFunctionBoundary.FAT_PATH)
         self.binary = parser.slices[0]
         self.analyzer = MachoAnalyzer.get_analyzer(self.binary)
 
-    def test_find_method_code(self):
+    def test_find_method_code(self) -> None:
         sel = "application:didFinishLaunchingWithOptions:"
         # found in Hopper
         correct_start_address = VirtualMemoryPointer(0x1000066DC)

@@ -7,18 +7,21 @@ from strongarm.macho.codesign import CodesignParser
 class TestCodeSignParser:
     TARGET_PATH = pathlib.Path(__file__).parent / "bin" / "TestBinary1"
 
-    def setup_method(self):
+    def setup_method(self) -> None:
         parser = MachoParser(TestCodeSignParser.TARGET_PATH)
         self.binary = parser.get_arm64_slice()
+        assert self.binary
         self.codesign_parser = CodesignParser(self.binary)
 
-    def test_find_codesign_command(self):
+    def test_find_codesign_command(self) -> None:
+        assert self.binary
+        assert self.binary.code_signature_cmd
         assert self.binary.code_signature_cmd.cmd == 0x1D
         assert self.binary.code_signature_cmd.cmdsize == 0x10
         assert self.binary.code_signature_cmd.dataoff == 0x12D2E0
         assert self.binary.code_signature_cmd.datasize == 0x6500
 
-    def test_entitlements(self):
+    def test_entitlements(self) -> None:
         correct_ents = bytearray(
             b'<?xml version="1.0" encoding="UTF-8" standalone="yes"?>\n'
             b'<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">\n'
@@ -40,8 +43,8 @@ class TestCodeSignParser:
         )
         assert self.codesign_parser.entitlements == correct_ents
 
-    def test_identifier(self):
+    def test_identifier(self) -> None:
         assert self.codesign_parser.signing_identifier == "com.honestdollar.honestdollar"
 
-    def test_team_id(self):
+    def test_team_id(self) -> None:
         assert self.codesign_parser.signing_team_id == "E6435Z6R89"

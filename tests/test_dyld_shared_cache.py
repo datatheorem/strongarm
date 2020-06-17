@@ -18,7 +18,7 @@ class TestDyldSharedCache:
     def dyld_shared_cache(self) -> DyldSharedCacheParser:
         return DyldSharedCacheParser(_DSC_PATH)
 
-    def test_parses_dsc_maps(self, dyld_shared_cache):
+    def test_parses_dsc_maps(self, dyld_shared_cache: DyldSharedCacheParser) -> None:
         # Ensure the structures at the start of the DSC were parsed exactly as expected
         assert dyld_shared_cache.file_magic == 0x646C7964
 
@@ -42,14 +42,14 @@ class TestDyldSharedCache:
         assert linkedit_map.size == 0x7884000
         assert linkedit_map.init_prot == linkedit_map.max_prot == 0x1
 
-    def test_parses_dsc_images(self, dyld_shared_cache):
+    def test_parses_dsc_images(self, dyld_shared_cache: DyldSharedCacheParser) -> None:
         assert len(dyld_shared_cache.embedded_binary_info) == 1400
         # Pick out a binary and ensure its location is reported correctly
         image_path = Path("/System/Library/Frameworks/CoreFoundation.framework/CoreFoundation")
         corefoundation_range = dyld_shared_cache.embedded_binary_info[image_path]
         assert corefoundation_range == (VirtualMemoryPointer(0x180DB9000), VirtualMemoryPointer(0x18111D000))
 
-    def test_find_image_for_code_address(self, dyld_shared_cache):
+    def test_find_image_for_code_address(self, dyld_shared_cache: DyldSharedCacheParser) -> None:
         # Given an address within an embedded image
         code_addr = VirtualMemoryPointer(0x180AC1000)
         # When I ask which image contains it
@@ -57,7 +57,7 @@ class TestDyldSharedCache:
         # The correct image is returned
         assert implementing_image == Path("/usr/lib/system/libsystem_malloc.dylib")
 
-    def test_analyze_embedded_binary(self, dyld_shared_cache):
+    def test_analyze_embedded_binary(self, dyld_shared_cache: DyldSharedCacheParser) -> None:
         # Given I parse an embedded binary
         binary = dyld_shared_cache.get_embedded_binary(Path("/usr/lib/libSystem.B.dylib"))
         # The binary appears to be parsed correctly

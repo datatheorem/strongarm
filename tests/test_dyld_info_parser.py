@@ -9,12 +9,13 @@ class TestDyldInfoParser:
     BINARY1_PATH = pathlib.Path(__file__).parent / "bin" / "StrongarmTarget"
     BINARY2_PATH = pathlib.Path(__file__).parent / "bin" / "TestBinary4"
 
-    def test_identify_imported_symbols_1(self):
+    def test_identify_imported_symbols_1(self) -> None:
         parser = MachoParser(TestDyldInfoParser.BINARY1_PATH)
         binary = parser.get_arm64_slice()
+        assert binary
         analyzer = MachoAnalyzer.get_analyzer(binary)
 
-        correct_imported_symbols = {
+        correct_imported_symbols_raw = {
             4295004408: "_OBJC_CLASS_$_NSURLCredential",
             4295004656: "_OBJC_CLASS_$_NSObject",
             4295004488: "_OBJC_METACLASS_$_NSObject",
@@ -63,15 +64,18 @@ class TestDyldInfoParser:
             4295000200: "_objc_storeStrong",
             4295000208: "_rand",
         }
+        correct_imported_symbols = {VirtualMemoryPointer(k): v for k, v in correct_imported_symbols_raw.items()}
+
         assert analyzer.imported_symbols_to_symbol_names == correct_imported_symbols
         for imported_pointer in correct_imported_symbols.keys():
             symbol_name = correct_imported_symbols[imported_pointer]
             if "_OBJC_CLASS_$_" in symbol_name:
                 assert analyzer.class_name_for_class_pointer(imported_pointer) == symbol_name
 
-    def test_identify_imported_symbols_2(self):
+    def test_identify_imported_symbols_2(self) -> None:
         parser = MachoParser(TestDyldInfoParser.BINARY2_PATH)
         binary = parser.get_arm64_slice()
+        assert binary
         analyzer = MachoAnalyzer.get_analyzer(binary)
 
         # TestBinary4's dyld binding opcodes utilize BIND_OPCODE_DO_BIND_ADD_ADDR_ULEB

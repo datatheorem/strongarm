@@ -9,7 +9,7 @@ class TestObjcRuntimeDataParser:
     CATEGORY_PATH = pathlib.Path(__file__).parent / "bin" / "TestBinary1"
     PROTOCOL_32BIT_PATH = pathlib.Path(__file__).parent / "bin" / "Protocol32Bit"
 
-    def test_path_for_external_symbol(self):
+    def test_path_for_external_symbol(self) -> None:
         parser = MachoParser(TestObjcRuntimeDataParser.FAT_PATH)
         binary = parser.slices[0]
         dyld_info_parser = DyldInfoParser(binary)
@@ -47,7 +47,7 @@ class TestObjcRuntimeDataParser:
             assert objc_parser.path_for_external_symbol(symbol) == correct_map[symbol]
         assert objc_parser.path_for_external_symbol("XXX_fake_symbol_XXX") is None
 
-    def test_find_categories(self):
+    def test_find_categories(self) -> None:
         parser = MachoParser(TestObjcRuntimeDataParser.CATEGORY_PATH)
         binary = parser.slices[0]
         dyld_info_parser = DyldInfoParser(binary)
@@ -69,9 +69,10 @@ class TestObjcRuntimeDataParser:
         assert selector.name == "allowsAnyHTTPSCertificateForHost:"
         assert selector.implementation == 0x100005028
 
-    def test_parse_ivars(self):
+    def test_parse_ivars(self) -> None:
         parser = MachoParser(TestObjcRuntimeDataParser.CATEGORY_PATH)
         binary = parser.get_arm64_slice()
+        assert binary
         dyld_info_parser = DyldInfoParser(binary)
         objc_parser = ObjcRuntimeDataParser(binary, dyld_info_parser)
 
@@ -99,9 +100,10 @@ class TestObjcRuntimeDataParser:
         # Then the correct data is provided
         assert sorted(parsed_ivars) == sorted(correct_ivar_layout)
 
-    def test_find_protocols(self):
+    def test_find_protocols(self) -> None:
         parser = MachoParser(TestObjcRuntimeDataParser.FAT_PATH)
         binary = parser.get_arm64_slice()
+        assert binary
         dyld_info_parser = DyldInfoParser(binary)
         objc_parser = ObjcRuntimeDataParser(binary, dyld_info_parser)
 
@@ -112,9 +114,10 @@ class TestObjcRuntimeDataParser:
         for p in correct_protocols:
             assert p in [a.name for a in protocols]
 
-    def test_parse_protocol(self):
+    def test_parse_protocol(self) -> None:
         parser = MachoParser(TestObjcRuntimeDataParser.FAT_PATH)
         binary = parser.get_arm64_slice()
+        assert binary
         dyld_info_parser = DyldInfoParser(binary)
         objc_parser = ObjcRuntimeDataParser(binary, dyld_info_parser)
 
@@ -130,8 +133,8 @@ class TestObjcRuntimeDataParser:
         for s in correct_selectors:
             assert s in [sel.name for sel in session_protocol.selectors]
 
-    def test_class_conforming_protocols(self):
-        def check_class_conformed_protocols(class_name: str, correct_protocols: List[str]):
+    def test_class_conforming_protocols(self) -> None:
+        def check_class_conformed_protocols(class_name: str, correct_protocols: List[str]) -> None:
             cls = [x for x in objc_parser.classes if x.name == class_name][0]
             assert cls is not None
             conformed_protocol_names = [x.name for x in cls.protocols]
@@ -139,6 +142,7 @@ class TestObjcRuntimeDataParser:
 
         parser = MachoParser(TestObjcRuntimeDataParser.CATEGORY_PATH)
         binary = parser.get_arm64_slice()
+        assert binary
         dyld_info_parser = DyldInfoParser(binary)
         objc_parser = ObjcRuntimeDataParser(binary, dyld_info_parser)
 
@@ -152,9 +156,10 @@ class TestObjcRuntimeDataParser:
         # this class doesn't conform to any protocols
         check_class_conformed_protocols("BadFilesDetector", [])
 
-    def test_protocol_32bit(self):
+    def test_protocol_32bit(self) -> None:
         parser = MachoParser(TestObjcRuntimeDataParser.PROTOCOL_32BIT_PATH)
         binary = parser.get_armv7_slice()
+        assert binary
         dyld_info_parser = DyldInfoParser(binary)
         objc_parser = ObjcRuntimeDataParser(binary, dyld_info_parser)
         assert len(objc_parser.classes) == 66

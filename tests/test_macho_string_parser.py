@@ -1,25 +1,25 @@
 import pathlib
 
-from strongarm.macho import MachoStringTableHelper
+from strongarm.macho import MachoStringTableHelper, VirtualMemoryPointer
 from strongarm.macho.macho_parse import MachoParser
 
 
 class TestMachoStringParser:
     FAT_PATH = pathlib.Path(__file__).parent / "bin" / "StrongarmTarget"
 
-    def setup_method(self):
+    def setup_method(self) -> None:
         parser = MachoParser(self.FAT_PATH)
         self.binary = parser.slices[0]
         self.string_helper = MachoStringTableHelper(self.binary)
 
-    def test_exposed_symbol_list(self):
+    def test_exposed_symbol_list(self) -> None:
         # The exported symbols from the binary
         found_exported = self.string_helper.exported_symbols
         # Matches the expected value
         expected = {4294967296: "__mh_execute_header"}
         assert found_exported == expected
 
-    def test_imported_symbol_list(self):
+    def test_imported_symbol_list(self) -> None:
         # The imported symbols from the binary
         found_imported = self.string_helper.imported_symbols
 
@@ -58,9 +58,9 @@ class TestMachoStringParser:
         ]
         assert set(found_imported) == set(expected)
 
-    def test_get_symbol_for_address(self):
+    def test_get_symbol_for_address(self) -> None:
         # Given the address of a function
-        address = 4294967296
+        address = VirtualMemoryPointer(4294967296)
         # And the symbol name of that function
         symbol_name = self.string_helper.get_symbol_name_for_address(address)
         # The name is the expected value

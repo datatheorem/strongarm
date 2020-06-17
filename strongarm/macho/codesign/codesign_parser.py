@@ -127,7 +127,7 @@ class CodesignParser:
 
     def print_code_directory(self, code_dir: CSCodeDirectory) -> None:
         print(f"CodeDirectory @ {hex(code_dir.binary_offset)}")
-        print(f"-----------------------")
+        print("-----------------------")
         print(f"Version: {hex(code_dir.version)}")
         print(f"Flags: {hex(code_dir.flags)}")
         print(f"Hash offset: {hex(code_dir.hash_offset)}")

@@ -9,12 +9,12 @@ from tests.utils import function_containing_asm
 class TestBasicBlocks:
     TARGET_PATH = pathlib.Path(__file__).parent / "bin" / "StrongarmControlFlowTarget"
 
-    def setup_method(self):
+    def setup_method(self) -> None:
         parser = MachoParser(TestBasicBlocks.TARGET_PATH)
         self.binary = parser.slices[0]
         self.analyzer = MachoAnalyzer.get_analyzer(self.binary)
 
-    def test_find_basic_blocks_1(self):
+    def test_find_basic_blocks_1(self) -> None:
         # Given I provide a method implementation which contains a switch statement
         function_analyzer = self.analyzer.get_imps_for_sel("switchControlFlow")[0]
 
@@ -35,7 +35,7 @@ class TestBasicBlocks:
         ]
         assert basic_blocks == [(VirtualMemoryPointer(a), VirtualMemoryPointer(b)) for a, b in correct_basic_blocks]
 
-    def test_find_basic_blocks_2(self):
+    def test_find_basic_blocks_2(self) -> None:
         # Given I provide a method implementation with a backwards local jump
         function_analyzer = self.analyzer.get_imps_for_sel("forControlFlow")[0]
 
@@ -47,7 +47,7 @@ class TestBasicBlocks:
 
         assert basic_blocks == [(VirtualMemoryPointer(a), VirtualMemoryPointer(b)) for a, b in correct_basic_blocks]
 
-    def test_find_basic_blocks_3(self):
+    def test_find_basic_blocks_3(self) -> None:
         # Given I provide a method implementation with a backwards local jump
         function_analyzer = self.analyzer.get_imps_for_sel("whileControlFlow")[0]
 
@@ -58,7 +58,7 @@ class TestBasicBlocks:
         correct_basic_blocks = [(0x100006848, 0x100006864), (0x100006864, 0x10000687C), (0x10000687C, 0x100006898)]
         assert basic_blocks == [(VirtualMemoryPointer(a), VirtualMemoryPointer(b)) for a, b in correct_basic_blocks]
 
-    def test_find_basic_blocks_4(self):
+    def test_find_basic_blocks_4(self) -> None:
         # Given I provide a function with no internal branching
         function_analyzer = ObjcFunctionAnalyzer.get_function_analyzer(self.binary, VirtualMemoryPointer(0x100006898))
 
@@ -69,7 +69,7 @@ class TestBasicBlocks:
         correct_basic_blocks = [(0x100006898, 0x100006918)]
         assert basic_blocks == [(VirtualMemoryPointer(a), VirtualMemoryPointer(b)) for a, b in correct_basic_blocks]
 
-    def test_find_basic_blocks_5(self):
+    def test_find_basic_blocks_5(self) -> None:
         # Given I provide a method implementation with forwards local jumps
         function_analyzer = self.analyzer.get_imps_for_sel("ifControlFlow")[0]
 
@@ -87,7 +87,7 @@ class TestBasicBlocks:
         ]
         assert basic_blocks == [(VirtualMemoryPointer(a), VirtualMemoryPointer(b)) for a, b in correct_basic_blocks]
 
-    def test_find_control_flow_6(self):
+    def test_find_control_flow_6(self) -> None:
         # Given I provide a method implementation with both forwards and backwards local jumps
         function_analyzer = self.analyzer.get_imps_for_sel("nestedControlFlow")[0]
 
@@ -107,10 +107,11 @@ class TestBasicBlocks:
         ]
         assert basic_blocks == [(VirtualMemoryPointer(a), VirtualMemoryPointer(b)) for a, b in correct_basic_blocks]
 
-    def test_find_basic_blocks_7(self):
+    def test_find_basic_blocks_7(self) -> None:
         # Given I provide a method implementation with no conditional branching which ends in an unconditional jump
         binary_path = pathlib.Path(__file__).parent / "bin" / "StrongarmTarget"
         binary = MachoParser(binary_path).get_arm64_slice()
+        assert binary
         analyzer = MachoAnalyzer.get_analyzer(binary)
         function_analyzer = analyzer.get_imps_for_sel("bluetoothManagerCall")[0]
 
@@ -121,9 +122,10 @@ class TestBasicBlocks:
         correct_basic_blocks = [(0x100006534, 0x100006590)]
         assert basic_blocks == [(VirtualMemoryPointer(a), VirtualMemoryPointer(b)) for a, b in correct_basic_blocks]
 
-    def test_find_basic_blocks_8(self):
+    def test_find_basic_blocks_8(self) -> None:
         binary_path = pathlib.Path(__file__).parent / "bin" / "DynStaticChecks"
         binary = MachoParser(binary_path).get_arm64_slice()
+        assert binary
         analyzer = MachoAnalyzer.get_analyzer(binary)
         function_analyzer = analyzer.get_imps_for_sel("UsageDESAlgorithm")[0]
 
@@ -134,10 +136,11 @@ class TestBasicBlocks:
         correct_basic_blocks = [(0x100007B1C, 0x100007BC4), (0x100007BC4, 0x100007BD4), (0x100007BD4, 0x100007BD8)]
         assert basic_blocks == [(VirtualMemoryPointer(a), VirtualMemoryPointer(b)) for a, b in correct_basic_blocks]
 
-    def test_early_return(self):
+    def test_early_return(self) -> None:
         # Given I provide a function that has a `ret` instruction on an early code path, with more basic blocks after it
         binary_path = pathlib.Path(__file__).parent / "bin" / "DynStaticChecks"
         binary = MachoParser(binary_path).get_arm64_slice()
+        assert binary
         analyzer = MachoAnalyzer.get_analyzer(binary)
         function_analyzer = analyzer.get_imps_for_sel("earlyReturn")[0]
 
@@ -155,7 +158,7 @@ class TestBasicBlocks:
         ]
         assert basic_blocks == [(VirtualMemoryPointer(a), VirtualMemoryPointer(b)) for a, b in correct_basic_blocks]
 
-    def test_early_return2(self):
+    def test_early_return2(self) -> None:
         # Given I provide a function that has a `ret` instruction on an early code path, with more basic blocks after it
         source = """
         mov x0, #0x123

@@ -827,7 +827,7 @@ class TestMachoAnalyzerDynStaticChecks:
                 xrefs = analyzer.string_xrefs_to(string)
                 assert xrefs == expected_xrefs
 
-    def test_find_strings_in_func(self):
+    def test_find_strings_in_func(self) -> None:
         # Given a binary that accesses C and CF strings in a few functions / methods
         source_code = """
         void func1() {

@@ -8,7 +8,7 @@ import time
 from contextlib import closing
 from ctypes import sizeof
 from dataclasses import dataclass
-from typing import TYPE_CHECKING, Any, Callable, Dict, Iterable, List, Optional, Set, Tuple, TypeVar
+from typing import TYPE_CHECKING, Any, Callable, Dict, Iterable, List, Optional, Set, Tuple, TypeVar, cast
 
 from capstone import CS_ARCH_ARM64, CS_MODE_ARM, Cs, CsInsn
 from capstone.arm64_const import ARM64_OP_IMM
@@ -29,7 +29,7 @@ from strongarm.macho.objc_runtime_data_parser import (
 )
 
 if TYPE_CHECKING:
-    from strongarm.objc import ObjcFunctionAnalyzer, ObjcMethodInfo  # noqa: F401
+    from strongarm.objc import ObjcFunctionAnalyzer, ObjcMethodInfo
 
 
 _T = TypeVar("_T")
@@ -109,7 +109,7 @@ def _requires_xrefs_computed(func: CallableT) -> CallableT:
             self._build_xref_tables()
         return func(self, *args, **kwargs)
 
-    return wrap
+    return cast(CallableT, wrap)
 
 
 class MachoAnalyzer:

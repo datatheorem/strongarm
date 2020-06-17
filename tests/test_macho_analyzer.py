@@ -820,6 +820,30 @@ class TestMachoAnalyzerDynStaticChecks:
                 xrefs = analyzer.string_xrefs_to(string)
                 assert xrefs == expected_xrefs
 
+    def test_find_strings_in_func(self):
+        # Given a binary that accesses C and CF strings in a few functions / methods
+        source_code = """
+        void func1() {
+            printf("CString1");
+            NSLog(@"CFString1");
+        }
+        - (void)method1 {
+            func1();
+            printf("CString2");
+            [NSString stringWithFormat:@"CFString2"];
+        }
+        """
+        with binary_containing_code(source_code, is_assembly=False) as (binary, analyzer):
+            # When I ask for the strings referenced by each function/method
+            # Then each string is correctly returned
+            functions_to_string_data = {
+                VirtualMemoryPointer(0x100007E44): [(0x100007E54, "CString1"), (0x100007E60, "CFString1")],
+                VirtualMemoryPointer(0x100007E7C): [(0x100007E98, "CString2"), (0x100007EBC, "CFString2")],
+            }
+            for function_addr, expected_string_load_and_strings in functions_to_string_data.items():
+                strings_in_func = analyzer.strings_in_func(VirtualMemoryPointer(function_addr))
+                assert strings_in_func == expected_string_load_and_strings
+
 
 class TestMachoAnalyzerControlFlowTarget:
     FAT_PATH = pathlib.Path(__file__).parent / "bin" / "StrongarmControlFlowTarget"

@@ -580,7 +580,7 @@ class MachoBinary:
         if not section_name:
             return None
         # some sections will never contain a string literal and can cause errors if we try to read a string from them
-        if section_name in ["__bss"]:
+        if section_name in ["__bss", "__objc_selrefs", "__objc_classrefs"]:
             return None
         # special case if this is a __cfstring entry
         if section_name == "__cfstring":

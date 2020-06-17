@@ -905,7 +905,7 @@ class MachoAnalyzer:
         c = self._db_handle.cursor()
         xrefs_query = c.execute(
             "SELECT accessor_func_start_address, accessor_address from string_xrefs WHERE string_literal=?",
-            (string_literal,)
+            (string_literal,),
         ).fetchall()
         string_xrefs = [(VirtualMemoryPointer(x[0]), VirtualMemoryPointer(x[1])) for x in xrefs_query]
         return string_xrefs
@@ -916,9 +916,9 @@ class MachoAnalyzer:
         Returns a tuple of (instruction that completes the string load, loaded string literal)
         """
         c = self._db_handle.cursor()
-        xrefs: Iterable[Tuple[str, int]] = c.execute(
+        xrefs: Iterable[Tuple[int, str]] = c.execute(
             "SELECT accessor_address, string_literal from string_xrefs WHERE accessor_func_start_address=?",
-            (func_addr,)
+            (func_addr,),
         )
         string_loads = [(VirtualMemoryPointer(x[0]), x[1]) for x in xrefs]
         return string_loads

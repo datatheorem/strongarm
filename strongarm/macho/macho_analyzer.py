@@ -98,9 +98,12 @@ class CallableSymbol:
     symbol_name: str
 
 
-def _requires_xrefs_computed(func: Callable) -> Callable:
+CallableT = TypeVar("CallableT", bound=Callable)
+
+
+def _requires_xrefs_computed(func: CallableT) -> CallableT:
     @functools.wraps(func)
-    def wrap(self: "MachoAnalyzer", *args: Any, **kwargs: Any) -> Callable:
+    def wrap(self: "MachoAnalyzer", *args: Any, **kwargs: Any) -> Any:
         if not self._has_computed_xrefs:
             logging.info(f"called {func.__name__} before XRefs were computed, computing now...")
             self._build_xref_tables()
@@ -158,9 +161,10 @@ class MachoAnalyzer:
     def calls_to(self, address: VirtualMemoryPointer) -> List[CallerXRef]:
         """Return the list of code-locations within the binary which branch to the provided address.
         """
-        c = self._db_handle.cursor()
-        xrefs = c.execute("SELECT * from function_calls WHERE destination_address=?", (int(address),)).fetchall()
-        return [CallerXRef(x[0], x[1], x[2]) for x in xrefs]
+        xrefs_cursor = self._db_handle.execute(
+            "SELECT * from function_calls WHERE destination_address=?", (int(address),)
+        )
+        return [CallerXRef(x[0], x[1], x[2]) for x in xrefs_cursor]
 
     @_requires_xrefs_computed
     def objc_calls_to(
@@ -195,8 +199,8 @@ class MachoAnalyzer:
                 f" WHERE classref IN ({class_refs_int_list}) OR selref IN ({sel_refs_int_list})"
             )
 
-        objc_calls = self._db_handle.execute(query)
-        return [ObjcMsgSendXref(x[0], x[1], x[2], x[3], x[4]) for x in objc_calls]
+        objc_calls_cursor = self._db_handle.execute(query)
+        return [ObjcMsgSendXref(x[0], x[1], x[2], x[3], x[4]) for x in objc_calls_cursor]
 
     def _compute_function_basic_blocks(
         self, entry_point: VirtualMemoryPointer, end_address: VirtualMemoryPointer

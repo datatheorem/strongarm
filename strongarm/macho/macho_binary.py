@@ -184,7 +184,7 @@ class MachoBinary:
         self.is_swap = self.should_swap_bytes()
         # Big endian binaries are currently unsupported
         if self.is_swap:
-            raise NotImplementedError(f"Big-endian binaries are unsupported")
+            raise NotImplementedError("Big-endian binaries are unsupported")
 
         self.is_64bit = self.magic_is_64()
 
@@ -406,7 +406,7 @@ class MachoBinary:
         if not self._virtual_base:
             text_seg = self.segment_with_name("__TEXT")
             if not text_seg:
-                raise RuntimeError(f"Could not find virtual base because binary has no __TEXT segment.")
+                raise RuntimeError("Could not find virtual base because binary has no __TEXT segment.")
             self._virtual_base = VirtualMemoryPointer(text_seg.vmaddr)
 
         return self._virtual_base
@@ -428,17 +428,17 @@ class MachoBinary:
         if offset > 0x100000000:
             raise InvalidAddressError(
                 f"get_bytes() offset {hex(offset)} looks like a virtual address."
-                f" Did you mean to use get_content_from_virtual_address?"
+                " Did you mean to use get_content_from_virtual_address?"
             )
         if offset < 0:
             raise InvalidAddressError(f"get_bytes() passed negative offset: {hex(offset)}")
         if _translate_addr_to_file:
-            raise ValueError(f"_translate_addr_to_file may only be used with dyld_shared_cache binaries")
+            raise ValueError("_translate_addr_to_file may only be used with dyld_shared_cache binaries")
 
         # safeguard against reading from an encrypted segment of the binary
         if self.is_range_encrypted(offset, size):
             raise BinaryEncryptedError(
-                f"Cannot read encrypted"
+                "Cannot read encrypted"
                 f" range [{hex(int(self.encryption_info.cryptoff))}"
                 f" to {hex(int(self.encryption_info.cryptsize))}]"
             )
@@ -796,9 +796,9 @@ class MachoBinary:
         Note: This will invalidate the binary's code signature, if present.
         """
         if not self.is_64bit:
-            raise RuntimeError(f"Inserting load commands is only support on 64-bit binaries")
+            raise RuntimeError("Inserting load commands is only support on 64-bit binaries")
         if self.is_swap:
-            raise RuntimeError(f"Unsupported endianness")
+            raise RuntimeError("Unsupported endianness")
 
         load_cmd = DylibCommand()
         load_cmd.cmd = MachoLoadCommands.LC_LOAD_DYLIB
@@ -871,7 +871,7 @@ class MachoBinary:
         from strongarm.macho.macho_definitions import MachoFatHeader, MachoFatArch, MachArch
 
         if any(x.is_swap for x in slices):
-            raise RuntimeError(f"Unsupported endianness")
+            raise RuntimeError("Unsupported endianness")
 
         # Write the FAT header
         fat_header = MachoFatHeader()

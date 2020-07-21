@@ -57,7 +57,9 @@ class ObjcInstruction:
         return False
 
     @classmethod
-    def parse_instruction(cls, function_analyzer: "ObjcFunctionAnalyzer", instruction: CsInsn) -> "ObjcInstruction":
+    def parse_instruction(
+        cls, function_analyzer: "ObjcFunctionAnalyzer", instruction: CsInsn
+    ) -> Union["ObjcInstruction", "ObjcUnconditionalBranchInstruction", "ObjcConditionalBranchInstruction"]:
         """Read an instruction and encapsulate it in the appropriate ObjcInstruction subclass
         """
         if ObjcBranchInstruction.is_branch_instruction(instruction):

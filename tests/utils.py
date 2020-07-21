@@ -12,14 +12,14 @@ from strongarm.objc import ObjcFunctionAnalyzer
 
 @contextmanager
 def _compile_code(
-    source_code: str, is_assembly: bool, code_outside_objc_class=""
+    source_code: str, is_assembly: bool, code_outside_objc_class: str = ""
 ) -> Generator[pathlib.Path, None, None]:
     """Compile the provided source code & yield the path to the compiled binary. The path is in a temporary directory.
     If is_assembly is set, the source code is treated as AArch64 assembly. Otherwise, as Objective-C source.
     """
     # We can only use code_outside_objc_class if the provided source_code is ObjC code, not assembly
     if is_assembly and len(code_outside_objc_class):
-        raise ValueError(f"Can't use code_outside_objc_class when the input code is assembly")
+        raise ValueError("Can't use code_outside_objc_class when the input code is assembly")
 
     if is_assembly:
         wrapped_source = f"""
@@ -103,7 +103,7 @@ def _compile_code(
 
 @contextmanager
 def binary_containing_code(
-    code_inside_objc_class: str, is_assembly: bool, code_outside_objc_class=""
+    code_inside_objc_class: str, is_assembly: bool, code_outside_objc_class: str = ""
 ) -> Generator[Tuple[MachoBinary, MachoAnalyzer], None, None]:
     """Provide an app package which contains the compiled source code.
     If is_assembly is set, the source code is treated as AArch64 assembly. Otherwise, as Objective-C source.

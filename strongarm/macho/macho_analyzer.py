@@ -109,6 +109,31 @@ def _requires_xrefs_computed(func):
     return wrap
 
 
+class cached_property(object):
+    """A property whose value is computed only once.
+    Used as a < py3.8 alternative to @functools.cached_property
+    Avoiding @functools.lru_cache as they would keep-alive the MachoAnalyzer forever. See:
+    https://bugs.python.org/issue19859
+    Implementation copied from:
+    https://github.com/pallets/werkzeug/blob/0e1b8c4fe598725b343085c5a9a867e90b966db6/werkzeug/utils.py#L35-L73
+    """
+
+    def __init__(self, func, name=None, doc=None):
+        self.__name__ = name or func.__name__
+        self.__module__ = func.__module__
+        self.__doc__ = doc or func.__doc__
+        self.func = func
+
+    def __get__(self, obj, type=None):
+        if obj is None:
+            return self
+        value = obj.__dict__.get(self.__name__, None)
+        if value is None:
+            value = self.func(obj)
+            obj.__dict__[self.__name__] = value
+        return value
+
+
 class MachoAnalyzer:
     # This class does expensive one-time cross-referencing operations
     # Therefore, we want only one instance to exist for any MachoBinary
@@ -567,7 +592,7 @@ class MachoAnalyzer:
         self._imported_symbol_addresses_to_names = symbol_name_map
         return symbol_name_map
 
-    @property
+    @cached_property
     def imported_symbols_to_symbol_names(self) -> Dict[VirtualMemoryPointer, str]:
         """Return a Dict of imported symbol pointers to their names.
         These symbols are not necessarily callable, but may rather be imported classes, for example.
@@ -575,7 +600,7 @@ class MachoAnalyzer:
         """
         return {addr: x.name for addr, x in self.dyld_bound_symbols.items()}
 
-    @property
+    @cached_property
     def imported_symbol_names_to_pointers(self) -> Dict[str, VirtualMemoryPointer]:
         """Return a Dict of imported symbol names to their pointers.
         These symbols are not necessarily callable.
@@ -594,7 +619,7 @@ class MachoAnalyzer:
         """
         return self.crossref_helper.exported_symbols
 
-    @property
+    @cached_property
     def exported_symbol_names_to_pointers(self) -> Dict[str, VirtualMemoryPointer]:
         """Return a Dict of exported symbol names to pointers to their definitions.
         Inverse of MachoAnalyzer.exported_symbols_to_symbol_names()

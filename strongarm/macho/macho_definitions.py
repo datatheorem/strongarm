@@ -262,6 +262,53 @@ class MachoLinkeditDataCommand(Structure):
     _fields_ = [*MachoLoadCommand._fields_, ("dataoff", c_uint32), ("datasize", c_uint32)]
 
 
+class MachoBuildVersionCommand(Structure):
+    """Python representation of struct build_version_command
+
+    Definition found in <mach-o/loader.h>
+    """
+
+    _fields_ = [
+        *MachoLoadCommand._fields_,
+        ("platform", c_uint32),
+        ("minos", c_uint32),
+        ("sdk", c_uint32),
+        ("ntools", c_uint32),
+    ]
+
+
+class MachoBuildVersionPlatform(IntEnum):
+    MACOS = 1
+    IOS = 2
+    TVOS = 3
+    WATCHOS = 4
+    BRIDGEOS = 5
+    IOSMAC = 6
+    MACCATALYST = 6
+    IOSSIMULATOR = 7
+    TVOSSIMULATOR = 8
+    WATCHOSSIMULATOR = 9
+    DRIVERKIT = 10
+
+
+class MachoBuildToolVersion(Structure):
+    """Python representation of struct build_tool_version
+
+    Definition found in <mach-o/loader.h>
+    """
+
+    _fields_ = [
+        ("tool", c_uint32),
+        ("version", c_uint32),
+    ]
+
+
+class MachoBuildTool(IntEnum):
+    CLANG = 1
+    SWIFT = 2
+    LD = 3
+
+
 class MachoNlistUn(Union):
     """Python representation of union n_un
 

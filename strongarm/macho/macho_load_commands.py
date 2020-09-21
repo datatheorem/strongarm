@@ -2,6 +2,7 @@ from enum import IntEnum
 
 
 class MachoLoadCommands(IntEnum):
+    # https://opensource.apple.com/source/cctools/cctools-949.0.1/include/mach-o/loader.h.auto.html
     LC_REQ_DYLD = 0x80000000
 
     LC_SEGMENT = 0x1
@@ -55,4 +56,9 @@ class MachoLoadCommands(IntEnum):
     LC_ENCRYPTION_INFO_64 = 0x2C
     LC_LINKER_OPTION = 0x2D
     LC_LINKER_OPTIMIZATION_HINT = 0x2E
+    LC_VERSION_MIN_TVOS = 0x2F
     LC_VERSION_MIN_WATCHOS = 0x30
+    LC_NOTE = 0x31
+    LC_BUILD_VERSION = 0x32
+    LC_DYLD_EXPORTS_TRIE = 0x33 | LC_REQ_DYLD
+    LC_DYLD_CHAINED_FIXUPS = 0x34 | LC_REQ_DYLD

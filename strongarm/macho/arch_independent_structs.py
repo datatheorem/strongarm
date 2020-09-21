@@ -5,6 +5,8 @@ from strongarm.macho.macho_definitions import (
     CFString32,
     CFString64,
     DylibCommand,
+    MachoBuildToolVersion,
+    MachoBuildVersionCommand,
     MachoDyldInfoCommand,
     MachoDysymtabCommand,
     MachoEncryptionInfo32Command,
@@ -264,3 +266,13 @@ class MachoDyldInfoCommandStruct(ArchIndependentStructure):
 class MachoLinkeditDataCommandStruct(ArchIndependentStructure):
     _32_BIT_STRUCT = MachoLinkeditDataCommand
     _64_BIT_STRUCT = MachoLinkeditDataCommand
+
+
+class MachoBuildVersionCommandStruct(ArchIndependentStructure):
+    _32_BIT_STRUCT = MachoBuildVersionCommand
+    _64_BIT_STRUCT = MachoBuildVersionCommand
+
+
+class MachoBuildToolVersionStruct(ArchIndependentStructure):
+    _32_BIT_STRUCT = MachoBuildToolVersion
+    _64_BIT_STRUCT = MachoBuildToolVersion

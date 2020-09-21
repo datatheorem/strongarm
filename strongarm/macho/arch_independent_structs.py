@@ -76,6 +76,8 @@ _32_BIT_STRUCT_ALIAS = Union[
     Type["CSCodeDirectoryStruct"],
     Type["CSBlobIndexStruct"],
     Type["ObjcIvarList"],
+    Type["MachoBuildVersionCommand"],
+    Type["MachoBuildToolVersion"],
 ]
 
 _64_BIT_STRUCT_ALIAS = Union[
@@ -104,6 +106,8 @@ _64_BIT_STRUCT_ALIAS = Union[
     Type["CSCodeDirectoryStruct"],
     Type["CSBlobIndexStruct"],
     Type["ObjcIvarList"],
+    Type["MachoBuildVersionCommand"],
+    Type["MachoBuildToolVersion"],
 ]
 
 

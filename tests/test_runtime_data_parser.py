@@ -187,4 +187,3 @@ class TestObjcRuntimeDataParser:
         ld_version = build_tool_versions[0]
         assert ld_version.tool == MachoBuildTool.LD
         assert ld_version.version == 0x2610000
-

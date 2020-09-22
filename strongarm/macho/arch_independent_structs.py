@@ -133,8 +133,6 @@ class ArchIndependentStructure:
         struct_type = (
             cls._ALTERATE_STRUCT if use_alternate_struct else (cls._64_BIT_STRUCT if is_64bit else cls._32_BIT_STRUCT)
         )
-        if use_alternate_struct:
-            struct_type = cls._ALTERATE_STRUCT
 
         if struct_type is None:
             raise ValueError("Undefined struct_type")

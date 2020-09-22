@@ -311,7 +311,7 @@ class MachoBinary:
                 # Parse the build tool versions following this structure
                 build_tool_offset = offset + self._build_version_cmd.sizeof
                 self._build_tool_versions = []
-                for i in range(self._build_version_cmd.ntools):
+                for _ in range(self._build_version_cmd.ntools):
                     build_tool_version = self.read_struct(build_tool_offset, MachoBuildToolVersionStruct)
                     self._build_tool_versions.append(build_tool_version)
 

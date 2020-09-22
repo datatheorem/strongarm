@@ -990,9 +990,9 @@ class MachoBinary:
             return None
         # X.Y.Z is encoded in nibbles xxxx.yy.zz
         encoded_min_target = self._build_version_cmd.minos
-        patch = (encoded_min_target & (0xFF << (8 * 0))) >> (8 * 0)
-        minor = (encoded_min_target & (0xFF << (8 * 1))) >> (8 * 1)
-        major = (encoded_min_target & (0xFFFF << (8 * 2))) >> (8 * 2)
+        patch = (encoded_min_target >> (8 * 0)) & 0xFF
+        minor = (encoded_min_target >> (8 * 1)) & 0xFF
+        major = (encoded_min_target >> (8 * 2)) & 0xFFFF
         return LooseVersion(f"{major}.{minor}.{patch}")
 
     def get_build_version_platform(self) -> Optional[MachoBuildVersionPlatform]:

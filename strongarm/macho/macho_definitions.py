@@ -1,5 +1,5 @@
 import struct
-from ctypes import Structure, Union, c_char, c_char_p, c_int16, c_uint8, c_uint16, c_uint32, c_uint64
+from ctypes import Structure, Union, c_char, c_char_p, c_int16, c_int32, c_uint8, c_uint16, c_uint32, c_uint64
 from enum import IntEnum
 from typing import TypeVar
 
@@ -620,6 +620,13 @@ class ObjcMethod32(Structure):
 
 class ObjcMethod64(Structure):
     _fields_ = [("name", c_uint64), ("signature", c_uint64), ("implementation", c_uint64)]
+
+
+class ObjcMethodRelativeData(Structure):
+    # Keep the field names the same so that this can be interacted with in the same way as any other ObjcMethodStruct
+    # In reality, these fields are closer to: selref_off, signature_off, implementation_off
+    # Note that the `name` field instead points to a selref that must be dereferenced to retrieve the name.
+    _fields_ = [("name", c_int32), ("signature", c_int32), ("implementation", c_int32)]
 
 
 class ObjcIvar32(Structure):

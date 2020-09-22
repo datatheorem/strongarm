@@ -34,6 +34,7 @@ from strongarm.macho.macho_definitions import (
     ObjcMethod32,
     ObjcMethod64,
     ObjcMethodList,
+    ObjcMethodRelativeData,
     ObjcProtocolList32,
     ObjcProtocolList64,
     ObjcProtocolRaw32,
@@ -110,34 +111,52 @@ _64_BIT_STRUCT_ALIAS = Union[
     Type["MachoBuildToolVersion"],
 ]
 
+_ALTERNATE_STRUCT_ALIAS = Union[
+    Type[ObjcMethodRelativeData],
+]
+
 
 class ArchIndependentStructure:
     _32_BIT_STRUCT: Optional[_32_BIT_STRUCT_ALIAS] = None
     _64_BIT_STRUCT: Optional[_64_BIT_STRUCT_ALIAS] = None
+    _ALTERATE_STRUCT: Optional[_ALTERNATE_STRUCT_ALIAS] = None
 
     @classmethod
-    def struct_size(cls, is_64bit: bool = True) -> int:
+    def struct_size(cls, is_64bit: bool = True, use_alternate_struct=False) -> int:
         """Get the size of the structure
         Args:
             is_64bit: Binary's 64 bitness
+            use_alternate_struct: Whether to use the _ALTERNATE_STRUCT variant instead of the standard one
         Returns:
-            size of the structure
+            size of the structure in bytes
         """
-        struct_type = cls._64_BIT_STRUCT if is_64bit else cls._32_BIT_STRUCT
+        struct_type = (
+            cls._ALTERATE_STRUCT if use_alternate_struct else (cls._64_BIT_STRUCT if is_64bit else cls._32_BIT_STRUCT)
+        )
+        if use_alternate_struct:
+            struct_type = cls._ALTERATE_STRUCT
+
         if struct_type is None:
             raise ValueError("Undefined struct_type")
 
         return sizeof(struct_type)
 
-    def __init__(self, binary_offset: int, struct_bytes: bytearray, is_64bit: bool = True) -> None:
-        """Parse structure from 32bit or 64bit definition
+    def __init__(
+        self, binary_offset: int, struct_bytes: bytearray, is_64bit: bool = True, use_alternate_struct=False
+    ) -> None:
+        """Parse a structure whose data layout may be different depending on architecture or toolchain version.
 
         Args:
             binary_offset: The file offset or virtual address of the struct to read
             struct_bytes: The struct bytes
             is_64bit: The binary's 64 bitness
+            use_alternate_struct: Whether to use the _ALTERNATE_STRUCT layout to parse the backing data
         """
-        struct_type = self._64_BIT_STRUCT if is_64bit else self._32_BIT_STRUCT
+        struct_type = (
+            self._ALTERATE_STRUCT
+            if use_alternate_struct
+            else (self._64_BIT_STRUCT if is_64bit else self._32_BIT_STRUCT)
+        )
         if struct_type is None:
             raise ValueError("Undefined struct_type")
 
@@ -220,6 +239,7 @@ class ObjcClassRawStruct(ArchIndependentStructure):
 class ObjcMethodStruct(ArchIndependentStructure):
     _32_BIT_STRUCT = ObjcMethod32
     _64_BIT_STRUCT = ObjcMethod64
+    _ALTERATE_STRUCT = ObjcMethodRelativeData
 
 
 class ObjcIvarStruct(ArchIndependentStructure):

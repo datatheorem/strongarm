@@ -318,21 +318,27 @@ class MachoBinary:
             # move to next load command in header
             offset += load_command.cmdsize
 
-    def read_struct(self, binary_offset: int, struct_type: Type[AIS], virtual: bool = False) -> AIS:
+    def read_struct(
+        self, binary_offset: int, struct_type: Type[AIS], virtual: bool = False, use_alternate_struct=False
+    ) -> AIS:
         """Given an binary offset, return the structure it describes.
 
         Params:
             binary_offset: Address from where to read the bytes.
             struct_type: ArchIndependentStructure subclass.
             virtual: Whether the address should be slid (virtual) or not.
+            use_alternate_struct: If set, parse the backing binary data using the ArchIndependentStructure's
+                _ALTERNATE_STRUCT data layout.
+                For example: in iOS 14 and above, ObjcMethod64 is replaced by a new structure with signed 32-bit
+                offsets. We still want to use the ObjcMethodStruct AIS wrapper, but need to parse different underlying
+                data.
 
         Returns:
             ArchIndependentStructure loaded from the pointed address.
         """
-
-        size = struct_type.struct_size(self.is_64bit)
+        size = struct_type.struct_size(self.is_64bit, use_alternate_struct=use_alternate_struct)
         data = self.get_contents_from_address(address=binary_offset, size=size, is_virtual=virtual)
-        return struct_type(binary_offset, data, self.is_64bit)
+        return struct_type(binary_offset, data, self.is_64bit, use_alternate_struct=use_alternate_struct)
 
     def section_name_for_address(self, virt_addr: VirtualMemoryPointer) -> Optional[str]:
         """Given an address in the virtual address space, return the name of the section which contains it.

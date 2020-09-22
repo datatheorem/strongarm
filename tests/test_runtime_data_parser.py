@@ -3,7 +3,7 @@ from distutils.version import LooseVersion
 from typing import List
 
 from strongarm.macho import DyldInfoParser, MachoParser, ObjcCategory, ObjcRuntimeDataParser
-from strongarm.macho.macho_definitions import MachoBuildTool, MachoBuildVersionPlatform
+from strongarm.macho.macho_definitions import MachoBuildTool, MachoBuildVersionPlatform, VirtualMemoryPointer
 
 
 class TestObjcRuntimeDataParser:
@@ -11,6 +11,7 @@ class TestObjcRuntimeDataParser:
     CATEGORY_PATH = pathlib.Path(__file__).parent / "bin" / "TestBinary1"
     PROTOCOL_32BIT_PATH = pathlib.Path(__file__).parent / "bin" / "Protocol32Bit"
     IOS14_RELATIVE_METHOD_LIST_BIN_PATH = pathlib.Path(__file__).parent / "bin" / "iOS14_relative_method_list"
+    IOS13_ABSOLUTE_METHOD_LIST_BIN_PATH = pathlib.Path(__file__).parent / "bin" / "iOS13_objc_opt"
 
     def test_path_for_external_symbol(self) -> None:
         parser = MachoParser(TestObjcRuntimeDataParser.FAT_PATH)
@@ -187,3 +188,56 @@ class TestObjcRuntimeDataParser:
         ld_version = build_tool_versions[0]
         assert ld_version.tool == MachoBuildTool.LD
         assert ld_version.version == 0x2610000
+
+    def test_ios13_absolute_method_lists(self):
+        # Given a binary compiled with a minimum deployment target of iOS 13
+        parser = MachoParser(TestObjcRuntimeDataParser.IOS13_ABSOLUTE_METHOD_LIST_BIN_PATH)
+        binary = parser.get_arm64_slice()
+        binary.get_minimum_deployment_target()
+
+        # When the Objective C methods within the binary are parsed
+        dyld_info_parser = DyldInfoParser(binary)
+        objc_parser = ObjcRuntimeDataParser(binary, dyld_info_parser)
+        selref_selector_map = objc_parser.selrefs_to_selectors()
+
+        # Then the method structures are correctly parsed
+        assert len(selref_selector_map) == 3
+
+        s1 = selref_selector_map[VirtualMemoryPointer(0x10000D380)]
+        assert s1.implementation is None
+        assert s1.is_external_definition is True
+        assert s1.name == "role"
+
+        s2 = selref_selector_map[VirtualMemoryPointer(0x10000D388)]
+        assert s2.implementation is None
+        assert s2.is_external_definition is True
+        assert s2.name == "initWithName:sessionRole:"
+
+        s3 = selref_selector_map[VirtualMemoryPointer(0x10000D378)]
+        assert s3.implementation == VirtualMemoryPointer(0x100006354)
+        assert s3.is_external_definition is False
+        assert s3.name == "viewDidLoad"
+
+    def test_ios14_relative_method_lists(self):
+        # Given a binary compiled with a minimum deployment target of iOS 14
+        parser = MachoParser(TestObjcRuntimeDataParser.IOS14_RELATIVE_METHOD_LIST_BIN_PATH)
+        binary = parser.get_arm64_slice()
+        binary.get_minimum_deployment_target()
+
+        # When the Objective C methods within the binary are parsed
+        dyld_info_parser = DyldInfoParser(binary)
+        objc_parser = ObjcRuntimeDataParser(binary, dyld_info_parser)
+        selref_selector_map = objc_parser.selrefs_to_selectors()
+
+        # Then the method structures are correctly parsed
+        assert len(selref_selector_map) == 7
+
+        external_sel = selref_selector_map[VirtualMemoryPointer(0x10000C0E0)]
+        assert external_sel.implementation is None
+        assert external_sel.is_external_definition is True
+        assert external_sel.name == "evaluateJavaScript:inFrame:inContentWorld:completionHandler:"
+
+        internal_sel = selref_selector_map[VirtualMemoryPointer(0x10000C0B0)]
+        assert internal_sel.implementation == VirtualMemoryPointer(0x100007BFC)
+        assert internal_sel.is_external_definition is False
+        assert internal_sel.name == "usesWebView"

@@ -1,13 +1,16 @@
 import pathlib
+from distutils.version import LooseVersion
 from typing import List
 
 from strongarm.macho import DyldInfoParser, MachoParser, ObjcCategory, ObjcRuntimeDataParser
+from strongarm.macho.macho_definitions import MachoBuildTool, MachoBuildVersionPlatform
 
 
 class TestObjcRuntimeDataParser:
     FAT_PATH = pathlib.Path(__file__).parent / "bin" / "StrongarmTarget"
     CATEGORY_PATH = pathlib.Path(__file__).parent / "bin" / "TestBinary1"
     PROTOCOL_32BIT_PATH = pathlib.Path(__file__).parent / "bin" / "Protocol32Bit"
+    IOS14_RELATIVE_METHOD_LIST_BIN_PATH = pathlib.Path(__file__).parent / "bin" / "iOS14_relative_method_list"
 
     def test_path_for_external_symbol(self) -> None:
         parser = MachoParser(TestObjcRuntimeDataParser.FAT_PATH)
@@ -167,3 +170,20 @@ class TestObjcRuntimeDataParser:
         assert len(test_cls.protocols) == 2
         proto_names = [x.name for x in test_cls.protocols]
         assert proto_names == ["UIApplicationDelegate", "UITabBarControllerDelegate"]
+
+    def test_ios14_build_version_cmd(self):
+        # Given a binary compiled with a minimum deployment target of iOS 14
+        parser = MachoParser(TestObjcRuntimeDataParser.IOS14_RELATIVE_METHOD_LIST_BIN_PATH)
+        binary = parser.get_arm64_slice()
+
+        # When I query properties such as the minimum deployment target, deployment platform,
+        # and build tool versions
+        # Then the correct data is parsed and returned
+        assert binary.get_minimum_deployment_target() == LooseVersion("14.0.0")
+        assert binary.get_build_version_platform() == MachoBuildVersionPlatform.IOS
+
+        build_tool_versions = binary.get_build_tool_versions()
+        assert len(build_tool_versions) == 1
+        ld_version = build_tool_versions[0]
+        assert ld_version.tool == MachoBuildTool.LD
+        assert ld_version.version == 0x2610000

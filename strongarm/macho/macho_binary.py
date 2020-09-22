@@ -1,6 +1,7 @@
 import math
 from _ctypes import Structure
 from ctypes import c_uint32, c_uint64, sizeof
+from distutils.version import LooseVersion
 from pathlib import Path
 from typing import TYPE_CHECKING, Any, List, Optional, Set, Tuple, Type, TypeVar
 
@@ -9,6 +10,8 @@ from strongarm.macho.arch_independent_structs import (
     ArchIndependentStructure,
     CFStringStruct,
     DylibCommandStruct,
+    MachoBuildToolVersionStruct,
+    MachoBuildVersionCommandStruct,
     MachoDyldInfoCommandStruct,
     MachoDysymtabCommandStruct,
     MachoEncryptionInfoStruct,
@@ -27,6 +30,7 @@ from strongarm.macho.macho_definitions import (
     DylibStruct,
     LcStrUnion,
     MachArch,
+    MachoBuildVersionPlatform,
     MachoFileType,
     StaticFilePointer,
     VirtualMemoryPointer,
@@ -152,6 +156,8 @@ class MachoBinary:
         self._function_starts_cmd: Optional[MachoLinkeditDataCommandStruct] = None
         self._functions_list: Optional[Set[VirtualMemoryPointer]] = None
         self._id_dylib_cmd: Optional[DylibCommandStruct] = None
+        self._build_version_cmd: Optional[MachoBuildVersionCommandStruct] = None
+        self._build_tool_versions: Optional[List[MachoBuildToolVersionStruct]] = None
 
         self.__codesign_parser: Optional[CodesignParser] = None
 
@@ -299,6 +305,15 @@ class MachoBinary:
                 self._id_dylib_cmd = self.read_struct(offset, DylibCommandStruct)
                 # This load command should only be present for dylibs. Validate this assumption
                 assert self.file_type == MachoFileType.MH_DYLIB
+
+            elif load_command.cmd == MachoLoadCommands.LC_BUILD_VERSION:
+                self._build_version_cmd = self.read_struct(offset, MachoBuildVersionCommandStruct)
+                # Parse the build tool versions following this structure
+                build_tool_offset = offset + self._build_version_cmd.sizeof
+                self._build_tool_versions = []
+                for _ in range(self._build_version_cmd.ntools):
+                    build_tool_version = self.read_struct(build_tool_offset, MachoBuildToolVersionStruct)
+                    self._build_tool_versions.append(build_tool_version)
 
             # move to next load command in header
             offset += load_command.cmdsize
@@ -969,3 +984,21 @@ class MachoBinary:
         if not dylib_name:
             dylib_name = "<unknown dylib>"
         return dylib_name
+
+    def get_minimum_deployment_target(self) -> Optional[LooseVersion]:
+        if not self._build_version_cmd:
+            return None
+        # X.Y.Z is encoded in nibbles xxxx.yy.zz
+        encoded_min_target = self._build_version_cmd.minos
+        patch = (encoded_min_target >> (8 * 0)) & 0xFF
+        minor = (encoded_min_target >> (8 * 1)) & 0xFF
+        major = (encoded_min_target >> (8 * 2)) & 0xFFFF
+        return LooseVersion(f"{major}.{minor}.{patch}")
+
+    def get_build_version_platform(self) -> Optional[MachoBuildVersionPlatform]:
+        if not self._build_version_cmd:
+            return None
+        return MachoBuildVersionPlatform(self._build_version_cmd.platform)
+
+    def get_build_tool_versions(self) -> Optional[List[MachoBuildToolVersionStruct]]:
+        return self._build_tool_versions

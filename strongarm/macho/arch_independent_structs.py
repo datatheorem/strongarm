@@ -51,6 +51,7 @@ if TYPE_CHECKING:
         CSCodeDirectoryStruct,
         CSBlobIndexStruct,
     )
+    from .macho_binary import MachoBinary
 
 # Create type alias for the following classes that inherit from ArchIndependentStructure
 _32_BIT_STRUCT_ALIAS = Union[

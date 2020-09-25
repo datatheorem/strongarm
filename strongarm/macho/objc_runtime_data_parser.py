@@ -1,6 +1,5 @@
 import logging
 from ctypes import c_uint32, c_uint64, sizeof
-from distutils.version import LooseVersion
 from typing import Dict, List, Optional
 
 from more_itertools import first_true
@@ -419,31 +418,6 @@ class ObjcRuntimeDataParser:
         Prior to iOS 14, 64-bit targets would use an ObjcMethod64 structure with absolute addresses.
         On iOS 14 and later, 64-bit targets use a structure with 32-bit relative offsets from each field.
         """
-        # If the binary was built for iOS 14+, use the relative method list structure that encodes signed
-        # 32-bit offsets instead of 64-bit absolute addresses
-        minimum_deployment_target = binary.get_minimum_deployment_target()
-        # If the deployment target wasn't reported by the binary, assume it's below iOS 14
-        if minimum_deployment_target is None:
-            use_alternate_layout = False
-        else:
-            use_alternate_layout = minimum_deployment_target >= LooseVersion("14.0.0")
-
-        method_ent = binary.read_struct(
-            method_entry_off, ObjcMethodStruct, virtual=True, use_alternate_struct=use_alternate_layout
-        )
-
-        if use_alternate_layout:
-            # Fix up each field by translating it from a 32b signed offset to an absolute address
-            method_ent.signature += method_entry_off + 4  # type: ignore
-            method_ent.implementation += method_entry_off + 8
-            # Rather than pointing to a selector literal, this field points to a selref. Dereference it now
-            selref_addr = method_ent.name + method_entry_off
-            method_ent.name = binary.read_word(selref_addr, True, c_uint64)  # type: ignore
-
-        # Byte-align IMP, as the lower bits are used for flags
-        method_ent.implementation &= ~0x3
-
-        return method_ent
 
     def read_selectors_from_methlist_ptr(self, methlist_ptr: VirtualMemoryPointer) -> List[ObjcSelector]:
         """Given the virtual address of a method list, return a List of ObjcSelectors encapsulating each method
@@ -454,7 +428,10 @@ class ObjcRuntimeDataParser:
         # the first entry appears directly after the ObjcMethodListStruct
         method_entry_off = methlist_ptr + methlist.sizeof
         for i in range(methlist.methcount):
-            method_ent = self.read_method_struct(self.binary, method_entry_off)
+            method_ent = ObjcMethodStruct.read_method_struct(self.binary, method_entry_off)
+            # Byte-align IMP, as the lower bits are used for flags
+            method_ent.implementation &= ~0x3  # type: ignore
+
             symbol_name = self.binary.get_full_string_from_start_address(method_ent.name)
             if not symbol_name:
                 raise ValueError(f"Could not get symbol name for {method_ent.name}")
@@ -611,7 +588,7 @@ class ObjcRuntimeDataParser:
         # the least significant 2 bits are used for flags
         # flag 0x1 indicates a Swift class
         # mod data pointer to ignore flags!
-        class_entry.data &= ~0x3
+        class_entry.data &= ~0x3  # type: ignore
         return class_entry
 
     def _get_objc_data_from_objc_class(self, objc_class: ObjcClassRawStruct) -> Optional[ObjcDataRawStruct]:

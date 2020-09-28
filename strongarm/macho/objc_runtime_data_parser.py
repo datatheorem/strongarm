@@ -412,13 +412,6 @@ class ObjcRuntimeDataParser:
             ivar_struct_ptr += ivar_struct.sizeof
         return ivars
 
-    @staticmethod
-    def read_method_struct(binary: MachoBinary, method_entry_off: VirtualMemoryPointer) -> ObjcMethodStruct:
-        """Read a struct objc_method from the provided address, accounting for the pre- and post- iOS 14 format.
-        Prior to iOS 14, 64-bit targets would use an ObjcMethod64 structure with absolute addresses.
-        On iOS 14 and later, 64-bit targets use a structure with 32-bit relative offsets from each field.
-        """
-
     def read_selectors_from_methlist_ptr(self, methlist_ptr: VirtualMemoryPointer) -> List[ObjcSelector]:
         """Given the virtual address of a method list, return a List of ObjcSelectors encapsulating each method
         """

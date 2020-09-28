@@ -114,10 +114,6 @@ _64_BIT_STRUCT_ALIAS = Union[
     Type["MachoBuildToolVersion"],
 ]
 
-_ALTERNATE_STRUCT_ALIAS = Union[
-    Type[ObjcMethodRelativeData],
-]
-
 
 class ArchIndependentStructure:
     _32_BIT_STRUCT: Optional[_32_BIT_STRUCT_ALIAS] = None

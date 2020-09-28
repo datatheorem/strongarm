@@ -2,7 +2,7 @@
 
 from .debug_util import DebugUtil
 
-__version__ = "9.3.0"
+__version__ = "9.4.0"
 __author__ = "Data Theorem"
 __url__ = "https://bitbucket.org/datatheorem/strongarm"
 

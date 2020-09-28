@@ -421,9 +421,9 @@ class ObjcRuntimeDataParser:
         # the first entry appears directly after the ObjcMethodListStruct
         method_entry_off = methlist_ptr + methlist.sizeof
         for i in range(methlist.methcount):
-            method_ent = self.binary.read_struct(method_entry_off, ObjcMethodStruct, virtual=True)
-            # byte-align IMP
-            method_ent.implementation &= ~0x3
+            method_ent = ObjcMethodStruct.read_method_struct(self.binary, method_entry_off)
+            # Byte-align IMP, as the lower bits are used for flags
+            method_ent.implementation &= ~0x3  # type: ignore
 
             symbol_name = self.binary.get_full_string_from_start_address(method_ent.name)
             if not symbol_name:
@@ -581,7 +581,7 @@ class ObjcRuntimeDataParser:
         # the least significant 2 bits are used for flags
         # flag 0x1 indicates a Swift class
         # mod data pointer to ignore flags!
-        class_entry.data &= ~0x3
+        class_entry.data &= ~0x3  # type: ignore
         return class_entry
 
     def _get_objc_data_from_objc_class(self, objc_class: ObjcClassRawStruct) -> Optional[ObjcDataRawStruct]:

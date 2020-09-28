@@ -1,4 +1,5 @@
-from ctypes import sizeof
+from ctypes import Structure, c_uint64, sizeof
+from distutils.version import LooseVersion
 from typing import TYPE_CHECKING, Any, Optional, Type, Union
 
 from strongarm.macho.macho_definitions import (
@@ -34,10 +35,12 @@ from strongarm.macho.macho_definitions import (
     ObjcMethod32,
     ObjcMethod64,
     ObjcMethodList,
+    ObjcMethodRelativeData,
     ObjcProtocolList32,
     ObjcProtocolList64,
     ObjcProtocolRaw32,
     ObjcProtocolRaw64,
+    VirtualMemoryPointer,
 )
 
 # create type alias for the following classes that inherit from ArchIndependentStructure
@@ -48,6 +51,7 @@ if TYPE_CHECKING:
         CSCodeDirectoryStruct,
         CSBlobIndexStruct,
     )
+    from .macho_binary import MachoBinary
 
 # Create type alias for the following classes that inherit from ArchIndependentStructure
 _32_BIT_STRUCT_ALIAS = Union[
@@ -116,39 +120,32 @@ class ArchIndependentStructure:
     _64_BIT_STRUCT: Optional[_64_BIT_STRUCT_ALIAS] = None
 
     @classmethod
-    def struct_size(cls, is_64bit: bool = True) -> int:
-        """Get the size of the structure
+    def get_backing_data_layout(
+        cls, is_64bit: bool = True, minimum_deployment_target: Optional[LooseVersion] = None
+    ) -> Type[Structure]:
+        """The underlying data layout may be different depending on the binary type.
         Args:
             is_64bit: Binary's 64 bitness
+            minimum_deployment_target: The minimum deployment target (target OS version) of the binary, if available
         Returns:
-            size of the structure
+            size of the structure in bytes
         """
         struct_type = cls._64_BIT_STRUCT if is_64bit else cls._32_BIT_STRUCT
+
         if struct_type is None:
             raise ValueError("Undefined struct_type")
 
-        return sizeof(struct_type)
+        return struct_type
 
-    def __init__(self, binary_offset: int, struct_bytes: bytearray, is_64bit: bool = True) -> None:
-        """Parse structure from 32bit or 64bit definition
-
-        Args:
-            binary_offset: The file offset or virtual address of the struct to read
-            struct_bytes: The struct bytes
-            is_64bit: The binary's 64 bitness
-        """
-        struct_type = self._64_BIT_STRUCT if is_64bit else self._32_BIT_STRUCT
-        if struct_type is None:
-            raise ValueError("Undefined struct_type")
-
-        struct: ArchIndependentStructure = struct_type.from_buffer(struct_bytes)  # type: ignore
+    def __init__(self, binary_offset: int, struct_bytes: bytearray, backing_layout: Type[Structure]):
+        struct: ArchIndependentStructure = backing_layout.from_buffer(struct_bytes)  # type: ignore
 
         for field_name, _ in struct._fields_:
             # clone fields from struct to this class
             setattr(self, field_name, getattr(struct, field_name))
 
         # record size of underlying struct, for when traversing file by structs
-        self.sizeof = sizeof(struct_type)
+        self.sizeof = sizeof(backing_layout)
         # record the location in the binary this struct was parsed from
         self.binary_offset = binary_offset
 
@@ -156,9 +153,6 @@ class ArchIndependentStructure:
         # GVR suggested to use this pattern to ignore dynamic attribute assignment errors
         def __getattr__(self, key: str) -> Any:
             pass
-
-        implementation: Any = None
-        data: Any = None
 
     def __repr__(self) -> str:
         attributes = "\t".join([f"{x}: {getattr(self, x)}" for x in self.__dict__.keys()])
@@ -220,6 +214,40 @@ class ObjcClassRawStruct(ArchIndependentStructure):
 class ObjcMethodStruct(ArchIndependentStructure):
     _32_BIT_STRUCT = ObjcMethod32
     _64_BIT_STRUCT = ObjcMethod64
+
+    @classmethod
+    def get_backing_data_layout(
+        cls, is_64bit: bool = True, minimum_deployment_target: Optional[LooseVersion] = None
+    ) -> Type[Structure]:
+        # Prior to iOS 14, 64-bit targets would use an ObjcMethod64 structure with absolute addresses.
+        # On iOS 14 and later, 64-bit targets use a structure with 32-bit relative offsets from each field.
+        if is_64bit and minimum_deployment_target and minimum_deployment_target >= LooseVersion("14.0.0"):
+            return ObjcMethodRelativeData
+
+        return super().get_backing_data_layout(is_64bit, minimum_deployment_target)
+
+    @classmethod
+    def read_method_struct(cls, binary: "MachoBinary", address: VirtualMemoryPointer) -> "ObjcMethodStruct":  # noqa
+        """Read an ObjcMethodStruct from the provided binary address.
+        This method accounts for post-iOS-14 binaries using a relative-offset layout for this structure, and
+         patches the field values to appear as absolute addresses to callers, to match the layout from prior versions.
+        """
+        struct_type = cls.get_backing_data_layout(binary.is_64bit, binary.get_minimum_deployment_target())
+        data = binary.get_contents_from_address(address=address, size=sizeof(struct_type), is_virtual=True)
+        method_ent = ObjcMethodStruct(address, data, struct_type)
+
+        # If we're parsing the iOS14+ structure that encodes signed 32b offsets instead of 64b absolute addresses,
+        # translate the offsets to absolute addresses for caller convenience.
+        if struct_type == ObjcMethodRelativeData:
+            # Fix up each field by translating it from a 32b signed offset to an absolute address
+            method_entry_off = address
+            method_ent.signature += method_entry_off + 4  # type: ignore
+            method_ent.implementation += method_entry_off + 8  # type: ignore
+            # Rather than pointing to a selector literal, this field points to a selref. Dereference it now
+            selref_addr = method_ent.name + method_entry_off  # type: ignore
+            method_ent.name = binary.read_word(selref_addr, True, c_uint64)  # type: ignore
+
+        return method_ent
 
 
 class ObjcIvarStruct(ArchIndependentStructure):

@@ -325,14 +325,12 @@ class MachoBinary:
             binary_offset: Address from where to read the bytes.
             struct_type: ArchIndependentStructure subclass.
             virtual: Whether the address should be slid (virtual) or not.
-
         Returns:
             ArchIndependentStructure loaded from the pointed address.
         """
-
-        size = struct_type.struct_size(self.is_64bit)
-        data = self.get_contents_from_address(address=binary_offset, size=size, is_virtual=virtual)
-        return struct_type(binary_offset, data, self.is_64bit)
+        backing_layout = struct_type.get_backing_data_layout(self.is_64bit, self.get_minimum_deployment_target())
+        data = self.get_contents_from_address(address=binary_offset, size=sizeof(backing_layout), is_virtual=virtual)
+        return struct_type(binary_offset, data, backing_layout)
 
     def section_name_for_address(self, virt_addr: VirtualMemoryPointer) -> Optional[str]:
         """Given an address in the virtual address space, return the name of the section which contains it.

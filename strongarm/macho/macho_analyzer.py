@@ -213,7 +213,6 @@ class MachoAnalyzer:
             f"SELECT * from objc_msgSends"
             f" WHERE class_name IN ({classes_int_list}) {query_predicate} selector IN ({selectors_int_list})"
         )
-        print(query)
         objc_calls_cursor = self._db_handle.execute(query)
         return [ObjcMsgSendXref(x[0], x[1], x[2], x[3], x[4]) for x in objc_calls_cursor]
 

@@ -1,6 +1,6 @@
 import pathlib
 from contextlib import contextmanager
-from typing import Generator, Tuple
+from typing import Generator, List, Tuple
 
 import pytest
 
@@ -9,6 +9,24 @@ from strongarm.macho.macho_analyzer import MachoAnalyzer, ObjcMsgSendXref, Virtu
 from strongarm.macho.macho_parse import MachoParser
 from strongarm.objc import ObjcFunctionAnalyzer
 from tests.utils import binary_containing_code
+
+
+class TestMachoAnalyzerControlFlowTarget:
+    FAT_PATH = pathlib.Path(__file__).parent / "bin" / "StrongarmControlFlowTarget"
+
+    def setup_method(self) -> None:
+        parser = MachoParser(self.FAT_PATH)
+        self.binary = parser.slices[0]
+        self.analyzer = MachoAnalyzer.get_analyzer(self.binary)
+
+    def test_get_function_end_address(self) -> None:
+        test_cases = (
+            # -[CFDataFlowMethods switchControlFlow] defined at 0x10000675c
+            (0x10000675C, 0x1000067F4),
+        )
+        for entry_point, expected_end_address in test_cases:
+            end_address = self.analyzer.get_function_end_address(VirtualMemoryPointer(entry_point))
+            assert end_address == expected_end_address
 
 
 class TestMachoAnalyzer:
@@ -430,31 +448,37 @@ class TestMachoAnalyzerDynStaticChecks:
         assert binary
         analyzer = MachoAnalyzer.get_analyzer(binary)
 
-        # When I ask for XRefs to `ARSKView`
-        arskview_classref = analyzer.classref_for_class_name("_OBJC_CLASS_$_ARSKView")
-        assert arskview_classref
-        objc_calls = analyzer.objc_calls_to(
-            objc_classrefs=[arskview_classref], objc_selrefs=[], requires_class_and_sel_found=False
-        )
-
-        # Then the code location is returned
-        assert len(objc_calls) == 1
-
-        call = objc_calls[0]
-        assert call == ObjcMsgSendXref(
+        expected_call_site = ObjcMsgSendXref(
             caller_func_start_address=VirtualMemoryPointer(0x100006388),
             caller_addr=VirtualMemoryPointer(0x1000063B4),
             destination_addr=VirtualMemoryPointer(0x10000659C),
-            classref=VirtualMemoryPointer(0x10000D398),
-            selref=VirtualMemoryPointer(0x0),
+            class_name="_OBJC_CLASS_$_ARSKView",
+            selector="new",
         )
 
-        # TODO(PT): Update this unit test once this functionality is added
-        # And when I ask for XRefs to `[ARSKView new]`
+        # When I ask for XRefs to `ARSKView`
+        objc_calls = analyzer.objc_calls_to(
+            objc_class_names=["_OBJC_CLASS_$_ARSKView"], objc_selectors=[], requires_class_and_sel_found=False
+        )
         # Then the code location is returned
+        assert len(objc_calls) == 1
+        assert objc_calls[0] == expected_call_site
 
         # And when I ask for XRefs to `new`
+        objc_calls = analyzer.objc_calls_to(
+            objc_class_names=[], objc_selectors=["new"], requires_class_and_sel_found=False
+        )
         # Then the code location is returned
+        assert len(objc_calls) == 1
+        assert objc_calls[0] == expected_call_site
+
+        # And when I ask for XRefs to `[ARSKView new]`
+        objc_calls = analyzer.objc_calls_to(
+            objc_class_names=["_OBJC_CLASS_$_ARSKView"], objc_selectors=["new"], requires_class_and_sel_found=False
+        )
+        # Then the code location is returned
+        assert len(objc_calls) == 1
+        assert objc_calls[0] == expected_call_site
 
     def test_xref_objc_opt_class(self) -> None:
         # Given I provide a binary which contains the code:
@@ -463,29 +487,43 @@ class TestMachoAnalyzerDynStaticChecks:
         assert binary
         analyzer = MachoAnalyzer.get_analyzer(binary)
 
-        # When I ask for XRefs to `ARSKView`
-        arfacetracking_classref = analyzer.classref_for_class_name("_OBJC_CLASS_$_ARFaceTrackingConfiguration")
-        assert arfacetracking_classref
-        objc_calls = analyzer.objc_calls_to(
-            objc_classrefs=[arfacetracking_classref], objc_selrefs=[], requires_class_and_sel_found=False
-        )
-
-        # Then the code location is returned
-        assert len(objc_calls) == 1
-        assert objc_calls[0] == ObjcMsgSendXref(
+        expected_call_site = ObjcMsgSendXref(
             caller_func_start_address=VirtualMemoryPointer(0x100006388),
             caller_addr=VirtualMemoryPointer(0x10000639C),
             destination_addr=VirtualMemoryPointer(0x100006590),
-            classref=VirtualMemoryPointer(0x10000D390),
-            selref=VirtualMemoryPointer(0x0),
+            class_name="_OBJC_CLASS_$_ARFaceTrackingConfiguration",
+            selector="class",
         )
 
-        # TODO(PT): Update this unit test once this functionality is added
-        # And when I ask for XRefs to `[ARFaceTrackingConfiguration class]`
+        # When I ask for XRefs to `ARSKView`
+        objc_calls = analyzer.objc_calls_to(
+            objc_class_names=["_OBJC_CLASS_$_ARFaceTrackingConfiguration"],
+            objc_selectors=[],
+            requires_class_and_sel_found=False,
+        )
         # Then the code location is returned
+        assert len(objc_calls) == 1
+        assert objc_calls[0] == expected_call_site
 
         # And when I ask for XRefs to `class`
+        objc_calls = analyzer.objc_calls_to(
+            objc_class_names=[], objc_selectors=["class"], requires_class_and_sel_found=False
+        )
         # Then the code location is returned
+        print(objc_calls)
+        assert len(objc_calls) == 2
+        assert objc_calls[1] == expected_call_site
+
+        # And when I ask for XRefs to `[ARFaceTrackingConfiguration class]`
+        # Then the code location is returned
+        objc_calls = analyzer.objc_calls_to(
+            objc_class_names=["_OBJC_CLASS_$_ARFaceTrackingConfiguration"],
+            objc_selectors=[],
+            requires_class_and_sel_found=False,
+        )
+        # Then the code location is returned
+        assert len(objc_calls) == 1
+        assert objc_calls[0] == expected_call_site
 
     @contextmanager
     def uiwebview_bound_symbol_collision(self) -> Generator[Tuple[MachoBinary, MachoAnalyzer], None, None]:
@@ -851,20 +889,72 @@ class TestMachoAnalyzerDynStaticChecks:
                 strings_in_func = analyzer.strings_in_func(VirtualMemoryPointer(function_addr))
                 assert strings_in_func == expected_string_load_and_strings
 
+    def test_objc_fast_path_xrefs(self) -> None:
+        # Given a binary that accesses C and CF strings in a few functions / methods
+        # Given a binary that intentionally hits the ObjC fast-paths
+        source_code = """
+        - (void)objc_opt_class {
+            Class x = [NSObject class];
+        }
+        - (void)objc_opt_isKindOfClass {
+            BOOL x = [NSObject isKindOfClass:[NSArray class]];
+        }
+        - (void)objc_opt_new {
+            NSObject* x = [NSObject new];
+        }
+        - (void)objc_opt_respondsToSelector {
+            BOOL x = [NSObject respondsToSelector:@selector(fake)];
+        }
+        - (void)objc_opt_self {
+            id x = [[NSObject new] self];
+        }
+        - (void)objc_alloc {
+            id x = [NSObject alloc];
+        }
+        - (void)objc_alloc_init {
+            id x = [[NSObject alloc] init];
+        }
+        - (void)useMsgSend {
+            // Ensure the binary has _objc_msgSend since SA requires it
+            id x = [NSArray arrayWithArray:@[@2]];
+        }
+        """
+        with binary_containing_code(source_code, is_assembly=False) as (binary, analyzer):
+            # And ensure that each ObjC fast path is actually used in the binary
+            fast_paths = [
+                "_objc_opt_class",
+                "_objc_opt_isKindOfClass",
+                "_objc_opt_new",
+                "_objc_opt_respondsToSelector",
+                "_objc_opt_self",
+                "_objc_alloc",
+                "_objc_alloc_init",
+            ]
+            for fast_path_func in fast_paths:
+                assert analyzer.callable_symbol_for_symbol_name(fast_path_func) is not None
 
-class TestMachoAnalyzerControlFlowTarget:
-    FAT_PATH = pathlib.Path(__file__).parent / "bin" / "StrongarmControlFlowTarget"
+            sels_to_expected_call_site = {
+                "class": "objc_opt_class",
+                "isKindOfClass:": "objc_opt_isKindOfClass",
+                "new": "objc_opt_new",
+                "respondsToSelector:": "objc_opt_respondsToSelector",
+                "self": "objc_opt_self",
+                "alloc": "objc_alloc",
+                "init": "objc_alloc_init",
+            }
+            for selector, expected_method_name_containing_xref in sels_to_expected_call_site.items():
+                # When I ask for XRefs to the selector
+                xrefs = analyzer.objc_calls_to(
+                    objc_class_names=[], objc_selectors=[selector], requires_class_and_sel_found=False
+                )
 
-    def setup_method(self) -> None:
-        parser = MachoParser(self.FAT_PATH)
-        self.binary = parser.slices[0]
-        self.analyzer = MachoAnalyzer.get_analyzer(self.binary)
+                callers: List[str] = []
+                for xref in xrefs:
+                    entry_point = VirtualMemoryPointer(xref.caller_func_start_address)
+                    method_info = analyzer.method_info_for_entry_point(entry_point)
+                    if not method_info:
+                        continue
+                    callers.append(method_info.objc_sel.name)
 
-    def test_get_function_end_address(self) -> None:
-        test_cases = (
-            # -[CFDataFlowMethods switchControlFlow] defined at 0x10000675c
-            (0x10000675C, 0x1000067F4),
-        )
-        for entry_point, expected_end_address in test_cases:
-            end_address = self.analyzer.get_function_end_address(VirtualMemoryPointer(entry_point))
-            assert end_address == expected_end_address
+                # Then the method contains a usage of the fast-path selector, masked behind an _objc_opt_* call
+                assert expected_method_name_containing_xref in callers

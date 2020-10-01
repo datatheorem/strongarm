@@ -52,8 +52,8 @@ ANALYZER_SQL_SCHEMA = """
         destination_address INT,
         caller_address INT,
         caller_func_start_address INT,
-        classref INT,
-        selref INT
+        class_name TEXT,
+        selector TEXT
     );
 
     CREATE TABLE named_callable_symbols(
@@ -84,8 +84,8 @@ class CallerXRef:
 
 @dataclass
 class ObjcMsgSendXref(CallerXRef):
-    classref: VirtualMemoryPointer
-    selref: VirtualMemoryPointer
+    class_name: Optional[str]
+    selector: Optional[str]
 
 
 @dataclass
@@ -193,37 +193,26 @@ class MachoAnalyzer:
 
     @_requires_xrefs_computed
     def objc_calls_to(
-        self,
-        objc_classrefs: List[VirtualMemoryPointer],
-        objc_selrefs: List[VirtualMemoryPointer],
-        requires_class_and_sel_found: bool,
+        self, objc_class_names: List[str], objc_selectors: List[str], requires_class_and_sel_found: bool,
     ) -> List[ObjcMsgSendXref]:
         """Return the list of code-locations in the binary which invoke _objc_msgSend with any of the provided
-        classrefs or selrefs.
+        classes or selectors.
+        This also covers iOS 13.5+'s optimized calls that bypass _objc_msgSend, such as _objc_alloc_init.
 
         If requires_class_and_sel_found is set, a call-site will only be yielded if one of the
-        classrefs and one of the selrefs are messaged in the same call.
-        Otherwise, a call-site will be yielded if one of the classrefs *or* one of the selrefs are messaged
+        classes and one of the selectors are messaged in the same call.
+        Otherwise, a call-site will be yielded if one of the classes *or* one of the selectors are messaged
         at a call site.
         """
+        classes_int_list = ", ".join(f'"{x}"' for x in objc_class_names)
+        selectors_int_list = ", ".join(f'"{x}"' for x in objc_selectors)
 
-        class_refs_int_list = ", ".join(str(int(x)) for x in objc_classrefs)
-        sel_refs_int_list = ", ".join(str(int(x)) for x in objc_selrefs)
-
-        # Do we require the classref and selref being messaged to both be messaged at the same call site?
-        if requires_class_and_sel_found:
-            # The classref and selref must both be present to yield a match
-            query = (
-                f"SELECT * from objc_msgSends"
-                f" WHERE classref IN ({class_refs_int_list}) AND selref IN ({sel_refs_int_list})"
-            )
-        else:
-            # The classref and selref don't both need to be present to yield a match
-            query = (
-                f"SELECT * from objc_msgSends"
-                f" WHERE classref IN ({class_refs_int_list}) OR selref IN ({sel_refs_int_list})"
-            )
-
+        # Do we require the class and selector being messaged to both be messaged at the same call site?
+        query_predicate = "AND" if requires_class_and_sel_found else "OR"
+        query = (
+            f"SELECT * from objc_msgSends"
+            f" WHERE class_name IN ({classes_int_list}) {query_predicate} selector IN ({selectors_int_list})"
+        )
         objc_calls_cursor = self._db_handle.execute(query)
         return [ObjcMsgSendXref(x[0], x[1], x[2], x[3], x[4]) for x in objc_calls_cursor]
 
@@ -324,35 +313,6 @@ class MachoAnalyzer:
         with self._db_handle:
             cursor.close()
 
-    def _get_objc_dispatch_pointers(self) -> Tuple[VirtualMemoryPointer, List[VirtualMemoryPointer]]:
-        # TODO(PT): Handle binaries that don't contain ObjC
-        objc_msgsend_symbol = self.callable_symbol_for_symbol_name("_objc_msgSend")
-        if not objc_msgsend_symbol:
-            raise NotImplementedError(f"{self.binary.path} has no imported _objc_msgSend symbol")
-        objc_msgsend_addr = objc_msgsend_symbol.address
-
-        # Some special selectors have a fast-path, _objc_opt_<selector>, that was added in iOS 13
-        # The _objc_opt_* call is emitted instead of _objc_msgSend when the class has not re-implemented the selector.
-        # In other words, these fast-paths are only used if the default NSObject implementation will be called
-        # Found with: $ nm "/usr/lib/libobjc.A.dylib" | grep "objc_opt"
-        objc_opt_function_names = [
-            "_objc_opt_class",
-            "_objc_opt_isKindOfClass",
-            "_objc_opt_new",
-            "_objc_opt_respondsToSelector",
-            "_objc_opt_self",
-        ]
-        objc_opt_function_addrs: List[VirtualMemoryPointer] = []
-        for func_name in objc_opt_function_names:
-            # A callable symbol is only present if the function has been used in this binary
-            sym = self.callable_symbol_for_symbol_name(func_name)
-            if sym:
-                objc_opt_function_addrs.append(sym.address)
-            else:
-                objc_opt_function_addrs.append(VirtualMemoryPointer(-1))
-        objc_function_addrs = objc_opt_function_addrs + [objc_msgsend_addr]
-        return objc_msgsend_addr, objc_function_addrs
-
     def _get_loaded_string(
         self, peekable_function_code: peekable, current_instr: CsInsn
     ) -> Optional[Tuple[VirtualMemoryPointer, str]]:
@@ -394,6 +354,77 @@ class MachoAnalyzer:
 
         return None
 
+    @cached_property
+    def _objc_msgSend_addr(self) -> VirtualMemoryPointer:
+        # TODO(PT): Handle binaries that don't contain ObjC
+        objc_msgsend_symbol = self.callable_symbol_for_symbol_name("_objc_msgSend")
+        if not objc_msgsend_symbol:
+            raise NotImplementedError(f"{self.binary.path} has no imported _objc_msgSend symbol")
+        return VirtualMemoryPointer(objc_msgsend_symbol.address)
+
+    @cached_property
+    def _objc_fastpath_ptrs_to_selector_names(self):
+        # Some special selectors have a fast-path, _objc_opt_<selector>, that was added in iOS 13
+        # The _objc_opt_* call is emitted instead of _objc_msgSend when the NSObject implementation will be called.
+        # Found with: $ nm "/usr/lib/libobjc.A.dylib" | grep "objc_opt"
+        # There are also functions in this family that don't begin with "_opt", such as _objc_alloc.
+        fastpath_function_names_to_selector_names = {
+            "_objc_opt_class": "class",
+            "_objc_opt_isKindOfClass": "isKindOfClass:",
+            "_objc_opt_new": "new",
+            "_objc_opt_respondsToSelector": "respondsToSelector:",
+            "_objc_opt_self": "self",
+            "_objc_alloc": "alloc",
+            "_objc_alloc_init": "init",
+        }
+        fastpath_funcptrs_to_selector_names: Dict[VirtualMemoryPointer, str] = {}
+        for func_name, selector_name in fastpath_function_names_to_selector_names.items():
+            # A callable symbol is only present if the function has been used in this binary
+            sym = self.callable_symbol_for_symbol_name(func_name)
+            if not sym:
+                continue
+            fastpath_funcptrs_to_selector_names[sym.address] = selector_name
+        return fastpath_funcptrs_to_selector_names
+
+    def _get_objc_call_xref(
+        self, func_analyzer: "ObjcFunctionAnalyzer", instr: CsInsn, destination_address: VirtualMemoryPointer
+    ) -> Tuple[int, int, int, Optional[str], Optional[str]]:
+        """Internal transformation of an Objective-C call site to a collection suitable for inserting into the call DB.
+        This method handles both calls to _objc_msgSend and fast-paths such as _objc_alloc.
+        The resulting XRef will contain the higher-level selector being messaged, for example "alloc".
+        """
+        from strongarm.objc import ObjcUnconditionalBranchInstruction, RegisterContentsType
+
+        parsed_instr = ObjcUnconditionalBranchInstruction.parse_instruction(
+            func_analyzer, instr, patch_msgSend_destination=False
+        )
+
+        class_name = None
+        selector = None
+
+        classref_reg = func_analyzer.get_register_contents_at_instruction("x0", parsed_instr)
+        if classref_reg.type == RegisterContentsType.IMMEDIATE:
+            classref = classref_reg.value
+            # Record the class name being messaged
+            class_name = self.class_name_for_class_pointer(VirtualMemoryPointer(classref))
+
+        if destination_address == self._objc_msgSend_addr:
+            # Branch to _objc_msgSend
+            selref_reg = func_analyzer.get_register_contents_at_instruction("x1", parsed_instr)
+            if selref_reg.type == RegisterContentsType.IMMEDIATE:
+                selref = selref_reg.value
+                selector_ent = self.selector_for_selref(VirtualMemoryPointer(selref))
+                if selector_ent:
+                    # Record the selector being messaged
+                    selector = selector_ent.name
+
+        else:
+            # Branch to optimized NSObject method that bypasses _objc_msgSend
+            # This is a call to a fast-path selector; fill in the selector name manually
+            selector = self._objc_fastpath_ptrs_to_selector_names[destination_address]
+
+        return int(destination_address), instr.address, int(func_analyzer.start_address), class_name, selector
+
     def _build_xref_tables(self) -> None:
         """Iterate all the code in the binary and populate the following DB tables:
         * function_calls
@@ -409,7 +440,9 @@ class MachoAnalyzer:
         c = self._db_handle.cursor()
         start_time = time.time()
         logging.debug(f"{self.binary.path} computing call XRefs...")
-        objc_msgsend_addr, objc_function_addrs = self._get_objc_dispatch_pointers()
+
+        objc_msgsend_addr = self._objc_msgSend_addr
+        objc_function_family = [objc_msgsend_addr] + list(self._objc_fastpath_ptrs_to_selector_names.keys())
 
         for entry_point, end_address in self.get_function_boundaries():
             function_size = end_address - entry_point
@@ -436,58 +469,19 @@ class MachoAnalyzer:
                         load_addr, string = string_load_tup
                         string_access = (string, load_addr, entry_point)
                         string_accesses.append(string_access)
-
                     continue
 
                 # We're looking at an unconditional branch instruction
                 # Record that the branch receiver has an XRef from this instruction
                 destination_address = instr.operands[0].value.imm
 
-                if destination_address in objc_function_addrs:
+                if destination_address in objc_function_family:
                     # Branch to function in the _objc_* family
-                    from strongarm.objc import RegisterContentsType, ObjcFunctionAnalyzer  # noqa: F811
+                    from strongarm.objc import ObjcFunctionAnalyzer  # noqa: F811
 
                     if not func_analyzer:
                         func_analyzer = ObjcFunctionAnalyzer.get_function_analyzer(self.binary, entry_point)
-
-                    parsed_instr = ObjcUnconditionalBranchInstruction.parse_instruction(
-                        func_analyzer, instr, patch_msgSend_destination=False
-                    )
-
-                    classref = 0x0
-                    selref = 0x0
-
-                    classref_reg = func_analyzer.get_register_contents_at_instruction("x0", parsed_instr)
-                    if classref_reg.type == RegisterContentsType.IMMEDIATE:
-                        classref = classref_reg.value
-
-                    if destination_address == objc_msgsend_addr:
-                        # Branch to _objc_msgSend
-                        selref_reg = func_analyzer.get_register_contents_at_instruction("x1", parsed_instr)
-                        if selref_reg.type == RegisterContentsType.IMMEDIATE:
-                            selref = selref_reg.value
-
-                        # If we're branching to a locally-implemented Objective-C method, set the `destination_addr`
-                        # field to be the address of the local Objective-C entry point
-                        # Additionally, in this case, include a 'function call' XRef. This enables getting all the
-                        # callers to a locally-implemented Objective-C method *or* C function via the `calls_to` API.
-                        # TODO(PT): Re-evaluate whether this is necessary or if the objc_calls_to() API is sufficient
-                        selector = self.selector_for_selref(VirtualMemoryPointer(selref))
-                        if selector and selector.implementation:
-                            destination_address = selector.implementation
-                            function_call_xref = (destination_address, instr.address, entry_point)
-                            function_branches.append(function_call_xref)
-                    else:
-                        # Branch to _objc_opt*. Even though the specific _objc_opt_* function tells us which method is
-                        # being invoked, we can't fill in the XRef's selref.
-                        # Consider a call to _objc_opt_new(_OBJC_CLASS_$_MyClass). We see that the class is being sent
-                        # @selector(new), but we can't fill in the `new` selref in the XRef because there is no
-                        # guarantee that `new` will be in the binary's selref table unless it's used with
-                        # _objc_msgSend elsewhere.
-                        pass
-
-                    objc_call = (int(destination_address), instr.address, entry_point, int(classref), int(selref))
-                    objc_calls.append(objc_call)
+                    objc_calls.append(self._get_objc_call_xref(func_analyzer, instr, destination_address))
 
                 else:
                     # Non-ObjC function call, i.e. a branch to any address other than _objc_msgSend/_objc_opt_*

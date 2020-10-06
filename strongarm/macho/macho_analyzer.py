@@ -224,9 +224,9 @@ class MachoAnalyzer:
         bytecode = self.binary.get_content_from_virtual_address(
             virtual_address=entry_point, size=end_address - entry_point
         )
-        basic_block_starts = compute_function_basic_blocks_fast(bytecode, entry_point, end_address)
+        basic_block_starts = compute_function_basic_blocks_fast(bytecode, entry_point)
         # Convert basic-block starts to [start, end] pairs
-        return pairwise([VirtualMemoryPointer(x) for x in basic_block_starts])
+        return pairwise(VirtualMemoryPointer(x) for x in basic_block_starts)
 
     def _build_function_boundaries_index(self) -> None:
         """Iterate all the entry points listed in the binary metadata and compute the end-of-function address for each.

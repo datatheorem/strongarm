@@ -219,63 +219,14 @@ class MachoAnalyzer:
     def _compute_function_basic_blocks(
         self, entry_point: VirtualMemoryPointer, end_address: VirtualMemoryPointer
     ) -> Iterable[Tuple[VirtualMemoryPointer, VirtualMemoryPointer]]:
-        from strongarm.objc import ObjcUnconditionalBranchInstruction
+        from strongarm_dataflow.dataflow import compute_function_basic_blocks_fast
 
         bytecode = self.binary.get_content_from_virtual_address(
             virtual_address=entry_point, size=end_address - entry_point
         )
-        # Grab a chunk of code within which to search for a function boundary
-        disassembled_code = self.cs.disasm(bytecode, entry_point)
-
-        # Find the basic blocks in this code chunk which are before the next entry point
-        basic_block_starts = {entry_point}
-
-        branch_mnemonic_to_dest_addr_op_idx = {
-            **dict.fromkeys(ObjcUnconditionalBranchInstruction.UNCONDITIONAL_BRANCH_MNEMONICS, 0),
-            "cbz": 1,
-            "cbnz": 1,
-            "tbz": 2,
-            "tbnz": 2,
-            # No destination address available for these mnemonics
-            "br": None,
-            "ret": None,
-        }
-        for instr in disassembled_code:
-            # Ensure we're looking at a branch instruction and pull out the destination address
-            if instr.mnemonic not in branch_mnemonic_to_dest_addr_op_idx:
-                continue
-
-            dest_addr_op_idx = branch_mnemonic_to_dest_addr_op_idx[instr.mnemonic]
-            if dest_addr_op_idx is None:
-                # Special instruction which does not have a destination address we can resolve
-                # "ret" always means EOF, "br" might always mean a local jump
-                basic_block_starts.add(VirtualMemoryPointer(instr.address + instr.size))
-            else:
-                destination_address = instr.operands[dest_addr_op_idx].value.imm
-
-                # Is it a branch to a local label within the function?
-                if entry_point <= destination_address <= end_address:
-                    basic_block_starts.add(VirtualMemoryPointer(instr.address + instr.size))
-                    basic_block_starts.add(VirtualMemoryPointer(destination_address))
-                    continue
-
-                # Unconditional branches always end a basic block, even if jumping somewhere outside the function
-                # (such as a tail call at the end of a code path)
-                if instr.mnemonic == "b":
-                    basic_block_starts.add(VirtualMemoryPointer(instr.address + instr.size))
-
-                # If a function contains a stack canary, its last instruction will be a branch-with-link to
-                # __stack_chk_fail. A 'normal' branch-with-link would not be a sensible function-end, but a
-                # stack canary is special because it's guaranteed to trigger an exception.
-                # Handle this by assuming if we see a branch-with-link at the last instruction before the next entry-
-                # point, it's probably a stack-canary (and thus another basic-block boundary).
-                # We could make this heuristic stronger by parsing the instruction and checking if it jumps to the
-                # __stack_chk_fail symbol, but this likely gets the job done most of the time.
-                if instr.address == end_address - instr.size and instr.mnemonic == "bl":
-                    basic_block_starts.add(VirtualMemoryPointer(instr.address + instr.size))
-
+        basic_block_starts = compute_function_basic_blocks_fast(bytecode, entry_point)
         # Convert basic-block starts to [start, end] pairs
-        return pairwise(sorted(basic_block_starts))
+        return pairwise(VirtualMemoryPointer(x) for x in basic_block_starts)
 
     def _build_function_boundaries_index(self) -> None:
         """Iterate all the entry points listed in the binary metadata and compute the end-of-function address for each.

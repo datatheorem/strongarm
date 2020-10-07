@@ -46,10 +46,10 @@ from strongarm.macho.macho_definitions import (
 # create type alias for the following classes that inherit from ArchIndependentStructure
 if TYPE_CHECKING:
     from .codesign.codesign_definitions import (  # noqa: F401
-        CSBlobStruct,
-        CSSuperblobStruct,
-        CSCodeDirectoryStruct,
         CSBlobIndexStruct,
+        CSBlobStruct,
+        CSCodeDirectoryStruct,
+        CSSuperblobStruct,
     )
     from .macho_binary import MachoBinary
 

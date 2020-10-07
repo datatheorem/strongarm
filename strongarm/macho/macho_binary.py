@@ -1,9 +1,10 @@
 import math
-from _ctypes import Structure
 from ctypes import c_uint32, c_uint64, sizeof
 from distutils.version import LooseVersion
 from pathlib import Path
 from typing import TYPE_CHECKING, Any, List, Optional, Set, Tuple, Type, TypeVar
+
+from _ctypes import Structure
 
 from strongarm.debug_util import DebugUtil
 from strongarm.macho.arch_independent_structs import (
@@ -881,7 +882,7 @@ class MachoBinary:
     def write_fat(slices: List["MachoBinary"], path: Path) -> None:
         """Write a list of Mach-O slices into a FAT file at the provided path.
         """
-        from strongarm.macho.macho_definitions import MachoFatHeader, MachoFatArch, MachArch
+        from strongarm.macho.macho_definitions import MachArch, MachoFatArch, MachoFatHeader
 
         if any(x.is_swap for x in slices):
             raise RuntimeError("Unsupported endianness")

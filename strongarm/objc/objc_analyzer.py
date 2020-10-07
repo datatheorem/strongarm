@@ -4,11 +4,11 @@ from subprocess import check_output
 from typing import List, Optional
 
 from capstone import CsInsn
+from strongarm_dataflow.dataflow import get_register_contents_at_instruction_fast
+from strongarm_dataflow.register_contents import RegisterContents, RegisterContentsType
 
 from strongarm.debug_util import DebugUtil
 from strongarm.macho import MachoBinary, ObjcClass, ObjcSelector, VirtualMemoryPointer
-from strongarm_dataflow.dataflow import get_register_contents_at_instruction_fast
-from strongarm_dataflow.register_contents import RegisterContents, RegisterContentsType
 
 from .objc_instruction import ObjcBranchInstruction, ObjcInstruction, ObjcUnconditionalBranchInstruction
 

@@ -890,7 +890,6 @@ class TestMachoAnalyzerDynStaticChecks:
                 assert strings_in_func == expected_string_load_and_strings
 
     def test_objc_fast_path_xrefs(self) -> None:
-        # Given a binary that accesses C and CF strings in a few functions / methods
         # Given a binary that intentionally hits the ObjC fast-paths
         source_code = """
         - (void)objc_opt_class {
@@ -958,3 +957,35 @@ class TestMachoAnalyzerDynStaticChecks:
 
                 # Then the method contains a usage of the fast-path selector, masked behind an _objc_opt_* call
                 assert expected_method_name_containing_xref in callers
+
+    def test_parse_xrefs__binary_lacks_objc_msgSend(self) -> None:
+        # Given a binary that hits ObjC fast-path functions but does not contain an imported _objc_msgSend symbol
+        source_code = """
+        - (void)objc_opt_new {
+            NSObject* x = [NSObject new];
+            NSLog(@"x: %@", x);
+        }
+        """
+        with binary_containing_code(source_code, is_assembly=False) as (binary, analyzer):
+            # Validate assumptions
+            assert analyzer.callable_symbol_for_symbol_name("_objc_msgSend") is None
+            assert analyzer._objc_msgSend_addr is None
+            assert analyzer.callable_symbol_for_symbol_name("_objc_opt_new") is not None
+            nslog_imported_sym = analyzer.callable_symbol_for_symbol_name("_NSLog")
+            assert nslog_imported_sym is not None
+            nslog_stub_addr = nslog_imported_sym.address
+
+            # When I use various XRef APIs
+            objc_new_xrefs = analyzer.objc_calls_to([], ["new"], False)
+            nslog_xrefs = analyzer.calls_to(nslog_stub_addr)
+
+            # Then XRefs are successfully parsed even though there is no _objc_msgSend symbol
+            # And the XRefs look correct
+            assert len(objc_new_xrefs) == 1
+            objc_new_xref = objc_new_xrefs[0]
+            assert objc_new_xref.class_name == "_OBJC_CLASS_$_NSObject"
+            assert objc_new_xref.selector == "new"
+
+            assert len(nslog_xrefs) == 1
+            nslog_xref = nslog_xrefs[0]
+            assert nslog_xref.destination_addr == nslog_stub_addr

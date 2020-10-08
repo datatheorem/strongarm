@@ -307,7 +307,6 @@ class MachoAnalyzer:
 
     @cached_property
     def _objc_msgSend_addr(self) -> Optional[VirtualMemoryPointer]:
-        # TODO(PT): Handle binaries that don't contain ObjC
         objc_msgsend_symbol = self.callable_symbol_for_symbol_name("_objc_msgSend")
         if not objc_msgsend_symbol:
             return None

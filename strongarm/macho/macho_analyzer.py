@@ -306,11 +306,11 @@ class MachoAnalyzer:
         return None
 
     @cached_property
-    def _objc_msgSend_addr(self) -> VirtualMemoryPointer:
+    def _objc_msgSend_addr(self) -> Optional[VirtualMemoryPointer]:
         # TODO(PT): Handle binaries that don't contain ObjC
         objc_msgsend_symbol = self.callable_symbol_for_symbol_name("_objc_msgSend")
         if not objc_msgsend_symbol:
-            raise NotImplementedError(f"{self.binary.path} has no imported _objc_msgSend symbol")
+            return None
         return VirtualMemoryPointer(objc_msgsend_symbol.address)
 
     @cached_property
@@ -359,7 +359,7 @@ class MachoAnalyzer:
             # Record the class name being messaged
             class_name = self.class_name_for_class_pointer(VirtualMemoryPointer(classref))
 
-        if destination_address == self._objc_msgSend_addr:
+        if self._objc_msgSend_addr and destination_address == self._objc_msgSend_addr:
             # Branch to _objc_msgSend
             selref_reg = func_analyzer.get_register_contents_at_instruction("x1", parsed_instr)
             if selref_reg.type == RegisterContentsType.IMMEDIATE:
@@ -392,8 +392,9 @@ class MachoAnalyzer:
         start_time = time.time()
         logging.debug(f"{self.binary.path} computing call XRefs...")
 
-        objc_msgsend_addr = self._objc_msgSend_addr
-        objc_function_family = [objc_msgsend_addr] + list(self._objc_fastpath_ptrs_to_selector_names.keys())
+        objc_function_family = list(self._objc_fastpath_ptrs_to_selector_names.keys())
+        if self._objc_msgSend_addr:
+            objc_function_family.append(self._objc_msgSend_addr)
 
         for entry_point, end_address in self.get_function_boundaries():
             function_size = end_address - entry_point

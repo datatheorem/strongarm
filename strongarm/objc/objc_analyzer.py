@@ -334,12 +334,17 @@ class ObjcFunctionAnalyzer:
             if bb.start_address <= instruction.address < bb.end_address:
                 # Found the basic block containing the instruction; reduce dataflow analysis space to its head
                 dataflow_space_start = bb.start_address
+                dataflow_space_end = bb.end_address
                 break
         else:
             # We are in the process of computing basic blocks, so we can't query them. Use the whole function for DFA
             dataflow_space_start = self.start_address
+            dataflow_space_end = self.end_address
 
-        return get_register_contents_at_instruction_fast(register, self, instruction, dataflow_space_start)
+        # To try and save a bit of work, don't include bytecode past the end of this basic block,
+        # as we only need the bytecode up to the provided instruction
+        function_bytecode = self.binary.get_content_from_virtual_address(self.start_address, dataflow_space_end - self.start_address)
+        return get_register_contents_at_instruction_fast(register, self, instruction, dataflow_space_start, function_bytecode)
 
     def _find_basic_blocks(self) -> List["BasicBlock"]:
         """Locate the basic-block-boundaries within the source function.
@@ -350,6 +355,9 @@ class ObjcFunctionAnalyzer:
         Returns:
             a List of objects encapsulating the basic block boundaries.
         """
+        # TODO(PT): _compute_function_basic_blocks is called twice per function:
+        # Once on the initial pass to detect function boundaries, and another time
+        # when an ObjcFunctionAnalyzer is created
         basic_blocks = self.macho_analyzer._compute_function_basic_blocks(self.start_address, self.end_address)
         return list(starmap(BasicBlock, basic_blocks))
 

@@ -232,18 +232,24 @@ class MachoAnalyzer:
         # Convert basic-block starts to [start, end] pairs
         return pairwise(x for x in basic_block_starts)
 
-    def get_basic_block_boundaries(self, entry_point: VirtualMemoryPointer) -> List[Tuple[VirtualMemoryPointer, VirtualMemoryPointer]]:
-        cursor = self._db_handle.execute("SELECT basic_blocks_str FROM basic_blocks WHERE entry_point=?", (entry_point,))
+    def get_basic_block_boundaries(
+        self, entry_point: VirtualMemoryPointer
+    ) -> List[Tuple[VirtualMemoryPointer, VirtualMemoryPointer]]:
+        """Given the function starting at the provided address, return the list of (start_addr, end_addr) basic blocks.
+        """
+        cursor = self._db_handle.execute(
+            "SELECT basic_blocks_str FROM basic_blocks WHERE entry_point=?", (entry_point,)
+        )
         with closing(cursor):
             basic_blocks_str_list = [x for x in cursor]
-            assert(len(basic_blocks_str_list) == 1)
+            assert len(basic_blocks_str_list) == 1
             basic_blocks_str = basic_blocks_str_list[0][0]
-            # Basic block start/end pair format: (a, b), (b, c), (c, d)
-            # Trim leading and closing parenthesis and split by middle comma
+            # Basic block start/end pair format: (a, b)|(b, c)|(c, d)
             start_end_pairs = basic_blocks_str.split("|")
             tups = []
             for pair in start_end_pairs:
-                start, end = pair[1:-1].split(', ')
+                # Trim leading and closing parenthesis and split by middle comma
+                start, end = pair[1:-1].split(", ")
                 tups.append((VirtualMemoryPointer(start), VirtualMemoryPointer(end)))
             return tups
 
@@ -275,14 +281,15 @@ class MachoAnalyzer:
             # This can happen in the assembly unit tests, where we insert a jump to a dummy __text label
             if len(basic_blocks) == 0:
                 continue
-            end_address = max((bb_end for _, bb_end in basic_blocks))
+            end_address = VirtualMemoryPointer(max((bb_end for _, bb_end in basic_blocks)))
             cursor.execute(
                 "INSERT INTO function_boundaries (entry_point, end_address) VALUES (?, ?)", (entry_point, end_address)
             )
-            basic_blocks_tup_str = [f'({b[0]}, {b[1]})' for b in basic_blocks]
+            basic_blocks_tup_str = [f"({b[0]}, {b[1]})" for b in basic_blocks]
             basic_blocks_str = "|".join(basic_blocks_tup_str)
             cursor.execute(
-                "INSERT INTO basic_blocks (entry_point, basic_blocks_str) VALUES (?, ?)", (entry_point, basic_blocks_str)
+                "INSERT INTO basic_blocks (entry_point, basic_blocks_str) VALUES (?, ?)",
+                (entry_point, basic_blocks_str),
             )
 
         with self._db_handle:
@@ -325,7 +332,7 @@ class MachoAnalyzer:
         * objc_msgSends
         * string_xrefs
         """
-        from strongarm_dataflow.dataflow import get_function_xrefs_fast, compute_function_basic_blocks_fast
+        from strongarm_dataflow.dataflow import compute_function_basic_blocks_fast, get_function_xrefs_fast
 
         if self._has_computed_xrefs:
             logging.error("Already computed xrefs, why was _build_xref_tables called again?")
@@ -345,12 +352,7 @@ class MachoAnalyzer:
             )
             basic_block_starts = compute_function_basic_blocks_fast(bytecode, entry_point)
             results_tup = get_function_xrefs_fast(
-                self,
-                entry_point,
-                basic_block_starts,
-                bytecode,
-                self._objc_msgSend_addr,
-                objc_function_family,
+                self, entry_point, basic_block_starts, bytecode, self._objc_msgSend_addr, objc_function_family,
             )
             string_accesses, function_calls, objc_calls = results_tup
 

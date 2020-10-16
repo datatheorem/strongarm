@@ -11,8 +11,7 @@ from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any, Callable, Dict, Iterable, List, Optional, Set, Tuple, TypeVar, cast
 
 from capstone import CS_ARCH_ARM64, CS_MODE_ARM, Cs, CsInsn
-from capstone.arm64_const import ARM64_OP_IMM
-from more_itertools import pairwise, peekable
+from more_itertools import pairwise
 
 from strongarm.macho.arch_independent_structs import CFString32, CFString64, CFStringStruct
 from strongarm.macho.dyld_info_parser import DyldBoundSymbol, DyldInfoParser
@@ -84,6 +83,9 @@ class CallerXRef:
     destination_addr: VirtualMemoryPointer
     caller_addr: VirtualMemoryPointer
     caller_func_start_address: VirtualMemoryPointer
+
+    def __lt__(self, other):
+        return self.caller_addr < other.caller_addr
 
 
 @dataclass

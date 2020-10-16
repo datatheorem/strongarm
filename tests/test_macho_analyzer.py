@@ -496,30 +496,34 @@ class TestMachoAnalyzerDynStaticChecks:
         )
 
         # When I ask for XRefs to `ARSKView`
-        objc_calls = sorted(analyzer.objc_calls_to(
-            objc_class_names=["_OBJC_CLASS_$_ARFaceTrackingConfiguration"],
-            objc_selectors=[],
-            requires_class_and_sel_found=False,
-        ))
+        objc_calls = sorted(
+            analyzer.objc_calls_to(
+                objc_class_names=["_OBJC_CLASS_$_ARFaceTrackingConfiguration"],
+                objc_selectors=[],
+                requires_class_and_sel_found=False,
+            )
+        )
         # Then the code location is returned
         assert len(objc_calls) == 1
         assert objc_calls[0] == expected_call_site
 
         # And when I ask for XRefs to `class`
-        objc_calls = sorted(analyzer.objc_calls_to(
-            objc_class_names=[], objc_selectors=["class"], requires_class_and_sel_found=False
-        ))
+        objc_calls = sorted(
+            analyzer.objc_calls_to(objc_class_names=[], objc_selectors=["class"], requires_class_and_sel_found=False)
+        )
         # Then the code location is returned
         assert len(objc_calls) == 2
         assert objc_calls[0] == expected_call_site
 
         # And when I ask for XRefs to `[ARFaceTrackingConfiguration class]`
         # Then the code location is returned
-        objc_calls = sorted(analyzer.objc_calls_to(
-            objc_class_names=["_OBJC_CLASS_$_ARFaceTrackingConfiguration"],
-            objc_selectors=[],
-            requires_class_and_sel_found=False,
-        ))
+        objc_calls = sorted(
+            analyzer.objc_calls_to(
+                objc_class_names=["_OBJC_CLASS_$_ARFaceTrackingConfiguration"],
+                objc_selectors=[],
+                requires_class_and_sel_found=False,
+            )
+        )
         # Then the code location is returned
         assert len(objc_calls) == 1
         assert objc_calls[0] == expected_call_site

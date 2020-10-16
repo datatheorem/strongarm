@@ -344,7 +344,7 @@ class ObjcFunctionAnalyzer:
         # To try and save a bit of work, don't include bytecode past the end of this basic block,
         # as we only need the bytecode up to the provided instruction
         function_bytecode = self.binary.get_content_from_virtual_address(self.start_address, dataflow_space_end - self.start_address)
-        return get_register_contents_at_instruction_fast(register, self, instruction, dataflow_space_start, function_bytecode)
+        return get_register_contents_at_instruction_fast(register, self.start_address, function_bytecode, dataflow_space_start, instruction.address)
 
     def _find_basic_blocks(self) -> List["BasicBlock"]:
         """Locate the basic-block-boundaries within the source function.

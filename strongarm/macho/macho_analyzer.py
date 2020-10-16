@@ -325,7 +325,7 @@ class MachoAnalyzer:
         * objc_msgSends
         * string_xrefs
         """
-        from strongarm_dataflow.dataflow import get_function_xrefs_fast
+        from strongarm_dataflow.dataflow import get_function_xrefs_fast, compute_function_basic_blocks_fast
 
         if self._has_computed_xrefs:
             logging.error("Already computed xrefs, why was _build_xref_tables called again?")
@@ -347,10 +347,10 @@ class MachoAnalyzer:
             results_tup = get_function_xrefs_fast(
                 self,
                 entry_point,
+                basic_block_starts,
                 bytecode,
                 self._objc_msgSend_addr,
                 objc_function_family,
-                basic_block_starts,
             )
             string_accesses, function_calls, objc_calls = results_tup
 

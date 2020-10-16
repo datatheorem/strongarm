@@ -510,9 +510,8 @@ class TestMachoAnalyzerDynStaticChecks:
             objc_class_names=[], objc_selectors=["class"], requires_class_and_sel_found=False
         )
         # Then the code location is returned
-        print(objc_calls)
         assert len(objc_calls) == 2
-        assert objc_calls[1] == expected_call_site
+        assert objc_calls[0] == expected_call_site
 
         # And when I ask for XRefs to `[ARFaceTrackingConfiguration class]`
         # Then the code location is returned
@@ -863,7 +862,7 @@ class TestMachoAnalyzerDynStaticChecks:
 
             for string, expected_xrefs in string_to_xrefs.items():
                 xrefs = analyzer.string_xrefs_to(string)
-                assert xrefs == expected_xrefs
+                assert sorted(xrefs) == sorted(expected_xrefs)
 
     def test_find_strings_in_func(self) -> None:
         # Given a binary that accesses C and CF strings in a few functions / methods

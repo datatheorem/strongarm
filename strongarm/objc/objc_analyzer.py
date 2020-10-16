@@ -358,7 +358,7 @@ class ObjcFunctionAnalyzer:
         # TODO(PT): _compute_function_basic_blocks is called twice per function:
         # Once on the initial pass to detect function boundaries, and another time
         # when an ObjcFunctionAnalyzer is created
-        basic_blocks = self.macho_analyzer._compute_function_basic_blocks(self.start_address, self.end_address)
+        basic_blocks = self.macho_analyzer.get_basic_block_boundaries(self.start_address)
         return list(starmap(BasicBlock, basic_blocks))
 
     def __repr__(self) -> str:

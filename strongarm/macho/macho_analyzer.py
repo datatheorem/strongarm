@@ -41,6 +41,10 @@ ANALYZER_SQL_SCHEMA = """
         end_address INT NOT NULL UNIQUE,
         CHECK (entry_point < end_address)
     );
+    CREATE TABLE basic_blocks(
+        entry_point INT NOT NULL UNIQUE PRIMARY KEY,
+        basic_blocks_str TEXT
+    );
 
     CREATE TABLE function_calls(
         destination_address INT,
@@ -218,7 +222,7 @@ class MachoAnalyzer:
 
     def _compute_function_basic_blocks(
         self, entry_point: VirtualMemoryPointer, end_address: VirtualMemoryPointer
-    ) -> Iterable[Tuple[VirtualMemoryPointer, VirtualMemoryPointer]]:
+    ) -> Iterable[Tuple[int, int]]:
         from strongarm_dataflow.dataflow import compute_function_basic_blocks_fast
 
         bytecode = self.binary.get_content_from_virtual_address(
@@ -226,7 +230,22 @@ class MachoAnalyzer:
         )
         basic_block_starts = compute_function_basic_blocks_fast(bytecode, entry_point)
         # Convert basic-block starts to [start, end] pairs
-        return pairwise(VirtualMemoryPointer(x) for x in basic_block_starts)
+        return pairwise(x for x in basic_block_starts)
+
+    def get_basic_block_boundaries(self, entry_point: VirtualMemoryPointer) -> List[Tuple[VirtualMemoryPointer, VirtualMemoryPointer]]:
+        cursor = self._db_handle.execute("SELECT basic_blocks_str FROM basic_blocks WHERE entry_point=?", (entry_point,))
+        with closing(cursor):
+            basic_blocks_str_list = [x for x in cursor]
+            assert(len(basic_blocks_str_list) == 1)
+            basic_blocks_str = basic_blocks_str_list[0][0]
+            # Basic block start/end pair format: (a, b), (b, c), (c, d)
+            # Trim leading and closing parenthesis and split by middle comma
+            start_end_pairs = basic_blocks_str.split("|")
+            tups = []
+            for pair in start_end_pairs:
+                start, end = pair[1:-1].split(', ')
+                tups.append((VirtualMemoryPointer(start), VirtualMemoryPointer(end)))
+            return tups
 
     def _build_function_boundaries_index(self) -> None:
         """Iterate all the entry points listed in the binary metadata and compute the end-of-function address for each.
@@ -259,6 +278,11 @@ class MachoAnalyzer:
             end_address = max((bb_end for _, bb_end in basic_blocks))
             cursor.execute(
                 "INSERT INTO function_boundaries (entry_point, end_address) VALUES (?, ?)", (entry_point, end_address)
+            )
+            basic_blocks_tup_str = [f'({b[0]}, {b[1]})' for b in basic_blocks]
+            basic_blocks_str = "|".join(basic_blocks_tup_str)
+            cursor.execute(
+                "INSERT INTO basic_blocks (entry_point, basic_blocks_str) VALUES (?, ?)", (entry_point, basic_blocks_str)
             )
 
         with self._db_handle:

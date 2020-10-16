@@ -59,12 +59,9 @@ class TestObjcRuntimeDataParser:
 
         # extract category list
         category_classes = [x for x in objc_parser.classes if isinstance(x, ObjcCategory)]
-        print(category_classes)
-        print([x.name for x in category_classes])
         assert len(category_classes) == 9
 
         # look at one category
-        print(category_classes)
         category = [x for x in category_classes if x.name == "_OBJC_CLASS_$_NSURLRequest (DataController)"][0]
         assert category.base_class == "_OBJC_CLASS_$_NSURLRequest"
         assert category.category_name == "DataController"

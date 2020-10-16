@@ -969,7 +969,11 @@ class TestMachoAnalyzerDynStaticChecks:
             # Validate assumptions
             assert analyzer.callable_symbol_for_symbol_name("_objc_msgSend") is None
             assert analyzer._objc_msgSend_addr is None
-            assert analyzer.callable_symbol_for_symbol_name("_objc_opt_new") is not None
+
+            objc_opt_new_sym = analyzer.callable_symbol_for_symbol_name("_objc_opt_new")
+            assert objc_opt_new_sym is not None
+            objc_opt_new_stub_addr = objc_opt_new_sym.address
+
             nslog_imported_sym = analyzer.callable_symbol_for_symbol_name("_NSLog")
             assert nslog_imported_sym is not None
             nslog_stub_addr = nslog_imported_sym.address
@@ -984,7 +988,69 @@ class TestMachoAnalyzerDynStaticChecks:
             objc_new_xref = objc_new_xrefs[0]
             assert objc_new_xref.class_name == "_OBJC_CLASS_$_NSObject"
             assert objc_new_xref.selector == "new"
+            # Test all properties to ensure XRef system works
+            assert objc_new_xref.destination_addr == objc_opt_new_stub_addr
+            assert objc_new_xref.caller_addr == 0x100007edc
+            assert objc_new_xref.caller_func_start_address == 0x100007ebc
 
             assert len(nslog_xrefs) == 1
             nslog_xref = nslog_xrefs[0]
             assert nslog_xref.destination_addr == nslog_stub_addr
+            # Test all properties to ensure XRef system works
+            assert nslog_xref.caller_addr == 0x100007ef8
+            assert nslog_xref.caller_func_start_address == 0x100007ebc
+
+    def test_parse_xrefs__objc_msgSend(self) -> None:
+        # Given a binary that uses _objc_msgSend in a few places
+        source_code = """
+        - (void)m1 {
+            NSString* x = [NSString stringWithFormat:@"test"];
+            NSLog(@"%@", x);
+        }
+        - (void)m2 {
+            UIView* x = [[UIView alloc] initWithFrame:CGRectZero];
+            NSLog(@"%@", x);
+        }
+        - (void)m3 {
+            // Try to get a call to -addObject: without a valid classref
+            NSMutableArray* m = [NSMutableArray alloc];
+            [[UIView alloc] init];
+            NSLog(@"%@", @"123");
+            [m init];
+            [m addObject:@4];
+        }
+        """
+        with binary_containing_code(source_code, is_assembly=False) as (binary, analyzer):
+            # Validate assumptions
+            objc_msgSend_sym = analyzer.callable_symbol_for_symbol_name("_objc_msgSend")
+            assert objc_msgSend_sym is not None
+            objc_msgSend_addr = objc_msgSend_sym.address
+
+            objc_alloc_sym = analyzer.callable_symbol_for_symbol_name("_objc_alloc")
+            assert objc_alloc_sym is not None
+            objc_alloc_addr = objc_alloc_sym.address
+
+            objc_alloc_init_sym = analyzer.callable_symbol_for_symbol_name("_objc_alloc_init")
+            assert objc_alloc_init_sym is not None
+            objc_alloc_init_addr = objc_alloc_init_sym.address
+
+            m1_addr = analyzer.get_method_imp_addresses("m1")[0]
+            m2_addr = analyzer.get_method_imp_addresses("m2")[0]
+            m3_addr = analyzer.get_method_imp_addresses("m3")[0]
+
+            # When I look at the raw Objective-C Xrefs that were generated
+            analyzer._build_xref_tables()
+            objc_xrefs = [x for x in analyzer._db_handle.execute("SELECT * from objc_msgSends")]
+
+            # Then they are generated correctly and include every ObjC call in the binary
+            correct_xrefs = [
+                (objc_msgSend_addr, 0x100007d0c, m1_addr, "_OBJC_CLASS_$_NSString", "stringWithFormat:"),
+                (objc_alloc_addr, 0x100007d64, m2_addr, "_OBJC_CLASS_$_UIView", "alloc"),
+                (objc_msgSend_addr, 0x100007d88, m2_addr, "_OBJC_CLASS_$_UIView", "initWithFrame:"),
+                (objc_alloc_addr, 0x100007dd4, m3_addr, "_OBJC_CLASS_$_NSMutableArray", "alloc"),
+                (objc_alloc_init_addr, 0x100007de8, m3_addr, "_OBJC_CLASS_$_UIView", "init"),
+                (objc_msgSend_addr, 0x100007e1c, m3_addr, "___CFConstantStringClassReference", "init"),
+                (objc_msgSend_addr, 0x100007e48, m3_addr, "_OBJC_CLASS_$_NSNumber", "numberWithInt:"),
+                (objc_msgSend_addr, 0x100007e68, m3_addr, None, "addObject:"),
+            ]
+            assert objc_xrefs == correct_xrefs

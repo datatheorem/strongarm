@@ -41,8 +41,12 @@ ANALYZER_SQL_SCHEMA = """
         CHECK (entry_point < end_address)
     );
     CREATE TABLE basic_blocks(
-        entry_point INT NOT NULL UNIQUE PRIMARY KEY,
-        basic_blocks_str TEXT
+        entry_point INT NOT NULL,
+        start_address INT NOT NULL,
+        end_address INT NOT NULL,
+        CHECK(entry_point <= start_address),
+        CHECK(start_address < end_address),
+        UNIQUE(entry_point, start_address, end_address)
     );
 
     CREATE TABLE function_calls(
@@ -78,17 +82,14 @@ class DisassemblyFailedError(Exception):
     """
 
 
-@dataclass
+@dataclass(order=True, frozen=True)
 class CallerXRef:
     destination_addr: VirtualMemoryPointer
     caller_addr: VirtualMemoryPointer
     caller_func_start_address: VirtualMemoryPointer
 
-    def __lt__(self, other):
-        return self.caller_addr < other.caller_addr
 
-
-@dataclass
+@dataclass(order=True, frozen=True)
 class ObjcMsgSendXref(CallerXRef):
     class_name: Optional[str]
     selector: Optional[str]
@@ -240,20 +241,10 @@ class MachoAnalyzer:
         """Given the function starting at the provided address, return the list of (start_addr, end_addr) basic blocks.
         """
         cursor = self._db_handle.execute(
-            "SELECT basic_blocks_str FROM basic_blocks WHERE entry_point=?", (entry_point,)
+            "SELECT start_address, end_address FROM basic_blocks WHERE entry_point=?", (entry_point,)
         )
         with closing(cursor):
-            basic_blocks_str_list = [x for x in cursor]
-            assert len(basic_blocks_str_list) == 1
-            basic_blocks_str = basic_blocks_str_list[0][0]
-            # Basic block start/end pair format: (a, b)|(b, c)|(c, d)
-            start_end_pairs = basic_blocks_str.split("|")
-            tups = []
-            for pair in start_end_pairs:
-                # Trim leading and closing parenthesis and split by middle comma
-                start, end = pair[1:-1].split(", ")
-                tups.append((VirtualMemoryPointer(start), VirtualMemoryPointer(end)))
-            return tups
+            return [x for x in cursor]
 
     def _build_function_boundaries_index(self) -> None:
         """Iterate all the entry points listed in the binary metadata and compute the end-of-function address for each.
@@ -287,11 +278,8 @@ class MachoAnalyzer:
             cursor.execute(
                 "INSERT INTO function_boundaries (entry_point, end_address) VALUES (?, ?)", (entry_point, end_address)
             )
-            basic_blocks_tup_str = [f"({b[0]}, {b[1]})" for b in basic_blocks]
-            basic_blocks_str = "|".join(basic_blocks_tup_str)
-            cursor.execute(
-                "INSERT INTO basic_blocks (entry_point, basic_blocks_str) VALUES (?, ?)",
-                (entry_point, basic_blocks_str),
+            cursor.executemany(
+                "INSERT INTO basic_blocks VALUES (?, ?, ?)", [(entry_point, t[0], t[1]) for t in basic_blocks]
             )
 
         with self._db_handle:
@@ -353,10 +341,9 @@ class MachoAnalyzer:
                 virtual_address=entry_point, size=end_address - entry_point
             )
             basic_block_starts = compute_function_basic_blocks_fast(bytecode, entry_point)
-            results_tup = get_function_xrefs_fast(
+            string_accesses, function_calls, objc_calls = get_function_xrefs_fast(
                 self, entry_point, basic_block_starts, bytecode, self._objc_msgSend_addr, objc_function_family,
             )
-            string_accesses, function_calls, objc_calls = results_tup
 
             # Add each branch and xref in this source function to the SQLite db
             c.executemany("INSERT INTO function_calls VALUES (?, ?, ?)", function_calls)

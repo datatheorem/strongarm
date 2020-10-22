@@ -6,7 +6,7 @@ name = "pypi"
 [packages]
 capstone = "*"
 more_itertools = "*"
-strongarm_dataflow = {git = "ssh://git@bitbucket.org/datatheorem/strongarm-dataflow.git", ref = "1.1.0"}
+strongarm_dataflow = {git = "ssh://git@bitbucket.org/datatheorem/strongarm-dataflow.git",ref = "SCAN-2217-xref-cpp"}
 
 [dev-packages]
 # Packages for developing

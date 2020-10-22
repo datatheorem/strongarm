@@ -11,8 +11,7 @@ from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any, Callable, Dict, Iterable, List, Optional, Set, Tuple, TypeVar, cast
 
 from capstone import CS_ARCH_ARM64, CS_MODE_ARM, Cs, CsInsn
-from capstone.arm64_const import ARM64_OP_IMM
-from more_itertools import pairwise, peekable
+from more_itertools import pairwise
 
 from strongarm.macho.arch_independent_structs import CFString32, CFString64, CFStringStruct
 from strongarm.macho.dyld_info_parser import DyldBoundSymbol, DyldInfoParser
@@ -40,6 +39,14 @@ ANALYZER_SQL_SCHEMA = """
         entry_point INT NOT NULL UNIQUE,
         end_address INT NOT NULL UNIQUE,
         CHECK (entry_point < end_address)
+    );
+    CREATE TABLE basic_blocks(
+        entry_point INT NOT NULL,
+        start_address INT NOT NULL,
+        end_address INT NOT NULL,
+        CHECK(entry_point <= start_address),
+        CHECK(start_address < end_address),
+        UNIQUE(entry_point, start_address, end_address)
     );
 
     CREATE TABLE function_calls(
@@ -75,14 +82,14 @@ class DisassemblyFailedError(Exception):
     """
 
 
-@dataclass
+@dataclass(order=True, frozen=True)
 class CallerXRef:
     destination_addr: VirtualMemoryPointer
     caller_addr: VirtualMemoryPointer
     caller_func_start_address: VirtualMemoryPointer
 
 
-@dataclass
+@dataclass(order=True, frozen=True)
 class ObjcMsgSendXref(CallerXRef):
     class_name: Optional[str]
     selector: Optional[str]
@@ -218,7 +225,7 @@ class MachoAnalyzer:
 
     def _compute_function_basic_blocks(
         self, entry_point: VirtualMemoryPointer, end_address: VirtualMemoryPointer
-    ) -> Iterable[Tuple[VirtualMemoryPointer, VirtualMemoryPointer]]:
+    ) -> Iterable[Tuple[int, int]]:
         from strongarm_dataflow.dataflow import compute_function_basic_blocks_fast
 
         bytecode = self.binary.get_content_from_virtual_address(
@@ -226,7 +233,18 @@ class MachoAnalyzer:
         )
         basic_block_starts = compute_function_basic_blocks_fast(bytecode, entry_point)
         # Convert basic-block starts to [start, end] pairs
-        return pairwise(VirtualMemoryPointer(x) for x in basic_block_starts)
+        return pairwise(x for x in basic_block_starts)
+
+    def get_basic_block_boundaries(
+        self, entry_point: VirtualMemoryPointer
+    ) -> List[Tuple[VirtualMemoryPointer, VirtualMemoryPointer]]:
+        """Given the function starting at the provided address, return the list of (start_addr, end_addr) basic blocks.
+        """
+        cursor = self._db_handle.execute(
+            "SELECT start_address, end_address FROM basic_blocks WHERE entry_point=?", (entry_point,)
+        )
+        with closing(cursor):
+            return [x for x in cursor]
 
     def _build_function_boundaries_index(self) -> None:
         """Iterate all the entry points listed in the binary metadata and compute the end-of-function address for each.
@@ -256,54 +274,16 @@ class MachoAnalyzer:
             # This can happen in the assembly unit tests, where we insert a jump to a dummy __text label
             if len(basic_blocks) == 0:
                 continue
-            end_address = max((bb_end for _, bb_end in basic_blocks))
+            end_address = VirtualMemoryPointer(max((bb_end for _, bb_end in basic_blocks)))
             cursor.execute(
                 "INSERT INTO function_boundaries (entry_point, end_address) VALUES (?, ?)", (entry_point, end_address)
+            )
+            cursor.executemany(
+                "INSERT INTO basic_blocks VALUES (?, ?, ?)", [(entry_point, t[0], t[1]) for t in basic_blocks]
             )
 
         with self._db_handle:
             cursor.close()
-
-    def _get_loaded_string(
-        self, peekable_function_code: peekable, current_instr: CsInsn
-    ) -> Optional[Tuple[VirtualMemoryPointer, str]]:
-        """If the provided code is loading a String, return a tuple of the string load address and the loaded string.
-        Returns None otherwise.
-
-        This yields both C strings and CFStrings, as they're loaded via the same pattern (the pattern is in fact the
-        same for all constant-data loads).
-
-        String-loads require multiple instructions to complete (first, loading a page, then, loading a page offset).
-        This method returns the last instruction in the string load, to match other disassemblers like Hopper and IDA.
-        """
-        # Is the code loading a string? Check this using a few heuristics that match data loads
-        # These patterns are used to load any constant word, so we throw away matches that don't point to strings
-        candidate_string_addr, candidate_load_addr = None, None
-        if current_instr.mnemonic == "adrp":
-            # 0x10000a264 adrp x2, #0x1001f7000
-            # 0x10000a268 add x2, x2, #0xc00 ; @"Reachable via WiFi"
-            next_instr = peekable_function_code.peek()
-            if next_instr.mnemonic == "add":
-                if current_instr.operands[1].type == ARM64_OP_IMM and next_instr.operands[2].type == ARM64_OP_IMM:
-                    # We've found a constant word load
-                    page_base = current_instr.operands[1].value.imm
-                    page_offset = next_instr.operands[2].value.imm
-                    candidate_string_addr = VirtualMemoryPointer(page_base + page_offset)
-                    # The second instruction is the one that "completes" the string load
-                    candidate_load_addr = VirtualMemoryPointer(next_instr.address)
-
-        elif current_instr.mnemonic == "adr":
-            # 0x10003acb0 adr x2, #0x1000e5e70 ; @"DELETE FROM testfairy WHERE id = %d;"
-            if current_instr.operands[1].type == ARM64_OP_IMM:
-                candidate_string_addr = VirtualMemoryPointer(current_instr.operands[1].value.imm)
-                candidate_load_addr = VirtualMemoryPointer(current_instr.address)
-
-        if candidate_string_addr:
-            string = self.binary.read_string_at_address(candidate_string_addr)
-            if string and candidate_load_addr:
-                return candidate_load_addr, string
-
-        return None
 
     @cached_property
     def _objc_msgSend_addr(self) -> Optional[VirtualMemoryPointer]:
@@ -336,52 +316,13 @@ class MachoAnalyzer:
             fastpath_funcptrs_to_selector_names[sym.address] = selector_name
         return fastpath_funcptrs_to_selector_names
 
-    def _get_objc_call_xref(
-        self, func_analyzer: "ObjcFunctionAnalyzer", instr: CsInsn, destination_address: VirtualMemoryPointer
-    ) -> Tuple[int, int, int, Optional[str], Optional[str]]:
-        """Internal transformation of an Objective-C call site to a collection suitable for inserting into the call DB.
-        This method handles both calls to _objc_msgSend and fast-paths such as _objc_alloc.
-        The resulting XRef will contain the higher-level selector being messaged, for example "alloc".
-        """
-        from strongarm.objc import ObjcUnconditionalBranchInstruction, RegisterContentsType
-
-        parsed_instr = ObjcUnconditionalBranchInstruction.parse_instruction(
-            func_analyzer, instr, patch_msgSend_destination=False
-        )
-
-        class_name = None
-        selector = None
-
-        classref_reg = func_analyzer.get_register_contents_at_instruction("x0", parsed_instr)
-        if classref_reg.type == RegisterContentsType.IMMEDIATE:
-            classref = classref_reg.value
-            # Record the class name being messaged
-            class_name = self.class_name_for_class_pointer(VirtualMemoryPointer(classref))
-
-        if self._objc_msgSend_addr and destination_address == self._objc_msgSend_addr:
-            # Branch to _objc_msgSend
-            selref_reg = func_analyzer.get_register_contents_at_instruction("x1", parsed_instr)
-            if selref_reg.type == RegisterContentsType.IMMEDIATE:
-                selref = selref_reg.value
-                selector_ent = self.selector_for_selref(VirtualMemoryPointer(selref))
-                if selector_ent:
-                    # Record the selector being messaged
-                    selector = selector_ent.name
-
-        else:
-            # Branch to optimized NSObject method that bypasses _objc_msgSend
-            # This is a call to a fast-path selector; fill in the selector name manually
-            selector = self._objc_fastpath_ptrs_to_selector_names[destination_address]
-
-        return int(destination_address), instr.address, int(func_analyzer.start_address), class_name, selector
-
     def _build_xref_tables(self) -> None:
         """Iterate all the code in the binary and populate the following DB tables:
         * function_calls
         * objc_msgSends
         * string_xrefs
         """
-        from strongarm.objc import ObjcUnconditionalBranchInstruction
+        from strongarm_dataflow.dataflow import compute_function_basic_blocks_fast, get_function_xrefs_fast
 
         if self._has_computed_xrefs:
             logging.error("Already computed xrefs, why was _build_xref_tables called again?")
@@ -396,52 +337,16 @@ class MachoAnalyzer:
             objc_function_family.append(self._objc_msgSend_addr)
 
         for entry_point, end_address in self.get_function_boundaries():
-            function_size = end_address - entry_point
-
-            # Iterate the disassembled code
-            try:
-                disassembled_code = self.disassemble_region(entry_point, function_size)
-            except DisassemblyFailedError:
-                # Skip code regions containing invalid bytecode
-                continue
-
-            function_branches = []
-            objc_calls = []
-            string_accesses = []
-            func_analyzer = None
-
-            peekable_code_in_func = peekable(disassembled_code)
-            for instr in peekable_code_in_func:
-                # Is it a non-branching instruction?
-                if instr.mnemonic not in ObjcUnconditionalBranchInstruction.UNCONDITIONAL_BRANCH_MNEMONICS:
-                    # Is it part of a string-load?
-                    string_load_tup = self._get_loaded_string(peekable_code_in_func, instr)
-                    if string_load_tup is not None:
-                        load_addr, string = string_load_tup
-                        string_access = (string, load_addr, entry_point)
-                        string_accesses.append(string_access)
-                    continue
-
-                # We're looking at an unconditional branch instruction
-                # Record that the branch receiver has an XRef from this instruction
-                destination_address = instr.operands[0].value.imm
-
-                if destination_address in objc_function_family:
-                    # Branch to function in the _objc_* family
-                    from strongarm.objc import ObjcFunctionAnalyzer  # noqa: F811
-
-                    if not func_analyzer:
-                        func_analyzer = ObjcFunctionAnalyzer.get_function_analyzer(self.binary, entry_point)
-                    objc_calls.append(self._get_objc_call_xref(func_analyzer, instr, destination_address))
-
-                else:
-                    # Non-ObjC function call, i.e. a branch to any address other than _objc_msgSend/_objc_opt_*
-                    # Could be an imported C function, a local C function, a block, etc.
-                    xref = (destination_address, instr.address, entry_point)
-                    function_branches.append(xref)
+            bytecode = self.binary.get_content_from_virtual_address(
+                virtual_address=entry_point, size=end_address - entry_point
+            )
+            basic_block_starts = compute_function_basic_blocks_fast(bytecode, entry_point)
+            string_accesses, function_calls, objc_calls = get_function_xrefs_fast(
+                self, entry_point, basic_block_starts, bytecode, self._objc_msgSend_addr, objc_function_family,
+            )
 
             # Add each branch and xref in this source function to the SQLite db
-            c.executemany("INSERT INTO function_calls VALUES (?, ?, ?)", function_branches)
+            c.executemany("INSERT INTO function_calls VALUES (?, ?, ?)", function_calls)
             c.executemany("INSERT INTO objc_msgSends VALUES (?, ?, ?, ?, ?)", objc_calls)
             c.executemany("INSERT INTO string_xrefs VALUES (?, ?, ?)", string_accesses)
 

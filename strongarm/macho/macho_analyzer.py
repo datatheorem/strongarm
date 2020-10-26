@@ -657,7 +657,22 @@ class MachoAnalyzer:
     def selref_for_selector_name(self, selector_name: str) -> Optional[VirtualMemoryPointer]:
         return self.objc_helper.selref_for_selector_name(selector_name)
 
+    @_requires_xrefs_computed
     def strings(self) -> Set[str]:
+        """Return a list containing every string in the binary
+        """
+        # Grab strings from the __cstring section
+        all_strings = self.get_cstrings()
+
+        # Strings that may be in other sections
+        c = self._db_handle.cursor()
+        xref_strings_rows = c.execute("SELECT string_literal from string_xrefs").fetchall()
+        xref_strings = [xref_strings_row[0] for xref_strings_row in xref_strings_rows]
+
+        all_strings.update(set(xref_strings))
+        return all_strings
+
+    def get_cstrings(self) -> Set[str]:
         """Return the list of strings in the binary's __cstring section.
         """
         # TODO(PT): This is SLOW and WASTEFUL!!!

@@ -322,7 +322,7 @@ class MachoAnalyzer:
         * objc_msgSends
         * string_xrefs
         """
-        from strongarm_dataflow.dataflow import compute_function_basic_blocks_fast, get_function_xrefs_fast
+        from strongarm_dataflow.dataflow import get_function_xrefs_fast
 
         if self._has_computed_xrefs:
             logging.error("Already computed xrefs, why was _build_xref_tables called again?")
@@ -340,10 +340,14 @@ class MachoAnalyzer:
             bytecode = self.binary.get_content_from_virtual_address(
                 virtual_address=entry_point, size=end_address - entry_point
             )
-            basic_block_starts = compute_function_basic_blocks_fast(bytecode, entry_point)
-            string_accesses, function_calls, objc_calls = get_function_xrefs_fast(
-                self, entry_point, basic_block_starts, bytecode, self._objc_msgSend_addr, objc_function_family,
-            )
+            basic_block_starts = [x for tup in self.get_basic_block_boundaries(entry_point) for x in tup]
+            try:
+                string_accesses, function_calls, objc_calls = get_function_xrefs_fast(
+                    self, entry_point, basic_block_starts, bytecode, self._objc_msgSend_addr, objc_function_family,
+                )
+            except RuntimeError as e:
+                logging.warning(f"Could not generate XRefs in {entry_point}: {e}")
+                continue
 
             # Add each branch and xref in this source function to the SQLite db
             c.executemany("INSERT INTO function_calls VALUES (?, ?, ?)", function_calls)

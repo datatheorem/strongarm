@@ -97,6 +97,13 @@ def _compile_code(
         )
         if ret.returncode:
             print(ret.stderr.decode())
+
+            # Is the toolchain unavailable in the current environment?
+            if "xcrun: not found" in ret.stderr.decode():
+                raise RuntimeError(
+                    f"Run the unit test locally, then commit the new binary in tests/bin/auto_compiled_binaries."
+                )
+
             raise RuntimeError(f"Compilation failed: {wrapped_source}")
         yield output_filepath
 

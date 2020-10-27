@@ -356,7 +356,7 @@ class TestMachoAnalyzer:
         }
         @end
         """
-        with binary_containing_code("", is_assembly=False, code_outside_objc_class=source_code) as (binary, analyzer):
+        with binary_containing_code(source_code, is_assembly=False) as (binary, analyzer):
             # When I ask for the list of strings in __cstrings
             cstrings = analyzer.get_cstrings()
             # I get 1 item - the hardcoded string

@@ -657,22 +657,31 @@ class MachoAnalyzer:
     def selref_for_selector_name(self, selector_name: str) -> Optional[VirtualMemoryPointer]:
         return self.objc_helper.selref_for_selector_name(selector_name)
 
+    @_requires_xrefs_computed
     def strings(self) -> Set[str]:
+        """Return a list containing every string in the binary
+        """
+        # Gather strings from various sections
+        all_strings = set()
+        for section_name in ["__cstring", "__objc_methname", "__objc_methtype", "__objc_classname"]:
+            section_strings = self._strings_in_section(section_name)
+            all_strings.update(section_strings)
+
+        # Gather strings found via Xrefs
+        c = self._db_handle.cursor()
+        xref_strings_rows = c.execute("SELECT string_literal from string_xrefs").fetchall()
+        xref_strings = [xref_strings_row[0] for xref_strings_row in xref_strings_rows]
+        all_strings.update(set(xref_strings))
+
+        return all_strings
+
+    def get_cstrings(self) -> Set[str]:
         """Return the list of strings in the binary's __cstring section.
         """
         # TODO(PT): This is SLOW and WASTEFUL!!!
         # These transformations should be done ONCE on initial analysis!
         # This method should cache its result.
-        strings_section = self.binary.section_with_name("__cstring", "__TEXT")
-        if not strings_section:
-            return set()
-
-        strings_content = strings_section.content
-
-        # split into characters (string table is packed and each entry is terminated by a null character)
-        string_table = list(strings_content)
-        transformed_strings = MachoStringTableHelper.transform_string_section(string_table)
-        return set((x.full_string for x in transformed_strings.values()))
+        return self._strings_in_section("__cstring")
 
     def _stringref_for_cstring(self, string: str) -> Optional[VirtualMemoryPointer]:
         """Try to find the stringref in __cstrings for a provided C string.
@@ -821,3 +830,13 @@ class MachoAnalyzer:
         c.executemany("INSERT INTO named_callable_symbols VALUES (0, ?, ?)", callable_addr_and_sym_name)
 
         self._db_handle.commit()
+
+    def _strings_in_section(self, section_name: str) -> Set[str]:
+        """Fetch the list of strings located inside the provided section
+        """
+        discovered_strings = set()
+        string_section = self.binary.section_with_name(section_name, "__TEXT")
+        if string_section:
+            transformed_strings = MachoStringTableHelper.transform_string_section(list(string_section.content))
+            discovered_strings = set((x.full_string for x in transformed_strings.values()))
+        return discovered_strings

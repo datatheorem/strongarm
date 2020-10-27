@@ -336,6 +336,42 @@ class TestMachoAnalyzer:
         # Then no named symbol is returned
         assert symbol is None
 
+    def test_strings(self) -> None:
+        source_code = """
+        @interface Class1 : NSObject
+        - (void)selectorOutsideCString;
+        @end
+        @implementation Class1
+        - (void)selectorOutsideCString {
+            NSLog(@"Wheee!");
+        }
+        @end
+        @interface Class2 : NSObject
+        - (void)foo;
+        @end
+        @implementation Class2
+        - (void)foo {
+            // Ensure there is an XRef to the selector literal in __objc_methname
+           [[[Class1 alloc] init] selectorOutsideCString];
+        }
+        @end
+        """
+        with binary_containing_code(source_code, is_assembly=False) as (binary, analyzer):
+            # When I ask for the list of strings in __cstrings
+            cstrings = analyzer.get_cstrings()
+            # I get 1 item - the hardcoded string
+            assert len(cstrings) == 1
+            assert "Wheee!" in cstrings
+
+            # When I ask for all strings
+            all_strings = analyzer.strings()
+            assert len(all_strings) > 5
+            # I get methods, classes, methodtypes, and cstrings
+            assert "selectorOutsideCString" in all_strings
+            assert "Class2" in all_strings
+            assert "Wheee!" in all_strings
+            assert "v16@0:8" in all_strings
+
 
 class TestMachoAnalyzerDynStaticChecks:
     FAT_PATH = pathlib.Path(__file__).parent / "bin" / "DynStaticChecks"

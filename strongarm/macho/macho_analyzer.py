@@ -340,7 +340,13 @@ class MachoAnalyzer:
             objc_function_family.append(self._objc_msgSend_addr)
 
         build_xref_database_fast(
-            self, self.binary.path.as_posix(), self._db_path.as_posix(), self.binary.get_virtual_base(), self._objc_msgSend_addr, objc_function_family, list(self.get_function_boundaries())
+            self,
+            self.binary.path.as_posix(),
+            self._db_path.as_posix(),
+            self.binary.get_virtual_base(),
+            self._objc_msgSend_addr,
+            objc_function_family,
+            list(self.get_function_boundaries()),
         )
 
         self._has_computed_xrefs = True

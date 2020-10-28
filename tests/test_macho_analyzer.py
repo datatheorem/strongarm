@@ -1079,7 +1079,7 @@ class TestMachoAnalyzerDynStaticChecks:
             m3_addr = analyzer.get_method_imp_addresses("m3")[0]
 
             # When I look at the raw Objective-C Xrefs that were generated
-            analyzer._build_xref_tables()
+            analyzer._build_xref_database()
             objc_xrefs = [x for x in analyzer._db_handle.execute("SELECT * from objc_msgSends")]
 
             # Then they are generated correctly and include every ObjC call in the binary

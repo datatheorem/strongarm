@@ -37,7 +37,7 @@
         },
         "strongarm-dataflow": {
             "git": "ssh://git@bitbucket.org/datatheorem/strongarm-dataflow.git",
-            "ref": "fe2f8daf2d027606618c9ca2209ddd31285888ae"
+            "ref": "420356d34488237775157798c1fda5193c85d682"
         }
     },
     "develop": {

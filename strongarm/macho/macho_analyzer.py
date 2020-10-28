@@ -113,7 +113,7 @@ def _requires_xrefs_computed(func: CallableT) -> CallableT:
     def wrap(self: "MachoAnalyzer", *args: Any, **kwargs: Any) -> Any:
         if not self._has_computed_xrefs:
             logging.info(f"called {func.__name__} before XRefs were computed, computing now...")
-            self._build_xref_tables()
+            self._build_xref_database()
         return func(self, *args, **kwargs)
 
     return cast(CallableT, wrap)
@@ -316,19 +316,22 @@ class MachoAnalyzer:
             fastpath_funcptrs_to_selector_names[sym.address] = selector_name
         return fastpath_funcptrs_to_selector_names
 
-    def _build_xref_tables(self) -> None:
+    def basic_blocks_helper(self, entry_point):
+        basic_block_starts = [x for tup in self.get_basic_block_boundaries(entry_point) for x in tup]
+        return basic_block_starts
+
+    def _build_xref_database(self) -> None:
         """Iterate all the code in the binary and populate the following DB tables:
         * function_calls
         * objc_msgSends
         * string_xrefs
         """
-        from strongarm_dataflow.dataflow import get_function_xrefs_fast
+        from strongarm_dataflow.dataflow import build_xref_database_fast
 
         if self._has_computed_xrefs:
-            logging.error("Already computed xrefs, why was _build_xref_tables called again?")
+            logging.error("Already computed xrefs, why was _build_xref_database called again?")
             return
 
-        c = self._db_handle.cursor()
         start_time = time.time()
         logging.debug(f"{self.binary.path} computing call XRefs...")
 
@@ -336,25 +339,10 @@ class MachoAnalyzer:
         if self._objc_msgSend_addr:
             objc_function_family.append(self._objc_msgSend_addr)
 
-        for entry_point, end_address in self.get_function_boundaries():
-            bytecode = self.binary.get_content_from_virtual_address(
-                virtual_address=entry_point, size=end_address - entry_point
-            )
-            basic_block_starts = [x for tup in self.get_basic_block_boundaries(entry_point) for x in tup]
-            try:
-                string_accesses, function_calls, objc_calls = get_function_xrefs_fast(
-                    self, entry_point, basic_block_starts, bytecode, self._objc_msgSend_addr, objc_function_family,
-                )
-            except RuntimeError as e:
-                logging.warning(f"Could not generate XRefs in {entry_point}: {e}")
-                continue
+        build_xref_database_fast(
+            self, self.binary.path.as_posix(), self._db_path.as_posix(), self.binary.get_virtual_base(), self._objc_msgSend_addr, objc_function_family, list(self.get_function_boundaries())
+        )
 
-            # Add each branch and xref in this source function to the SQLite db
-            c.executemany("INSERT INTO function_calls VALUES (?, ?, ?)", function_calls)
-            c.executemany("INSERT INTO objc_msgSends VALUES (?, ?, ?, ?, ?)", objc_calls)
-            c.executemany("INSERT INTO string_xrefs VALUES (?, ?, ?)", string_accesses)
-
-        self._db_handle.commit()
         self._has_computed_xrefs = True
         end_time = time.time()
         logging.debug(f"Finding xrefs took {end_time - start_time} seconds")

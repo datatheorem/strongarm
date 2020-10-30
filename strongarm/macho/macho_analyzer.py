@@ -246,6 +246,11 @@ class MachoAnalyzer:
         with closing(cursor):
             return [x for x in cursor]
 
+    def get_basic_block_starts(self, entry_point: VirtualMemoryPointer) -> List[VirtualMemoryPointer]:
+        """Get the start address of each basic block in the provided function.
+        """
+        return [x[0] for x in self.get_basic_block_boundaries(entry_point)]
+
     def _build_function_boundaries_index(self) -> None:
         """Iterate all the entry points listed in the binary metadata and compute the end-of-function address for each.
         The end-of-function address for each entry point is then stored in a DB table.
@@ -315,10 +320,6 @@ class MachoAnalyzer:
                 continue
             fastpath_funcptrs_to_selector_names[sym.address] = selector_name
         return fastpath_funcptrs_to_selector_names
-
-    def basic_blocks_helper(self, entry_point):
-        basic_block_starts = [x for tup in self.get_basic_block_boundaries(entry_point) for x in tup]
-        return basic_block_starts
 
     def _build_xref_database(self) -> None:
         """Iterate all the code in the binary and populate the following DB tables:

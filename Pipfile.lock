@@ -29,15 +29,15 @@
         },
         "more-itertools": {
             "hashes": [
-                "sha256:6f83822ae94818eae2612063a5101a7311e68ae8002005b5e05f03fd74a86a20",
-                "sha256:9b30f12df9393f0d28af9210ff8efe48d10c94f73e5daf886f10c4b0b0b4f03c"
+                "sha256:8e1a2a43b2f2727425f2b5839587ae37093f19153dc26c0927d1048ff6557330",
+                "sha256:b3a9005928e5bed54076e6e549c792b306fddfe72b2d1d22dd63d42d5d3899cf"
             ],
             "index": "pypi",
-            "version": "==8.5.0"
+            "version": "==8.6.0"
         },
         "strongarm-dataflow": {
             "git": "ssh://git@bitbucket.org/datatheorem/strongarm-dataflow.git",
-            "ref": "91f90d634ba232d1330d911c46aff211d33b8388"
+            "ref": "9b9b1ed10c7a8608a1ad65cb215104954b6f6263"
         }
     },
     "develop": {

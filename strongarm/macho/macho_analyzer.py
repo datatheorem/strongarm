@@ -244,12 +244,7 @@ class MachoAnalyzer:
             "SELECT start_address, end_address FROM basic_blocks WHERE entry_point=?", (entry_point,)
         )
         with closing(cursor):
-            return [x for x in cursor]
-
-    def get_basic_block_starts(self, entry_point: VirtualMemoryPointer) -> List[VirtualMemoryPointer]:
-        """Get the start address of each basic block in the provided function.
-        """
-        return [x[0] for x in self.get_basic_block_boundaries(entry_point)]
+            return [(VirtualMemoryPointer(x[0]), VirtualMemoryPointer(x[1])) for x in cursor]
 
     def _build_function_boundaries_index(self) -> None:
         """Iterate all the entry points listed in the binary metadata and compute the end-of-function address for each.

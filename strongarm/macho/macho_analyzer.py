@@ -340,6 +340,7 @@ class MachoAnalyzer:
             self.binary.path.as_posix(),
             self._db_path.as_posix(),
             self.binary.get_virtual_base(),
+            self.binary.get_file_offset(),
             self._objc_msgSend_addr,
             objc_function_family,
             list(self.get_function_boundaries()),

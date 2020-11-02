@@ -124,7 +124,7 @@ class MachoBinary:
     SUPPORTED_MAG = _MAG_64 + _MAG_32
     BYTES_PER_INSTRUCTION = 4
 
-    def __init__(self, path: Path, binary_data: bytes) -> None:
+    def __init__(self, path: Path, binary_data: bytes, file_offset: Optional[StaticFilePointer] = None) -> None:
         """Parse the bytes representing a Mach-O file.
         """
         from .codesign.codesign_parser import CodesignParser
@@ -136,6 +136,7 @@ class MachoBinary:
         self.is_swap: bool = False
         self.slice_filesize = len(binary_data)
         self._load_commands_end_addr = 0
+        self.file_offset = file_offset or StaticFilePointer(0x0)
 
         # Mach-O header data
         self.cpu_type: CPU_TYPE = CPU_TYPE.UNKNOWN  # Overwritten later in the parse
@@ -424,6 +425,11 @@ class MachoBinary:
             self._virtual_base = VirtualMemoryPointer(text_seg.vmaddr)
 
         return self._virtual_base
+
+    def get_file_offset(self) -> StaticFilePointer:
+        """Retrieve the offset within the file of this Mach-O slice
+        """
+        return self.file_offset
 
     def get_bytes(self, offset: StaticFilePointer, size: int, _translate_addr_to_file: bool = False) -> bytearray:
         """Retrieve bytes from Mach-O slice, taking into account that the slice could be at an offset within a FAT

@@ -73,7 +73,7 @@ class MachoParser:
             raise RuntimeError(f"Parsing error: data at file offset {hex(int(fileoff))} was not a valid Mach-O slice!")
 
         slice_data = self.get_bytes(fileoff, slice_size)
-        attempt = MachoBinary(self.path, slice_data)
+        attempt = MachoBinary(self.path, slice_data, file_offset=fileoff)
 
         # if the MachoBinary does not have a header, there was a problem parsing it
         if not attempt.header:

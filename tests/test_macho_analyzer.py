@@ -1124,18 +1124,18 @@ class TestMachoAnalyzerDynStaticChecks:
             # Then XRefs are generated successfully, even though a function contained invalid bytecode
             assert objc_xrefs == [
                 ObjcMsgSendXref(
-                    destination_addr=VirtualMemoryPointer(0x100007ee4),
-                    caller_addr=VirtualMemoryPointer(0x100007e40),
-                    caller_func_start_address=VirtualMemoryPointer(0x100007e1c),
+                    destination_addr=VirtualMemoryPointer(0x100007EE4),
+                    caller_addr=VirtualMemoryPointer(0x100007E40),
+                    caller_func_start_address=VirtualMemoryPointer(0x100007E1C),
                     class_name=None,
                     selector="method1",
                 )
             ]
             assert c_xrefs == [
                 CallerXRef(
-                    destination_addr=VirtualMemoryPointer(0x100007ed8),
-                    caller_addr=VirtualMemoryPointer(0x100007e0c),
-                    caller_func_start_address=VirtualMemoryPointer(0x100007df0),
+                    destination_addr=VirtualMemoryPointer(0x100007ED8),
+                    caller_addr=VirtualMemoryPointer(0x100007E0C),
+                    caller_func_start_address=VirtualMemoryPointer(0x100007DF0),
                 )
             ]
 
@@ -1182,9 +1182,9 @@ class TestMachoAnalyzerDynStaticChecks:
             # Then XRefs are generated successfully, even though a function contained invalid bytecode
             assert objc_xrefs == [
                 ObjcMsgSendXref(
-                    destination_addr=VirtualMemoryPointer(0x100007ed4),
-                    caller_addr=VirtualMemoryPointer(0x100007de8),
-                    caller_func_start_address=VirtualMemoryPointer(0x100007dc4),
+                    destination_addr=VirtualMemoryPointer(0x100007ED4),
+                    caller_addr=VirtualMemoryPointer(0x100007DE8),
+                    caller_func_start_address=VirtualMemoryPointer(0x100007DC4),
                     class_name=None,
                     selector="method1",
                 )

@@ -12,7 +12,7 @@ setup(
     install_requires=[
         "capstone",
         "more_itertools",
-        "strongarm_dataflow @ git+ssh://git@bitbucket.org/datatheorem/strongarm-dataflow.git@2.1.1",
+        "strongarm_dataflow @ git+ssh://git@bitbucket.org/datatheorem/strongarm-dataflow.git@SCAN-2415-invalid-bytecode-string-xref",
     ],
     package_data={"strongarm": ["py.typed"]},
     data_files=[("", ["LICENSE.txt"])],

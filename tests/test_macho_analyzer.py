@@ -5,7 +5,7 @@ from typing import Generator, List, Tuple
 import pytest
 
 from strongarm.macho import MachoBinary, ObjcCategory
-from strongarm.macho.macho_analyzer import MachoAnalyzer, ObjcMsgSendXref, VirtualMemoryPointer
+from strongarm.macho.macho_analyzer import CallerXRef, MachoAnalyzer, ObjcMsgSendXref, VirtualMemoryPointer
 from strongarm.macho.macho_parse import MachoParser
 from strongarm.objc import ObjcFunctionAnalyzer
 from tests.utils import binary_containing_code
@@ -1094,3 +1094,99 @@ class TestMachoAnalyzerDynStaticChecks:
                 (objc_msgSend_addr, 0x100007E68, m3_addr, None, "addObject:"),
             ]
             assert sorted(objc_xrefs) == sorted(correct_xrefs)
+
+    def test_generate_xrefs__malformed_bytecode(self):
+        # Given a binary with a function that intentionally embeds invalid AArch64 bytecode
+        source_code = """
+        - (void)method1 {
+            NSLog(@"Some code");
+        }
+        - (void)method2 {
+            [self method1];
+        }
+        - (void)badBytecode {
+            NSLog(@"Some other code");
+            [self method2];
+
+            // Some garbage instructions that'll fail to disassemble
+            asm volatile(".word 0xffffffff");
+            asm volatile(".word 0xffffffff");
+
+            NSLog(@"Some more code");
+            [self method2];
+        }
+        """
+        with binary_containing_code(source_code, is_assembly=False) as (binary, analyzer):
+            # When I generate XRefs for the binary
+            objc_xrefs = sorted(analyzer.objc_calls_to([], ["method1"], False))
+            c_xrefs = sorted(analyzer.calls_to(analyzer.callable_symbol_for_symbol_name("_NSLog").address))
+
+            # Then XRefs are generated successfully, even though a function contained invalid bytecode
+            assert objc_xrefs == [
+                ObjcMsgSendXref(
+                    destination_addr=VirtualMemoryPointer(0x100007ee4),
+                    caller_addr=VirtualMemoryPointer(0x100007e40),
+                    caller_func_start_address=VirtualMemoryPointer(0x100007e1c),
+                    class_name=None,
+                    selector="method1",
+                )
+            ]
+            assert c_xrefs == [
+                CallerXRef(
+                    destination_addr=VirtualMemoryPointer(0x100007ed8),
+                    caller_addr=VirtualMemoryPointer(0x100007e0c),
+                    caller_func_start_address=VirtualMemoryPointer(0x100007df0),
+                )
+            ]
+
+    def test_generate_xrefs__malformed_bytecode_in_string_xref(self):
+        # Given a binary with a function that intentionally embeds invalid AArch64 bytecode
+        # And the bytecode will trigger the lookahead-disassemble to parse a string load XRef
+        source_code = """
+        - (void)method1 {
+            NSLog(@"Some code");
+        }
+        - (void)method2 {
+            [self method1];
+        }
+        - (void)badBytecode {
+            NSLog(@"Some other code");
+            [self method2];
+
+            // This massaged bytecode was copied from the app referenced by SCAN-2415
+            // Instruction 1: Relative jump to after the bytecode sequence
+            asm volatile(".word 0x14000005");
+
+            // Instruction 2: adrp x0, #0x114e40000
+            // XRef generation will interpret this as the first half of a string load,
+            // and will try to disassemble the next instruction to complete the string load
+            asm volatile(".word 0xb00a71c0");
+
+            // Instructions 3 & 4: garbage, will fail to disassemble
+            asm volatile(".word 0xffffffff");
+            asm volatile(".word 0xffffffff");
+
+            NSLog(@"Some more code");
+            [self method2];
+        }
+        - (void)method3 {
+            NSLog(@"Some more code");
+            [self method2];
+        }
+        """
+        with binary_containing_code(source_code, is_assembly=False) as (binary, analyzer):
+            # When I generate XRefs for the binary
+            objc_xrefs = sorted(analyzer.objc_calls_to([], ["method1"], False))
+            c_xrefs = sorted(analyzer.calls_to(analyzer.callable_symbol_for_symbol_name("_NSLog").address))
+
+            # Then XRefs are generated successfully, even though a function contained invalid bytecode
+            assert objc_xrefs == [
+                ObjcMsgSendXref(
+                    destination_addr=VirtualMemoryPointer(0x100007ed4),
+                    caller_addr=VirtualMemoryPointer(0x100007de8),
+                    caller_func_start_address=VirtualMemoryPointer(0x100007dc4),
+                    class_name=None,
+                    selector="method1",
+                )
+            ]
+            assert len(c_xrefs) == 3

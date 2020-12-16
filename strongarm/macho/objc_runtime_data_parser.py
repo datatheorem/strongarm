@@ -421,7 +421,9 @@ class ObjcRuntimeDataParser:
         # the first entry appears directly after the ObjcMethodListStruct
         method_entry_off = methlist_ptr + methlist.sizeof
         for i in range(methlist.methcount):
-            method_ent = ObjcMethodStruct.read_method_struct(self.binary, method_entry_off)
+            method_ent = ObjcMethodStruct.read_method_struct(
+                self.binary, method_entry_off, methlist_flags=methlist.flags
+            )
             # Byte-align IMP, as the lower bits are used for flags
             method_ent.implementation &= ~0x3  # type: ignore
 

@@ -217,22 +217,32 @@ class ObjcMethodStruct(ArchIndependentStructure):
 
     @classmethod
     def get_backing_data_layout(
-        cls, is_64bit: bool = True, minimum_deployment_target: Optional[LooseVersion] = None
+        cls,
+        is_64bit: bool = True,
+        minimum_deployment_target: Optional[LooseVersion] = None,
+        methlist_flags: Optional[int] = None,
     ) -> Type[Structure]:
         # Prior to iOS 14, 64-bit targets would use an ObjcMethod64 structure with absolute addresses.
         # On iOS 14 and later, 64-bit targets use a structure with 32-bit relative offsets from each field.
         if is_64bit and minimum_deployment_target and minimum_deployment_target >= LooseVersion("14.0.0"):
-            return ObjcMethodRelativeData
+            # SCAN-2419: Binaries can be built for iOS 14 and still use an absolute method list, so also check a flag
+            # bit set in the method list
+            if methlist_flags and methlist_flags & (1 << 31) != 0:
+                return ObjcMethodRelativeData
 
         return super().get_backing_data_layout(is_64bit, minimum_deployment_target)
 
     @classmethod
-    def read_method_struct(cls, binary: "MachoBinary", address: VirtualMemoryPointer) -> "ObjcMethodStruct":  # noqa
+    def read_method_struct(
+        cls, binary: "MachoBinary", address: VirtualMemoryPointer, methlist_flags: Optional[int] = None
+    ) -> "ObjcMethodStruct":  # noqa
         """Read an ObjcMethodStruct from the provided binary address.
         This method accounts for post-iOS-14 binaries using a relative-offset layout for this structure, and
          patches the field values to appear as absolute addresses to callers, to match the layout from prior versions.
         """
-        struct_type = cls.get_backing_data_layout(binary.is_64bit, binary.get_minimum_deployment_target())
+        struct_type = cls.get_backing_data_layout(
+            binary.is_64bit, binary.get_minimum_deployment_target(), methlist_flags
+        )
         data = binary.get_contents_from_address(address=address, size=sizeof(struct_type), is_virtual=True)
         method_ent = ObjcMethodStruct(address, data, struct_type)
 

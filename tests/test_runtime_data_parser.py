@@ -2,8 +2,15 @@ import pathlib
 from distutils.version import LooseVersion
 from typing import List
 
-from strongarm.macho import DyldInfoParser, MachoParser, ObjcCategory, ObjcRuntimeDataParser
-from strongarm.macho.macho_definitions import MachoBuildTool, MachoBuildVersionPlatform, VirtualMemoryPointer
+from strongarm.macho import DyldInfoParser, MachoParser, ObjcCategory, ObjcMethodStruct, ObjcRuntimeDataParser
+from strongarm.macho.macho_definitions import (
+    MachoBuildTool,
+    MachoBuildVersionPlatform,
+    ObjcMethod32,
+    ObjcMethod64,
+    ObjcMethodRelativeData,
+    VirtualMemoryPointer,
+)
 
 
 class TestObjcRuntimeDataParser:
@@ -238,3 +245,22 @@ class TestObjcRuntimeDataParser:
         assert internal_sel.implementation == VirtualMemoryPointer(0x100007BFC)
         assert internal_sel.is_external_definition is False
         assert internal_sel.name == "usesWebView"
+
+    def test_ios14__selects_correct_method_list_variant(self):
+        # Given a variety of input parameters
+        args_to_expected_variant = {
+            (("is_64bit", False), ("minimum_deployment_target", "13.0.0"), ("methlist_flags", 0x0)): ObjcMethod32,
+            (("is_64bit", True), ("minimum_deployment_target", "13.0.0"), ("methlist_flags", 0x0)): ObjcMethod64,
+            (("is_64bit", True), ("minimum_deployment_target", "14.0.0"), ("methlist_flags", 0x0)): ObjcMethod64,
+            (
+                ("is_64bit", True),
+                ("minimum_deployment_target", "14.0.0"),
+                ("methlist_flags", 0x80000000),
+            ): ObjcMethodRelativeData,
+        }
+        for kwargs_tup, expected_retval in args_to_expected_variant.items():
+            kwargs = {t[0]: t[1] for t in kwargs_tup}
+            # When I check which structure variant should be used to parse a method list
+            retval = ObjcMethodStruct.get_backing_data_layout(**kwargs)
+            # Then I see the correct structure variant is returned
+            assert retval == expected_retval

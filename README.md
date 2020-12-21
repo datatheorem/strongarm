@@ -189,6 +189,41 @@ AGPL license
 
 # Changelog
 
+## 2020-12-21 10.5.1
+
+### SCAN-2419: A binary built for iOS 14 may still include relative instead of absolute method lists.
+
+This release will look at both the deployment target and a flag bit set in the method list header when choosing whether to parse a relative or absolute method list. 
+
+### SCAN-2415: Handle edge-case around encountering invalid bytecode while generating XRefs
+
+Prior to this release, XRef generation already had handling for when it encountered invalid bytecode within a source function.
+However, a particular assembly contruction like the following could reach a code path that did not have this handling:
+
+```c
+    // Instruction 1: Relative jump to after the bytecode sequence
+    asm volatile(".word 0x14000005");
+
+    // Instruction 2: adrp x0, #0x114e40000
+    // XRef generation will interpret this as the first half of a string load,
+    // and will try to disassemble the next instruction to complete the string load
+    asm volatile(".word 0xb00a71c0");
+
+    // Instructions 3 & 4: garbage, will fail to disassemble
+    asm volatile(".word 0xffffffff");
+    asm volatile(".word 0xffffffff");
+```
+
+`_generate_function_xrefs` dispatches to one of a few functions to generate an XRef, depending on the XRef type. 
+One of these is `_generate_loaded_string_xref.`
+
+Instead of looking just at the current disassembled instruction, `_generate_loaded_string_xref` sometimes needs a 1-instruction lookahead 
+to parse a string load. Thus, `_generate_loaded_string_xref` sometimes needs to use cs_disasm directly outside of the main cs_disasm_iter loop. 
+
+If this lookahead instruction was invalid bytecode, we threw an unhandled exception and eventually failed to generate XRefs. 
+This release adds handling in this code path. Now, when the lookahead instruction is invalid, XRef generation will correctly skip the function,
+similarly to how a function is skipped if a source function contains invalid bytecode in the common case.
+
 ## 2020-11-04 10.5.0 
 
 ### SCAN-2316: `MachoBinary` exposes its file offset within a larger FAT via `MachoBinary.get_file_offset() -> StaticFilePointer`.

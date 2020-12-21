@@ -191,7 +191,11 @@ AGPL license
 
 ## 2020-12-21 10.5.1
 
-### SCAN-2419: Handle edge-case around encountering invalid bytecode while generating XRefs
+### SCAN-2419: A binary built for iOS 14 may still include relative instead of absolute method lists.
+
+This release will look at both the deployment target and a flag bit set in the method list header when choosing whether to parse a relative or absolute method list. 
+
+### SCAN-2415: Handle edge-case around encountering invalid bytecode while generating XRefs
 
 Prior to this release, XRef generation already had handling for when it encountered invalid bytecode within a source function.
 However, a particular assembly contruction like the following could reach a code path that did not have this handling:

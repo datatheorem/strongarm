@@ -1,6 +1,8 @@
 strongarm
 -----------------
 
+[![PyVersion badge](https://img.shields.io/badge/py-3.7%20%7C%203.8%20%7C%203.9-brightgreen.svg)](https://shields.io/)
+
 *strongarm* is a full-featured, cross-platform Mach-O analysis library.
 
 strongarm is production-ready and is used throughout DataTheorem's iOS static analyzer stack.

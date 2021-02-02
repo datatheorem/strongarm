@@ -7,7 +7,7 @@ setup(
     version=__version__,
     description="Mach-O/ARM64 analyzer",
     author="Data Theorem",
-    url="https://bitbucket.org/datatheorem/strongarm",
+    url="https://github.com/datatheorem/strongarm",
     packages=find_packages(exclude=["tests"]),
     install_requires=[
         "capstone",

@@ -3,7 +3,7 @@ from setuptools import find_packages, setup
 from strongarm import __version__
 
 setup(
-    name="strongarm",
+    name="strongarm-ios",
     version=__version__,
     description="Mach-O/ARM64 analyzer",
     author="Data Theorem",

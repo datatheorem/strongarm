@@ -1,6 +1,55 @@
+import logging
+import os
+import subprocess
+
 from setuptools import find_packages, setup
+from setuptools.command.build_ext import build_ext
+from setuptools.command.develop import develop
+from setuptools.command.install import install
 
 from strongarm import __version__
+
+
+def install_capstone():
+    platform = getattr(os.uname(), "sysname", None)
+    logging.info(f"Installing Capstone for platform: {platform}")
+
+    if platform == "Darwin":
+        logging.info(f"Installing Capstone backend from brew...")
+        subprocess.run("brew install capstone", shell=True)
+    elif platform == "Linux":
+        logging.info(f"Installing Capstone backend from apt-get...")
+        subprocess.run("apt-get update", shell=True)
+        subprocess.run(
+            "apt-get install libcapstone3 libcapstone-dev sqlite3 libsqlite3-dev -y --allow-unauthenticated", shell=True
+        )
+    else:
+        # Let's not make this a fatal error, as the user may be able to install Capstone on their own
+        logging.warning(f"Unknown platform: {platform}")
+        logging.warning(f"You must install the capstone backend before using strongarm")
+
+
+# https://stackoverflow.com/questions/19569557/pip-not-picking-up-a-custom-install-cmdclass
+class InstallCapstoneBuildExtCmd(build_ext):
+    def run(self) -> None:
+        install_capstone()
+        super().run()
+
+
+class InstallCapstoneInstallCmd(install):
+    def run(self) -> None:
+        install_capstone()
+        super().run()
+
+
+class InstallCapstoneDevelopCmd(develop):
+    def run(self) -> None:
+        install_capstone()
+        super().run()
+
+
+# Ensure our logs when installing Capstone show up
+logging.basicConfig(level=logging.INFO)
 
 setup(
     name="strongarm-ios",
@@ -9,7 +58,12 @@ setup(
     author="Data Theorem",
     url="https://github.com/datatheorem/strongarm",
     packages=find_packages(exclude=["tests"]),
-    install_requires=["capstone", "more_itertools", "strongarm_dataflow==2.1.2"],
+    install_requires=["capstone", "more_itertools", "strongarm_dataflow==2.1.3"],
     package_data={"strongarm": ["py.typed"]},
     data_files=[("", ["LICENSE.txt"])],
+    cmdclass={
+        "build_ext": InstallCapstoneBuildExtCmd,
+        "install": InstallCapstoneInstallCmd,
+        "develop": InstallCapstoneDevelopCmd,
+    },
 )

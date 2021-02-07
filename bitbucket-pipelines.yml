@@ -18,6 +18,10 @@ pipelines:
           caches:
             - pip
           script:
+            # Update before installing packages
+            - apt-get update
+            # These dependencies are normally installed by strongarm-base/setup.py
+            - apt-get install libcapstone3 libcapstone-dev sqlite3 libsqlite3-dev -y --allow-unauthenticated
             - pip install pipenv
             - export PIP_PROCESS_DEPENDENCY_LINKS=1
             - pipenv install --dev
@@ -28,8 +32,10 @@ pipelines:
           caches:
             - pip
           script:
-            # Update before install packages
+            # Update before installing packages
             - apt-get update
+            # These dependencies are normally installed by strongarm-base/setup.py
+            - apt-get install libcapstone3 libcapstone-dev sqlite3 libsqlite3-dev -y --allow-unauthenticated
             - pip install --upgrade pip pipenv
             - pip install invoke pipenv pytest mypy flake8
             # Version info

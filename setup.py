@@ -7,7 +7,7 @@ from setuptools.command.build_ext import build_ext
 from setuptools.command.develop import develop
 from setuptools.command.install import install
 
-from strongarm import __version__
+from strongarm import __url__, __version__
 
 
 def install_capstone():
@@ -15,10 +15,10 @@ def install_capstone():
     logging.info(f"Installing Capstone for platform: {platform}")
 
     if platform == "Darwin":
-        logging.info(f"Installing Capstone backend from brew...")
+        logging.info("Installing Capstone backend from brew...")
         subprocess.run("brew install capstone", shell=True)
     elif platform == "Linux":
-        logging.info(f"Installing Capstone backend from apt-get...")
+        logging.info("Installing Capstone backend from apt-get...")
         subprocess.run("apt-get update", shell=True)
         subprocess.run(
             "apt-get install libcapstone3 libcapstone-dev sqlite3 libsqlite3-dev -y --allow-unauthenticated", shell=True
@@ -26,7 +26,7 @@ def install_capstone():
     else:
         # Let's not make this a fatal error, as the user may be able to install Capstone on their own
         logging.warning(f"Unknown platform: {platform}")
-        logging.warning(f"You must install the capstone backend before using strongarm")
+        logging.warning("You must install the capstone backend before using strongarm")
 
 
 # https://stackoverflow.com/questions/19569557/pip-not-picking-up-a-custom-install-cmdclass
@@ -56,7 +56,7 @@ setup(
     version=__version__,
     description="Mach-O/ARM64 analyzer",
     author="Data Theorem",
-    url="https://github.com/datatheorem/strongarm",
+    url=__url__,
     packages=find_packages(exclude=["tests"]),
     install_requires=["capstone", "more_itertools", "strongarm_dataflow==2.1.3"],
     package_data={"strongarm": ["py.typed"]},

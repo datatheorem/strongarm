@@ -226,7 +226,18 @@ class MachoAnalyzer:
     def _compute_function_basic_blocks(
         self, entry_point: VirtualMemoryPointer, end_address: VirtualMemoryPointer
     ) -> Iterable[Tuple[int, int]]:
-        from strongarm_dataflow.dataflow import compute_function_basic_blocks_fast
+        # PT: This implicitly links against the capstone shared library,
+        # and if capstone is not installed correctly it will raise an ImportError.
+        # Report this in a clearer way so the user can see exactly what went wrong.
+        try:
+            from strongarm_dataflow.dataflow import compute_function_basic_blocks_fast
+        except ImportError as e:
+            if "libcapstone" in e:
+                import sys
+
+                print("\ncapstone 4.x could not be found, is the capstone backend installed?\n")
+                sys.exit(1)
+            raise
 
         bytecode = self.binary.get_content_from_virtual_address(
             virtual_address=entry_point, size=end_address - entry_point

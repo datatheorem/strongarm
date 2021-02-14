@@ -1,6 +1,6 @@
+import logging
 from typing import Optional
 
-from strongarm.debug_util import DebugUtil
 from strongarm.macho.macho_binary import MachoBinary
 from strongarm.macho.macho_definitions import StaticFilePointer
 
@@ -56,7 +56,7 @@ class CodesignParser:
             pass
         else:
             # unknown magic
-            DebugUtil.log(self, f"Unknown CodeSign blob magic @ {hex(file_offset)}: {hex(magic)}")
+            logging.debug(self, f"Unknown CodeSign blob magic @ {hex(file_offset)}: {hex(magic)}")
 
     def parse_superblob(self, file_offset: StaticFilePointer) -> None:
         """Parse a codesign 'superblob' at the provided file offset.

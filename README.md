@@ -5,7 +5,7 @@ strongarm
 [![PyPI version](https://img.shields.io/pypi/v/strongarm-ios.svg)](https://pypi.org/project/strongarm-ios/)
 [![PyVersion badge](https://img.shields.io/badge/py-3.7%20%7C%203.8%20%7C%203.9-brightgreen.svg)](https://shields.io/)
 
-*strongarm* is a full-featured, cross-platform Mach-O analysis library.
+*strongarm* is a full-featured, cross-platform ARM64 Mach-O analysis library.
 
 strongarm is production-ready and is used throughout DataTheorem's iOS static analyzer stack.
 
@@ -26,40 +26,6 @@ all of these tools are as well:
 - `dump_entitlements`: Print the code-signing information
 - `bitcode_retriever`: Extract the XAR archive containing LLVM bitcode from a Mach-O
 
-
-Features
------------
-
-- Access and cross-reference Mach-O info via an API
-- Dataflow analysis
-- Function-boundary detection
-
-### Mach-O parsing:
-
-- Metadata (architecture, endianness, etc)
-- Load commands
-- Symbol tables
-- String tables
-- Code signature
-- APIs to lookup metadata/XRefs of an address
-- Dyld info
-
-### Mach-O analysis:
-
-- Function boundary detection & disassembly
-- Track constant data movement in assembly
-- Read Objective-C info (classes, categories, protocols, methods, ivars, etc)
-- Cross-reference addresses to imported/exported symbols
-- Dyld bound symbols & implementation stubs
-- Parse constant NSStrings and C strings
-- Basic block analysis
-
-### Mach-O editing:
-
-- Load command insertion
-- Write Mach-O structures
-- Byte-edit binaries
-
 Installation
 -----------
 
@@ -75,6 +41,38 @@ $ cd strongarm-ios/
 $ pipenv shell
 $ pipenv install
 ```
+
+Features
+-----------
+
+- Access and cross-reference Mach-O info via an API
+- Dataflow analysis
+- Function-boundary detection
+
+### Mach-O parsing:
+
+- Metadata (architecture, endianness, etc)
+- Load commands
+- Symbol tables
+- String tables
+- Code signature
+- Dyld info
+- Objective-C info (classes, categories, protocols, methods, ivars, etc)
+
+### Mach-O analysis:
+
+- Cross-references (xrefs) of code and strings
+- Function boundary detection & disassembly
+- Track constant data movement in assembly
+- Dyld bound symbols & implementation stubs
+- Parse constant NSStrings and C strings
+- Basic block analysis
+
+### Mach-O editing:
+
+- Load command insertion
+- Write Mach-O structures
+- Byte-edit binaries
 
 Quickstart
 -----------
@@ -98,6 +96,10 @@ Advanced analysis
 Some APIs which require more memory or cross-referencing are available through `MachoAnalyzer`
 
 ```python
+import pathlib
+from strongarm.macho import MachoParser, MachoBinary, MachoAnalyzer
+
+macho_parser = MachoParser(pathlib.Path('~/Documents/MyApp.app/MyApp'))
 binary: MachoBinary = macho_parser.get_arm64_slice()
 # A MachoAnalyzer wraps a binary and allows deeper analysis
 analyzer = MachoAnalyzer.get_analyzer(binary)
@@ -127,7 +129,11 @@ Code analysis
 Once you have a handle to a `FunctionAnalyzer`, representing a source code function, you can analyze the code:
 
 ```python
+import pathlib
+from strongarm.macho import MachoParser, MachoBinary, MachoAnalyzer
 from strongarm.objc import ObjcFunctionAnalyzer
+
+macho_parser = MachoParser(pathlib.Path('~/Documents/MyApp.app/MyApp'))
 binary: MachoBinary = macho_parser.get_arm64_slice()
 analyzer = MachoAnalyzer.get_analyzer(binary)
 function_analyzer = ObjcFunctionAnalyzer.get_function_analyzer_for_signature(binary, 'ViewController', 'viewDidLoad')

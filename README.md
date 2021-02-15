@@ -1,6 +1,8 @@
 strongarm
 -----------------
 
+![Build](https://travis-ci.com/datatheorem/strongarm-dataflow.svg?token=tAHgetxjRpiWdtpcAxqw&branch=master)
+[![PyPI version](https://img.shields.io/pypi/v/strongarm-ios.svg)](https://pypi.org/project/strongarm-ios/)
 [![PyVersion badge](https://img.shields.io/badge/py-3.7%20%7C%203.8%20%7C%203.9-brightgreen.svg)](https://shields.io/)
 
 *strongarm* is a full-featured, cross-platform Mach-O analysis library.

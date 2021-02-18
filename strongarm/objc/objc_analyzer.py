@@ -1,6 +1,6 @@
 import functools
-import shlex
 import logging
+import shlex
 from itertools import starmap
 from subprocess import check_output
 from typing import List, Optional

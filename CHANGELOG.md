@@ -1,5 +1,30 @@
 # Changelog
 
+## 2020-02-16 10.5.5
+
+### SCAN-783: Avoid shell injection when invoking c++filt
+
+Disclosed by Keegan Saunders <keegan@undefinedbehaviour.org>
+
+Also, drop `DebugUtil` in favor of the standard library's `logging` module.
+
+## 2020-02-10 10.5.3
+
+## 2020-02-16 10.5.4
+
+### SCAN-783: Bump strongarm-dataflow to 2.1.4
+
+## 2020-02-10 10.5.3
+
+### SCAN-783: Validate capstone install upon failing to import strongarm_dataflow
+
+The cause of the failed import may be a linking error when the C-ext tries to link capstone. 
+If this is the case, report it more cleanly to the user so it’s clear what’s going on.
+
+## 2020-02-02 10.5.2
+
+### SCAN-783: Metadata tweaks pending open-source release
+
 ## 2020-12-21 10.5.1
 
 ### SCAN-2419: A binary built for iOS 14 may still include relative instead of absolute method lists.

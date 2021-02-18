@@ -1,3 +1,4 @@
+import logging
 import math
 from ctypes import c_uint32, c_uint64, sizeof
 from distutils.version import LooseVersion
@@ -6,7 +7,6 @@ from typing import TYPE_CHECKING, Any, List, Optional, Set, Tuple, Type, TypeVar
 
 from _ctypes import Structure
 
-from strongarm.debug_util import DebugUtil
 from strongarm.macho.arch_independent_structs import (
     ArchIndependentStructure,
     CFStringStruct,
@@ -169,7 +169,7 @@ class MachoBinary:
 
         self.platform_word_type = c_uint64 if self.is_64bit else c_uint32
         self.symtab_contents = self._get_symtab_contents()
-        DebugUtil.log(self, f"parsed symtab, len = {len(self.symtab_contents)}")
+        logging.debug(self, f"parsed symtab, len = {len(self.symtab_contents)}")
 
     def __repr__(self) -> str:
         return f"<MachoBinary binary={self.path}>"
@@ -182,11 +182,11 @@ class MachoBinary:
             False otherwise.
 
         """
-        # DebugUtil.log(self, f"parsing Mach-O slice @ {hex(int(self._offset_within_fat))} in {self.path}")
+        # logging.debug(self, f"parsing Mach-O slice @ {hex(int(self._offset_within_fat))} in {self.path}")
 
         # Preliminary Mach-O parsing
         if not self.verify_magic():
-            DebugUtil.log(self, f"unsupported magic {hex(self.slice_magic)}")
+            logging.debug(self, f"unsupported magic {hex(self.slice_magic)}")
             return False
 
         self.is_swap = self.should_swap_bytes()
@@ -198,7 +198,7 @@ class MachoBinary:
 
         self.parse_header()
 
-        DebugUtil.log(self, f"header parsed. non-native endianness? {self.is_swap}. 64-bit? {self.is_64bit}")
+        logging.debug(self, f"header parsed. non-native endianness? {self.is_swap}. 64-bit? {self.is_64bit}")
         return True
 
     @property
@@ -494,7 +494,7 @@ class MachoBinary:
             Array of Nlist64's representing binary's symbol table
 
         """
-        DebugUtil.log(self, f"parsing {self.symtab.nsyms} symtab entries")
+        logging.debug(self, f"parsing {self.symtab.nsyms} symtab entries")
 
         symtab = []
         # start reading from symoff and increment by one Nlist64 each iteration

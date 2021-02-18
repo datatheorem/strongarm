@@ -1,4 +1,5 @@
 import functools
+import shlex
 from itertools import starmap
 from subprocess import check_output
 from typing import List, Optional
@@ -42,7 +43,7 @@ def _demangle_cpp_symbol(cpp_symbol: str) -> str:
     # Try demangling multiple times, trimming a leading underscore each time until success (up to 3 times)
     for _ in range(3):
         # If demangling fails, allow the exception to propagate up. This can alert us to scanner issues.
-        demangled_symbol = check_output(f"c++filt -_ {cpp_symbol}", shell=True).decode().strip()
+        demangled_symbol = check_output(["c++filt", "-_", shlex.quote(cpp_symbol)]).decode().strip()
         # Was the symbol demangled?
         if demangled_symbol != cpp_symbol:
             if is_block:

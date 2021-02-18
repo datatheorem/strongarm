@@ -1,5 +1,6 @@
 import hashlib
 import pathlib
+import shlex
 import shutil
 import subprocess
 from contextlib import contextmanager
@@ -86,13 +87,14 @@ def _compile_code(
             source_file.write(wrapped_source)
 
         ret = subprocess.run(
-            f"xcrun -sdk iphoneos "
-            f"clang -arch arm64 "
-            f"-framework Foundation "
-            f"-framework CoreGraphics "
-            f"-framework UIKit "
-            f"{source_filepath.as_posix()} -o {output_filepath.as_posix()}",
-            shell=True,
+            [
+                "xcrun -sdk iphoneos",
+                "clang -arch arm64",
+                f"-framework Foundation",
+                f"-framework CoreGraphics",
+                f"-framework UIKit",
+                f"{shlex.quote(source_filepath.as_posix())} -o {shlex.quote(output_filepath.as_posix())}",
+            ],
             stderr=subprocess.PIPE,
         )
         if ret.returncode:

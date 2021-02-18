@@ -16,12 +16,21 @@ def install_capstone():
 
     if platform == "Darwin":
         logging.info("Installing Capstone backend from brew...")
-        subprocess.run("brew install capstone", shell=True)
+        subprocess.run(["brew", "install", "capstone"])
     elif platform == "Linux":
         logging.info("Installing Capstone backend from apt-get...")
-        subprocess.run("apt-get update", shell=True)
+        subprocess.run(["apt-get", "update"])
         subprocess.run(
-            "apt-get install libcapstone3 libcapstone-dev sqlite3 libsqlite3-dev -y --allow-unauthenticated", shell=True
+            [
+                "apt-get",
+                "install",
+                "libcapstone3",
+                "libcapstone-dev",
+                "sqlite3",
+                "libsqlite3-dev",
+                "-y",
+                "--allow-unauthenticated",
+            ]
         )
     else:
         # Let's not make this a fatal error, as the user may be able to install Capstone on their own

@@ -1,8 +1,6 @@
-from strongarm import DebugUtil
 from strongarm.macho import MachoAnalyzer, MachoParser
 from strongarm.objc import CodeSearch, CodeSearchTermCallDestination
 
-DebugUtil.debug = True
 binary = MachoParser("./tests/bin/StrongarmTarget").get_arm64_slice()
 analyzer = MachoAnalyzer(binary)
 

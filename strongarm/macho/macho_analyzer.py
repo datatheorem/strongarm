@@ -232,7 +232,7 @@ class MachoAnalyzer:
         try:
             from strongarm_dataflow.dataflow import compute_function_basic_blocks_fast
         except ImportError as e:
-            if "libcapstone" in e:
+            if "libcapstone" in str(e):
                 import sys
 
                 print("\ncapstone 4.x could not be found, is the capstone backend installed?\n")

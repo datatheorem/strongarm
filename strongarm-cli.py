@@ -20,7 +20,6 @@ from strongarm.cli.utils import (
     print_raw_strings,
     print_selector,
 )
-from strongarm.debug_util import DebugUtil
 from strongarm.macho import MachoAnalyzer, MachoBinary, MachoParser, VirtualMemoryPointer
 
 
@@ -242,7 +241,7 @@ def main() -> None:
     configure_logger()
 
     if args.verbose:
-        DebugUtil.debug = True
+        logging.getLogger().setLevel(logging.DEBUG)
 
     print_header(args)
 

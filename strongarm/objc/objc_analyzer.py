@@ -1,4 +1,5 @@
 import functools
+import logging
 from itertools import starmap
 from subprocess import check_output
 from typing import List, Optional
@@ -7,7 +8,6 @@ from capstone import CsInsn
 from strongarm_dataflow.dataflow import get_register_contents_at_instruction_fast
 from strongarm_dataflow.register_contents import RegisterContents, RegisterContentsType
 
-from strongarm.debug_util import DebugUtil
 from strongarm.macho import MachoBinary, ObjcClass, ObjcSelector, VirtualMemoryPointer
 
 from .objc_instruction import ObjcBranchInstruction, ObjcInstruction, ObjcUnconditionalBranchInstruction
@@ -148,11 +148,11 @@ class ObjcFunctionAnalyzer:
             output: string to output to debug log
         """
         if not len(self.instructions):
-            DebugUtil.log(self, f"func(stub) {output}")
+            logging.debug(self, f"func(stub) {output}")
         else:
             func_base = self.start_address
             instruction_address = func_base + (idx * MachoBinary.BYTES_PER_INSTRUCTION)
-            DebugUtil.log(self, f"func({hex(int(instruction_address))}) {output}")
+            logging.debug(self, f"func({hex(int(instruction_address))}) {output}")
 
     def get_symbol_name(self) -> str:
         """Return a objective-c class/method, c function, or sub_address-style string representing the name of

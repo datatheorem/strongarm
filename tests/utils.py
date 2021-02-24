@@ -90,9 +90,9 @@ def _compile_code(
             [
                 "xcrun -sdk iphoneos",
                 "clang -arch arm64",
-                f"-framework Foundation",
-                f"-framework CoreGraphics",
-                f"-framework UIKit",
+                "-framework Foundation",
+                "-framework CoreGraphics",
+                "-framework UIKit",
                 f"{shlex.quote(source_filepath.as_posix())} -o {shlex.quote(output_filepath.as_posix())}",
             ],
             stderr=subprocess.PIPE,

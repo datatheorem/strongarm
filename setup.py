@@ -67,7 +67,7 @@ setup(
     author="Data Theorem",
     url=__url__,
     packages=find_packages(exclude=["tests"]),
-    install_requires=["capstone", "more_itertools", "strongarm_dataflow==2.1.4"],
+    install_requires=["capstone", "more_itertools", "strongarm_dataflow==2.1.5"],
     package_data={"strongarm": ["py.typed"]},
     data_files=[("", ["LICENSE.txt"])],
     cmdclass={

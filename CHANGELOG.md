@@ -1,5 +1,9 @@
 # Changelog
 
+## 2020-03-16 10.5.6
+
+### SCAN-2515: Prevent a NULL-dereference when building XRef table of a malformed binary
+
 ## 2020-02-16 10.5.5
 
 ### SCAN-783: Avoid shell injection when invoking c++filt

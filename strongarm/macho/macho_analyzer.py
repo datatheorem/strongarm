@@ -665,7 +665,7 @@ class MachoAnalyzer:
         """
         # Gather strings from various sections
         all_strings = set()
-        for section_name in ["__cstring", "__objc_methname", "__objc_methtype", "__objc_classname"]:
+        for section_name in ["__cstring", "__objc_methname", "__objc_methtype", "__objc_classname", "__const"]:
             section_strings = self._strings_in_section(section_name)
             all_strings.update(section_strings)
 

@@ -595,8 +595,8 @@ class MachoAnalyzer:
         return VirtualMemoryPointer(results[0])
 
     @cached_property
-    def class_name_for_class_pointer_map(self) -> Dict[VirtualMemoryPointer, str]:
-        return {VirtualMemoryPointer(x.raw_struct.binary_offset): x.name for x in self.objc_classes()}
+    def class_for_class_pointer_map(self) -> Dict[VirtualMemoryPointer, ObjcClass]:
+        return {VirtualMemoryPointer(x.raw_struct.binary_offset): x for x in self.objc_classes()}
 
     def class_name_for_class_pointer(self, classref: VirtualMemoryPointer) -> Optional[str]:
         """Given a classref, return the name of the class.
@@ -613,9 +613,9 @@ class MachoAnalyzer:
 
         # First, check if we were provided with the address of an __objc_data struct in __objc_data representing
         # the class.
-        local_class = self.class_name_for_class_pointer_map.get(classref)
+        local_class = self.class_for_class_pointer_map.get(classref)
         if local_class:
-            return local_class
+            return local_class.name
 
         # Then, check if we were passed a classref pointer in __objc_classrefs
         try:
@@ -624,9 +624,9 @@ class MachoAnalyzer:
             # Invalid classref
             return None
 
-        local_class = self.class_name_for_class_pointer_map.get(dereferenced_classref)
+        local_class = self.class_for_class_pointer_map.get(dereferenced_classref)
         if local_class:
-            return local_class
+            return local_class.name
 
         # Invalid classref
         return None

@@ -594,13 +594,18 @@ class MachoAnalyzer:
 
         return VirtualMemoryPointer(results[0])
 
+    @cached_property
+    def class_for_class_pointer_map(self) -> Dict[VirtualMemoryPointer, ObjcClass]:
+        return {VirtualMemoryPointer(x.raw_struct.binary_offset): x for x in self.objc_classes()}
+
     def class_name_for_class_pointer(self, classref: VirtualMemoryPointer) -> Optional[str]:
         """Given a classref, return the name of the class.
         This method will handle classes implemented within the binary and imported classes.
         """
         # Did the caller provide a classref for an imported class?
-        if classref in self.imported_symbols_to_symbol_names:
-            return self.imported_symbols_to_symbol_names[classref]
+        local_class = self.imported_symbols_to_symbol_names.get(classref)
+        if local_class:
+            return local_class
 
         # The class is implemented within the binary and has an associated ObjcClass object
         # We could have been passed either a classref pointer in __objc_classrefs, or the direct address of
@@ -608,10 +613,9 @@ class MachoAnalyzer:
 
         # First, check if we were provided with the address of an __objc_data struct in __objc_data representing
         # the class.
-        local_class = [x for x in self.objc_classes() if x.raw_struct.binary_offset == classref]
-        if len(local_class):
-            assert len(local_class) == 1
-            return local_class[0].name
+        local_class = self.class_for_class_pointer_map.get(classref)
+        if local_class:
+            return local_class.name
 
         # Then, check if we were passed a classref pointer in __objc_classrefs
         try:
@@ -620,10 +624,9 @@ class MachoAnalyzer:
             # Invalid classref
             return None
 
-        local_class = [x for x in self.objc_classes() if x.raw_struct.binary_offset == dereferenced_classref]
-        if len(local_class):
-            assert len(local_class) == 1
-            return local_class[0].name
+        local_class = self.class_for_class_pointer_map.get(dereferenced_classref)
+        if local_class:
+            return local_class.name
 
         # Invalid classref
         return None

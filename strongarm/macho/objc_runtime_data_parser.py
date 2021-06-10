@@ -173,6 +173,7 @@ class ObjcRuntimeDataParser:
 
             # Some binaries contain a symtab such that all the calculated string address are the same. This check
             # prevents spamming the logs with errors about the same symbol
+            # TODO(FS): Task tracking this issue SCAN-2744
             if string_file_address in visited_addresses:
                 continue
             visited_addresses.add(string_file_address)

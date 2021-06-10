@@ -457,10 +457,10 @@ class MachoBinary:
 
         # safeguard against reading from an encrypted segment of the binary
         if self.is_range_encrypted(offset, size):
+            encryption_range_start = int(self.encryption_info.cryptoff)
+            encryption_range_end = encryption_range_start + int(self.encryption_info.cryptsize)
             raise BinaryEncryptedError(
-                "Cannot read encrypted"
-                f" range [{hex(int(self.encryption_info.cryptoff))}"
-                f" to {hex(int(self.encryption_info.cryptsize))}]"
+                f"Cannot read encrypted range [{hex(encryption_range_start)} - {hex(encryption_range_end)}]"
             )
 
         return bytearray(self._cached_binary[offset : offset + size])

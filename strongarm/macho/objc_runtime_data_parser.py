@@ -163,15 +163,23 @@ class ObjcRuntimeDataParser:
         symtab = self.binary.symtab
         symtab_contents = self.binary.symtab_contents
         dysymtab = self.binary.dysymtab
+        visited_addresses = set()
         for undef_sym_idx in range(dysymtab.nundefsym):
             symtab_idx = dysymtab.iundefsym + undef_sym_idx
             sym = symtab_contents[symtab_idx]
 
             strtab_idx = sym.n_un.n_strx
             string_file_address = symtab.stroff + strtab_idx
+
+            # Some binaries contain a symtab such that all the calculated string address are the same. This check
+            # prevents spamming the logs with errors about the same symbol
+            if string_file_address in visited_addresses:
+                continue
+            visited_addresses.add(string_file_address)
+
             symbol_name = self.binary.get_full_string_from_start_address(string_file_address, virtual=False)
             if not symbol_name:
-                logging.error(f"Could not get symbol name at address {string_file_address}")
+                logging.error(f"Could not get symbol name at address {hex(string_file_address)}")
                 continue
 
             library_ordinal = self._library_ordinal_from_n_desc(sym.n_desc)
@@ -501,7 +509,7 @@ class ObjcRuntimeDataParser:
     ) -> ObjcClass:
         symbol_name = self.binary.get_full_string_from_start_address(objc_data_struct.name)
         if not symbol_name:
-            raise ValueError(f"Could not get symbol name for {objc_data_struct.name}")
+            raise ValueError(f"Could not get symbol name for {hex(objc_data_struct.name)}")
 
         selectors: List[ObjcSelector] = []
         protocols: List[ObjcProtocol] = []

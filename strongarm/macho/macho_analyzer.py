@@ -112,7 +112,9 @@ def _requires_xrefs_computed(func: CallableT) -> CallableT:
     @functools.wraps(func)
     def wrap(self: "MachoAnalyzer", *args: Any, **kwargs: Any) -> Any:
         if not self._has_computed_xrefs:
-            logging.info(f"called {func.__name__} before XRefs were computed, computing now...")
+            logging.info(
+                f"called {func.__name__} before XRefs were computed for {self.binary.path.name}, computing now..."
+            )
             self._build_xref_database()
         return func(self, *args, **kwargs)
 

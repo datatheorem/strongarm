@@ -50,7 +50,7 @@ class MachoParser:
         valid Mach-O or FAT archive
         """
         if not self.is_magic_supported():
-            raise ArchitectureNotSupportedError()
+            raise ArchitectureNotSupportedError(self.path.as_posix())
 
         self.is_swapped = self.should_swap_bytes()
 

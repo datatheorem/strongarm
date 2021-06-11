@@ -1,5 +1,13 @@
 # Changelog
 
+## 2020-06-11 10.5.7
+
+### SCAN-2740: Improve log and error messages
+
+### SCAN-2666: Speed up MachoAnalyzer.class_name_for_class_pointer()
+
+### SCAN-2658: Read strings from __const section
+
 ## 2020-03-16 10.5.6
 
 ### SCAN-2515: Prevent a NULL-dereference when building XRef table of a malformed binary

@@ -701,7 +701,7 @@ class MachoAnalyzer:
             return None
 
         strings_base = strings_section.address
-        strings_content = strings_section.content
+        strings_content = self.binary.get_bytes(strings_section.offset, strings_section.size)
 
         # split into characters (string table is packed and each entry is terminated by a null character)
         string_table = list(strings_content)
@@ -844,6 +844,7 @@ class MachoAnalyzer:
         discovered_strings = set()
         string_section = self.binary.section_with_name(section_name, "__TEXT")
         if string_section:
-            transformed_strings = MachoStringTableHelper.transform_string_section(list(string_section.content))
+            strings_content = self.binary.get_bytes(string_section.offset, string_section.size)
+            transformed_strings = MachoStringTableHelper.transform_string_section(list(strings_content))
             discovered_strings = set((x.full_string for x in transformed_strings.values()))
         return discovered_strings

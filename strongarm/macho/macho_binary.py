@@ -68,7 +68,6 @@ class MachoSegment:
     def __init__(self, binary: "MachoBinary", segment_command: MachoSegmentCommandStruct) -> None:
         self.cmd = segment_command
 
-        self.content = binary.get_bytes(segment_command.fileoff, segment_command.filesize)
         self.name = segment_command.segname.decode()
         self.sizeof = segment_command.sizeof
 
@@ -99,7 +98,6 @@ class MachoSection:
         self.segment = segment
 
         # ignore these types due to dynamic attributes of associated types
-        self.content = binary.get_bytes(section_command.offset, section_command.size)
         self.name = section_command.sectname.decode()
         self.segment_name = section_command.segname.decode()
         self.address = section_command.addr
@@ -685,7 +683,7 @@ class MachoBinary:
             return locations, entries
 
         section_base = section.address
-        section_data = section.content
+        section_data = self.get_bytes(section.offset, section.size)
 
         binary_word = self.platform_word_type
         pointer_count = int(len(section_data) / sizeof(binary_word))

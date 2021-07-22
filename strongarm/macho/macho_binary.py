@@ -3,7 +3,7 @@ import math
 from ctypes import c_uint32, c_uint64, sizeof
 from distutils.version import LooseVersion
 from pathlib import Path
-from typing import TYPE_CHECKING, Any, List, Optional, Set, Tuple, Type, TypeVar
+from typing import TYPE_CHECKING, Any, List, Optional, Set, Tuple, Type, TypeVar, Dict
 
 from _ctypes import Structure
 
@@ -122,7 +122,7 @@ class MachoBinary:
     SUPPORTED_MAG = _MAG_64 + _MAG_32
     BYTES_PER_INSTRUCTION = 4
 
-    def __init__(self, path: Path, binary_data: bytes, file_offset: Optional[StaticFilePointer] = None) -> None:
+    def __init__(self, path: Path, binary_data: bytes, file_offset: Optional[StaticFilePointer] = None, _preprocess_chained_fixup_pointers: bool = True) -> None:
         """Parse the bytes representing a Mach-O file.
         """
         from .codesign.codesign_parser import CodesignParser
@@ -168,6 +168,16 @@ class MachoBinary:
         self.platform_word_type = c_uint64 if self.is_64bit else c_uint32
         self.symtab_contents = self._get_symtab_contents()
         logging.debug(self, f"parsed symtab, len = {len(self.symtab_contents)}")
+
+        from .dyld_info_parser import DyldInfoParser, DyldBoundSymbol
+        self.dyld_bound_symbols: Dict[VirtualMemoryPointer, DyldBoundSymbol] = {}
+
+        if _preprocess_chained_fixup_pointers and self._dyld_chained_fixups:
+            # Dyld's chained fixups will be parsed, and fixup the underlying binary memory to contain valid pointers.
+            # Overwrite our internal memory with the overwritten data to keep things consistent and correct
+            self.dyld_bound_symbols, self._cached_binary = DyldInfoParser.preprocess_chained_fixups(self)
+        else:
+            self.dyld_bound_symbols = DyldInfoParser.parse_dyld_info(self)
 
     def __repr__(self) -> str:
         return f"<MachoBinary binary={self.path}>"
@@ -801,6 +811,7 @@ class MachoBinary:
     def write_struct(self, struct: Structure, address: int, virtual: bool = False) -> "MachoBinary":
         """Serialize and write the provided structure the Mach-O slice, returning a new modified binary.
         Note: This will invalidate the binary's code signature, if present.
+        TODO(PT): Deprecate and move to MachoBinaryWriter
         """
         # Write the structure bytes to the binary
         # TODO(PT): byte order?
@@ -812,6 +823,7 @@ class MachoBinary:
         including the pathname.
         Raises NoEmptySpaceForLoadCommandError() if there's not enough space in the Mach-O header to add a new command.
         Note: This will invalidate the binary's code signature, if present.
+        TODO(PT): Deprecate and move to MachoBinaryWriter
         """
         if not self.is_64bit:
             raise RuntimeError("Inserting load commands is only support on 64-bit binaries")
@@ -877,6 +889,7 @@ class MachoBinary:
 
     def write_binary(self, path: Path) -> None:
         """Write the in-memory Mach-O slice to the provided path.
+        TODO(PT): Deprecate and move to MachoBinaryWriter
         """
         # Pass 'x' so the call will throw an exception if the path already exists
         with open(path, "xb") as out_file:
@@ -885,6 +898,7 @@ class MachoBinary:
     @staticmethod
     def write_fat(slices: List["MachoBinary"], path: Path) -> None:
         """Write a list of Mach-O slices into a FAT file at the provided path.
+        TODO(PT): Deprecate and move to MachoBinaryWriter
         """
         from strongarm.macho.macho_definitions import MachArch, MachoFatArch, MachoFatHeader
 

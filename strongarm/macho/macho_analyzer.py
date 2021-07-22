@@ -14,7 +14,7 @@ from capstone import CS_ARCH_ARM64, CS_MODE_ARM, Cs, CsInsn
 from more_itertools import pairwise
 
 from strongarm.macho.arch_independent_structs import CFString32, CFString64, CFStringStruct
-from strongarm.macho.dyld_info_parser import DyldBoundSymbol, DyldInfoParser
+from strongarm.macho.dyld_info_parser import DyldBoundSymbol
 from strongarm.macho.macho_binary import InvalidAddressError, MachoBinary
 from strongarm.macho.macho_definitions import VirtualMemoryPointer
 from strongarm.macho.macho_imp_stubs import MachoImpStubsParser
@@ -159,8 +159,6 @@ class MachoAnalyzer:
         self.cs = Cs(CS_ARCH_ARM64, CS_MODE_ARM)
         self.cs.detail = True
 
-        # Worker to parse dyld bytecode stream and extract dyld stub addresses to the DyldBoundSymbol they represent
-        self.dyld_info_parser = DyldInfoParser(self.binary)
         # Each __stubs function calls a single dyld stub address, which has a corresponding DyldBoundSymbol.
         # Map of each __stub function to the associated name of the DyldBoundSymbol
         self._imported_symbol_addresses_to_names: Dict[VirtualMemoryPointer, str] = {}
@@ -378,7 +376,7 @@ class MachoAnalyzer:
     @property
     def objc_helper(self) -> ObjcRuntimeDataParser:
         if not self._objc_helper:
-            self._objc_helper = ObjcRuntimeDataParser(self.binary, self.dyld_info_parser)
+            self._objc_helper = ObjcRuntimeDataParser(self.binary)
         return self._objc_helper
 
     @classmethod
@@ -421,7 +419,7 @@ class MachoAnalyzer:
     def dyld_bound_symbols(self) -> Dict[VirtualMemoryPointer, DyldBoundSymbol]:
         """Return a Dict of each imported dyld stub to the corresponding symbol to be bound at runtime.
         """
-        return self.dyld_info_parser.dyld_stubs_to_symbols
+        return self.binary.dyld_bound_symbols
 
     @property
     def imp_stubs_to_symbol_names(self) -> Dict[VirtualMemoryPointer, str]:

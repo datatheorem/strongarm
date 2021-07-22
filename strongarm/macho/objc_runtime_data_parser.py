@@ -4,7 +4,6 @@ from typing import Dict, List, Optional
 
 from more_itertools import first_true
 
-from strongarm.macho import DyldInfoParser
 from strongarm.macho.arch_independent_structs import (
     ArchIndependentStructure,
     ObjcCategoryRawStruct,
@@ -15,10 +14,10 @@ from strongarm.macho.arch_independent_structs import (
     ObjcMethodListStruct,
     ObjcMethodStruct,
     ObjcProtocolListStruct,
-    ObjcProtocolRawStruct,
+    ObjcProtocolRawStruct, MachoDyldChainedPtr64Rebase,
 )
 from strongarm.macho.macho_binary import MachoBinary
-from strongarm.macho.macho_definitions import VirtualMemoryPointer
+from strongarm.macho.macho_definitions import VirtualMemoryPointer, MachoDyldChainedPtr64RebaseRaw, ObjcClassRaw64
 
 
 class ObjcSelref:
@@ -138,7 +137,7 @@ class ObjcCategory(ObjcClass):
 
 
 class ObjcRuntimeDataParser:
-    def __init__(self, binary: MachoBinary, dyld_info_parser: DyldInfoParser) -> None:
+    def __init__(self, binary: MachoBinary) -> None:
         self.binary = binary
         logging.debug(f"Parsing ObjC runtime info of {self.binary}...")
 
@@ -151,7 +150,7 @@ class ObjcRuntimeDataParser:
         logging.debug("Step 2: Parsing classes, categories, and protocols...")
         self._classrefs_to_objc_classes: Dict[VirtualMemoryPointer, ObjcClass] = {}
         # This populates self._classrefs_to_objc_classes
-        self.classes = self._parse_class_and_category_info(dyld_info_parser)
+        self.classes = self._parse_class_and_category_info()
         self.protocols = self._parse_global_protocol_info()
 
         logging.debug("Step 3: Resolving symbol name to source dylib map...")
@@ -322,7 +321,7 @@ class ObjcRuntimeDataParser:
                 parsed_categories.append(parsed_category)
         return parsed_categories
 
-    def _parse_class_and_category_info(self, dyld_info_parser: DyldInfoParser) -> List[ObjcClass]:
+    def _parse_class_and_category_info(self) -> List[ObjcClass]:
         """Parse classes and categories referenced by __objc_classlist and __objc_catlist
         """
         classes: List[ObjcClass] = []
@@ -331,7 +330,7 @@ class ObjcRuntimeDataParser:
         # Link superclass methods into their subclasses
         self._add_superclass_methods_to_subclasses()
         # Link superclasses of classes and base-classes of categories
-        self._add_superclass_or_base_class_name_to_classes(classes, dyld_info_parser)
+        self._add_superclass_or_base_class_name_to_classes(classes)
         return classes
 
     def _add_superclass_methods_to_subclasses(self) -> None:
@@ -346,9 +345,7 @@ class ObjcRuntimeDataParser:
             objc_class.selectors += superclass.selectors
             objc_class.protocols += superclass.protocols
 
-    def _add_superclass_or_base_class_name_to_classes(
-        self, classes: List[ObjcClass], dyld_info_parser: DyldInfoParser
-    ) -> None:
+    def _add_superclass_or_base_class_name_to_classes(self, classes: List[ObjcClass]) -> None:
         """Iterate each ObjC class/category, and backfill its superclass/base_class name, respectively.
 
         Linking super/base_classes needs two data-sources, depending on whether the super/base_class is imported or not:
@@ -366,8 +363,8 @@ class ObjcRuntimeDataParser:
 
             # If the base class is an imported classref, the imported classref will be bound to its runtime load address
             # by dyld. Look up whether we have an import-binding for the `base_class` field of this structure.
-            if base_class_field_addr in dyld_info_parser.dyld_stubs_to_symbols:
-                imported_base_class_sym = dyld_info_parser.dyld_stubs_to_symbols[base_class_field_addr]
+            if base_class_field_addr in self.binary.dyld_bound_symbols:
+                imported_base_class_sym = self.binary.dyld_bound_symbols[base_class_field_addr]
                 base_class_name = imported_base_class_sym.name
 
             else:

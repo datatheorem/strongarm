@@ -40,7 +40,8 @@ from strongarm.macho.macho_definitions import (
     ObjcProtocolList64,
     ObjcProtocolRaw32,
     ObjcProtocolRaw64,
-    VirtualMemoryPointer,
+    VirtualMemoryPointer, MachoDyldChainedFixupsHeaderRaw, MachoDyldChainedImportRaw, MachoDyldChainedStartsInImageRaw,
+    MachoDyldChainedStartsInSegmentRaw, MachoDyldChainedPtr64RebaseRaw, MachoDyldChainedPtr64BindRaw,
 )
 
 # create type alias for the following classes that inherit from ArchIndependentStructure
@@ -318,3 +319,27 @@ class MachoBuildVersionCommandStruct(ArchIndependentStructure):
 class MachoBuildToolVersionStruct(ArchIndependentStructure):
     _32_BIT_STRUCT = MachoBuildToolVersion
     _64_BIT_STRUCT = MachoBuildToolVersion
+
+
+class MachoDyldChainedFixupsHeader(ArchIndependentStructure):
+    _64_BIT_STRUCT = MachoDyldChainedFixupsHeaderRaw
+
+
+class MachoDyldChainedImport(ArchIndependentStructure):
+    _64_BIT_STRUCT = MachoDyldChainedImportRaw
+
+
+class MachoDyldChainedStartsInImage(ArchIndependentStructure):
+    _64_BIT_STRUCT = MachoDyldChainedStartsInImageRaw
+
+
+class MachoDyldChainedStartsInSegment(ArchIndependentStructure):
+    _64_BIT_STRUCT = MachoDyldChainedStartsInSegmentRaw
+
+
+class MachoDyldChainedPtr64Rebase(ArchIndependentStructure):
+    _64_BIT_STRUCT = MachoDyldChainedPtr64RebaseRaw
+
+
+class MachoDyldChainedPtr64Bind(ArchIndependentStructure):
+    _64_BIT_STRUCT = MachoDyldChainedPtr64BindRaw

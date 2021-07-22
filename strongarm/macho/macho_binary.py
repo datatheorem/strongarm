@@ -151,6 +151,8 @@ class MachoBinary:
         self._symtab: Optional[MachoSymtabCommandStruct] = None
         self._encryption_info: Optional[MachoEncryptionInfoStruct] = None
         self._dyld_info: Optional[MachoDyldInfoCommandStruct] = None
+        self._dyld_export_trie: Optional[MachoLinkeditDataCommandStruct] = None
+        self._dyld_chained_fixups: Optional[MachoLinkeditDataCommandStruct] = None
         self.load_dylib_commands: List[DylibCommandStruct] = []
         self._code_signature_cmd: Optional[MachoLinkeditDataCommandStruct] = None
         self._function_starts_cmd: Optional[MachoLinkeditDataCommandStruct] = None
@@ -300,6 +302,12 @@ class MachoBinary:
 
             elif load_command.cmd in [MachoLoadCommands.LC_DYLD_INFO, MachoLoadCommands.LC_DYLD_INFO_ONLY]:
                 self._dyld_info = self.read_struct(offset, MachoDyldInfoCommandStruct)
+
+            elif load_command.cmd in [MachoLoadCommands.LC_DYLD_EXPORTS_TRIE]:
+                self._dyld_export_trie = self.read_struct(offset, MachoLinkeditDataCommandStruct)
+
+            elif load_command.cmd in [MachoLoadCommands.LC_DYLD_CHAINED_FIXUPS]:
+                self._dyld_chained_fixups = self.read_struct(offset, MachoLinkeditDataCommandStruct)
 
             elif load_command.cmd in [MachoLoadCommands.LC_LOAD_DYLIB, MachoLoadCommands.LC_LOAD_WEAK_DYLIB]:
                 dylib_load_command = self.read_struct(offset, DylibCommandStruct)

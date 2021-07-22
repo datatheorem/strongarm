@@ -140,7 +140,7 @@ class ArchIndependentStructure:
     def __init__(self, binary_offset: int, struct_bytes: bytearray, backing_layout: Type[Structure]):
         struct: ArchIndependentStructure = backing_layout.from_buffer(struct_bytes)  # type: ignore
 
-        for field_name, _ in struct._fields_:
+        for field_name, *_ in struct._fields_:
             # clone fields from struct to this class
             setattr(self, field_name, getattr(struct, field_name))
 

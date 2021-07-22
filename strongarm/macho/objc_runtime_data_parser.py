@@ -6,6 +6,7 @@ from more_itertools import first_true
 
 from strongarm.macho.arch_independent_structs import (
     ArchIndependentStructure,
+    MachoDyldChainedPtr64Rebase,
     ObjcCategoryRawStruct,
     ObjcClassRawStruct,
     ObjcDataRawStruct,
@@ -14,10 +15,10 @@ from strongarm.macho.arch_independent_structs import (
     ObjcMethodListStruct,
     ObjcMethodStruct,
     ObjcProtocolListStruct,
-    ObjcProtocolRawStruct, MachoDyldChainedPtr64Rebase,
+    ObjcProtocolRawStruct,
 )
 from strongarm.macho.macho_binary import MachoBinary
-from strongarm.macho.macho_definitions import VirtualMemoryPointer, MachoDyldChainedPtr64RebaseRaw, ObjcClassRaw64
+from strongarm.macho.macho_definitions import MachoDyldChainedPtr64RebaseRaw, ObjcClassRaw64, VirtualMemoryPointer
 
 
 class ObjcSelref:

@@ -1,12 +1,18 @@
-from ctypes import sizeof, c_uint32, c_uint16, c_uint64, c_long
 import logging
+from ctypes import c_long, c_uint16, c_uint32, c_uint64, sizeof
 from dataclasses import dataclass, field
 from enum import IntEnum
-from typing import Dict, Tuple, List, Optional
+from typing import Dict, List, Optional, Tuple
 
-from .arch_independent_structs import MachoDyldChainedFixupsHeader, MachoDyldChainedImport, \
-    MachoDyldChainedStartsInImage, MachoDyldChainedStartsInSegment, MachoDyldChainedPtr64Rebase, \
-    MachoDyldChainedPtr64Bind, DylibCommandStruct
+from .arch_independent_structs import (
+    DylibCommandStruct,
+    MachoDyldChainedFixupsHeader,
+    MachoDyldChainedImport,
+    MachoDyldChainedPtr64Bind,
+    MachoDyldChainedPtr64Rebase,
+    MachoDyldChainedStartsInImage,
+    MachoDyldChainedStartsInSegment,
+)
 from .macho_binary import MachoBinary
 from .macho_binary_writer import MachoBinaryWriter
 from .macho_definitions import StaticFilePointer, VirtualMemoryPointer
@@ -48,10 +54,11 @@ class DyldInfoParser:
         Parses the chained fixup pointers and rewrites the underlying binary memory to contain the fixed-up pointers
         Also creates the map of dyld import addresses to the corresponding DyldBoundSymbol
     """
+
     @staticmethod
     def preprocess_chained_fixups(binary: MachoBinary) -> Tuple[Dict[VirtualMemoryPointer, DyldBoundSymbol], bytes]:
         if not binary._dyld_chained_fixups:
-            raise ValueError(f'This method expects the provided binary to contain chained fixup pointers')
+            raise ValueError(f"This method expects the provided binary to contain chained fixup pointers")
 
         chained_fixups_data_start = binary._dyld_chained_fixups.dataoff
         header = binary.read_struct(chained_fixups_data_start, MachoDyldChainedFixupsHeader)
@@ -63,13 +70,17 @@ class DyldInfoParser:
             chained_import = binary.read_struct(chained_import_addr, MachoDyldChainedImport)
             symbol_addr = symbols_start_addr + chained_import.name_offset
             symbol_string = binary.get_full_string_from_start_address(symbol_addr, virtual=False)
-            print(f'Chained import\tidx {i}\taddr {hex(chained_import_addr)}\tlib_ordinal {chained_import.lib_ordinal}\tweak_imp {chained_import.weak_import}\tsym {symbol_string}')
-            dyld_bound_symbols.append(DyldBoundSymbol(
-                binary=binary,
-                address=chained_import_addr,
-                library_ordinal=chained_import.lib_ordinal,
-                name=symbol_string,
-            ))
+            print(
+                f"Chained import\tidx {i}\taddr {hex(chained_import_addr)}\tlib_ordinal {chained_import.lib_ordinal}\tweak_imp {chained_import.weak_import}\tsym {symbol_string}"
+            )
+            dyld_bound_symbols.append(
+                DyldBoundSymbol(
+                    binary=binary,
+                    address=chained_import_addr,
+                    library_ordinal=chained_import.lib_ordinal,
+                    name=symbol_string,
+                )
+            )
 
             chained_import_addr += chained_import.sizeof
         dyld_bound_addresses_to_symbols: Dict[VirtualMemoryPointer, DyldBoundSymbol] = {}
@@ -89,7 +100,7 @@ class DyldInfoParser:
                     chained_starts_in_seg_offsets_base + (segment_idx * sizeof(c_uint32)),
                     virtual=False,
                     word_type=c_uint32,
-                    )
+                )
                 if starts_in_seg_struct_offset == 0:
                     continue
 
@@ -97,40 +108,52 @@ class DyldInfoParser:
                 chained_starts_in_seg = binary.read_struct(starts_in_seg_addr, MachoDyldChainedStartsInSegment)
 
                 seg = binary.segment_for_index(segment_idx)
-                print(f'{segment_idx}:{seg.name} ChainedStartsInSegment size {hex(chained_starts_in_seg.size)} page_size {hex(chained_starts_in_seg.page_size)} pointer_fmt {chained_starts_in_seg.pointer_format} segment_offset {hex(chained_starts_in_seg.segment_offset)} max_valid_ptr {chained_starts_in_seg.max_valid_pointer} page_count {chained_starts_in_seg.page_count}')
+                print(
+                    f"{segment_idx}:{seg.name} ChainedStartsInSegment size {hex(chained_starts_in_seg.size)} page_size {hex(chained_starts_in_seg.page_size)} pointer_fmt {chained_starts_in_seg.pointer_format} segment_offset {hex(chained_starts_in_seg.segment_offset)} max_valid_ptr {chained_starts_in_seg.max_valid_pointer} page_count {chained_starts_in_seg.page_count}"
+                )
 
                 offset_in_page_start = starts_in_seg_addr + chained_starts_in_seg.sizeof
                 for page_idx in range(chained_starts_in_seg.page_count):
                     # Read entry of variable-length array of words. See comment in MachoDyldChainedStartsInSegmentRaw
                     offset_in_page = binary.read_word(
-                        offset_in_page_start + (page_idx * sizeof(c_uint16)),
-                        virtual=False,
-                        word_type=c_uint16
+                        offset_in_page_start + (page_idx * sizeof(c_uint16)), virtual=False, word_type=c_uint16
                     )
-                    print(f'\tPageIdx {page_idx}, offset in page {hex(offset_in_page)}')
+                    print(f"\tPageIdx {page_idx}, offset in page {hex(offset_in_page)}")
 
-                    chain_base = chained_starts_in_seg.segment_offset + (page_idx * chained_starts_in_seg.page_size) + offset_in_page
+                    chain_base = (
+                        chained_starts_in_seg.segment_offset
+                        + (page_idx * chained_starts_in_seg.page_size)
+                        + offset_in_page
+                    )
                     while True:
                         chained_rebase_ptr = binary.read_struct(chain_base, MachoDyldChainedPtr64Rebase)
                         # Rebase or bind?
                         if chained_rebase_ptr.bind == 1:
                             chained_bind_ptr = binary.read_struct(chain_base, MachoDyldChainedPtr64Bind)
                             bound_symbol = dyld_bound_symbols[chained_bind_ptr.ordinal]
-                            print(f'\t\t{hex(chain_base)}: BIND\tordinal {chained_bind_ptr.ordinal}\taddend {chained_bind_ptr.addend}\treserved {chained_bind_ptr.reserved}\tnext {chained_bind_ptr.next}\tsymbol {bound_symbol.name}\t\tdylib {binary.dylib_name_for_library_ordinal(bound_symbol.library_ordinal)}')
+                            print(
+                                f"\t\t{hex(chain_base)}: BIND\tordinal {chained_bind_ptr.ordinal}\taddend {chained_bind_ptr.addend}\treserved {chained_bind_ptr.reserved}\tnext {chained_bind_ptr.next}\tsymbol {bound_symbol.name}\t\tdylib {binary.dylib_name_for_library_ordinal(bound_symbol.library_ordinal)}"
+                            )
                             dyld_bound_addresses_to_symbols[chain_base + binary.get_virtual_base()] = bound_symbol
-                            chain_base += (chained_bind_ptr.next * 4)
+                            chain_base += chained_bind_ptr.next * 4
                         else:
                             chained_ptr_raw = binary.read_word(chain_base, word_type=c_uint64, virtual=False)
                             # b = chain_base + (a.target * 4)
                             # print(f'\t\t{hex(chain_base)}: DyldChainedPtr64Rebase(raw: {hex(chained_ptr_raw)}) target off {hex(a.target)} high8 {hex(a.high8)} reserved {hex(a.reserved)} next {a.next} bind {a.bind}')
-                            print(f'\t\t{hex(chain_base)}: DyldChainedPtr64Rebase(raw: {hex(chained_ptr_raw)}) target={StaticFilePointer(chained_rebase_ptr.target)}')
+                            print(
+                                f"\t\t{hex(chain_base)}: DyldChainedPtr64Rebase(raw: {hex(chained_ptr_raw)}) target={StaticFilePointer(chained_rebase_ptr.target)}"
+                            )
                             virt_addr = binary.get_virtual_base() + chain_base
                             rebased_ptr = binary.get_virtual_base() + chained_rebase_ptr.target
                             # print(f'\t\t\t{hex(virt_addr)}\t.write({rebased_ptr})')
-                            writer.write_word(c_uint64(chained_rebase_ptr.target + binary.get_virtual_base()), chain_base, virtual=False)
+                            writer.write_word(
+                                c_uint64(chained_rebase_ptr.target + binary.get_virtual_base()),
+                                chain_base,
+                                virtual=False,
+                            )
                             # writer.write_word(c_uint64(rebased_ptr), virt_addr, virtual=True)
                             # print(f'\t\tTarget: {hex(b)} in {seg.name if seg else None}')
-                            chain_base += (chained_rebase_ptr.next * 4)
+                            chain_base += chained_rebase_ptr.next * 4
 
                         if chained_rebase_ptr.next == 0:
                             break
@@ -143,9 +166,8 @@ class DyldInfoParser:
         terminal_size, off = DyldInfoParser.read_uleb(data, off)
         print(terminal_size)
         children_count = data[off]
-        print(f'children count {children_count}')
+        print(f"children count {children_count}")
         raise RuntimeError("test")
-        pass
 
     @staticmethod
     def read_uleb(data: bytearray, offset: int) -> Tuple[int, int]:
@@ -169,15 +191,19 @@ class DyldInfoParser:
     @staticmethod
     def parse_dyld_info(binary: MachoBinary) -> Dict[VirtualMemoryPointer, DyldBoundSymbol]:
         if not binary.dyld_info:
-            raise ValueError(f'This method expects the provided binary to contain LC_DYLD_INFO')
+            raise ValueError(f"This method expects the provided binary to contain LC_DYLD_INFO")
 
         return {
             **DyldInfoParser._parse_dyld_bytestream(binary, binary.dyld_info.bind_off, binary.dyld_info.bind_size),
-            **DyldInfoParser._parse_dyld_bytestream(binary, binary.dyld_info.lazy_bind_off, binary.dyld_info.lazy_bind_size)
+            **DyldInfoParser._parse_dyld_bytestream(
+                binary, binary.dyld_info.lazy_bind_off, binary.dyld_info.lazy_bind_size
+            ),
         }
 
     @staticmethod
-    def _parse_dyld_bytestream(binary: MachoBinary, file_offset: StaticFilePointer, size: int) -> Dict[VirtualMemoryPointer, DyldBoundSymbol]:
+    def _parse_dyld_bytestream(
+        binary: MachoBinary, file_offset: StaticFilePointer, size: int
+    ) -> Dict[VirtualMemoryPointer, DyldBoundSymbol]:
         from ctypes import sizeof
 
         dyld_stubs_to_symbols: Dict[VirtualMemoryPointer, DyldBoundSymbol] = {}

@@ -3,7 +3,7 @@ import math
 from ctypes import c_uint32, c_uint64, sizeof
 from distutils.version import LooseVersion
 from pathlib import Path
-from typing import TYPE_CHECKING, Any, List, Optional, Set, Tuple, Type, TypeVar, Dict
+from typing import TYPE_CHECKING, Any, Dict, List, Optional, Set, Tuple, Type, TypeVar
 
 from _ctypes import Structure
 
@@ -122,7 +122,13 @@ class MachoBinary:
     SUPPORTED_MAG = _MAG_64 + _MAG_32
     BYTES_PER_INSTRUCTION = 4
 
-    def __init__(self, path: Path, binary_data: bytes, file_offset: Optional[StaticFilePointer] = None, _preprocess_chained_fixup_pointers: bool = True) -> None:
+    def __init__(
+        self,
+        path: Path,
+        binary_data: bytes,
+        file_offset: Optional[StaticFilePointer] = None,
+        _preprocess_chained_fixup_pointers: bool = True,
+    ) -> None:
         """Parse the bytes representing a Mach-O file.
         """
         from .codesign.codesign_parser import CodesignParser
@@ -171,7 +177,8 @@ class MachoBinary:
         self.symtab_contents = self._get_symtab_contents()
         logging.debug(self, f"parsed symtab, len = {len(self.symtab_contents)}")
 
-        from .dyld_info_parser import DyldInfoParser, DyldBoundSymbol
+        from .dyld_info_parser import DyldBoundSymbol, DyldInfoParser
+
         self.dyld_bound_symbols: Dict[VirtualMemoryPointer, DyldBoundSymbol] = {}
 
         if _preprocess_chained_fixup_pointers and self._dyld_chained_fixups:

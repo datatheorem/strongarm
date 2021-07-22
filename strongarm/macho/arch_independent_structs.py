@@ -8,6 +8,12 @@ from strongarm.macho.macho_definitions import (
     DylibCommand,
     MachoBuildToolVersion,
     MachoBuildVersionCommand,
+    MachoDyldChainedFixupsHeaderRaw,
+    MachoDyldChainedImportRaw,
+    MachoDyldChainedPtr64BindRaw,
+    MachoDyldChainedPtr64RebaseRaw,
+    MachoDyldChainedStartsInImageRaw,
+    MachoDyldChainedStartsInSegmentRaw,
     MachoDyldInfoCommand,
     MachoDysymtabCommand,
     MachoEncryptionInfo32Command,
@@ -40,8 +46,7 @@ from strongarm.macho.macho_definitions import (
     ObjcProtocolList64,
     ObjcProtocolRaw32,
     ObjcProtocolRaw64,
-    VirtualMemoryPointer, MachoDyldChainedFixupsHeaderRaw, MachoDyldChainedImportRaw, MachoDyldChainedStartsInImageRaw,
-    MachoDyldChainedStartsInSegmentRaw, MachoDyldChainedPtr64RebaseRaw, MachoDyldChainedPtr64BindRaw,
+    VirtualMemoryPointer,
 )
 
 # create type alias for the following classes that inherit from ArchIndependentStructure

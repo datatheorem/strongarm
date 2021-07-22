@@ -2,7 +2,7 @@ from ctypes import c_uint32, c_uint64, sizeof
 from dataclasses import dataclass
 from typing import List, Union
 
-from .macho_binary import StaticFilePointer, MachoBinary, VirtualMemoryPointer
+from .macho_binary import MachoBinary, StaticFilePointer, VirtualMemoryPointer
 
 
 @dataclass
@@ -30,7 +30,11 @@ class MachoBinaryWriter:
         for write in self.queued_writes:
             new_binary_data[write.file_offset : write.file_offset + len(write.bytes_to_write)] = write.bytes_to_write
 
-        self.modified_binary = MachoBinary(self.binary.path, new_binary_data, _preprocess_chained_fixup_pointers=self._preprocess_chained_fixup_pointers)
+        self.modified_binary = MachoBinary(
+            self.binary.path,
+            new_binary_data,
+            _preprocess_chained_fixup_pointers=self._preprocess_chained_fixup_pointers,
+        )
         return False
 
     def write_word(self, word: Union[c_uint32, c_uint64], address: int, virtual: bool = True) -> None:
@@ -46,4 +50,9 @@ class MachoBinaryWriter:
             file_offset = self.binary.file_offset_for_virtual_address(VirtualMemoryPointer(address))
 
         # Queue a binary write here
-        self.queued_writes.append(MachoBinaryQueuedWrite(file_offset=file_offset, bytes_to_write=bytearray(word.value.to_bytes(length=sizeof(word), byteorder="little"))))
+        self.queued_writes.append(
+            MachoBinaryQueuedWrite(
+                file_offset=file_offset,
+                bytes_to_write=bytearray(word.value.to_bytes(length=sizeof(word), byteorder="little")),
+            )
+        )

@@ -70,7 +70,7 @@ class DyldInfoParser:
             symbol_addr = symbols_start_addr + chained_import.name_offset
             symbol_string = binary.get_full_string_from_start_address(symbol_addr, virtual=False)
             if not symbol_string:
-                raise ValueError(f'Should not happen: Failed to read a string for chained import {chained_import_addr}')
+                raise ValueError(f"Should not happen: Failed to read a string for chained import {chained_import_addr}")
             dyld_bound_symbols.append(
                 DyldBoundSymbol(
                     binary=binary,

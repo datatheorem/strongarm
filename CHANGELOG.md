@@ -1,6 +1,46 @@
 # Changelog
 
-## 2020-06-11 10.5.7
+## 2021-07-26 11.0.0
+
+### SCAN-2795: Add support for iOS 15 binaries
+
+Support parsing binaries with a minimum deployment target of iOS 15 that use the "chained fixup pointer" dyld format.
+
+This release is a breaking change. For binaries targeting iOS 15 and that use the "chained fixup pointer" dyld format,
+strongarm will now do a two-step parse:
+
+1. strongarm will parse the binary enough to identify fixup pointer chains. 
+
+2. strongarm will rewrite its underlying copy of the binary memory to fixup chained rebases to their binary-local pointer values.
+
+3. strongarm will re-parse the binary with these changes.
+
+To facilitate this, `MachoBinaryWriter` has been added to facilitate several binary modifications at once without triggering a binary parse per modification.
+
+Use it like so:
+
+```python
+from pathlib import Path
+from ctypes import c_uint64, sizeof
+from strongarm.macho.macho_binary_writer import MachoBinaryWriter
+
+# Initialise a batch binary writer
+writer = MachoBinaryWriter(binary)
+
+# Make a series of changes to the binary
+with writer:
+    for i in range(5):
+        writer.write_word(word=c_uint64(0xdeadbeef), address=0x1000 + (i * sizeof(c_uint64)), virtual=False)
+
+# `writer.modified_binary` contains the re-parsed binary containing the provided changes
+# Persist the modified binary to disk
+writer.modified_binary.write_binary(Path(__file__) / "modified_binary")
+```
+
+Also, fix a bug in which parsing an Objective-C protocol after parsing an Objective-C class implementing that protocol 
+may result in strongarm not reporting implementation pointers for the implemented selectors.
+
+## 2021-06-11 10.5.7
 
 ### SCAN-2740: Improve log and error messages
 
@@ -8,11 +48,11 @@
 
 ### SCAN-2658: Read strings from __const section
 
-## 2020-03-16 10.5.6
+## 2021-03-16 10.5.6
 
 ### SCAN-2515: Prevent a NULL-dereference when building XRef table of a malformed binary
 
-## 2020-02-16 10.5.5
+## 2021-02-16 10.5.5
 
 ### SCAN-783: Avoid shell injection when invoking c++filt
 
@@ -20,20 +60,20 @@ Disclosed by Keegan Saunders <keegan@undefinedbehaviour.org>
 
 Also, drop `DebugUtil` in favor of the standard library's `logging` module.
 
-## 2020-02-10 10.5.3
+## 2021-02-10 10.5.3
 
-## 2020-02-16 10.5.4
+## 2021-02-16 10.5.4
 
 ### SCAN-783: Bump strongarm-dataflow to 2.1.4
 
-## 2020-02-10 10.5.3
+## 2021-02-10 10.5.3
 
 ### SCAN-783: Validate capstone install upon failing to import strongarm_dataflow
 
 The cause of the failed import may be a linking error when the C-ext tries to link capstone. 
 If this is the case, report it more cleanly to the user so it’s clear what’s going on.
 
-## 2020-02-02 10.5.2
+## 2021-02-02 10.5.2
 
 ### SCAN-783: Metadata tweaks pending open-source release
 

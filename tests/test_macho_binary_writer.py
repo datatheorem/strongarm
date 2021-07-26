@@ -6,7 +6,7 @@ from strongarm.macho.macho_binary_writer import MachoBinaryWriter
 from strongarm.macho.macho_parse import MachoParser
 
 
-class TestFatMachO:
+class TestMachoBinaryWriter:
     TEST_BIN_PATH = pathlib.Path(__file__).parent / "bin" / "StrongarmTarget"
 
     def test_batched_write(self) -> None:

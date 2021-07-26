@@ -69,6 +69,8 @@ class DyldInfoParser:
             chained_import = binary.read_struct(chained_import_addr, MachoDyldChainedImport)
             symbol_addr = symbols_start_addr + chained_import.name_offset
             symbol_string = binary.get_full_string_from_start_address(symbol_addr, virtual=False)
+            if not symbol_string:
+                raise ValueError(f'Should not happen: Failed to read a string for chained import {chained_import_addr}')
             dyld_bound_symbols.append(
                 DyldBoundSymbol(
                     binary=binary,
@@ -90,7 +92,7 @@ class DyldInfoParser:
             ]
         """
         if not binary._dyld_chained_fixups:
-            raise ValueError(f"This method expects the provided binary to contain chained fixup pointers")
+            raise ValueError("This method expects the provided binary to contain chained fixup pointers")
 
         chained_fixups_data_start = binary._dyld_chained_fixups.dataoff
         chained_fixups_header = binary.read_struct(chained_fixups_data_start, MachoDyldChainedFixupsHeader)
@@ -200,7 +202,7 @@ class DyldInfoParser:
             if chained_rebase_ptr.next == 0:
                 break
         else:
-            raise ValueError(f"Failed to find end of fixup pointer chain")
+            raise ValueError("Failed to find end of fixup pointer chain")
 
         return dyld_bound_addresses_to_symbols
 
@@ -226,7 +228,7 @@ class DyldInfoParser:
     @staticmethod
     def parse_dyld_info(binary: MachoBinary) -> Dict[VirtualMemoryPointer, DyldBoundSymbol]:
         if not binary.dyld_info:
-            raise ValueError(f"This method expects the provided binary to contain LC_DYLD_INFO")
+            raise ValueError("This method expects the provided binary to contain LC_DYLD_INFO")
 
         return {
             **DyldInfoParser._parse_dyld_bytestream(binary, binary.dyld_info.bind_off, binary.dyld_info.bind_size),

@@ -2,8 +2,8 @@ import pathlib
 from ctypes import c_uint64
 
 from strongarm.macho import ObjcRuntimeDataParser, VirtualMemoryPointer
-from strongarm.macho.macho_parse import MachoParser
 from strongarm.macho.macho_binary_writer import MachoBinaryWriter
+from strongarm.macho.macho_parse import MachoParser
 
 
 class TestFatMachO:
@@ -14,7 +14,7 @@ class TestFatMachO:
         binary = MachoParser(self.TEST_BIN_PATH).get_arm64_slice()
 
         original_view_controller_data_ref = VirtualMemoryPointer(0x100009190)
-        original_view_controller_data_target = VirtualMemoryPointer(0x1000086e8)
+        original_view_controller_data_target = VirtualMemoryPointer(0x1000086E8)
         original_view_controller_superclass_target = VirtualMemoryPointer(0x0)
 
         original_dt_label_data_ref = VirtualMemoryPointer(0x100009140)
@@ -30,9 +30,9 @@ class TestFatMachO:
         assert view_controller_cls.raw_struct.data == original_view_controller_data_target
         assert view_controller_cls.super_classref == original_view_controller_superclass_target
         assert [x.name for x in view_controller_cls.selectors] == [
-            'viewDidLoad',
-            'didReceiveMemoryWarning',
-            'URLSession:didReceiveChallenge:completionHandler:'
+            "viewDidLoad",
+            "didReceiveMemoryWarning",
+            "URLSession:didReceiveChallenge:completionHandler:",
         ]
 
         dt_label_cls = [c for c in objc_parser.classes if c.name == "DTLabel"][0]

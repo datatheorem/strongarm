@@ -182,8 +182,8 @@ class MachoBinary:
         self.dyld_bound_symbols: Dict[VirtualMemoryPointer, DyldBoundSymbol] = {}
 
         if self._dyld_chained_fixups:
-            if _preprocess_chained_fixup_pointers:
-                # Dyld's chained fixups will be parsed, and fixup the underlying binary memory to contain valid pointers.
+            if _preprocess_chained_fixup_pointers:  # type: ignore
+                # Dyld's chained fixups will be parsed, and fix the underlying binary memory to contain valid pointers.
                 # Overwrite our internal memory with the overwritten data to keep things consistent and correct
                 self.dyld_bound_symbols, self._cached_binary = DyldInfoParser.preprocess_chained_fixups(self)
         else:

@@ -789,11 +789,3 @@ class MachoDyldChainedPtr64BindRaw(Structure):
         # == 1
         ("bind", c_uint64, 1),
     ]
-
-
-class MachoDyldChainedImportRaw(Structure):
-    _fields_ = [
-        ("lib_ordinal", c_uint32, 8),
-        ("weak_import", c_uint32, 1),
-        ("name_offset", c_uint32, 23),
-    ]

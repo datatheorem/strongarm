@@ -6,7 +6,9 @@
 
 Support parsing binaries with a minimum deployment target of iOS 15 that use the "chained fixup pointer" dyld format.
 
-This release is a breaking change. For binaries targeting iOS 15 and that use the "chained fixup pointer" dyld format,
+This release is a breaking change. 
+
+(New): For binaries targeting iOS 15 and that use the "chained fixup pointer" dyld format,
 strongarm will now do a two-step parse:
 
 1. strongarm will parse the binary enough to identify fixup pointer chains. 
@@ -37,8 +39,10 @@ with writer:
 writer.modified_binary.write_binary(Path(__file__) / "modified_binary")
 ```
 
-Also, fix a bug in which parsing an Objective-C protocol after parsing an Objective-C class implementing that protocol 
+(Fix): Fix a bug in which parsing an Objective-C protocol after parsing an Objective-C class implementing that protocol 
 may result in strongarm not reporting implementation pointers for the implemented selectors.
+
+(Breaking): Reduce memory usage by removing duplicated binary memory in `MachoSegment` and `MachoSection`.
 
 ## 2021-06-11 10.5.7
 

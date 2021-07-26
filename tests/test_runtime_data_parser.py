@@ -65,28 +65,28 @@ class TestObjcRuntimeDataParser:
         objc_parser = ObjcRuntimeDataParser(binary)
 
         correct_map = {
-            '_NSLog': '/System/Library/Frameworks/Foundation.framework/Foundation',
-            '_NSStringFromClass': '/System/Library/Frameworks/Foundation.framework/Foundation',
-            '_OBJC_CLASS_$_UIResponder': '/System/Library/Frameworks/UIKit.framework/UIKit',
-            '_OBJC_CLASS_$_UISceneConfiguration': '/System/Library/Frameworks/UIKit.framework/UIKit',
-            '_OBJC_CLASS_$_UIViewController': '/System/Library/Frameworks/UIKit.framework/UIKit',
-            '_OBJC_METACLASS_$_NSObject': '/usr/lib/libobjc.A.dylib',
-            '_OBJC_METACLASS_$_UIResponder': '/System/Library/Frameworks/UIKit.framework/UIKit',
-            '_OBJC_METACLASS_$_UIViewController': '/System/Library/Frameworks/UIKit.framework/UIKit',
-            '_UIApplicationMain': '/System/Library/Frameworks/UIKit.framework/UIKit',
-            '___CFConstantStringClassReference': '/System/Library/Frameworks/CoreFoundation.framework/CoreFoundation',
-            '__objc_empty_cache': '/usr/lib/libobjc.A.dylib',
-            '_objc_alloc': '/usr/lib/libobjc.A.dylib',
-            '_objc_autoreleasePoolPop': '/usr/lib/libobjc.A.dylib',
-            '_objc_autoreleasePoolPush': '/usr/lib/libobjc.A.dylib',
-            '_objc_autoreleaseReturnValue': '/usr/lib/libobjc.A.dylib',
-            '_objc_msgSend': '/usr/lib/libobjc.A.dylib',
-            '_objc_msgSendSuper2': '/usr/lib/libobjc.A.dylib',
-            '_objc_opt_class': '/usr/lib/libobjc.A.dylib',
-            '_objc_release': '/usr/lib/libobjc.A.dylib',
-            '_objc_retain': '/usr/lib/libobjc.A.dylib',
-            '_objc_retainAutoreleasedReturnValue': '/usr/lib/libobjc.A.dylib',
-            '_objc_storeStrong': '/usr/lib/libobjc.A.dylib'
+            "_NSLog": "/System/Library/Frameworks/Foundation.framework/Foundation",
+            "_NSStringFromClass": "/System/Library/Frameworks/Foundation.framework/Foundation",
+            "_OBJC_CLASS_$_UIResponder": "/System/Library/Frameworks/UIKit.framework/UIKit",
+            "_OBJC_CLASS_$_UISceneConfiguration": "/System/Library/Frameworks/UIKit.framework/UIKit",
+            "_OBJC_CLASS_$_UIViewController": "/System/Library/Frameworks/UIKit.framework/UIKit",
+            "_OBJC_METACLASS_$_NSObject": "/usr/lib/libobjc.A.dylib",
+            "_OBJC_METACLASS_$_UIResponder": "/System/Library/Frameworks/UIKit.framework/UIKit",
+            "_OBJC_METACLASS_$_UIViewController": "/System/Library/Frameworks/UIKit.framework/UIKit",
+            "_UIApplicationMain": "/System/Library/Frameworks/UIKit.framework/UIKit",
+            "___CFConstantStringClassReference": "/System/Library/Frameworks/CoreFoundation.framework/CoreFoundation",
+            "__objc_empty_cache": "/usr/lib/libobjc.A.dylib",
+            "_objc_alloc": "/usr/lib/libobjc.A.dylib",
+            "_objc_autoreleasePoolPop": "/usr/lib/libobjc.A.dylib",
+            "_objc_autoreleasePoolPush": "/usr/lib/libobjc.A.dylib",
+            "_objc_autoreleaseReturnValue": "/usr/lib/libobjc.A.dylib",
+            "_objc_msgSend": "/usr/lib/libobjc.A.dylib",
+            "_objc_msgSendSuper2": "/usr/lib/libobjc.A.dylib",
+            "_objc_opt_class": "/usr/lib/libobjc.A.dylib",
+            "_objc_release": "/usr/lib/libobjc.A.dylib",
+            "_objc_retain": "/usr/lib/libobjc.A.dylib",
+            "_objc_retainAutoreleasedReturnValue": "/usr/lib/libobjc.A.dylib",
+            "_objc_storeStrong": "/usr/lib/libobjc.A.dylib",
         }
         assert objc_parser._sym_to_dylib_path == correct_map
         for symbol in correct_map:
@@ -315,11 +315,11 @@ class TestObjcRuntimeDataParser:
         assert objc_parser.classes[0].selectors[0].name == "viewDidLoad"
         # And the selref/IMP pointers have been rewritten from
         # their original chained rebases to internal pointers
-        assert objc_parser.classes[0].selectors[0].implementation == 0x10000628c
+        assert objc_parser.classes[0].selectors[0].implementation == 0x10000628C
         assert objc_parser.classes[0].selectors[0].is_external_definition is False
         assert objc_parser.classes[0].selectors[0].selref.selector_literal == "viewDidLoad"
-        assert objc_parser.classes[0].selectors[0].selref.source_address == 0x10000d278
-        assert objc_parser.classes[0].selectors[0].selref.destination_address == 0x1000065ec
+        assert objc_parser.classes[0].selectors[0].selref.source_address == 0x10000D278
+        assert objc_parser.classes[0].selectors[0].selref.destination_address == 0x1000065EC
 
         # And the selref -> selector map looks valid
         # And the locally implemented selectors have their implementation pointers correctly set
@@ -327,21 +327,73 @@ class TestObjcRuntimeDataParser:
         selref_selector_map = objc_parser.selrefs_to_selectors()
         # (Use _name instead of name as the latter has a special meaning to the MagicMock constructor)
         correct_selref_attr_map = {
-            0x10000d218: MagicMock(spec=ObjcSelector, _name="application:didFinishLaunchingWithOptions:", implementation=0x1000062c0, is_external_definition=False),
-            0x10000d220: MagicMock(spec=ObjcSelector, _name="application:configurationForConnectingSceneSession:options:", implementation=0x10000632c, is_external_definition=False),
-            0x10000d228: MagicMock(spec=ObjcSelector, _name="application:didDiscardSceneSessions:", implementation=0x1000063bc, is_external_definition=False),
-            0x10000d230: MagicMock(spec=ObjcSelector, _name="scene:willConnectToSession:options:", implementation=0x100006438, is_external_definition=False),
-            0x10000d238: MagicMock(spec=ObjcSelector, _name="sceneDidDisconnect:", implementation=0x10000643c, is_external_definition=False),
-            0x10000d240: MagicMock(spec=ObjcSelector, _name="sceneDidBecomeActive:", implementation=0x100006440, is_external_definition=False),
-            0x10000d248: MagicMock(spec=ObjcSelector, _name="sceneWillResignActive:", implementation=0x100006444, is_external_definition=False),
-            0x10000d250: MagicMock(spec=ObjcSelector, _name="sceneWillEnterForeground:", implementation=0x100006448, is_external_definition=False),
-            0x10000d258: MagicMock(spec=ObjcSelector, _name="sceneDidEnterBackground:", implementation=0x10000644c, is_external_definition=False),
-            0x10000d260: MagicMock(spec=ObjcSelector, _name="window", implementation=0x100006450, is_external_definition=False),
-            0x10000d268: MagicMock(spec=ObjcSelector, _name="setWindow:", implementation=0x100006460, is_external_definition=False),
-            0x10000d270: MagicMock(spec=ObjcSelector, _name=".cxx_destruct", implementation=0x100006474, is_external_definition=False),
-            0x10000d278: MagicMock(spec=ObjcSelector, _name="viewDidLoad", implementation=0x10000628c, is_external_definition=False),
-            0x10000d280: MagicMock(spec=ObjcSelector, _name="role", implementation=None, is_external_definition=True),
-            0x10000d288: MagicMock(spec=ObjcSelector, _name="initWithName:sessionRole:", implementation=None, is_external_definition=True),
+            0x10000D218: MagicMock(
+                spec=ObjcSelector,
+                _name="application:didFinishLaunchingWithOptions:",
+                implementation=0x1000062C0,
+                is_external_definition=False,
+            ),
+            0x10000D220: MagicMock(
+                spec=ObjcSelector,
+                _name="application:configurationForConnectingSceneSession:options:",
+                implementation=0x10000632C,
+                is_external_definition=False,
+            ),
+            0x10000D228: MagicMock(
+                spec=ObjcSelector,
+                _name="application:didDiscardSceneSessions:",
+                implementation=0x1000063BC,
+                is_external_definition=False,
+            ),
+            0x10000D230: MagicMock(
+                spec=ObjcSelector,
+                _name="scene:willConnectToSession:options:",
+                implementation=0x100006438,
+                is_external_definition=False,
+            ),
+            0x10000D238: MagicMock(
+                spec=ObjcSelector, _name="sceneDidDisconnect:", implementation=0x10000643C, is_external_definition=False
+            ),
+            0x10000D240: MagicMock(
+                spec=ObjcSelector,
+                _name="sceneDidBecomeActive:",
+                implementation=0x100006440,
+                is_external_definition=False,
+            ),
+            0x10000D248: MagicMock(
+                spec=ObjcSelector,
+                _name="sceneWillResignActive:",
+                implementation=0x100006444,
+                is_external_definition=False,
+            ),
+            0x10000D250: MagicMock(
+                spec=ObjcSelector,
+                _name="sceneWillEnterForeground:",
+                implementation=0x100006448,
+                is_external_definition=False,
+            ),
+            0x10000D258: MagicMock(
+                spec=ObjcSelector,
+                _name="sceneDidEnterBackground:",
+                implementation=0x10000644C,
+                is_external_definition=False,
+            ),
+            0x10000D260: MagicMock(
+                spec=ObjcSelector, _name="window", implementation=0x100006450, is_external_definition=False
+            ),
+            0x10000D268: MagicMock(
+                spec=ObjcSelector, _name="setWindow:", implementation=0x100006460, is_external_definition=False
+            ),
+            0x10000D270: MagicMock(
+                spec=ObjcSelector, _name=".cxx_destruct", implementation=0x100006474, is_external_definition=False
+            ),
+            0x10000D278: MagicMock(
+                spec=ObjcSelector, _name="viewDidLoad", implementation=0x10000628C, is_external_definition=False
+            ),
+            0x10000D280: MagicMock(spec=ObjcSelector, _name="role", implementation=None, is_external_definition=True),
+            0x10000D288: MagicMock(
+                spec=ObjcSelector, _name="initWithName:sessionRole:", implementation=None, is_external_definition=True
+            ),
         }
         for selref_addr, correct_sel in correct_selref_attr_map.items():
             actual_sel = selref_selector_map[selref_addr]

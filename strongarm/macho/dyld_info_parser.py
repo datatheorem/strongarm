@@ -119,6 +119,9 @@ class DyldInfoParser:
         # referring to. Since we'll be making many such writes, use a MachoBinaryWriter to do them more efficiently.
         writer = MachoBinaryWriter(binary)
         with writer:
+            # When applying our writes and re-parsing the Mach-O, do not try to process chained pointers again
+            writer._preprocess_chained_fixup_pointers = False
+
             for segment_idx in range(chained_starts_in_image.seg_count):
                 # Read entry of variable-length array of words. See comment in MachoDyldChainedStartsInImageRaw
                 starts_in_seg_struct_offset = binary.read_word(

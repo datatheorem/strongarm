@@ -24,7 +24,7 @@ def install_capstone():
             [
                 "apt-get",
                 "install",
-                "libcapstone3",
+                "libcapstone4",
                 "libcapstone-dev",
                 "sqlite3",
                 "libsqlite3-dev",

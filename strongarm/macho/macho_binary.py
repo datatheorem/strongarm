@@ -172,6 +172,7 @@ class MachoBinary:
         logging.debug(self, f"parsed symtab, len = {len(self.symtab_contents)}")
 
         from .dyld_info_parser import DyldBoundSymbol, DyldInfoParser
+
         self.dyld_bound_symbols: Dict[VirtualMemoryPointer, DyldBoundSymbol] = {}
         self.dyld_rebased_pointers: Dict[VirtualMemoryPointer, VirtualMemoryPointer] = {}
 

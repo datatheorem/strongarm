@@ -46,11 +46,11 @@ class DyldBoundSymbol:
 
 
 class DyldInfoParser:
-    """Wraps up the logic to parse __LINKEDIT data so that we can make sense of rebased and bound dyld symbols.
+    """Wraps up the logic to parse __LINKEDIT data so that we can make sense of rebased pointers and bound dyld symbols.
     On < iOS 15 binaries:
-        Parses the dyld bytecode stream and extract dyld stub addresses to the DyldBoundSymbol they represent
+        Parses the dyld bytecode stream and extract dyld bound addresses to the DyldBoundSymbol they represent
     On >= iOS 15 binaries:
-        Parses the chained fixup pointers and rewrites the underlying binary memory to contain the fixed-up pointers
+        Parses the chained fixup pointers and generates a map of rebased pointer locations to their values
         Also creates the map of dyld import addresses to the corresponding DyldBoundSymbol
     """
 

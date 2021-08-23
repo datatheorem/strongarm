@@ -3,7 +3,7 @@ import math
 from ctypes import c_uint32, c_uint64, sizeof
 from distutils.version import LooseVersion
 from pathlib import Path
-from typing import TYPE_CHECKING, Any, Dict, List, Optional, Set, Tuple, Type, TypeVar
+from typing import TYPE_CHECKING, Any, Dict, List, Optional, Set, Tuple, Type, TypeVar, Union
 
 from _ctypes import Structure
 
@@ -127,7 +127,6 @@ class MachoBinary:
         path: Path,
         binary_data: bytes,
         file_offset: Optional[StaticFilePointer] = None,
-        _preprocess_chained_fixup_pointers: bool = True,
     ) -> None:
         """Parse the bytes representing a Mach-O file.
         """
@@ -180,14 +179,16 @@ class MachoBinary:
         from .dyld_info_parser import DyldBoundSymbol, DyldInfoParser
 
         self.dyld_bound_symbols: Dict[VirtualMemoryPointer, DyldBoundSymbol] = {}
+        self.dyld_rebased_pointers: Dict[VirtualMemoryPointer, VirtualMemoryPointer] = {}
 
         if self._dyld_chained_fixups:
-            if _preprocess_chained_fixup_pointers:  # type: ignore
-                # Dyld's chained fixups will be parsed, and fix the underlying binary memory to contain valid pointers.
-                # Overwrite our internal memory with the overwritten data to keep things consistent and correct
-                self.dyld_bound_symbols, self._cached_binary = DyldInfoParser.preprocess_chained_fixups(self)
+            self.dyld_rebased_pointers, self.dyld_bound_symbols = DyldInfoParser.parse_chained_fixups(self)
         else:
             self.dyld_bound_symbols = DyldInfoParser.parse_dyld_info(self)
+
+        print()
+        print(self.dyld_rebased_pointers)
+        print()
 
     def __repr__(self) -> str:
         return f"<MachoBinary binary={self.path}>"
@@ -357,6 +358,29 @@ class MachoBinary:
         backing_layout = struct_type.get_backing_data_layout(self.is_64bit, self.get_minimum_deployment_target())
         data = self.get_contents_from_address(address=binary_offset, size=sizeof(backing_layout), is_virtual=virtual)
         return struct_type(binary_offset, data, backing_layout)
+
+    def read_struct_with_rebased_pointers(self, binary_offset: int, struct_type: Type[AIS], virtual: bool = False) -> AIS:
+        """Read a static binary structure that may contain rebased pointers.
+        For each uint64_t within the structure, check if we know that this pointer should be rebased.
+        If so, the static data here may be a packed chained fixup pointer, rather than a pointer we can follow.
+        In this case, update the pointer to contain the value to be rebased, so that the pointer can be followed.
+        """
+        backing_layout = struct_type.get_backing_data_layout(self.is_64bit, self.get_minimum_deployment_target())
+        data = self.get_contents_from_address(address=binary_offset, size=sizeof(backing_layout), is_virtual=virtual)
+        s = struct_type(binary_offset, data, backing_layout)
+
+        # Check each c_uint64/c_ulong to see if we know about a rebase for it. If so, apply it
+        base_virt_offset = binary_offset
+        if not virtual:
+            base_virt_offset += self.get_virtual_base()
+        for field_name, field_type, *_ in backing_layout._fields_:
+            field_offset = getattr(getattr(backing_layout, field_name), "offset")
+            field_address = base_virt_offset + field_offset
+            if field_type == c_uint64 and field_address in self.dyld_rebased_pointers:
+                logging.debug(f'Setting rebased pointer within {struct_type}+{field_offset} -> {self.dyld_rebased_pointers[field_address]} at {field_address}')
+                setattr(s, field_name, self.dyld_rebased_pointers[field_address])
+
+        return s
 
     def section_name_for_address(self, virt_addr: VirtualMemoryPointer) -> Optional[str]:
         """Given an address in the virtual address space, return the name of the section which contains it.
@@ -717,11 +741,18 @@ class MachoBinary:
 
         for i in range(pointer_count):
             # convert section offset of entry to absolute virtual address
-            locations.append(VirtualMemoryPointer(section_base + pointer_off))
+            ptr_location = VirtualMemoryPointer(section_base + pointer_off)
+            locations.append(ptr_location)
 
-            data_end = pointer_off + sizeof(binary_word)
-            val = binary_word.from_buffer(bytearray(section_data[pointer_off:data_end])).value
-            entries.append(VirtualMemoryPointer(val))
+            if ptr_location in self.dyld_rebased_pointers:
+                ptr_value = self.dyld_rebased_pointers[ptr_location]
+                logging.error(f'Pointer is rebased: {ptr_location} -> {ptr_value}')
+            else:
+                data_end = pointer_off + sizeof(binary_word)
+                ptr_value = VirtualMemoryPointer(binary_word.from_buffer(bytearray(section_data[pointer_off:data_end])).value)
+                logging.error(f'Pointer was not in the rebase list: {ptr_location} -> {ptr_value}')
+
+            entries.append(VirtualMemoryPointer(ptr_value))
 
             pointer_off += sizeof(binary_word)
 
@@ -742,6 +773,16 @@ class MachoBinary:
             raise InvalidAddressError(f"Could not read word at address {hex(address)}")
 
         return word_type.from_buffer(bytearray(file_bytes)).value
+
+    def read_rebased_pointer(self, address: VirtualMemoryPointer) -> VirtualMemoryPointer:
+        """Attempt to read a rebased pointer from the binary at a virtual address.
+        The pointer is assumed to be the platform word size.
+        """
+        if address not in self.dyld_rebased_pointers:
+            # This may be a pre-iOS 15 binary for which we don't record rebases
+            return VirtualMemoryPointer(self.read_word(address, virtual=True, word_type=self.platform_word_type))
+
+        return self.dyld_rebased_pointers[address]
 
     @property
     def header(self) -> MachoHeaderStruct:

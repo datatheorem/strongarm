@@ -8,16 +8,13 @@ Support parsing binaries with a minimum deployment target of iOS 15 that use the
 
 This release is a breaking change. 
 
-(New): For binaries targeting iOS 15 and that use the "chained fixup pointer" dyld format,
-strongarm will now do a two-step parse:
+(New): strongarm will now track the locations of rebases and will parse structures containing internal rebased pointers with fixups applied.
 
-1. strongarm will parse the binary enough to identify fixup pointer chains. 
+(Breaking): Reduce memory usage by removing duplicated binary memory in `MachoSection.content` and `MachoSegment.content`. Read the memory directly from the binary if you need to access it, as these were always direct copies.
 
-2. strongarm will rewrite its underlying copy of the binary memory to fixup chained rebases to their binary-local pointer values.
+(New): `MachoAnalyzer.stringref_for_string` is now more efficient, as C strings and CFStrings are now parsed as a whole when analysis begins.
 
-3. strongarm will re-parse the binary with these changes.
-
-To facilitate this, `MachoBinaryWriter` has been added to facilitate several binary modifications at once without triggering a binary parse per modification.
+(New): `MachoBinaryWriter` has been added to facilitate several binary modifications at once without triggering a binary parse per modification.
 
 Use it like so:
 
@@ -41,8 +38,6 @@ writer.modified_binary.write_binary(Path(__file__) / "modified_binary")
 
 (Fix): Fix a bug in which parsing an Objective-C protocol after parsing an Objective-C class implementing that protocol 
 may result in strongarm not reporting implementation pointers for the implemented selectors.
-
-(Breaking): Reduce memory usage by removing duplicated binary memory in `MachoSegment` and `MachoSection`.
 
 ## 2021-06-11 10.5.7
 

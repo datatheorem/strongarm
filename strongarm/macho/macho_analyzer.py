@@ -169,6 +169,8 @@ class MachoAnalyzer:
         self.imp_stubs = MachoImpStubsParser(binary, self.cs).imp_stubs
         self._objc_helper: Optional[ObjcRuntimeDataParser] = None
         self._objc_method_list: List[ObjcMethodInfo] = []
+        self._cfstring_to_stringref_map: Dict[str, VirtualMemoryPointer] = {}
+        self._cstring_to_stringref_map: Dict[str, VirtualMemoryPointer] = {}
 
         # Use a temporary database to store cross-referenced data. This provides constant-time lookups for things like
         # finding all the calls to a particular function.
@@ -182,6 +184,9 @@ class MachoAnalyzer:
 
         self._build_callable_symbol_index()
         self._build_function_boundaries_index()
+
+        self._build_cfstring_map()
+        self._build_cstring_map()
 
         # Done setting up, store this analyzer in class cache
         MachoAnalyzer._ANALYZER_CACHE[binary] = self
@@ -688,12 +693,7 @@ class MachoAnalyzer:
         # This method should cache its result.
         return self._strings_in_section("__cstring")
 
-    def _stringref_for_cstring(self, string: str) -> Optional[VirtualMemoryPointer]:
-        """Try to find the stringref in __cstrings for a provided C string.
-        If the string is not present in the __cstrings section, this method returns None.
-        """
-        # TODO(PT): This is SLOW and WASTEFUL!!!
-        # These transformations should be done ONCE on initial analysis!
+    def _build_cstring_map(self):
         strings_section = self.binary.section_with_name("__cstring", "__TEXT")
         if not strings_section:
             return None
@@ -705,24 +705,24 @@ class MachoAnalyzer:
         string_table = list(strings_content)
         transformed_strings = MachoStringTableHelper.transform_string_section(string_table)
         for idx, entry in transformed_strings.items():
-            if entry.full_string == string:
-                # found the string we're looking for
-                # the address is the base of __cstring plus the index of the entry
-                stringref_address = strings_base + idx
-                return stringref_address
+            # Address is the base of __cstring plus the index of the entry
+            stringref_address = VirtualMemoryPointer(strings_base + idx)
+            self._cstring_to_stringref_map[entry.full_string] = stringref_address
 
-        # didn't find the string the user requested
-        return None
-
-    def _stringref_for_cfstring(self, string: str) -> Optional[VirtualMemoryPointer]:
-        """Try to find the stringref in __cfstrings for a provided Objective-C string literal.
-        If the string is not present in the __cfstrings section, this method returns None.
+    def _stringref_for_cstring(self, string: str) -> Optional[VirtualMemoryPointer]:
+        """Try to find the stringref in __cstrings for a provided C string.
+        If the string is not present in the __cstrings section, this method returns None.
         """
-        # TODO(PT): This is SLOW and WASTEFUL!!!
-        # These transformations should be done ONCE on initial analysis!
+        if string not in self._cstring_to_stringref_map:
+            return None
+        return self._cstring_to_stringref_map[string]
+
+    def _build_cfstring_map(self):
         cfstrings_section = self.binary.section_with_name("__cfstring", "__DATA")
         if not cfstrings_section:
-            return None
+            cfstrings_section = self.binary.section_with_name("__cfstring", "__DATA_CONST")
+            if not cfstrings_section:
+                return
 
         sizeof_cfstring = sizeof(CFString64) if self.binary.is_64bit else sizeof(CFString32)
         cfstrings_base = cfstrings_section.address
@@ -730,14 +730,18 @@ class MachoAnalyzer:
         cfstrings_count = int((cfstrings_section.end_address - cfstrings_section.address) / sizeof_cfstring)
         for i in range(cfstrings_count):
             cfstring_addr = cfstrings_base + (i * sizeof_cfstring)
-            cfstring = self.binary.read_struct(cfstring_addr, CFStringStruct, virtual=True)
+            cfstring = self.binary.read_struct_with_rebased_pointers(cfstring_addr, CFStringStruct, virtual=True)
+            literal = self.binary.read_string_at_address(cfstring.literal)
+            if literal:
+                self._cfstring_to_stringref_map[literal] = VirtualMemoryPointer(cfstring_addr)
 
-            # check if this is the string the user requested
-            string_address = cfstring.literal
-            if self.binary.read_string_at_address(string_address) == string:
-                return VirtualMemoryPointer(cfstring_addr)
-
-        return None
+    def _stringref_for_cfstring(self, string: str) -> Optional[VirtualMemoryPointer]:
+        """Try to find the stringref in __cfstrings for a provided Objective-C string literal.
+        If the string is not present in the __cfstrings section, this method returns None.
+        """
+        if string not in self._cfstring_to_stringref_map:
+            return None
+        return self._cfstring_to_stringref_map[string]
 
     def stringref_for_string(self, string: str) -> Optional[VirtualMemoryPointer]:
         """Try to find the stringref for a provided string.

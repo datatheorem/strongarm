@@ -401,7 +401,7 @@ class ObjcRuntimeDataParser:
         # Parse each ivar struct which follows the ivarlist
         ivar_struct_ptr = ivarlist_ptr + ivarlist.sizeof
         for _ in range(ivarlist.count):
-            ivar_struct = self.binary.read_struct(ivar_struct_ptr, ObjcIvarStruct, virtual=True)
+            ivar_struct = self.binary.read_struct_with_rebased_pointers(ivar_struct_ptr, ObjcIvarStruct, virtual=True)
 
             ivar_name = self.binary.get_full_string_from_start_address(ivar_struct.name)
             class_name = self.binary.get_full_string_from_start_address(ivar_struct.type)
@@ -536,7 +536,8 @@ class ObjcRuntimeDataParser:
         # pointers start directly after the 'count' field
         addr = protolist.binary_offset + protolist.sizeof
         for i in range(protolist.count):
-            pointer = self.binary.read_word(addr)
+            # This pointer may be rebased
+            pointer = self.binary.read_rebased_pointer(addr)
             protocol_pointers.append(VirtualMemoryPointer(pointer))
             # step to next protocol pointer in list
             addr += sizeof(self.binary.platform_word_type)
@@ -574,19 +575,19 @@ class ObjcRuntimeDataParser:
     ) -> ObjcCategoryRawStruct:
         """Read a struct __objc_category from the location indicated by the provided __objc_catlist pointer
         """
-        category_entry = self.binary.read_struct(category_struct_pointer, ObjcCategoryRawStruct, virtual=True)
+        category_entry = self.binary.read_struct_with_rebased_pointers(category_struct_pointer, ObjcCategoryRawStruct, virtual=True)
         return category_entry
 
     def _get_objc_protocol_from_pointer(self, protocol_struct_pointer: VirtualMemoryPointer) -> ObjcProtocolRawStruct:
         """Read a struct __objc_protocol from the location indicated by the provided struct objc_protocol_list pointer
         """
-        protocol_entry = self.binary.read_struct(protocol_struct_pointer, ObjcProtocolRawStruct, virtual=True)
+        protocol_entry = self.binary.read_struct_with_rebased_pointers(protocol_struct_pointer, ObjcProtocolRawStruct, virtual=True)
         return protocol_entry
 
     def _get_objc_class_from_classlist_pointer(self, class_struct_pointer: VirtualMemoryPointer) -> ObjcClassRawStruct:
         """Read a struct __objc_class from the location indicated by the __objc_classlist pointer
         """
-        class_entry = self.binary.read_struct(class_struct_pointer, ObjcClassRawStruct, virtual=True)
+        class_entry = self.binary.read_struct_with_rebased_pointers(class_struct_pointer, ObjcClassRawStruct, virtual=True)
 
         # sanitize class_entry
         # the least significant 2 bits are used for flags
@@ -599,7 +600,7 @@ class ObjcRuntimeDataParser:
         """Read a struct __objc_data from a provided struct __objc_class
         If the struct __objc_class describe invalid or no corresponding data, None will be returned.
         """
-        data_entry = self.binary.read_struct(objc_class.data, ObjcDataRawStruct, virtual=True)
+        data_entry = self.binary.read_struct_with_rebased_pointers(objc_class.data, ObjcDataRawStruct, virtual=True)
         # ensure this is a valid entry
         if data_entry.name < self.binary.get_virtual_base():
             # TODO(PT): sometimes we'll get addresses passed to this method that are actually struct __objc_method

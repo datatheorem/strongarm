@@ -26,7 +26,7 @@ Prior to dyld performing the operations (i.e. what strongarm sees), this is the 
 
     * If ASLR loads the binary at 0x230000000, the pointer at 0x230005000 will be rebased to contain the address 0x23000f000.
 
-* Each pointer that is to be bound contains a dummy value of 0x00000000
+* Each pointer that is to be bound contains 0x00000000, or a small offset (named an 'addend', but this isn't hugely important)
 
   * Be careful, Hopper will lie and pretend that these addresses contain a pointer to an address within Hopper’s fake “External Symbols” section. Switch to hex-editor mode to show that they’re really zeroes.
 
@@ -58,5 +58,4 @@ Prior to dyld performing the operations (i.e. what strongarm sees), this is the 
 
     * A bit indicating that this is a bind, not a rebase
 
-Since strongarm has long assumed that rebases contain valid pointers, and not the “garbage pointer” that a fixup appears to be at first glance, I’ve changed strongarm such that the first thing it does is rewrite chains of rebases to contain the pre-iOS-15-style addresses. The binary is then re-parsed as normal.
-
+strongarm has long assumed that rebases contain valid pointers that can be followed in the static data, and not the "garbage pointer" that aa fixup appears to be at first glance. I've changed strongarm such that it now keeps track of rebase locations, and provides APIs to parse structures containing rebases and to query rebase locations.

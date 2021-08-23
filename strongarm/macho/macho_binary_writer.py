@@ -16,9 +16,6 @@ class MachoBinaryWriter:
         self.binary = binary
         self.modified_binary = binary
         self.queued_writes: List[MachoBinaryQueuedWrite] = []
-        # Special flag to support re-parsing a binary after rewriting iOS 15's chained fixup pointers
-        # This flag will be set to False when rewriting chained pointers to avoid trying to do the same work forever
-        self._preprocess_chained_fixup_pointers = True
 
     def __enter__(self) -> None:
         pass
@@ -33,7 +30,6 @@ class MachoBinaryWriter:
         self.modified_binary = MachoBinary(
             self.binary.path,
             new_binary_data,
-            _preprocess_chained_fixup_pointers=self._preprocess_chained_fixup_pointers,
         )
         return False
 

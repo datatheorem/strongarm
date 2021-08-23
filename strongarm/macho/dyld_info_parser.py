@@ -83,12 +83,12 @@ class DyldInfoParser:
         return dyld_bound_symbols
 
     @staticmethod
-    def preprocess_chained_fixups(binary: MachoBinary) -> Tuple[Dict[VirtualMemoryPointer, DyldBoundSymbol], bytes]:
+    def parse_chained_fixups(binary: MachoBinary) -> Tuple[Dict[VirtualMemoryPointer, VirtualMemoryPointer], Dict[VirtualMemoryPointer, DyldBoundSymbol]]:
         """Parses the chained fixup pointer data in __LINKEDIT
         Returns:
             Tuple[
-                Dict[dyld bound address, corresponding DyldBoundSymbol],
-                bytes representing the modified binary memory, with rebases fixed up to contain pointer values
+                Dict[address containing a pointer needing to be rebased, destination assuming the stated virtual base],
+                Dict[address containing a pointer that needs to be bound at load time, corresponding DyldBoundSymbol],
             ]
         """
         if not binary._dyld_chained_fixups:
@@ -119,56 +119,54 @@ class DyldInfoParser:
 
         # While processing rebases, we'll need to overwrite the rebase fixup pointer with the internal pointer it's
         # referring to. Since we'll be making many such writes, use a MachoBinaryWriter to do them more efficiently.
-        writer = MachoBinaryWriter(binary)
-        with writer:
-            # When applying our writes and re-parsing the Mach-O, do not try to process chained pointers again
-            writer._preprocess_chained_fixup_pointers = False
+        rebases: Dict[VirtualMemoryPointer, VirtualMemoryPointer] = {}
+        for segment_idx in range(chained_starts_in_image.seg_count):
+            # Read entry of variable-length array of words. See comment in MachoDyldChainedStartsInImageRaw
+            starts_in_seg_struct_offset = binary.read_word(
+                chained_starts_in_seg_offsets_base + (segment_idx * sizeof(c_uint32)),
+                virtual=False,
+                word_type=c_uint32,
+            )
+            # Skip segments that don't contain chains
+            if starts_in_seg_struct_offset == 0:
+                continue
 
-            for segment_idx in range(chained_starts_in_image.seg_count):
-                # Read entry of variable-length array of words. See comment in MachoDyldChainedStartsInImageRaw
-                starts_in_seg_struct_offset = binary.read_word(
-                    chained_starts_in_seg_offsets_base + (segment_idx * sizeof(c_uint32)),
-                    virtual=False,
-                    word_type=c_uint32,
+            starts_in_seg_addr = chained_starts_in_image_off + starts_in_seg_struct_offset
+            chained_starts_in_seg = binary.read_struct(starts_in_seg_addr, MachoDyldChainedStartsInSegment)
+            logging.debug(
+                f"ChainedStartsInSegment\tsegment {segment_idx}\t"
+                f"pointer_fmt {chained_starts_in_seg.pointer_format}\tpage count {chained_starts_in_seg.page_count}"
+            )
+
+            offset_in_page_start = starts_in_seg_addr + chained_starts_in_seg.sizeof
+            for page_idx in range(chained_starts_in_seg.page_count):
+                # Read entry of variable-length array of words. See comment in MachoDyldChainedStartsInSegmentRaw
+                offset_in_page = binary.read_word(
+                    offset_in_page_start + (page_idx * sizeof(c_uint16)), virtual=False, word_type=c_uint16
                 )
-                # Skip segments that don't contain chains
-                if starts_in_seg_struct_offset == 0:
-                    continue
+                logging.debug(f"\tPageIdx {page_idx}, offset in page {hex(offset_in_page)}")
 
-                starts_in_seg_addr = chained_starts_in_image_off + starts_in_seg_struct_offset
-                chained_starts_in_seg = binary.read_struct(starts_in_seg_addr, MachoDyldChainedStartsInSegment)
-                logging.debug(
-                    f"ChainedStartsInSegment\tsegment {segment_idx}\t"
-                    f"pointer_fmt {chained_starts_in_seg.pointer_format}\tpage count {chained_starts_in_seg.page_count}"
+                chain_base = (
+                    chained_starts_in_seg.segment_offset
+                    + (page_idx * chained_starts_in_seg.page_size)
+                    + offset_in_page
                 )
+                # Process this chain of fixup pointers
+                rebases_in_chain, bound_addresses_in_chain = DyldInfoParser._process_fixup_pointer_chain(
+                    binary, dyld_bound_symbols, chain_base
+                )
+                rebases.update(rebases_in_chain)
+                dyld_bound_addresses_to_symbols.update(bound_addresses_in_chain)
 
-                offset_in_page_start = starts_in_seg_addr + chained_starts_in_seg.sizeof
-                for page_idx in range(chained_starts_in_seg.page_count):
-                    # Read entry of variable-length array of words. See comment in MachoDyldChainedStartsInSegmentRaw
-                    offset_in_page = binary.read_word(
-                        offset_in_page_start + (page_idx * sizeof(c_uint16)), virtual=False, word_type=c_uint16
-                    )
-                    logging.debug(f"\tPageIdx {page_idx}, offset in page {hex(offset_in_page)}")
-
-                    chain_base = (
-                        chained_starts_in_seg.segment_offset
-                        + (page_idx * chained_starts_in_seg.page_size)
-                        + offset_in_page
-                    )
-                    # Process this chain of fixup pointers
-                    bound_addresses_in_chain = DyldInfoParser._process_fixup_pointer_chain(
-                        writer, dyld_bound_symbols, chain_base
-                    )
-                    dyld_bound_addresses_to_symbols.update(bound_addresses_in_chain)
-
-        return dyld_bound_addresses_to_symbols, writer.modified_binary._cached_binary
+        return rebases, dyld_bound_addresses_to_symbols
 
     @staticmethod
     def _process_fixup_pointer_chain(
-        writer: MachoBinaryWriter, dyld_bound_symbols_table: List[DyldBoundSymbol], chain_base: VirtualMemoryPointer
-    ) -> Dict[VirtualMemoryPointer, DyldBoundSymbol]:
-        binary = writer.binary
+        binary: MachoBinary, dyld_bound_symbols_table: List[DyldBoundSymbol], chain_base: VirtualMemoryPointer
+    ) -> Tuple[Dict[VirtualMemoryPointer, VirtualMemoryPointer], Dict[VirtualMemoryPointer, DyldBoundSymbol]]:
+        rebased_pointers: Dict[VirtualMemoryPointer, VirtualMemoryPointer] = {}
         dyld_bound_addresses_to_symbols: Dict[VirtualMemoryPointer, DyldBoundSymbol] = {}
+        virtual_base = binary.get_virtual_base()
         # As each fixup pointer will tell us whether there are any more to follow, loop forever
         # XXX(PT): Impose an upper bound on this loop, just in case
         for _ in range(10000):
@@ -184,18 +182,17 @@ class DyldInfoParser:
                     f"next {chained_bind_ptr.next}\tsymbol {bound_symbol.name}\t\t"
                     f"dylib {binary.dylib_name_for_library_ordinal(bound_symbol.library_ordinal)}"
                 )
-                dyld_bound_addresses_to_symbols[chain_base + binary.get_virtual_base()] = bound_symbol
+                dyld_bound_addresses_to_symbols[chain_base + virtual_base] = bound_symbol
                 chain_base += chained_bind_ptr.next * 4
             else:
                 # Rebase. Overwrite the fixup pointer with the internal binary pointer it refers to
+                # Rebase. Keep track that there's a rebased pointer here
                 chained_ptr_raw = binary.read_word(chain_base, word_type=c_uint64, virtual=False)
                 logging.debug(
                     f"\t\t{hex(chain_base)}: DyldChainedPtr64Rebase(raw: {hex(chained_ptr_raw)}) "
                     f"target={StaticFilePointer(chained_rebase_ptr.target)}"
                 )
-                writer.write_word(
-                    c_uint64(chained_rebase_ptr.target + binary.get_virtual_base()), chain_base, virtual=False,
-                )
+                rebased_pointers[VirtualMemoryPointer(chain_base + virtual_base)] = VirtualMemoryPointer(chained_rebase_ptr.target + virtual_base)
                 chain_base += chained_rebase_ptr.next * 4
 
             # Reached the end of the chain?
@@ -204,7 +201,7 @@ class DyldInfoParser:
         else:
             raise ValueError("Failed to find end of fixup pointer chain")
 
-        return dyld_bound_addresses_to_symbols
+        return rebased_pointers, dyld_bound_addresses_to_symbols
 
     @staticmethod
     def read_uleb(data: bytearray, offset: int) -> Tuple[int, int]:

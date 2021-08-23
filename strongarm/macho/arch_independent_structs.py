@@ -277,11 +277,12 @@ class ObjcMethodStruct(ArchIndependentStructure):
                 field_offset = getattr(getattr(struct_type, field_name), "offset")
                 field_address = address + field_offset
                 if field_type == c_uint64 and field_address in binary.dyld_rebased_pointers:
+                    pointer_value = binary.dyld_rebased_pointers[field_address]
                     logging.debug(
                         f"Setting rebased pointer within {struct_type}+{field_offset} -> "
-                        f"{binary.dyld_rebased_pointers[field_address]} at {field_address}"
+                        f"{pointer_value} at {field_address}"
                     )
-                    setattr(method_ent, field_name, binary.dyld_rebased_pointers[field_address])
+                    setattr(method_ent, field_name, pointer_value)
 
         return method_ent
 

@@ -743,13 +743,13 @@ class MachoBinary:
 
             if ptr_location in self.dyld_rebased_pointers:
                 ptr_value = self.dyld_rebased_pointers[ptr_location]
-                logging.error(f"Pointer is rebased: {ptr_location} -> {ptr_value}")
+                logging.debug(f"Pointer is rebased: {ptr_location} -> {ptr_value}")
             else:
                 data_end = pointer_off + sizeof(binary_word)
                 ptr_value = VirtualMemoryPointer(
                     binary_word.from_buffer(bytearray(section_data[pointer_off:data_end])).value
                 )
-                logging.error(f"Pointer was not in the rebase list: {ptr_location} -> {ptr_value}")
+                logging.debug(f"Pointer was not in the rebase list: {ptr_location} -> {ptr_value}")
 
             entries.append(VirtualMemoryPointer(ptr_value))
 

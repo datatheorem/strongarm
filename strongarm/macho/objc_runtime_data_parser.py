@@ -534,7 +534,7 @@ class ObjcRuntimeDataParser:
         protolist = self.binary.read_struct(protolist_ptr, ObjcProtocolListStruct, virtual=True)
         protocol_pointers: List[VirtualMemoryPointer] = []
         # pointers start directly after the 'count' field
-        addr = protolist.binary_offset + protolist.sizeof
+        addr = VirtualMemoryPointer(protolist.binary_offset + protolist.sizeof)
         for i in range(protolist.count):
             # This pointer may be rebased
             pointer = self.binary.read_rebased_pointer(addr)
@@ -575,19 +575,25 @@ class ObjcRuntimeDataParser:
     ) -> ObjcCategoryRawStruct:
         """Read a struct __objc_category from the location indicated by the provided __objc_catlist pointer
         """
-        category_entry = self.binary.read_struct_with_rebased_pointers(category_struct_pointer, ObjcCategoryRawStruct, virtual=True)
+        category_entry = self.binary.read_struct_with_rebased_pointers(
+            category_struct_pointer, ObjcCategoryRawStruct, virtual=True
+        )
         return category_entry
 
     def _get_objc_protocol_from_pointer(self, protocol_struct_pointer: VirtualMemoryPointer) -> ObjcProtocolRawStruct:
         """Read a struct __objc_protocol from the location indicated by the provided struct objc_protocol_list pointer
         """
-        protocol_entry = self.binary.read_struct_with_rebased_pointers(protocol_struct_pointer, ObjcProtocolRawStruct, virtual=True)
+        protocol_entry = self.binary.read_struct_with_rebased_pointers(
+            protocol_struct_pointer, ObjcProtocolRawStruct, virtual=True
+        )
         return protocol_entry
 
     def _get_objc_class_from_classlist_pointer(self, class_struct_pointer: VirtualMemoryPointer) -> ObjcClassRawStruct:
         """Read a struct __objc_class from the location indicated by the __objc_classlist pointer
         """
-        class_entry = self.binary.read_struct_with_rebased_pointers(class_struct_pointer, ObjcClassRawStruct, virtual=True)
+        class_entry = self.binary.read_struct_with_rebased_pointers(
+            class_struct_pointer, ObjcClassRawStruct, virtual=True
+        )
 
         # sanitize class_entry
         # the least significant 2 bits are used for flags

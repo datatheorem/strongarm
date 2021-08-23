@@ -27,10 +27,7 @@ class MachoBinaryWriter:
         for write in self.queued_writes:
             new_binary_data[write.file_offset : write.file_offset + len(write.bytes_to_write)] = write.bytes_to_write
 
-        self.modified_binary = MachoBinary(
-            self.binary.path,
-            new_binary_data,
-        )
+        self.modified_binary = MachoBinary(self.binary.path, new_binary_data,)
         return False
 
     def write_word(self, word: Union[c_uint32, c_uint64], address: int, virtual: bool = True) -> None:

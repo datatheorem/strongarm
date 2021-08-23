@@ -83,7 +83,9 @@ class DyldInfoParser:
         return dyld_bound_symbols
 
     @staticmethod
-    def parse_chained_fixups(binary: MachoBinary) -> Tuple[Dict[VirtualMemoryPointer, VirtualMemoryPointer], Dict[VirtualMemoryPointer, DyldBoundSymbol]]:
+    def parse_chained_fixups(
+        binary: MachoBinary,
+    ) -> Tuple[Dict[VirtualMemoryPointer, VirtualMemoryPointer], Dict[VirtualMemoryPointer, DyldBoundSymbol]]:
         """Parses the chained fixup pointer data in __LINKEDIT
         Returns:
             Tuple[
@@ -147,9 +149,7 @@ class DyldInfoParser:
                 logging.debug(f"\tPageIdx {page_idx}, offset in page {hex(offset_in_page)}")
 
                 chain_base = (
-                    chained_starts_in_seg.segment_offset
-                    + (page_idx * chained_starts_in_seg.page_size)
-                    + offset_in_page
+                    chained_starts_in_seg.segment_offset + (page_idx * chained_starts_in_seg.page_size) + offset_in_page
                 )
                 # Process this chain of fixup pointers
                 rebases_in_chain, bound_addresses_in_chain = DyldInfoParser._process_fixup_pointer_chain(
@@ -192,7 +192,9 @@ class DyldInfoParser:
                     f"\t\t{hex(chain_base)}: DyldChainedPtr64Rebase(raw: {hex(chained_ptr_raw)}) "
                     f"target={StaticFilePointer(chained_rebase_ptr.target)}"
                 )
-                rebased_pointers[VirtualMemoryPointer(chain_base + virtual_base)] = VirtualMemoryPointer(chained_rebase_ptr.target + virtual_base)
+                rebased_pointers[VirtualMemoryPointer(chain_base + virtual_base)] = VirtualMemoryPointer(
+                    chained_rebase_ptr.target + virtual_base
+                )
                 chain_base += chained_rebase_ptr.next * 4
 
             # Reached the end of the chain?

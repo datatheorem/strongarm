@@ -271,14 +271,15 @@ class ObjcMethodStruct(ArchIndependentStructure):
             # Rather than pointing to a selector literal, this field points to a selref. Dereference it now
             selref_addr = method_ent.name + method_entry_off  # type: ignore
             # This selref may be rebased
-            method_ent.name = binary.read_rebased_pointer(selref_addr)
+            method_ent.name = binary.read_rebased_pointer(selref_addr)  # type: ignore
         else:
             for field_name, field_type, *_ in struct_type._fields_:
                 field_offset = getattr(getattr(struct_type, field_name), "offset")
                 field_address = address + field_offset
                 if field_type == c_uint64 and field_address in binary.dyld_rebased_pointers:
                     logging.debug(
-                        f'Setting rebased pointer within {struct_type}+{field_offset} -> {binary.dyld_rebased_pointers[field_address]} at {field_address}')
+                        f"Setting rebased pointer within {struct_type}+{field_offset} -> {binary.dyld_rebased_pointers[field_address]} at {field_address}"
+                    )
                     setattr(method_ent, field_name, binary.dyld_rebased_pointers[field_address])
 
         return method_ent

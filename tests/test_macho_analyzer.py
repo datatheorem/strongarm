@@ -380,8 +380,11 @@ class TestMachoAnalyzer:
         # When I parse the C string/CFString data
         a = MachoAnalyzer.get_analyzer(binary)
         # Then the data is correctly parsed
-        assert a._cfstring_to_stringref_map == {'x is: %d i is %d': VirtualMemoryPointer(0x100008070), 'Default Configuration': VirtualMemoryPointer(0x100008090)}
-        assert a._cstring_to_stringref_map == {'x is: %d i is %d': 0x100007f71, 'Default Configuration': 0x100007f82}
+        assert a._cfstring_to_stringref_map == {
+            "x is: %d i is %d": VirtualMemoryPointer(0x100008070),
+            "Default Configuration": VirtualMemoryPointer(0x100008090),
+        }
+        assert a._cstring_to_stringref_map == {"x is: %d i is %d": 0x100007F71, "Default Configuration": 0x100007F82}
         # And I can query it via APIs
         assert a.stringref_for_string('@"x is: %d i is %d"') == VirtualMemoryPointer(0x100008070)
         assert a.stringref_for_string('@"Default Configuration"') == VirtualMemoryPointer(0x100008090)

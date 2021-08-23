@@ -3,7 +3,7 @@ import math
 from ctypes import c_uint32, c_uint64, sizeof
 from distutils.version import LooseVersion
 from pathlib import Path
-from typing import TYPE_CHECKING, Any, Dict, List, Optional, Set, Tuple, Type, TypeVar, Union
+from typing import TYPE_CHECKING, Any, Dict, List, Optional, Set, Tuple, Type, TypeVar
 
 from _ctypes import Structure
 
@@ -122,12 +122,7 @@ class MachoBinary:
     SUPPORTED_MAG = _MAG_64 + _MAG_32
     BYTES_PER_INSTRUCTION = 4
 
-    def __init__(
-        self,
-        path: Path,
-        binary_data: bytes,
-        file_offset: Optional[StaticFilePointer] = None,
-    ) -> None:
+    def __init__(self, path: Path, binary_data: bytes, file_offset: Optional[StaticFilePointer] = None,) -> None:
         """Parse the bytes representing a Mach-O file.
         """
         from .codesign.codesign_parser import CodesignParser
@@ -182,7 +177,7 @@ class MachoBinary:
         self.dyld_rebased_pointers: Dict[VirtualMemoryPointer, VirtualMemoryPointer] = {}
 
         if self._dyld_chained_fixups:
-            self.dyld_rebased_pointers, self.dyld_bound_symbols = DyldInfoParser.parse_chained_fixups(self)
+            self.dyld_rebased_pointers, self.dyld_bound_symbols = DyldInfoParser.parse_chained_fixups(self)  # type: ignore
         else:
             self.dyld_bound_symbols = DyldInfoParser.parse_dyld_info(self)
 
@@ -359,7 +354,9 @@ class MachoBinary:
         data = self.get_contents_from_address(address=binary_offset, size=sizeof(backing_layout), is_virtual=virtual)
         return struct_type(binary_offset, data, backing_layout)
 
-    def read_struct_with_rebased_pointers(self, binary_offset: int, struct_type: Type[AIS], virtual: bool = False) -> AIS:
+    def read_struct_with_rebased_pointers(
+        self, binary_offset: int, struct_type: Type[AIS], virtual: bool = False
+    ) -> AIS:
         """Read a static binary structure that may contain rebased pointers.
         For each uint64_t within the structure, check if we know that this pointer should be rebased.
         If so, the static data here may be a packed chained fixup pointer, rather than a pointer we can follow.
@@ -377,7 +374,9 @@ class MachoBinary:
             field_offset = getattr(getattr(backing_layout, field_name), "offset")
             field_address = base_virt_offset + field_offset
             if field_type == c_uint64 and field_address in self.dyld_rebased_pointers:
-                logging.debug(f'Setting rebased pointer within {struct_type}+{field_offset} -> {self.dyld_rebased_pointers[field_address]} at {field_address}')
+                logging.debug(
+                    f"Setting rebased pointer within {struct_type}+{field_offset} -> {self.dyld_rebased_pointers[field_address]} at {field_address}"
+                )
                 setattr(s, field_name, self.dyld_rebased_pointers[field_address])
 
         return s
@@ -746,11 +745,13 @@ class MachoBinary:
 
             if ptr_location in self.dyld_rebased_pointers:
                 ptr_value = self.dyld_rebased_pointers[ptr_location]
-                logging.error(f'Pointer is rebased: {ptr_location} -> {ptr_value}')
+                logging.error(f"Pointer is rebased: {ptr_location} -> {ptr_value}")
             else:
                 data_end = pointer_off + sizeof(binary_word)
-                ptr_value = VirtualMemoryPointer(binary_word.from_buffer(bytearray(section_data[pointer_off:data_end])).value)
-                logging.error(f'Pointer was not in the rebase list: {ptr_location} -> {ptr_value}')
+                ptr_value = VirtualMemoryPointer(
+                    binary_word.from_buffer(bytearray(section_data[pointer_off:data_end])).value
+                )
+                logging.error(f"Pointer was not in the rebase list: {ptr_location} -> {ptr_value}")
 
             entries.append(VirtualMemoryPointer(ptr_value))
 

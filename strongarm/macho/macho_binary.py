@@ -172,7 +172,6 @@ class MachoBinary:
         logging.debug(self, f"parsed symtab, len = {len(self.symtab_contents)}")
 
         from .dyld_info_parser import DyldBoundSymbol, DyldInfoParser
-
         self.dyld_bound_symbols: Dict[VirtualMemoryPointer, DyldBoundSymbol] = {}
         self.dyld_rebased_pointers: Dict[VirtualMemoryPointer, VirtualMemoryPointer] = {}
 
@@ -181,10 +180,6 @@ class MachoBinary:
             self.dyld_rebased_pointers, self.dyld_bound_symbols = rebases, binds
         else:
             self.dyld_bound_symbols = DyldInfoParser.parse_dyld_info(self)
-
-        print()
-        print(self.dyld_rebased_pointers)
-        print()
 
     def __repr__(self) -> str:
         return f"<MachoBinary binary={self.path}>"

@@ -177,7 +177,8 @@ class MachoBinary:
         self.dyld_rebased_pointers: Dict[VirtualMemoryPointer, VirtualMemoryPointer] = {}
 
         if self._dyld_chained_fixups:
-            self.dyld_rebased_pointers, self.dyld_bound_symbols = DyldInfoParser.parse_chained_fixups(self)  # type: ignore
+            rebases, binds = DyldInfoParser.parse_chained_fixups(self)  # type: ignore
+            self.dyld_rebased_pointers, self.dyld_bound_symbols = rebases, binds
         else:
             self.dyld_bound_symbols = DyldInfoParser.parse_dyld_info(self)
 
@@ -375,7 +376,8 @@ class MachoBinary:
             field_address = base_virt_offset + field_offset
             if field_type == c_uint64 and field_address in self.dyld_rebased_pointers:
                 logging.debug(
-                    f"Setting rebased pointer within {struct_type}+{field_offset} -> {self.dyld_rebased_pointers[field_address]} at {field_address}"
+                    f"Setting rebased pointer within {struct_type}+{field_offset} -> "
+                    f"{self.dyld_rebased_pointers[field_address]} at {field_address}"
                 )
                 setattr(s, field_name, self.dyld_rebased_pointers[field_address])
 

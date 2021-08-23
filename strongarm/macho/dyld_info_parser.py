@@ -14,7 +14,6 @@ from .arch_independent_structs import (
     MachoDyldChainedStartsInSegment,
 )
 from .macho_binary import MachoBinary
-from .macho_binary_writer import MachoBinaryWriter
 from .macho_definitions import StaticFilePointer, VirtualMemoryPointer
 
 

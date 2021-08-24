@@ -1,6 +1,7 @@
 from ctypes import c_uint32, c_uint64, sizeof
 from dataclasses import dataclass
-from typing import List, Union
+from types import TracebackType
+from typing import List, Optional, Type, Union
 
 from .macho_binary import MachoBinary, StaticFilePointer, VirtualMemoryPointer
 
@@ -20,7 +21,9 @@ class MachoBinaryWriter:
     def __enter__(self) -> None:
         pass
 
-    def __exit__(self, exc_type, exc_val, exc_tb):
+    def __exit__(
+        self, exc_type: Optional[Type[BaseException]], exc_val: Optional[BaseException], exc_tb: Optional[TracebackType]
+    ) -> None:
         # Create a new binary with the overwritten data
         new_binary_data = bytearray(len(self.binary._cached_binary))
         new_binary_data[:] = self.binary._cached_binary
@@ -28,7 +31,6 @@ class MachoBinaryWriter:
             new_binary_data[write.file_offset : write.file_offset + len(write.bytes_to_write)] = write.bytes_to_write
 
         self.modified_binary = MachoBinary(self.binary.path, new_binary_data,)
-        return False
 
     def write_word(self, word: Union[c_uint32, c_uint64], address: int, virtual: bool = True) -> None:
         """Enqueue a write of the provided word to the binary.

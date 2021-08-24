@@ -8,7 +8,7 @@ import time
 from contextlib import closing
 from ctypes import sizeof
 from dataclasses import dataclass
-from typing import TYPE_CHECKING, Any, Callable, Dict, Iterable, List, Optional, Set, Tuple, TypeVar, cast
+from typing import TYPE_CHECKING, Any, Callable, Dict, Iterable, List, Optional, Set, Tuple, Type, TypeVar, cast
 
 from capstone import CS_ARCH_ARM64, CS_MODE_ARM, Cs, CsInsn
 from more_itertools import pairwise
@@ -130,13 +130,13 @@ class cached_property(object):
     https://github.com/pallets/werkzeug/blob/0e1b8c4fe598725b343085c5a9a867e90b966db6/werkzeug/utils.py#L35-L73
     """
 
-    def __init__(self, func, name=None, doc=None):
-        self.__name__ = name or func.__name__
+    def __init__(self, func: Callable) -> None:
+        self.__name__ = func.__name__
         self.__module__ = func.__module__
-        self.__doc__ = doc or func.__doc__
+        self.__doc__ = func.__doc__
         self.func = func
 
-    def __get__(self, obj, type=None):
+    def __get__(self, obj: Any, _type: Type = None) -> Any:
         if obj is None:
             return self
         value = obj.__dict__.get(self.__name__, None)
@@ -307,7 +307,7 @@ class MachoAnalyzer:
         return VirtualMemoryPointer(objc_msgsend_symbol.address)
 
     @cached_property
-    def _objc_fastpath_ptrs_to_selector_names(self):
+    def _objc_fastpath_ptrs_to_selector_names(self) -> Dict[VirtualMemoryPointer, str]:
         # Some special selectors have a fast-path, _objc_opt_<selector>, that was added in iOS 13
         # The _objc_opt_* call is emitted instead of _objc_msgSend when the NSObject implementation will be called.
         # Found with: $ nm "/usr/lib/libobjc.A.dylib" | grep "objc_opt"

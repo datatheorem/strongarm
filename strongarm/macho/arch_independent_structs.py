@@ -1,3 +1,4 @@
+import logging
 from ctypes import Structure, c_uint64, sizeof
 from distutils.version import LooseVersion
 from typing import TYPE_CHECKING, Any, Optional, Type, Union
@@ -8,6 +9,12 @@ from strongarm.macho.macho_definitions import (
     DylibCommand,
     MachoBuildToolVersion,
     MachoBuildVersionCommand,
+    MachoDyldChainedFixupsHeaderRaw,
+    MachoDyldChainedImportRaw,
+    MachoDyldChainedPtr64BindRaw,
+    MachoDyldChainedPtr64RebaseRaw,
+    MachoDyldChainedStartsInImageRaw,
+    MachoDyldChainedStartsInSegmentRaw,
     MachoDyldInfoCommand,
     MachoDysymtabCommand,
     MachoEncryptionInfo32Command,
@@ -112,6 +119,13 @@ _64_BIT_STRUCT_ALIAS = Union[
     Type["ObjcIvarList"],
     Type["MachoBuildVersionCommand"],
     Type["MachoBuildToolVersion"],
+    Type["MachoDyldChainedFixupsHeaderRaw"],
+    Type["MachoDyldChainedImportRaw"],
+    Type["MachoDyldChainedStartsInImageRaw"],
+    Type["MachoDyldChainedStartsInSegmentRaw"],
+    Type["MachoDyldChainedPtr64RebaseRaw"],
+    Type["MachoDyldChainedPtr64BindRaw"],
+    Type["MachoBuildToolVersion"],
 ]
 
 
@@ -140,7 +154,7 @@ class ArchIndependentStructure:
     def __init__(self, binary_offset: int, struct_bytes: bytearray, backing_layout: Type[Structure]):
         struct: ArchIndependentStructure = backing_layout.from_buffer(struct_bytes)  # type: ignore
 
-        for field_name, _ in struct._fields_:
+        for field_name, *_ in struct._fields_:
             # clone fields from struct to this class
             setattr(self, field_name, getattr(struct, field_name))
 
@@ -253,9 +267,22 @@ class ObjcMethodStruct(ArchIndependentStructure):
             method_entry_off = address
             method_ent.signature += method_entry_off + 4  # type: ignore
             method_ent.implementation += method_entry_off + 8  # type: ignore
+
             # Rather than pointing to a selector literal, this field points to a selref. Dereference it now
             selref_addr = method_ent.name + method_entry_off  # type: ignore
-            method_ent.name = binary.read_word(selref_addr, True, c_uint64)  # type: ignore
+            # This selref may be rebased
+            method_ent.name = binary.read_rebased_pointer(selref_addr)  # type: ignore
+        else:
+            for field_name, field_type, *_ in struct_type._fields_:
+                field_offset = getattr(getattr(struct_type, field_name), "offset")
+                field_address = address + field_offset
+                if field_type == c_uint64 and field_address in binary.dyld_rebased_pointers:
+                    pointer_value = binary.dyld_rebased_pointers[field_address]
+                    logging.debug(
+                        f"Setting rebased pointer within {struct_type}+{field_offset} -> "
+                        f"{pointer_value} at {field_address}"
+                    )
+                    setattr(method_ent, field_name, pointer_value)
 
         return method_ent
 
@@ -318,3 +345,27 @@ class MachoBuildVersionCommandStruct(ArchIndependentStructure):
 class MachoBuildToolVersionStruct(ArchIndependentStructure):
     _32_BIT_STRUCT = MachoBuildToolVersion
     _64_BIT_STRUCT = MachoBuildToolVersion
+
+
+class MachoDyldChainedFixupsHeader(ArchIndependentStructure):
+    _64_BIT_STRUCT = MachoDyldChainedFixupsHeaderRaw
+
+
+class MachoDyldChainedImport(ArchIndependentStructure):
+    _64_BIT_STRUCT = MachoDyldChainedImportRaw
+
+
+class MachoDyldChainedStartsInImage(ArchIndependentStructure):
+    _64_BIT_STRUCT = MachoDyldChainedStartsInImageRaw
+
+
+class MachoDyldChainedStartsInSegment(ArchIndependentStructure):
+    _64_BIT_STRUCT = MachoDyldChainedStartsInSegmentRaw
+
+
+class MachoDyldChainedPtr64Rebase(ArchIndependentStructure):
+    _64_BIT_STRUCT = MachoDyldChainedPtr64RebaseRaw
+
+
+class MachoDyldChainedPtr64Bind(ArchIndependentStructure):
+    _64_BIT_STRUCT = MachoDyldChainedPtr64BindRaw

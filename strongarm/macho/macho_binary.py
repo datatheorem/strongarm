@@ -3,7 +3,7 @@ import math
 from ctypes import c_uint32, c_uint64, sizeof
 from distutils.version import LooseVersion
 from pathlib import Path
-from typing import TYPE_CHECKING, Any, List, Optional, Set, Tuple, Type, TypeVar
+from typing import TYPE_CHECKING, Any, Dict, List, Optional, Set, Tuple, Type, TypeVar
 
 from _ctypes import Structure
 
@@ -68,7 +68,6 @@ class MachoSegment:
     def __init__(self, binary: "MachoBinary", segment_command: MachoSegmentCommandStruct) -> None:
         self.cmd = segment_command
 
-        self.content = binary.get_bytes(segment_command.fileoff, segment_command.filesize)
         self.name = segment_command.segname.decode()
         self.sizeof = segment_command.sizeof
 
@@ -99,7 +98,6 @@ class MachoSection:
         self.segment = segment
 
         # ignore these types due to dynamic attributes of associated types
-        self.content = binary.get_bytes(section_command.offset, section_command.size)
         self.name = section_command.sectname.decode()
         self.segment_name = section_command.segname.decode()
         self.address = section_command.addr
@@ -124,7 +122,7 @@ class MachoBinary:
     SUPPORTED_MAG = _MAG_64 + _MAG_32
     BYTES_PER_INSTRUCTION = 4
 
-    def __init__(self, path: Path, binary_data: bytes, file_offset: Optional[StaticFilePointer] = None) -> None:
+    def __init__(self, path: Path, binary_data: bytes, file_offset: Optional[StaticFilePointer] = None,) -> None:
         """Parse the bytes representing a Mach-O file.
         """
         from .codesign.codesign_parser import CodesignParser
@@ -153,6 +151,8 @@ class MachoBinary:
         self._symtab: Optional[MachoSymtabCommandStruct] = None
         self._encryption_info: Optional[MachoEncryptionInfoStruct] = None
         self._dyld_info: Optional[MachoDyldInfoCommandStruct] = None
+        self._dyld_export_trie: Optional[MachoLinkeditDataCommandStruct] = None
+        self._dyld_chained_fixups: Optional[MachoLinkeditDataCommandStruct] = None
         self.load_dylib_commands: List[DylibCommandStruct] = []
         self._code_signature_cmd: Optional[MachoLinkeditDataCommandStruct] = None
         self._function_starts_cmd: Optional[MachoLinkeditDataCommandStruct] = None
@@ -170,6 +170,17 @@ class MachoBinary:
         self.platform_word_type = c_uint64 if self.is_64bit else c_uint32
         self.symtab_contents = self._get_symtab_contents()
         logging.debug(self, f"parsed symtab, len = {len(self.symtab_contents)}")
+
+        from .dyld_info_parser import DyldBoundSymbol, DyldInfoParser
+
+        self.dyld_bound_symbols: Dict[VirtualMemoryPointer, DyldBoundSymbol] = {}
+        self.dyld_rebased_pointers: Dict[VirtualMemoryPointer, VirtualMemoryPointer] = {}
+
+        if self._dyld_chained_fixups:
+            rebases, binds = DyldInfoParser.parse_chained_fixups(self)  # type: ignore
+            self.dyld_rebased_pointers, self.dyld_bound_symbols = rebases, binds
+        else:
+            self.dyld_bound_symbols = DyldInfoParser.parse_dyld_info(self)
 
     def __repr__(self) -> str:
         return f"<MachoBinary binary={self.path}>"
@@ -293,6 +304,12 @@ class MachoBinary:
             elif load_command.cmd in [MachoLoadCommands.LC_DYLD_INFO, MachoLoadCommands.LC_DYLD_INFO_ONLY]:
                 self._dyld_info = self.read_struct(offset, MachoDyldInfoCommandStruct)
 
+            elif load_command.cmd in [MachoLoadCommands.LC_DYLD_EXPORTS_TRIE]:
+                self._dyld_export_trie = self.read_struct(offset, MachoLinkeditDataCommandStruct)
+
+            elif load_command.cmd in [MachoLoadCommands.LC_DYLD_CHAINED_FIXUPS]:
+                self._dyld_chained_fixups = self.read_struct(offset, MachoLinkeditDataCommandStruct)
+
             elif load_command.cmd in [MachoLoadCommands.LC_LOAD_DYLIB, MachoLoadCommands.LC_LOAD_WEAK_DYLIB]:
                 dylib_load_command = self.read_struct(offset, DylibCommandStruct)
                 self.load_dylib_commands.append(dylib_load_command)
@@ -333,6 +350,34 @@ class MachoBinary:
         backing_layout = struct_type.get_backing_data_layout(self.is_64bit, self.get_minimum_deployment_target())
         data = self.get_contents_from_address(address=binary_offset, size=sizeof(backing_layout), is_virtual=virtual)
         return struct_type(binary_offset, data, backing_layout)
+
+    def read_struct_with_rebased_pointers(
+        self, binary_offset: int, struct_type: Type[AIS], virtual: bool = False
+    ) -> AIS:
+        """Read a static binary structure that may contain rebased pointers.
+        For each uint64_t within the structure, check if we know that this pointer should be rebased.
+        If so, the static data here may be a packed chained fixup pointer, rather than a pointer we can follow.
+        In this case, update the pointer to contain the value to be rebased, so that the pointer can be followed.
+        """
+        backing_layout = struct_type.get_backing_data_layout(self.is_64bit, self.get_minimum_deployment_target())
+        data = self.get_contents_from_address(address=binary_offset, size=sizeof(backing_layout), is_virtual=virtual)
+        s = struct_type(binary_offset, data, backing_layout)
+
+        # Check each c_uint64/c_ulong to see if we know about a rebase for it. If so, apply it
+        base_virt_offset = binary_offset
+        if not virtual:
+            base_virt_offset += self.get_virtual_base()
+        for field_name, field_type, *_ in backing_layout._fields_:
+            field_offset = getattr(getattr(backing_layout, field_name), "offset")
+            field_address = base_virt_offset + field_offset
+            if field_type == c_uint64 and field_address in self.dyld_rebased_pointers:
+                logging.debug(
+                    f"Setting rebased pointer within {struct_type}+{field_offset} -> "
+                    f"{self.dyld_rebased_pointers[field_address]} at {field_address}"
+                )
+                setattr(s, field_name, self.dyld_rebased_pointers[field_address])
+
+        return s
 
     def section_name_for_address(self, virt_addr: VirtualMemoryPointer) -> Optional[str]:
         """Given an address in the virtual address space, return the name of the section which contains it.
@@ -685,7 +730,7 @@ class MachoBinary:
             return locations, entries
 
         section_base = section.address
-        section_data = section.content
+        section_data = self.get_bytes(section.offset, section.size)
 
         binary_word = self.platform_word_type
         pointer_count = int(len(section_data) / sizeof(binary_word))
@@ -693,11 +738,20 @@ class MachoBinary:
 
         for i in range(pointer_count):
             # convert section offset of entry to absolute virtual address
-            locations.append(VirtualMemoryPointer(section_base + pointer_off))
+            ptr_location = VirtualMemoryPointer(section_base + pointer_off)
+            locations.append(ptr_location)
 
-            data_end = pointer_off + sizeof(binary_word)
-            val = binary_word.from_buffer(bytearray(section_data[pointer_off:data_end])).value
-            entries.append(VirtualMemoryPointer(val))
+            if ptr_location in self.dyld_rebased_pointers:
+                ptr_value = self.dyld_rebased_pointers[ptr_location]
+                logging.debug(f"Pointer is rebased: {ptr_location} -> {ptr_value}")
+            else:
+                data_end = pointer_off + sizeof(binary_word)
+                ptr_value = VirtualMemoryPointer(
+                    binary_word.from_buffer(bytearray(section_data[pointer_off:data_end])).value
+                )
+                logging.debug(f"Pointer was not in the rebase list: {ptr_location} -> {ptr_value}")
+
+            entries.append(VirtualMemoryPointer(ptr_value))
 
             pointer_off += sizeof(binary_word)
 
@@ -718,6 +772,16 @@ class MachoBinary:
             raise InvalidAddressError(f"Could not read word at address {hex(address)}")
 
         return word_type.from_buffer(bytearray(file_bytes)).value
+
+    def read_rebased_pointer(self, address: VirtualMemoryPointer) -> VirtualMemoryPointer:
+        """Attempt to read a rebased pointer from the binary at a virtual address.
+        The pointer is assumed to be the platform word size.
+        """
+        if address not in self.dyld_rebased_pointers:
+            # This may be a pre-iOS 15 binary for which we don't record rebases
+            return VirtualMemoryPointer(self.read_word(address, virtual=True, word_type=self.platform_word_type))
+
+        return self.dyld_rebased_pointers[address]
 
     @property
     def header(self) -> MachoHeaderStruct:
@@ -803,6 +867,7 @@ class MachoBinary:
     def write_struct(self, struct: Structure, address: int, virtual: bool = False) -> "MachoBinary":
         """Serialize and write the provided structure the Mach-O slice, returning a new modified binary.
         Note: This will invalidate the binary's code signature, if present.
+        TODO(PT): Deprecate and move to MachoBinaryWriter
         """
         # Write the structure bytes to the binary
         # TODO(PT): byte order?
@@ -814,6 +879,7 @@ class MachoBinary:
         including the pathname.
         Raises NoEmptySpaceForLoadCommandError() if there's not enough space in the Mach-O header to add a new command.
         Note: This will invalidate the binary's code signature, if present.
+        TODO(PT): Deprecate and move to MachoBinaryWriter
         """
         if not self.is_64bit:
             raise RuntimeError("Inserting load commands is only support on 64-bit binaries")
@@ -879,6 +945,7 @@ class MachoBinary:
 
     def write_binary(self, path: Path) -> None:
         """Write the in-memory Mach-O slice to the provided path.
+        TODO(PT): Deprecate and move to MachoBinaryWriter
         """
         # Pass 'x' so the call will throw an exception if the path already exists
         with open(path, "xb") as out_file:
@@ -887,6 +954,7 @@ class MachoBinary:
     @staticmethod
     def write_fat(slices: List["MachoBinary"], path: Path) -> None:
         """Write a list of Mach-O slices into a FAT file at the provided path.
+        TODO(PT): Deprecate and move to MachoBinaryWriter
         """
         from strongarm.macho.macho_definitions import MachArch, MachoFatArch, MachoFatHeader
 

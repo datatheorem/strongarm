@@ -672,3 +672,120 @@ class CFString32(Structure):
 
 class CFString64(Structure):
     _fields_ = [("base", c_uint64), ("flags", c_uint64), ("literal", c_uint64), ("length", c_uint64)]
+
+
+class MachoDyldChainedFixupsHeaderRaw(Structure):
+    _fields_ = [
+        # 0
+        ("fixups_version", c_uint32),
+        # Offset of dyld_chained_starts_in_image in chain_data
+        ("starts_offset", c_uint32),
+        # Offset of imports table in chain_data
+        ("imports_offset", c_uint32),
+        # Offset of symbol strings in chain_data
+        ("symbols_offset", c_uint32),
+        # Number of imported symbol names
+        ("imports_count", c_uint32),
+        # DYLD_CHAINED_IMPORT*
+        ("imports_format", c_uint32),
+        # 0 => uncompressed, 1 => zlib compressed
+        ("symbols_format", c_uint32),
+    ]
+
+
+class MachoDyldChainedImportFormat(IntEnum):
+    DYLD_CHAINED_IMPORT = 1
+    DYLD_CHAINED_IMPORT_ADDEND = 2
+    DYLD_CHAINED_IMPORT_ADDEND64 = 3
+
+
+class MachoDyldChainedImportRaw(Structure):
+    _fields_ = [
+        ("lib_ordinal", c_uint32, 8),
+        ("weak_import", c_uint32, 1),
+        ("name_offset", c_uint32, 23),
+    ]
+
+
+class MachoDyldChainedStartsInImageRaw(Structure):
+    _fields_ = [
+        ("seg_count", c_uint32),
+        # Each entry is offset into this struct for that segment
+        # followed by pool of dyld_chain_starts_in_segment data
+        # XXX(PT): Although this is declared as uint32_t[1] array in the dyld source, it's actually
+        # an array of `seg_count` entries.
+        # To avoid hacks that would let ctypes parse this correctly, we manually read the offsets
+        # ("seg_info_offset", c_uint32 * 1),
+    ]
+
+
+class MachoDyldChainedStartsInSegmentRaw(Structure):
+    # https://docs.python.org/3/library/ctypes.html#structure-union-alignment-and-byte-order
+    # XXX(PT): Force alignment to uint16_t, as by default this structure is reported as being 2 bytes too big
+    # The correct size is important when we're parsing data that is placed directly after this structure
+    _pack_ = 2
+
+    _fields_ = [
+        # Size of this (amount kernel needs to copy)
+        ("size", c_uint32),
+        # 0x1000 or 0x4000
+        ("page_size", c_uint16),
+        # DYLD_CHAINED_PTR_*
+        ("pointer_format", c_uint16),
+        # Offset in memory to start of segment
+        ("segment_offset", c_uint64),
+        # For 32-bit OS, any value beyond this is not a pointer
+        ("max_valid_pointer", c_uint32),
+        # How many pages are in array
+        ("page_count", c_uint16),
+        # Each entry is offset in each page of first element in chain
+        # or DYLD_CHAINED_PTR_START_NONE if no fixups on page
+        # XXX(PT): Variable-length array, see comment on MachoDyldChainedStartsInImageRaw
+        # ("page_start", c_uint16),
+        # Some 32-bit formats may require multiple starts per page.
+        # For those, if high bit is set in page_starts[], then it
+        # is index into chain_starts[] which is a list of starts
+        # the last of which has the high bit set
+        # XXX(PT): Variable-length array, see comment on MachoDyldChainedStartsInImageRaw
+        # ("chain_starts", c_uint16),
+    ]
+
+
+class MachoDyldChainedPointerStartType(IntEnum):
+    # Used in page_start[] to denote a page with no fixups
+    DYLD_CHAINED_PTR_START_NONE = 0xFFFF
+    # Used in page_start[] to denote a page which has multiple starts
+    DYLD_CHAINED_PTR_START_MULTI = 0x8000
+    # Used in chain_starts[] to denote last start in list for page
+    DYLD_CHAINED_PTR_START_LAST = 0x8000
+
+
+class MachoDyldChainedPtr64RebaseRaw(Structure):
+    # Used with DYLD_CHAINED_PTR_64/DYLD_CHAINED_PTR_64_OFFSET
+    _fields_ = [
+        # 64GB max image size (DYLD_CHAINED_PTR_64 => vmAddr, DYLD_CHAINED_PTR_64_OFFSET => runtimeOffset)
+        ("target", c_uint64, 36),
+        # Top 8 bits set to this (DYLD_CHAINED_PTR_64 => after slide added,
+        # DYLD_CHAINED_PTR_64_OFFSET => before slide added)
+        ("high8", c_uint64, 8),
+        # All zeros
+        ("reserved", c_uint64, 7),
+        # 4-byte stride
+        ("next", c_uint64, 12),
+        # == 0
+        ("bind", c_uint64, 1),
+    ]
+
+
+class MachoDyldChainedPtr64BindRaw(Structure):
+    _fields_ = [
+        ("ordinal", c_uint64, 24),
+        # 0 thru 255
+        ("addend", c_uint64, 8),
+        # All zeroes
+        ("reserved", c_uint64, 19),
+        # 4-byte stride
+        ("next", c_uint64, 12),
+        # == 1
+        ("bind", c_uint64, 1),
+    ]

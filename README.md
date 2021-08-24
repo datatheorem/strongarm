@@ -192,6 +192,26 @@ MachoBinary.write_binary(self, path: pathlib.Path) -> None
 MachoBinary.write_fat(slices: List['MachoBinary'], path: pathlib.Path) -> None
 ```
 
+To make several modifications to a `MachoBinary` while triggering only one extra parse, use a `MachoBinaryWriter`:
+
+```python
+from pathlib import Path
+from ctypes import c_uint64, sizeof
+from strongarm.macho.macho_binary_writer import MachoBinaryWriter
+
+# Initialise a batch binary writer
+writer = MachoBinaryWriter(binary)
+
+# Make a series of changes to the binary
+with writer:
+    for i in range(5):
+        writer.write_word(word=c_uint64(0xdeadbeef), address=0x1000 + (i * sizeof(c_uint64)), virtual=False)
+
+# `writer.modified_binary` contains the re-parsed binary containing the provided changes
+# Persist the modified binary to disk
+writer.modified_binary.write_binary(Path(__file__) / "modified_binary")
+```
+
 License
 ------------
 

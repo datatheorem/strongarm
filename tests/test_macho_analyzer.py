@@ -372,6 +372,23 @@ class TestMachoAnalyzer:
             assert "Wheee!" in all_strings
             assert "v16@0:8" in all_strings
 
+    def test_parses_cfstrings_with_rebases__ios15(self):
+        # Given a binary that contains chained fixup rebases within the CFString static structures
+        chained_fixup_pointers_binary = pathlib.Path(__file__).parent / "bin" / "iOS15_chained_fixup_pointers"
+        parser = MachoParser(chained_fixup_pointers_binary)
+        binary = parser.get_arm64_slice()
+        # When I parse the C string/CFString data
+        a = MachoAnalyzer.get_analyzer(binary)
+        # Then the data is correctly parsed
+        assert a._cfstring_to_stringref_map == {
+            "x is: %d i is %d": VirtualMemoryPointer(0x100008070),
+            "Default Configuration": VirtualMemoryPointer(0x100008090),
+        }
+        assert a._cstring_to_stringref_map == {"x is: %d i is %d": 0x100007F71, "Default Configuration": 0x100007F82}
+        # And I can query it via APIs
+        assert a.stringref_for_string('@"x is: %d i is %d"') == VirtualMemoryPointer(0x100008070)
+        assert a.stringref_for_string('@"Default Configuration"') == VirtualMemoryPointer(0x100008090)
+
 
 class TestMachoAnalyzerDynStaticChecks:
     FAT_PATH = pathlib.Path(__file__).parent / "bin" / "DynStaticChecks"

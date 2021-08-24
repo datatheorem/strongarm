@@ -8,13 +8,13 @@ import time
 from contextlib import closing
 from ctypes import sizeof
 from dataclasses import dataclass
-from typing import TYPE_CHECKING, Any, Callable, Dict, Iterable, List, Optional, Set, Tuple, TypeVar, cast
+from typing import TYPE_CHECKING, Any, Callable, Dict, Iterable, List, Optional, Set, Tuple, Type, TypeVar, cast
 
 from capstone import CS_ARCH_ARM64, CS_MODE_ARM, Cs, CsInsn
 from more_itertools import pairwise
 
 from strongarm.macho.arch_independent_structs import CFString32, CFString64, CFStringStruct
-from strongarm.macho.dyld_info_parser import DyldBoundSymbol, DyldInfoParser
+from strongarm.macho.dyld_info_parser import DyldBoundSymbol
 from strongarm.macho.macho_binary import InvalidAddressError, MachoBinary
 from strongarm.macho.macho_definitions import VirtualMemoryPointer
 from strongarm.macho.macho_imp_stubs import MachoImpStubsParser
@@ -130,13 +130,13 @@ class cached_property(object):
     https://github.com/pallets/werkzeug/blob/0e1b8c4fe598725b343085c5a9a867e90b966db6/werkzeug/utils.py#L35-L73
     """
 
-    def __init__(self, func, name=None, doc=None):
-        self.__name__ = name or func.__name__
+    def __init__(self, func: Callable) -> None:
+        self.__name__ = func.__name__
         self.__module__ = func.__module__
-        self.__doc__ = doc or func.__doc__
+        self.__doc__ = func.__doc__
         self.func = func
 
-    def __get__(self, obj, type=None):
+    def __get__(self, obj: Any, _type: Type = None) -> Any:
         if obj is None:
             return self
         value = obj.__dict__.get(self.__name__, None)
@@ -159,8 +159,6 @@ class MachoAnalyzer:
         self.cs = Cs(CS_ARCH_ARM64, CS_MODE_ARM)
         self.cs.detail = True
 
-        # Worker to parse dyld bytecode stream and extract dyld stub addresses to the DyldBoundSymbol they represent
-        self.dyld_info_parser = DyldInfoParser(self.binary)
         # Each __stubs function calls a single dyld stub address, which has a corresponding DyldBoundSymbol.
         # Map of each __stub function to the associated name of the DyldBoundSymbol
         self._imported_symbol_addresses_to_names: Dict[VirtualMemoryPointer, str] = {}
@@ -184,6 +182,9 @@ class MachoAnalyzer:
 
         self._build_callable_symbol_index()
         self._build_function_boundaries_index()
+
+        self._cfstring_to_stringref_map = self._build_cfstring_map()
+        self._cstring_to_stringref_map = self._build_cstring_map()
 
         # Done setting up, store this analyzer in class cache
         MachoAnalyzer._ANALYZER_CACHE[binary] = self
@@ -306,7 +307,7 @@ class MachoAnalyzer:
         return VirtualMemoryPointer(objc_msgsend_symbol.address)
 
     @cached_property
-    def _objc_fastpath_ptrs_to_selector_names(self):
+    def _objc_fastpath_ptrs_to_selector_names(self) -> Dict[VirtualMemoryPointer, str]:
         # Some special selectors have a fast-path, _objc_opt_<selector>, that was added in iOS 13
         # The _objc_opt_* call is emitted instead of _objc_msgSend when the NSObject implementation will be called.
         # Found with: $ nm "/usr/lib/libobjc.A.dylib" | grep "objc_opt"
@@ -378,7 +379,7 @@ class MachoAnalyzer:
     @property
     def objc_helper(self) -> ObjcRuntimeDataParser:
         if not self._objc_helper:
-            self._objc_helper = ObjcRuntimeDataParser(self.binary, self.dyld_info_parser)
+            self._objc_helper = ObjcRuntimeDataParser(self.binary)
         return self._objc_helper
 
     @classmethod
@@ -421,7 +422,7 @@ class MachoAnalyzer:
     def dyld_bound_symbols(self) -> Dict[VirtualMemoryPointer, DyldBoundSymbol]:
         """Return a Dict of each imported dyld stub to the corresponding symbol to be bound at runtime.
         """
-        return self.dyld_info_parser.dyld_stubs_to_symbols
+        return self.binary.dyld_bound_symbols
 
     @property
     def imp_stubs_to_symbol_names(self) -> Dict[VirtualMemoryPointer, str]:
@@ -690,56 +691,59 @@ class MachoAnalyzer:
         # This method should cache its result.
         return self._strings_in_section("__cstring")
 
-    def _stringref_for_cstring(self, string: str) -> Optional[VirtualMemoryPointer]:
-        """Try to find the stringref in __cstrings for a provided C string.
-        If the string is not present in the __cstrings section, this method returns None.
-        """
-        # TODO(PT): This is SLOW and WASTEFUL!!!
-        # These transformations should be done ONCE on initial analysis!
+    def _build_cstring_map(self) -> Dict[str, VirtualMemoryPointer]:
         strings_section = self.binary.section_with_name("__cstring", "__TEXT")
         if not strings_section:
-            return None
+            return {}
 
         strings_base = strings_section.address
-        strings_content = strings_section.content
+        strings_content = self.binary.get_bytes(strings_section.offset, strings_section.size)
 
+        string_to_stringrefs = {}
         # split into characters (string table is packed and each entry is terminated by a null character)
         string_table = list(strings_content)
         transformed_strings = MachoStringTableHelper.transform_string_section(string_table)
         for idx, entry in transformed_strings.items():
-            if entry.full_string == string:
-                # found the string we're looking for
-                # the address is the base of __cstring plus the index of the entry
-                stringref_address = strings_base + idx
-                return stringref_address
+            # Address is the base of __cstring plus the index of the entry
+            stringref_address = VirtualMemoryPointer(strings_base + idx)
+            string_to_stringrefs[entry.full_string] = stringref_address
+        return string_to_stringrefs
 
-        # didn't find the string the user requested
-        return None
+    def _stringref_for_cstring(self, string: str) -> Optional[VirtualMemoryPointer]:
+        """Try to find the stringref in __cstrings for a provided C string.
+        If the string is not present in the __cstrings section, this method returns None.
+        """
+        if string not in self._cstring_to_stringref_map:
+            return None
+        return self._cstring_to_stringref_map[string]
+
+    def _build_cfstring_map(self) -> Dict[str, VirtualMemoryPointer]:
+        cfstrings_section = self.binary.section_with_name("__cfstring", "__DATA")
+        if not cfstrings_section:
+            cfstrings_section = self.binary.section_with_name("__cfstring", "__DATA_CONST")
+            if not cfstrings_section:
+                return {}
+
+        sizeof_cfstring = sizeof(CFString64) if self.binary.is_64bit else sizeof(CFString32)
+        cfstrings_base = cfstrings_section.address
+
+        cfstring_to_stringrefs = {}
+        cfstrings_count = int((cfstrings_section.end_address - cfstrings_section.address) / sizeof_cfstring)
+        for i in range(cfstrings_count):
+            cfstring_addr = cfstrings_base + (i * sizeof_cfstring)
+            cfstring = self.binary.read_struct_with_rebased_pointers(cfstring_addr, CFStringStruct, virtual=True)
+            literal = self.binary.read_string_at_address(cfstring.literal)
+            if literal:
+                cfstring_to_stringrefs[literal] = VirtualMemoryPointer(cfstring_addr)
+        return cfstring_to_stringrefs
 
     def _stringref_for_cfstring(self, string: str) -> Optional[VirtualMemoryPointer]:
         """Try to find the stringref in __cfstrings for a provided Objective-C string literal.
         If the string is not present in the __cfstrings section, this method returns None.
         """
-        # TODO(PT): This is SLOW and WASTEFUL!!!
-        # These transformations should be done ONCE on initial analysis!
-        cfstrings_section = self.binary.section_with_name("__cfstring", "__DATA")
-        if not cfstrings_section:
+        if string not in self._cfstring_to_stringref_map:
             return None
-
-        sizeof_cfstring = sizeof(CFString64) if self.binary.is_64bit else sizeof(CFString32)
-        cfstrings_base = cfstrings_section.address
-
-        cfstrings_count = int((cfstrings_section.end_address - cfstrings_section.address) / sizeof_cfstring)
-        for i in range(cfstrings_count):
-            cfstring_addr = cfstrings_base + (i * sizeof_cfstring)
-            cfstring = self.binary.read_struct(cfstring_addr, CFStringStruct, virtual=True)
-
-            # check if this is the string the user requested
-            string_address = cfstring.literal
-            if self.binary.read_string_at_address(string_address) == string:
-                return VirtualMemoryPointer(cfstring_addr)
-
-        return None
+        return self._cfstring_to_stringref_map[string]
 
     def stringref_for_string(self, string: str) -> Optional[VirtualMemoryPointer]:
         """Try to find the stringref for a provided string.
@@ -844,6 +848,7 @@ class MachoAnalyzer:
         discovered_strings = set()
         string_section = self.binary.section_with_name(section_name, "__TEXT")
         if string_section:
-            transformed_strings = MachoStringTableHelper.transform_string_section(list(string_section.content))
+            strings_content = self.binary.get_bytes(string_section.offset, string_section.size)
+            transformed_strings = MachoStringTableHelper.transform_string_section(list(strings_content))
             discovered_strings = set((x.full_string for x in transformed_strings.values()))
         return discovered_strings

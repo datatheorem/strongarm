@@ -4,7 +4,6 @@ from typing import Dict, List, Optional
 
 from more_itertools import first_true
 
-from strongarm.macho import DyldInfoParser
 from strongarm.macho.arch_independent_structs import (
     ArchIndependentStructure,
     ObjcCategoryRawStruct,
@@ -138,7 +137,7 @@ class ObjcCategory(ObjcClass):
 
 
 class ObjcRuntimeDataParser:
-    def __init__(self, binary: MachoBinary, dyld_info_parser: DyldInfoParser) -> None:
+    def __init__(self, binary: MachoBinary) -> None:
         self.binary = binary
         logging.debug(f"Parsing ObjC runtime info of {self.binary}...")
 
@@ -151,7 +150,7 @@ class ObjcRuntimeDataParser:
         logging.debug("Step 2: Parsing classes, categories, and protocols...")
         self._classrefs_to_objc_classes: Dict[VirtualMemoryPointer, ObjcClass] = {}
         # This populates self._classrefs_to_objc_classes
-        self.classes = self._parse_class_and_category_info(dyld_info_parser)
+        self.classes = self._parse_class_and_category_info()
         self.protocols = self._parse_global_protocol_info()
 
         logging.debug("Step 3: Resolving symbol name to source dylib map...")
@@ -322,7 +321,7 @@ class ObjcRuntimeDataParser:
                 parsed_categories.append(parsed_category)
         return parsed_categories
 
-    def _parse_class_and_category_info(self, dyld_info_parser: DyldInfoParser) -> List[ObjcClass]:
+    def _parse_class_and_category_info(self) -> List[ObjcClass]:
         """Parse classes and categories referenced by __objc_classlist and __objc_catlist
         """
         classes: List[ObjcClass] = []
@@ -331,7 +330,7 @@ class ObjcRuntimeDataParser:
         # Link superclass methods into their subclasses
         self._add_superclass_methods_to_subclasses()
         # Link superclasses of classes and base-classes of categories
-        self._add_superclass_or_base_class_name_to_classes(classes, dyld_info_parser)
+        self._add_superclass_or_base_class_name_to_classes(classes)
         return classes
 
     def _add_superclass_methods_to_subclasses(self) -> None:
@@ -346,9 +345,7 @@ class ObjcRuntimeDataParser:
             objc_class.selectors += superclass.selectors
             objc_class.protocols += superclass.protocols
 
-    def _add_superclass_or_base_class_name_to_classes(
-        self, classes: List[ObjcClass], dyld_info_parser: DyldInfoParser
-    ) -> None:
+    def _add_superclass_or_base_class_name_to_classes(self, classes: List[ObjcClass]) -> None:
         """Iterate each ObjC class/category, and backfill its superclass/base_class name, respectively.
 
         Linking super/base_classes needs two data-sources, depending on whether the super/base_class is imported or not:
@@ -366,8 +363,8 @@ class ObjcRuntimeDataParser:
 
             # If the base class is an imported classref, the imported classref will be bound to its runtime load address
             # by dyld. Look up whether we have an import-binding for the `base_class` field of this structure.
-            if base_class_field_addr in dyld_info_parser.dyld_stubs_to_symbols:
-                imported_base_class_sym = dyld_info_parser.dyld_stubs_to_symbols[base_class_field_addr]
+            if base_class_field_addr in self.binary.dyld_bound_symbols:
+                imported_base_class_sym = self.binary.dyld_bound_symbols[base_class_field_addr]
                 base_class_name = imported_base_class_sym.name
 
             else:
@@ -404,7 +401,7 @@ class ObjcRuntimeDataParser:
         # Parse each ivar struct which follows the ivarlist
         ivar_struct_ptr = ivarlist_ptr + ivarlist.sizeof
         for _ in range(ivarlist.count):
-            ivar_struct = self.binary.read_struct(ivar_struct_ptr, ObjcIvarStruct, virtual=True)
+            ivar_struct = self.binary.read_struct_with_rebased_pointers(ivar_struct_ptr, ObjcIvarStruct, virtual=True)
 
             ivar_name = self.binary.get_full_string_from_start_address(ivar_struct.name)
             class_name = self.binary.get_full_string_from_start_address(ivar_struct.type)
@@ -447,16 +444,19 @@ class ObjcRuntimeDataParser:
 
             # save this selector in the selref pointer -> selector map
             if selref:
-                # if this selector is already in the map, check if we now know the implementation addr
+                # if this selector is already in the map, check if we now know the implementation address
                 # we could have parsed the selector literal/selref pair in _parse_selrefs() but not have known the
                 # implementation, but do now. It's also possible the selref is an external method, and thus will not
                 # have a local implementation.
+                most_specific_selector = selector
                 if selref.source_address in self._selref_ptr_to_selector_map:
                     previously_parsed_selector = self._selref_ptr_to_selector_map[selref.source_address]
-                    if not previously_parsed_selector.implementation:
-                        # delete the old entry, and add back in the next line
-                        del self._selref_ptr_to_selector_map[selref.source_address]
-                self._selref_ptr_to_selector_map[selref.source_address] = selector
+                    # Did we already parse this same selector but with more specific information?
+                    # (Say, if we parse an ObjC class implementing a protocol before parsing the protocol itself)
+                    if previously_parsed_selector.implementation:
+                        # Make sure we keep the most specific selector we've seen
+                        most_specific_selector = previously_parsed_selector
+                self._selref_ptr_to_selector_map[selref.source_address] = most_specific_selector
 
             method_entry_off += method_ent.sizeof
         return selectors
@@ -534,9 +534,10 @@ class ObjcRuntimeDataParser:
         protolist = self.binary.read_struct(protolist_ptr, ObjcProtocolListStruct, virtual=True)
         protocol_pointers: List[VirtualMemoryPointer] = []
         # pointers start directly after the 'count' field
-        addr = protolist.binary_offset + protolist.sizeof
+        addr = VirtualMemoryPointer(protolist.binary_offset + protolist.sizeof)
         for i in range(protolist.count):
-            pointer = self.binary.read_word(addr)
+            # This pointer may be rebased
+            pointer = self.binary.read_rebased_pointer(addr)
             protocol_pointers.append(VirtualMemoryPointer(pointer))
             # step to next protocol pointer in list
             addr += sizeof(self.binary.platform_word_type)
@@ -574,19 +575,25 @@ class ObjcRuntimeDataParser:
     ) -> ObjcCategoryRawStruct:
         """Read a struct __objc_category from the location indicated by the provided __objc_catlist pointer
         """
-        category_entry = self.binary.read_struct(category_struct_pointer, ObjcCategoryRawStruct, virtual=True)
+        category_entry = self.binary.read_struct_with_rebased_pointers(
+            category_struct_pointer, ObjcCategoryRawStruct, virtual=True
+        )
         return category_entry
 
     def _get_objc_protocol_from_pointer(self, protocol_struct_pointer: VirtualMemoryPointer) -> ObjcProtocolRawStruct:
         """Read a struct __objc_protocol from the location indicated by the provided struct objc_protocol_list pointer
         """
-        protocol_entry = self.binary.read_struct(protocol_struct_pointer, ObjcProtocolRawStruct, virtual=True)
+        protocol_entry = self.binary.read_struct_with_rebased_pointers(
+            protocol_struct_pointer, ObjcProtocolRawStruct, virtual=True
+        )
         return protocol_entry
 
     def _get_objc_class_from_classlist_pointer(self, class_struct_pointer: VirtualMemoryPointer) -> ObjcClassRawStruct:
         """Read a struct __objc_class from the location indicated by the __objc_classlist pointer
         """
-        class_entry = self.binary.read_struct(class_struct_pointer, ObjcClassRawStruct, virtual=True)
+        class_entry = self.binary.read_struct_with_rebased_pointers(
+            class_struct_pointer, ObjcClassRawStruct, virtual=True
+        )
 
         # sanitize class_entry
         # the least significant 2 bits are used for flags
@@ -599,7 +606,7 @@ class ObjcRuntimeDataParser:
         """Read a struct __objc_data from a provided struct __objc_class
         If the struct __objc_class describe invalid or no corresponding data, None will be returned.
         """
-        data_entry = self.binary.read_struct(objc_class.data, ObjcDataRawStruct, virtual=True)
+        data_entry = self.binary.read_struct_with_rebased_pointers(objc_class.data, ObjcDataRawStruct, virtual=True)
         # ensure this is a valid entry
         if data_entry.name < self.binary.get_virtual_base():
             # TODO(PT): sometimes we'll get addresses passed to this method that are actually struct __objc_method

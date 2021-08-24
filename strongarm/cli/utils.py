@@ -362,7 +362,8 @@ def print_raw_strings(binary: MachoBinary) -> None:
         return
 
     print("\nStrings:")
-    for string in strings_section.content.split(b"\0"):
+    strings_content = binary.get_bytes(strings_section.offset, strings_section.size)
+    for string in strings_content.split(b"\0"):
         try:
             print(f"\t{string.decode()}")
         except UnicodeDecodeError:

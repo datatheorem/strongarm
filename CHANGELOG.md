@@ -1,5 +1,9 @@
 # Changelog
 
+## Unreleased
+
+### SCAN-2909: Don't try to parse ARM64e slices for now (Will be reverted by SCAN-2910)
+
 ## 2021-07-26 11.0.0
 
 ### SCAN-2795: Add support for iOS 15 binaries

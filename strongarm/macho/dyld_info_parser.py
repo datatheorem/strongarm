@@ -18,19 +18,24 @@ from .macho_definitions import StaticFilePointer, VirtualMemoryPointer
 
 
 class BindOpcode(IntEnum):
-    BIND_OPCODE_DONE = 0
-    BIND_OPCODE_SET_DYLIB_ORDINAL_IMM = 1
-    BIND_OPCODE_SET_DYLIB_ORDINAL_ULEB = 2
-    BIND_OPCODE_SET_DYLIB_SPECIAL_IMM = 3
-    BIND_OPCODE_SET_SYMBOL_TRAILING_FLAGS_IMM = 4
-    BIND_OPCODE_SET_TYPE_IMM = 5
-    BIND_OPCODE_SET_ADDEND_SLEB = 6
-    BIND_OPCODE_SET_SEGMENT_AND_OFFSET_ULEB = 7
-    BIND_OPCODE_ADD_ADDR_ULEB = 8
-    BIND_OPCODE_DO_BIND = 9
-    BIND_OPCODE_DO_BIND_ADD_ADDR_ULEB = 10
-    BIND_OPCODE_DO_BIND_ADD_ADDR_IMM_SCALED = 11
-    BIND_OPCODE_DO_BIND_ULEB_TIMES_SKIPPING_ULEB = 12
+    BIND_OPCODE_DONE = 0x00
+    BIND_OPCODE_SET_DYLIB_ORDINAL_IMM = 0x10
+    BIND_OPCODE_SET_DYLIB_ORDINAL_ULEB = 0x20
+    BIND_OPCODE_SET_DYLIB_SPECIAL_IMM = 0x30
+    BIND_OPCODE_SET_SYMBOL_TRAILING_FLAGS_IMM = 0x40
+    BIND_OPCODE_SET_TYPE_IMM = 0x50
+    BIND_OPCODE_SET_ADDEND_SLEB = 0x60
+    BIND_OPCODE_SET_SEGMENT_AND_OFFSET_ULEB = 0x70
+    BIND_OPCODE_ADD_ADDR_ULEB = 0x80
+    BIND_OPCODE_DO_BIND = 0x90
+    BIND_OPCODE_DO_BIND_ADD_ADDR_ULEB = 0xA0
+    BIND_OPCODE_DO_BIND_ADD_ADDR_IMM_SCALED = 0xB0
+    BIND_OPCODE_DO_BIND_ULEB_TIMES_SKIPPING_ULEB = 0xC0
+    BIND_OPCODE_THREADED = 0xD0
+
+    # The immediate will contain a sub-opcode for BIND_OPCODE_THREADED
+    BIND_SUBOPCODE_THREADED_SET_BIND_ORDINAL_TABLE_SIZE_ULEB = 0x00
+    BIND_SUBOPCODE_THREADED_APPLY = 0x01
 
 
 @dataclass
@@ -251,6 +256,7 @@ class DyldInfoParser:
         segment_index = 0
         segment_offset = 0
         library_ordinal = 0
+        target_table_count = 0
 
         def commit_stub() -> None:
             segment_command = binary.segment_for_index(segment_index)
@@ -263,8 +269,8 @@ class DyldInfoParser:
 
         while index != len(binding_info):
             byte = binding_info[index]
-            opcode = byte >> 4
-            immediate = byte & 0xF
+            opcode = byte & 0xF0
+            immediate = byte & 0x0F
             index += 1
 
             if opcode == BindOpcode.BIND_OPCODE_DONE:
@@ -309,6 +315,16 @@ class DyldInfoParser:
                 for i in range(count):
                     commit_stub()
                     segment_offset += pointer_size + skip
+            elif opcode == BindOpcode.BIND_OPCODE_THREADED:
+                if immediate == BindOpcode.BIND_SUBOPCODE_THREADED_SET_BIND_ORDINAL_TABLE_SIZE_ULEB:
+                    target_table_count, index = DyldInfoParser.read_uleb(binding_info, index)
+                    if target_table_count > 65535:
+                        raise ValueError("Invalid target_table_count")
+                elif immediate == BindOpcode.BIND_SUBOPCODE_THREADED_APPLY:
+                    # TODO(PT): Parse a fixup pointer chain here
+                    pass
+                else:
+                    raise ValueError(f"Invalid threaded sub-opcode: {immediate}")
             else:
                 logging.error(f"unknown dyld bind opcode {hex(opcode)}, immediate {hex(immediate)}")
 

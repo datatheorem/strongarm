@@ -1,5 +1,9 @@
 # Changelog
 
+## Unreleased
+
+### SCAN-2907: Add basic support for BIND_OPCODE_THREADED
+
 ## 2021-07-26 11.0.0
 
 ### SCAN-2795: Add support for iOS 15 binaries

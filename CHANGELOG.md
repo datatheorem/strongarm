@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## 2021-09-23: 11.0.1
 
 ### SCAN-2907: Add basic support for BIND_OPCODE_THREADED
 ### SCAN-2909: Don't try to parse ARM64e slices for now (Will be reverted by SCAN-2910)

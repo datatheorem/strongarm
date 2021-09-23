@@ -318,7 +318,7 @@ class DyldInfoParser:
             elif opcode == BindOpcode.BIND_OPCODE_THREADED:
                 if immediate == BindOpcode.BIND_SUBOPCODE_THREADED_SET_BIND_ORDINAL_TABLE_SIZE_ULEB:
                     target_table_count, index = DyldInfoParser.read_uleb(binding_info, index)
-                    if target_table_count > 65535:
+                    if target_table_count >= (pow(2, 16) - 1):
                         raise ValueError("Invalid target_table_count")
                 elif immediate == BindOpcode.BIND_SUBOPCODE_THREADED_APPLY:
                     # TODO(PT): Parse a fixup pointer chain here

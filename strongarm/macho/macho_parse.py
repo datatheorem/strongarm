@@ -113,6 +113,12 @@ class MachoParser:
                 fat_arch.size = swap32(int(fat_arch.size))
                 fat_arch.align = swap32(int(fat_arch.align))
 
+            # TODO(PT): SCAN-2910: Don't skip ARM64E slices
+            if fat_arch.cputype == MachArch.MH_CPU_TYPE_ARM64 and fat_arch.cpusubtype == (
+                MachArch.MH_CPU_SUBTYPE_PTRAUTH_ABI | MachArch.MH_CPU_SUBTYPE_ARM64E
+            ):
+                continue
+
             self.parse_thin_header(StaticFilePointer(fat_arch.offset), fat_arch.size)
             # move to next fat_arch structure in file
             read_off += sizeof(MachoFatArch)

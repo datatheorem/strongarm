@@ -1,5 +1,9 @@
 # Changelog
 
+## 2021-09-23: 11.0.2
+
+### Necessary version bump to replace a malformed source archive on PyPI
+
 ## 2021-09-23: 11.0.1
 
 ### SCAN-2907: Add basic support for BIND_OPCODE_THREADED

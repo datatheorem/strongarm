@@ -162,14 +162,15 @@ class MachoBinary:
         self._build_tool_versions: Optional[List[MachoBuildToolVersionStruct]] = None
 
         self.__codesign_parser: Optional[CodesignParser] = None
+        self.__minimum_deployment_target: Optional[LooseVersion] = None
 
         # This kicks off the parse of the binary
         if not self.parse():
             raise RuntimeError("Failed to parse Mach-O")
 
         self.platform_word_type = c_uint64 if self.is_64bit else c_uint32
-        self.symtab_contents = self._get_symtab_contents()
-        logging.debug(self, f"parsed symtab, len = {len(self.symtab_contents)}")
+
+        self._symtab_contents: Optional[List[MachoNlistStruct]] = None
 
         from .dyld_info_parser import DyldBoundSymbol, DyldInfoParser
 
@@ -532,7 +533,14 @@ class MachoBinary:
         string_table = list(string_table_data)
         return string_table
 
-    def _get_symtab_contents(self) -> List[MachoNlistStruct]:
+    @property
+    def symtab_contents(self) -> List[MachoNlistStruct]:
+        if self._symtab_contents is None:
+            self._symtab_contents = self._parse_symtab_contents()
+            logging.debug(self, f"parsed symtab, len = {len(self.symtab_contents)}")
+        return self._symtab_contents
+
+    def _parse_symtab_contents(self) -> List[MachoNlistStruct]:
         """Parse symbol table containing list of Nlist64's
 
         Returns:
@@ -1059,14 +1067,15 @@ class MachoBinary:
         return dylib_name
 
     def get_minimum_deployment_target(self) -> Optional[LooseVersion]:
-        if not self._build_version_cmd:
-            return None
-        # X.Y.Z is encoded in nibbles xxxx.yy.zz
-        encoded_min_target = self._build_version_cmd.minos
-        patch = (encoded_min_target >> (8 * 0)) & 0xFF
-        minor = (encoded_min_target >> (8 * 1)) & 0xFF
-        major = (encoded_min_target >> (8 * 2)) & 0xFFFF
-        return LooseVersion(f"{major}.{minor}.{patch}")
+        if not self.__minimum_deployment_target:
+            if self._build_version_cmd:
+                # X.Y.Z is encoded in nibbles xxxx.yy.zz
+                encoded_min_target = self._build_version_cmd.minos
+                patch = (encoded_min_target >> (8 * 0)) & 0xFF
+                minor = (encoded_min_target >> (8 * 1)) & 0xFF
+                major = (encoded_min_target >> (8 * 2)) & 0xFFFF
+                self.__minimum_deployment_target = LooseVersion(f"{major}.{minor}.{patch}")
+        return self.__minimum_deployment_target
 
     def get_build_version_platform(self) -> Optional[MachoBuildVersionPlatform]:
         if not self._build_version_cmd:

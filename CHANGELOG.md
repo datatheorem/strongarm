@@ -1,5 +1,17 @@
 # Changelog
 
+## 2021-10-06: 11.0.3
+
+### SCAN-2929: Optimise load-command insertion code path
+
+Strongarm used to parse the symbol table on startup. This caused unnecessary CPU/RAM consumption when the API user
+simply wants to insert a load command.
+
+(New): Defer parsing of `MachoBinary.symtab_contents` until first requested.
+
+(New): `MachoBinary.read_struct()` calls `MachoBinary.get_minimum_deployment_target()` on each invocation, and the latter function 
+uses `LooseVersion`, which does regex parsing. Add a cache so this attribute is computed only once.
+
 ## 2021-09-23: 11.0.2
 
 ### Necessary version bump to replace a malformed source archive on PyPI

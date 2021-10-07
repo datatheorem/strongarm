@@ -327,23 +327,9 @@ class ObjcRuntimeDataParser:
         classes: List[ObjcClass] = []
         classes += self._parse_objc_classes()
         classes += self._parse_objc_categories()
-        # Link superclass methods into their subclasses
-        self._add_superclass_methods_to_subclasses()
         # Link superclasses of classes and base-classes of categories
         self._add_superclass_or_base_class_name_to_classes(classes)
         return classes
-
-    def _add_superclass_methods_to_subclasses(self) -> None:
-        for classlist_ptr, objc_class in self._classrefs_to_objc_classes.items():
-            super_classref = objc_class.super_classref
-            if not super_classref:
-                continue
-            superclass = self.objc_class_for_classlist_pointer(super_classref)
-            if not superclass:
-                continue
-            objc_class.ivars += superclass.ivars
-            objc_class.selectors += superclass.selectors
-            objc_class.protocols += superclass.protocols
 
     def _add_superclass_or_base_class_name_to_classes(self, classes: List[ObjcClass]) -> None:
         """Iterate each ObjC class/category, and backfill its superclass/base_class name, respectively.

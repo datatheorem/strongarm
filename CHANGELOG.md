@@ -1,5 +1,11 @@
 # Changelog
 
+## 2021-10-07: 12.0.0
+
+### SCAN-2944: ObjcClass.selectors no longer contains its superclass's selectors
+
+(Breaking): `ObjcClass.selectors` no longer contains its superclass's selectors. This was originally added for convenience, but does not reflect the underlying binary, and violates assumptions an API client was making.
+
 ## 2021-10-06: 11.0.3
 
 ### SCAN-2929: Optimise load-command insertion code path

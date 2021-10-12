@@ -1,5 +1,9 @@
 # Changelog
 
+## Unreleased
+
+Drop `MachoBinary` from the `MachoSection/MachoSegment` initialisers 
+
 ## 2021-10-07: 12.0.0
 
 ### SCAN-2944: ObjcClass.selectors no longer contains its superclass's selectors

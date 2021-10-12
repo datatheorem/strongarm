@@ -65,7 +65,7 @@ class InvalidAddressError(Exception):
 
 
 class MachoSegment:
-    def __init__(self, binary: "MachoBinary", segment_command: MachoSegmentCommandStruct) -> None:
+    def __init__(self, segment_command: MachoSegmentCommandStruct) -> None:
         self.cmd = segment_command
 
         self.name = segment_command.segname.decode()
@@ -93,7 +93,7 @@ class MachoSegment:
 
 
 class MachoSection:
-    def __init__(self, binary: "MachoBinary", section_command: MachoSectionRawStruct, segment: MachoSegment) -> None:
+    def __init__(self, section_command: MachoSectionRawStruct, segment: MachoSegment) -> None:
         self.cmd = section_command
         self.segment = segment
 
@@ -287,7 +287,7 @@ class MachoBinary:
             if load_command.cmd in [MachoLoadCommands.LC_SEGMENT, MachoLoadCommands.LC_SEGMENT_64]:
                 segment_command = self.read_struct(offset, MachoSegmentCommandStruct)
                 # TODO(PT) handle byte swap of segment if necessary
-                segment = MachoSegment(self, segment_command)
+                segment = MachoSegment(segment_command)
                 self.segments.append(segment)
                 self._parse_sections_for_segment(segment, offset)
 
@@ -449,7 +449,7 @@ class MachoBinary:
             # TODO(PT): handle byte swap of segment
             section_command = self.read_struct(section_offset, MachoSectionRawStruct)
             # Encapsulate header and content into one object, and store that
-            section = MachoSection(self, section_command, segment)
+            section = MachoSection(section_command, segment)
             segment.sections.append(section)
             # Add to list of sections within the Mach-O
             self.sections.append(section)

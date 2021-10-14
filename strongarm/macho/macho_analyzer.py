@@ -30,6 +30,7 @@ from strongarm.macho.objc_runtime_data_parser import (
 if TYPE_CHECKING:
     from strongarm.objc import ObjcFunctionAnalyzer, ObjcMethodInfo
 
+logger = logging.getLogger("strongarm")
 
 _T = TypeVar("_T")
 
@@ -112,7 +113,7 @@ def _requires_xrefs_computed(func: CallableT) -> CallableT:
     @functools.wraps(func)
     def wrap(self: "MachoAnalyzer", *args: Any, **kwargs: Any) -> Any:
         if not self._has_computed_xrefs:
-            logging.info(
+            logger.info(
                 f"called {func.__name__} before XRefs were computed for {self.binary.path.name}, computing now..."
             )
             self._build_xref_database()
@@ -339,11 +340,11 @@ class MachoAnalyzer:
         from strongarm_dataflow.dataflow import build_xref_database_fast
 
         if self._has_computed_xrefs:
-            logging.error("Already computed xrefs, why was _build_xref_database called again?")
+            logger.error("Already computed xrefs, why was _build_xref_database called again?")
             return
 
         start_time = time.time()
-        logging.debug(f"{self.binary.path} computing call XRefs...")
+        logger.debug(f"{self.binary.path} computing call XRefs...")
 
         objc_function_family = list(self._objc_fastpath_ptrs_to_selector_names.keys())
         if self._objc_msgSend_addr:
@@ -362,7 +363,7 @@ class MachoAnalyzer:
 
         self._has_computed_xrefs = True
         end_time = time.time()
-        logging.debug(f"Finding xrefs took {end_time - start_time} seconds")
+        logger.debug(f"Finding xrefs took {end_time - start_time} seconds")
 
     @classmethod
     def clear_cache(cls) -> None:
@@ -370,7 +371,7 @@ class MachoAnalyzer:
         This can be used when you are finished analyzing a binary set and don't want to retain the cached data in memory
         """
         for binary, analyzer in cls._ANALYZER_CACHE.items():
-            logging.debug(f"Deleting db {analyzer._db_path}...")
+            logger.debug(f"Deleting db {analyzer._db_path}...")
             analyzer._db_handle.close()
             shutil.rmtree(analyzer._db_tempdir.as_posix())
 

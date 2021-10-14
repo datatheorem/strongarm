@@ -229,7 +229,7 @@ def main() -> None:
     args = arg_parser.parse_args()
 
     def configure_logger() -> None:
-        root = logging.getLogger()
+        root = logging.getLogger("strongarm")
         root.setLevel(logging.DEBUG)
 
         ch = logging.StreamHandler(sys.stdout)
@@ -241,7 +241,7 @@ def main() -> None:
     configure_logger()
 
     if args.verbose:
-        logging.getLogger().setLevel(logging.DEBUG)
+        logging.getLogger("strongarm").setLevel(logging.DEBUG)
 
     print_header(args)
 

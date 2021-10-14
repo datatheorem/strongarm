@@ -6,6 +6,8 @@ from strongarm.macho.macho_definitions import StaticFilePointer
 
 from .codesign_definitions import CodesignBlobTypeEnum, CSBlob, CSBlobIndex, CSCodeDirectory, CSSuperblob
 
+logger = logging.getLogger("strongarm")
+
 
 class CodesignParser:
     """Parser for the CodeSign blobs in __LINKEDIT pointed to by LC_CODE_SIGNATURE.
@@ -56,7 +58,7 @@ class CodesignParser:
             pass
         else:
             # unknown magic
-            logging.debug(self, f"Unknown CodeSign blob magic @ {hex(file_offset)}: {hex(magic)}")
+            logger.debug(self, f"Unknown CodeSign blob magic @ {hex(file_offset)}: {hex(magic)}")
 
     def parse_superblob(self, file_offset: StaticFilePointer) -> None:
         """Parse a codesign 'superblob' at the provided file offset.

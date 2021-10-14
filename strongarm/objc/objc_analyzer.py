@@ -13,6 +13,8 @@ from strongarm.macho import MachoBinary, ObjcClass, ObjcSelector, VirtualMemoryP
 
 from .objc_instruction import ObjcBranchInstruction, ObjcInstruction, ObjcUnconditionalBranchInstruction
 
+logger = logging.getLogger("strongarm")
+
 
 def _is_mangled_cpp_symbol(symbol_name: str) -> bool:
     """Return whether a symbol name appears to be a mangled C++ symbol.
@@ -149,11 +151,11 @@ class ObjcFunctionAnalyzer:
             output: string to output to debug log
         """
         if not len(self.instructions):
-            logging.debug(self, f"func(stub) {output}")
+            logger.debug(self, f"func(stub) {output}")
         else:
             func_base = self.start_address
             instruction_address = func_base + (idx * MachoBinary.BYTES_PER_INSTRUCTION)
-            logging.debug(self, f"func({hex(int(instruction_address))}) {output}")
+            logger.debug(self, f"func({hex(int(instruction_address))}) {output}")
 
     def get_symbol_name(self) -> str:
         """Return a objective-c class/method, c function, or sub_address-style string representing the name of

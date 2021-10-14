@@ -8,6 +8,8 @@ from typing import List, Tuple
 
 from strongarm.macho import DyldSharedCacheParser, MachoAnalyzer, VirtualMemoryPointer
 
+logger = logging.getLogger("strongarm")
+
 
 def main():
     logging.basicConfig(level=logging.INFO)
@@ -28,14 +30,14 @@ def main():
         # The DSC has more than 1,000 binaries, so try to free up resources after each image
         MachoAnalyzer.clear_cache()
 
-        logging.info(f"({idx+1}/{image_count}) Symbolicating {path}...")
+        logger.info(f"({idx+1}/{image_count}) Symbolicating {path}...")
         try:
             binary = dyld_shared_cache.get_embedded_binary(path)
             analyzer = MachoAnalyzer.get_analyzer(binary)
             for sym, addr in analyzer.exported_symbol_names_to_pointers.items():
                 symbols.append((VirtualMemoryPointer(addr), sym, path))
         except Exception:
-            logging.error(f"Failed to symbolicate {path}")
+            logger.error(f"Failed to symbolicate {path}")
             continue
 
     with open(str(args.output_csv_path), "w", newline="") as output_csv:

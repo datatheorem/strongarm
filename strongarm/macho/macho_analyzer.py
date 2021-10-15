@@ -646,8 +646,6 @@ class MachoAnalyzer:
             return classrefs[0]
 
         # TODO(PT): this is expensive! We should do one analysis step of __objc_classrefs and create a map.
-        classref_locations, classref_destinations = self.binary.read_pointer_section("__objc_classrefs")
-
         # is it a local class?
         class_locations = [x.raw_struct.binary_offset for x in self.objc_classes() if x.name == class_name]
         if not len(class_locations):
@@ -655,12 +653,9 @@ class MachoAnalyzer:
             return None
         class_location = VirtualMemoryPointer(class_locations[0])
 
-        if class_location not in classref_destinations:
-            # unknown class name
-            return None
-
-        classref_index = classref_destinations.index(class_location)
-        return classref_locations[classref_index]
+        classref_addr_to_pointer_map = self.binary.read_pointer_section("__objc_classrefs")
+        classref_pointer_to_addr_map = {v: k for k, v in classref_addr_to_pointer_map.items()}
+        return classref_pointer_to_addr_map.get(class_location)
 
     def selref_for_selector_name(self, selector_name: str) -> Optional[VirtualMemoryPointer]:
         return self.objc_helper.selref_for_selector_name(selector_name)

@@ -205,12 +205,8 @@ class ObjcRuntimeDataParser:
         value, but none of the ObjcSelector objects will have their `implementation` field filled, because
         at this point in the parse we do not yet know the implementations of each selector. ObjcSelectors which we
         later find an implementation for are updated in self.read_selectors_from_methlist_ptr"""
-        selref_pointers, selector_literal_pointers = self.binary.read_pointer_section("__objc_selrefs")
-        # sanity check
-        if len(selref_pointers) != len(selector_literal_pointers):
-            raise RuntimeError("read invalid data from __objc_selrefs")
-
-        for selref_ptr, selector_literal_ptr in zip(selref_pointers, selector_literal_pointers):
+        selref_pointers = self.binary.read_pointer_section("__objc_selrefs")
+        for selref_ptr, selector_literal_ptr in selref_pointers.items():
             # read selector string literal from selref pointer
             selector_string = self.binary.get_full_string_from_start_address(selector_literal_ptr)
             if not selector_string:
@@ -541,20 +537,17 @@ class ObjcRuntimeDataParser:
     def _get_catlist_pointers(self) -> List[VirtualMemoryPointer]:
         """Read pointers in __objc_catlist into list
         """
-        _, catlist_pointers = self.binary.read_pointer_section("__objc_catlist")
-        return catlist_pointers
+        return list(self.binary.read_pointer_section("__objc_catlist").values())
 
     def _get_protolist_pointers(self) -> List[VirtualMemoryPointer]:
         """Read pointers in __objc_protolist into list
         """
-        _, protolist_pointers = self.binary.read_pointer_section("__objc_protolist")
-        return protolist_pointers
+        return list(self.binary.read_pointer_section("__objc_protolist").values())
 
     def _get_classlist_pointers(self) -> List[VirtualMemoryPointer]:
         """Read pointers in __objc_classlist into list
         """
-        _, classlist_pointers = self.binary.read_pointer_section("__objc_classlist")
-        return classlist_pointers
+        return list(self.binary.read_pointer_section("__objc_classlist").values())
 
     def _get_objc_category_from_catlist_pointer(
         self, category_struct_pointer: VirtualMemoryPointer

@@ -712,7 +712,7 @@ class MachoBinary:
             source_name = "<unknown dylib>"
         return source_name
 
-    def read_pointer_section(self, section_name: str) -> Tuple[List[VirtualMemoryPointer], List[VirtualMemoryPointer]]:
+    def read_pointer_section(self, section_name: str) -> Dict[VirtualMemoryPointer, VirtualMemoryPointer]:
         """Read all the pointers in a section
 
         It is the caller's responsibility to only call this with a `section_name` which indicates a section which should
@@ -725,9 +725,6 @@ class MachoBinary:
         The indexes of these two lists are matched up; that is, list1[0] is the virtual address of the first pointer
         in the requested section, and list2[0] is the pointer value contained at that address.
         """
-        locations: List[VirtualMemoryPointer] = []
-        entries: List[VirtualMemoryPointer] = []
-
         # PT: Assume a pointer-list-section will always be in __DATA or __DATA_CONST. True as far as I know.
         for segment in ["__DATA", "__DATA_CONST"]:
             section = self.section_with_name(section_name, segment)
@@ -735,7 +732,9 @@ class MachoBinary:
                 break
         else:
             # Couldn't find the desired section
-            return locations, entries
+            return {}
+
+        address_to_pointer_map: Dict[VirtualMemoryPointer, VirtualMemoryPointer] = {}
 
         section_base = section.address
         section_data = self.get_bytes(section.offset, section.size)
@@ -747,7 +746,6 @@ class MachoBinary:
         for i in range(pointer_count):
             # convert section offset of entry to absolute virtual address
             ptr_location = VirtualMemoryPointer(section_base + pointer_off)
-            locations.append(ptr_location)
 
             if ptr_location in self.dyld_rebased_pointers:
                 ptr_value = self.dyld_rebased_pointers[ptr_location]
@@ -759,11 +757,11 @@ class MachoBinary:
                 )
                 logging.debug(f"Pointer was not in the rebase list: {ptr_location} -> {ptr_value}")
 
-            entries.append(VirtualMemoryPointer(ptr_value))
+            address_to_pointer_map[ptr_location] = VirtualMemoryPointer(ptr_value)
 
             pointer_off += sizeof(binary_word)
 
-        return locations, entries
+        return address_to_pointer_map
 
     def read_word(self, address: int, virtual: bool = True, word_type: Any = None) -> int:
         """Attempt to read a word from the binary at a virtual address.
@@ -1051,6 +1049,20 @@ class MachoBinary:
 
         self._functions_list = functions_list
         return self._functions_list
+
+    def get_constructor_functions(self) -> List[VirtualMemoryPointer]:
+        """Get a list of the function entry points defined in __mod_init_func. This includes C constructors.
+
+        Returns: A list of VirtualMemoryPointers corresponding to each function's entry point.
+        """
+        return list(self.read_pointer_section("__mod_init_func").values())
+
+    def get_destructor_functions(self) -> List[VirtualMemoryPointer]:
+        """Get a list of the function entry points defined in __mod_term_func. This includes C destructors.
+
+        Returns: A list of VirtualMemoryPointers corresponding to each function's entry point.
+        """
+        return list(self.read_pointer_section("__mod_term_func").values())
 
     def dylib_id(self) -> Optional[str]:
         """If the binary contains an LC_ID_DYLIB load command, return the pathname which the binary represents.

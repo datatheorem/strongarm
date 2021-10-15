@@ -8,7 +8,7 @@ from typing import List, Tuple
 
 from strongarm.macho import DyldSharedCacheParser, MachoAnalyzer, VirtualMemoryPointer
 
-logger = logging.getLogger("strongarm")
+logger = logging.getLogger("strongarm").getChild(__file__)
 
 
 def main():

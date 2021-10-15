@@ -16,7 +16,7 @@ from strongarm.macho.macho_definitions import (
     VMProtFlags,
 )
 
-logger = logging.getLogger("strongarm")
+logger = logging.getLogger("strongarm").getChild(__file__)
 
 _StructureT = TypeVar("_StructureT", bound=Structure)
 

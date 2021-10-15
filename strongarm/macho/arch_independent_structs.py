@@ -60,7 +60,7 @@ if TYPE_CHECKING:
     )
     from .macho_binary import MachoBinary
 
-logger = logging.getLogger("strongarm")
+logger = logging.getLogger("strongarm").getChild(__file__)
 
 # Create type alias for the following classes that inherit from ArchIndependentStructure
 _32_BIT_STRUCT_ALIAS = Union[

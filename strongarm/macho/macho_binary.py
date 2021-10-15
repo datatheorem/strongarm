@@ -41,7 +41,7 @@ from strongarm.macho.macho_load_commands import MachoLoadCommands
 if TYPE_CHECKING:
     from strongarm.macho.codesign import CodesignParser
 
-logger = logging.getLogger("strongarm")
+logger = logging.getLogger("strongarm").getChild(__file__)
 
 AIS = TypeVar("AIS", bound=ArchIndependentStructure)
 

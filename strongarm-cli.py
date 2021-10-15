@@ -229,7 +229,7 @@ def main() -> None:
     args = arg_parser.parse_args()
 
     def configure_logger() -> None:
-        root = logging.getLogger("strongarm")
+        root = logging.getLogger("strongarm").getChild(__file__)
         root.setLevel(logging.DEBUG)
 
         ch = logging.StreamHandler(sys.stdout)

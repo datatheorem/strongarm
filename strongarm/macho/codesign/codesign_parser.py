@@ -6,7 +6,7 @@ from strongarm.macho.macho_definitions import StaticFilePointer
 
 from .codesign_definitions import CodesignBlobTypeEnum, CSBlob, CSBlobIndex, CSCodeDirectory, CSSuperblob
 
-logger = logging.getLogger("strongarm")
+logger = logging.getLogger("strongarm").getChild(__file__)
 
 
 class CodesignParser:

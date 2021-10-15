@@ -16,7 +16,7 @@ from .arch_independent_structs import (
 from .macho_binary import MachoBinary
 from .macho_definitions import StaticFilePointer, VirtualMemoryPointer
 
-logger = logging.getLogger("strongarm")
+logger = logging.getLogger("strongarm").getChild(__file__)
 
 
 class BindOpcode(IntEnum):

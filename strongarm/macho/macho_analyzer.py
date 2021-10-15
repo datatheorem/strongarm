@@ -30,7 +30,7 @@ from strongarm.macho.objc_runtime_data_parser import (
 if TYPE_CHECKING:
     from strongarm.objc import ObjcFunctionAnalyzer, ObjcMethodInfo
 
-logger = logging.getLogger("strongarm")
+logger = logging.getLogger("strongarm").getChild(__file__)
 
 _T = TypeVar("_T")
 

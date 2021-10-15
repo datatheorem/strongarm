@@ -13,7 +13,7 @@ from strongarm.macho import MachoBinary, ObjcClass, ObjcSelector, VirtualMemoryP
 
 from .objc_instruction import ObjcBranchInstruction, ObjcInstruction, ObjcUnconditionalBranchInstruction
 
-logger = logging.getLogger("strongarm")
+logger = logging.getLogger("strongarm").getChild(__file__)
 
 
 def _is_mangled_cpp_symbol(symbol_name: str) -> bool:

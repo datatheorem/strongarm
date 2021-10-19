@@ -8,8 +8,9 @@ from setuptools.command.develop import develop
 from setuptools.command.install import install
 
 from strongarm import __url__, __version__
+from strongarm.logger import strongarm_logger
 
-logger = logging.getLogger("strongarm").getChild(__file__)
+logger = strongarm_logger.getChild(__file__)
 
 
 def install_capstone():

@@ -1,10 +1,10 @@
-import logging
 from ctypes import c_uint32, sizeof
 from pathlib import Path
 from typing import Dict, List, Optional, Tuple, Type, TypeVar
 
 from _ctypes import Structure
 
+from strongarm.logger import strongarm_logger
 from strongarm.macho.macho_binary import MachoBinary
 from strongarm.macho.macho_definitions import (
     DyldSharedCacheHeader,
@@ -16,7 +16,7 @@ from strongarm.macho.macho_definitions import (
     VMProtFlags,
 )
 
-logger = logging.getLogger("strongarm").getChild(__file__)
+logger = strongarm_logger.getChild(__file__)
 
 _StructureT = TypeVar("_StructureT", bound=Structure)
 

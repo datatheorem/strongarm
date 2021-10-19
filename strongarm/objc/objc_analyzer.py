@@ -1,5 +1,4 @@
 import functools
-import logging
 import shlex
 from itertools import starmap
 from subprocess import check_output
@@ -9,11 +8,12 @@ from capstone import CsInsn
 from strongarm_dataflow.dataflow import get_register_contents_at_instruction_fast
 from strongarm_dataflow.register_contents import RegisterContents, RegisterContentsType
 
+from strongarm.logger import strongarm_logger
 from strongarm.macho import MachoBinary, ObjcClass, ObjcSelector, VirtualMemoryPointer
 
 from .objc_instruction import ObjcBranchInstruction, ObjcInstruction, ObjcUnconditionalBranchInstruction
 
-logger = logging.getLogger("strongarm").getChild(__file__)
+logger = strongarm_logger.getChild(__file__)
 
 
 def _is_mangled_cpp_symbol(symbol_name: str) -> bool:

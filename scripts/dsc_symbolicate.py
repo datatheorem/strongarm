@@ -7,8 +7,9 @@ from pathlib import Path
 from typing import List, Tuple
 
 from strongarm.macho import DyldSharedCacheParser, MachoAnalyzer, VirtualMemoryPointer
+from strongarm.logger import strongarm_logger
 
-logger = logging.getLogger("strongarm").getChild(__file__)
+logger = strongarm_logger.getChild(__file__)
 
 
 def main():

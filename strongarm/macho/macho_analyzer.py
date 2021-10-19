@@ -1,5 +1,4 @@
 import functools
-import logging
 import pathlib
 import shutil
 import sqlite3
@@ -13,6 +12,7 @@ from typing import TYPE_CHECKING, Any, Callable, Dict, Iterable, List, Optional,
 from capstone import CS_ARCH_ARM64, CS_MODE_ARM, Cs, CsInsn
 from more_itertools import pairwise
 
+from strongarm.logger import strongarm_logger
 from strongarm.macho.arch_independent_structs import CFString32, CFString64, CFStringStruct
 from strongarm.macho.dyld_info_parser import DyldBoundSymbol
 from strongarm.macho.macho_binary import InvalidAddressError, MachoBinary
@@ -30,7 +30,7 @@ from strongarm.macho.objc_runtime_data_parser import (
 if TYPE_CHECKING:
     from strongarm.objc import ObjcFunctionAnalyzer, ObjcMethodInfo
 
-logger = logging.getLogger("strongarm").getChild(__file__)
+logger = strongarm_logger.getChild(__file__)
 
 _T = TypeVar("_T")
 

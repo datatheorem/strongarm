@@ -1,8 +1,8 @@
-import logging
 from ctypes import Structure, c_uint64, sizeof
 from distutils.version import LooseVersion
 from typing import TYPE_CHECKING, Any, Optional, Type, Union
 
+from strongarm.logger import strongarm_logger
 from strongarm.macho.macho_definitions import (
     CFString32,
     CFString64,
@@ -60,7 +60,7 @@ if TYPE_CHECKING:
     )
     from .macho_binary import MachoBinary
 
-logger = logging.getLogger("strongarm").getChild(__file__)
+logger = strongarm_logger.getChild(__file__)
 
 # Create type alias for the following classes that inherit from ArchIndependentStructure
 _32_BIT_STRUCT_ALIAS = Union[

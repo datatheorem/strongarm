@@ -1,4 +1,3 @@
-import logging
 import math
 from ctypes import c_uint32, c_uint64, sizeof
 from distutils.version import LooseVersion
@@ -7,6 +6,7 @@ from typing import TYPE_CHECKING, Any, Dict, List, Optional, Set, Tuple, Type, T
 
 from _ctypes import Structure
 
+from strongarm.logger import strongarm_logger
 from strongarm.macho.arch_independent_structs import (
     ArchIndependentStructure,
     CFStringStruct,
@@ -41,7 +41,7 @@ from strongarm.macho.macho_load_commands import MachoLoadCommands
 if TYPE_CHECKING:
     from strongarm.macho.codesign import CodesignParser
 
-logger = logging.getLogger("strongarm").getChild(__file__)
+logger = strongarm_logger.getChild(__file__)
 
 AIS = TypeVar("AIS", bound=ArchIndependentStructure)
 

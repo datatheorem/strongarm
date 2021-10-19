@@ -1,9 +1,9 @@
-import logging
 from ctypes import c_uint32, c_uint64, sizeof
 from typing import Dict, List, Optional
 
 from more_itertools import first_true
 
+from strongarm.logger import strongarm_logger
 from strongarm.macho.arch_independent_structs import (
     ArchIndependentStructure,
     ObjcCategoryRawStruct,
@@ -19,7 +19,7 @@ from strongarm.macho.arch_independent_structs import (
 from strongarm.macho.macho_binary import MachoBinary
 from strongarm.macho.macho_definitions import VirtualMemoryPointer
 
-logger = logging.getLogger("strongarm").getChild(__file__)
+logger = strongarm_logger.getChild(__file__)
 
 
 class ObjcSelref:

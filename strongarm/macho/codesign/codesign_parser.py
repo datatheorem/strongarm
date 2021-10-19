@@ -1,12 +1,12 @@
-import logging
 from typing import Optional
 
+from strongarm.logger import strongarm_logger
 from strongarm.macho.macho_binary import MachoBinary
 from strongarm.macho.macho_definitions import StaticFilePointer
 
 from .codesign_definitions import CodesignBlobTypeEnum, CSBlob, CSBlobIndex, CSCodeDirectory, CSSuperblob
 
-logger = logging.getLogger("strongarm").getChild(__file__)
+logger = strongarm_logger.getChild(__file__)
 
 
 class CodesignParser:

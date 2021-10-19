@@ -1,8 +1,9 @@
-import logging
 from ctypes import c_long, c_uint16, c_uint32, c_uint64, sizeof
 from dataclasses import dataclass, field
 from enum import IntEnum
 from typing import Dict, List, Optional, Tuple
+
+from strongarm.logger import strongarm_logger
 
 from .arch_independent_structs import (
     DylibCommandStruct,
@@ -16,7 +17,7 @@ from .arch_independent_structs import (
 from .macho_binary import MachoBinary
 from .macho_definitions import StaticFilePointer, VirtualMemoryPointer
 
-logger = logging.getLogger("strongarm").getChild(__file__)
+logger = strongarm_logger.getChild(__file__)
 
 
 class BindOpcode(IntEnum):

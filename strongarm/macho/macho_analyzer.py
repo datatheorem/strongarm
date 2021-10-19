@@ -654,6 +654,7 @@ class MachoAnalyzer:
         class_location = VirtualMemoryPointer(class_locations[0])
 
         classref_addr_to_pointer_map = self.binary.read_pointer_section("__objc_classrefs")
+        # If None is returned, it is an unknown class name
         return first((k for k, v in classref_addr_to_pointer_map.items() if v == class_location), None)
 
     def selref_for_selector_name(self, selector_name: str) -> Optional[VirtualMemoryPointer]:

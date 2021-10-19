@@ -257,29 +257,9 @@ def main(args: argparse.Namespace) -> None:
         print("Error reading binary:", e)
         return
 
-    if args.metadata:
-        print_binary_info(binary)
-    if args.segments:
-        print_binary_segments(binary)
-    if args.sections:
-        print_binary_sections(binary)
-    if args.loads:
-        print_binary_load_commands(binary)
-    if args.classes:
-        print_analyzer_classes(analyzer)
-    if args.protocols:
-        print_analyzer_protocols(analyzer)
-    if args.methods:
-        print_analyzer_methods(analyzer)
-    if args.imports:
-        print_analyzer_imported_symbols(analyzer)
-    if args.exports:
-        print_analyzer_exported_symbols(analyzer)
-    if args.strings:
-        print_raw_strings(binary)
-
-    if any(
-        [
+    args_command_list = [
+        command
+        for command in (
             # fmt: off
             args.metadata,
             args.segments, args.sections,
@@ -288,24 +268,30 @@ def main(args: argparse.Namespace) -> None:
             args.imports, args.exports,
             args.strings,
             # fmt: on
-        ]
-    ):
-        pass
+        )
+        if command
+    ]
 
-    elif script:
+    if script:
         print("Running provided script...\n\n")
         strongarm_script(binary, analyzer)
 
     else:
-        autorun_cmd = "info metadata segments sections loads"
-        print(f"Auto-running '{autorun_cmd}'\n\n")
-
         shell = StrongarmShell(binary, analyzer)
-        shell.run_command(autorun_cmd)
 
-        # this will return False once the shell exists
-        while shell.process_command():
-            pass
+        if args_command_list:
+            for command in args_command_list:
+                shell.run_command(f"info {command}")
+
+        else:
+            autorun_cmd = "info metadata segments sections loads"
+            print(f"Auto-running '{autorun_cmd}'\n\n")
+
+            shell.run_command(autorun_cmd)
+
+            # this will return False once the shell exists
+            while shell.process_command():
+                pass
 
     print()
     print("May your arms be beefy and your binaries unencrypted")
@@ -316,15 +302,15 @@ if __name__ == "__main__":
     arg_parser.add_argument("--verbose", action="store_true", help="Output extra info while analyzing")
     arg_parser.add_argument("binary_path", metavar="binary_path", type=str, help="Path to binary to analyze")
 
-    arg_parser.add_argument("--metadata", action="store_true", help="Print metadata")
-    arg_parser.add_argument("--segments", action="store_true", help="Print segments")
-    arg_parser.add_argument("--sections", action="store_true", help="Print sections")
-    arg_parser.add_argument("--loads", action="store_true", help="Print loads")
-    arg_parser.add_argument("--classes", action="store_true", help="Print classes")
-    arg_parser.add_argument("--protocols", action="store_true", help="Print protocols")
-    arg_parser.add_argument("--methods", action="store_true", help="Print methods")
-    arg_parser.add_argument("--imports", action="store_true", help="Print imports")
-    arg_parser.add_argument("--exports", action="store_true", help="Print exports")
-    arg_parser.add_argument("--strings", action="store_true", help="Print strings")
+    arg_parser.add_argument("--metadata", action="store_const", const="metadata", help="Print metadata")
+    arg_parser.add_argument("--segments", action="store_const", const="segments", help="Print segments")
+    arg_parser.add_argument("--sections", action="store_const", const="sections", help="Print sections")
+    arg_parser.add_argument("--loads", action="store_const", const="loads", help="Print loads")
+    arg_parser.add_argument("--classes", action="store_const", const="classes", help="Print classes")
+    arg_parser.add_argument("--protocols", action="store_const", const="protocols", help="Print protocols")
+    arg_parser.add_argument("--methods", action="store_const", const="methods", help="Print methods")
+    arg_parser.add_argument("--imports", action="store_const", const="imports", help="Print imports")
+    arg_parser.add_argument("--exports", action="store_const", const="exports", help="Print exports")
+    arg_parser.add_argument("--strings", action="store_const", const="strings", help="Print strings")
 
     main(arg_parser.parse_args())

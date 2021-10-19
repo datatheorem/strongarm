@@ -240,7 +240,7 @@ def main(args: argparse.Namespace) -> None:
 
     print_header(args)
 
-    parser = MachoParser(pathlib.Path(args.binary_path).expanduser().resolve())
+    parser = MachoParser(pathlib.Path(args.binary_path))
 
     # print slice info
     print("Slices:")

@@ -21,7 +21,7 @@ from strongarm.cli.utils import (
     print_selector,
 )
 from strongarm.logger import strongarm_logger
-from strongarm.macho import MachoAnalyzer, MachoBinary, MachoParser, VirtualMemoryPointer
+from strongarm.macho import BinaryEncryptedError, MachoAnalyzer, MachoBinary, MachoParser, VirtualMemoryPointer
 
 
 def print_header(args: argparse.Namespace) -> None:
@@ -219,15 +219,10 @@ def strongarm_script(binary: MachoBinary, analyzer: MachoAnalyzer) -> None:
     """
 
 
-def main() -> None:
+def main(args: argparse.Namespace) -> None:
     # XXX(PT): Change this if you want to run a quick script! Write it in strongarm_script()
     script = False
     # end of config
-
-    arg_parser = argparse.ArgumentParser(description="Mach-O Analyzer")
-    arg_parser.add_argument("--verbose", action="store_true", help="Output extra info while analyzing")
-    arg_parser.add_argument("binary_path", metavar="binary_path", type=str, help="Path to binary to analyze")
-    args = arg_parser.parse_args()
 
     def configure_logger() -> None:
         root = strongarm_logger.getChild(__file__)
@@ -256,22 +251,67 @@ def main() -> None:
     binary = pick_macho_slice(parser)
     print(f"Reading {binary.cpu_type.name} slice\n\n")
 
-    analyzer = MachoAnalyzer.get_analyzer(binary)
-    shell = StrongarmShell(binary, analyzer)
+    try:
+        analyzer = MachoAnalyzer.get_analyzer(binary)
+
+    except BinaryEncryptedError as e:
+        print("Error reading binary:", e)
+        return
+
+    args_command_list = [
+        command
+        for command in (
+            # fmt: off
+            args.metadata,
+            args.segments, args.sections,
+            args.loads,
+            args.classes, args.protocols, args.methods,
+            args.imports, args.exports,
+            args.strings,
+            # fmt: on
+        )
+        if command
+    ]
 
     if script:
         print("Running provided script...\n\n")
         strongarm_script(binary, analyzer)
-    else:
-        autorun_cmd = "info metadata segments sections loads"
-        print(f"Auto-running '{autorun_cmd}'\n\n")
-        shell.run_command(autorun_cmd)
 
-        # this will return False once the shell exists
-        while shell.process_command():
-            pass
+    else:
+        shell = StrongarmShell(binary, analyzer)
+
+        if args_command_list:
+            for command in args_command_list:
+                shell.run_command(f"info {command}")
+
+        else:
+            autorun_cmd = "info metadata segments sections loads"
+            print(f"Auto-running '{autorun_cmd}'\n\n")
+
+            shell.run_command(autorun_cmd)
+
+            # this will return False once the shell exists
+            while shell.process_command():
+                pass
+
+    print()
     print("May your arms be beefy and your binaries unencrypted")
 
 
 if __name__ == "__main__":
-    main()
+    arg_parser = argparse.ArgumentParser(description="Mach-O Analyzer")
+    arg_parser.add_argument("--verbose", action="store_true", help="Output extra info while analyzing")
+    arg_parser.add_argument("binary_path", metavar="binary_path", type=str, help="Path to binary to analyze")
+
+    arg_parser.add_argument("--metadata", action="store_const", const="metadata", help="Print metadata")
+    arg_parser.add_argument("--segments", action="store_const", const="segments", help="Print segments")
+    arg_parser.add_argument("--sections", action="store_const", const="sections", help="Print sections")
+    arg_parser.add_argument("--loads", action="store_const", const="loads", help="Print load commands")
+    arg_parser.add_argument("--classes", action="store_const", const="classes", help="Print Objective-C classes")
+    arg_parser.add_argument("--protocols", action="store_const", const="protocols", help="Print Objective-C protocols")
+    arg_parser.add_argument("--methods", action="store_const", const="methods", help="Print Objective-C methods")
+    arg_parser.add_argument("--imports", action="store_const", const="imports", help="Print imported symbols")
+    arg_parser.add_argument("--exports", action="store_const", const="exports", help="Print exported symbols")
+    arg_parser.add_argument("--strings", action="store_const", const="strings", help="Print strings")
+
+    main(arg_parser.parse_args())

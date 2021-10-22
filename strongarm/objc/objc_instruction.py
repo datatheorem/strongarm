@@ -166,7 +166,7 @@ class ObjcUnconditionalBranchInstruction(ObjcBranchInstruction):
         if not called_sym:
             # Branch to an anonymous destination
             # Might be a basic block within a function or some other label
-            # logging.debug(f'No symbol for branch destination {hex(self.destination_address)}')
+            # logger.debug(f'No symbol for branch destination {hex(self.destination_address)}')
             self.is_external_c_call = False
             self.is_msgSend_call = False
             self.symbol = None

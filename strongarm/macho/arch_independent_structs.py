@@ -1,8 +1,8 @@
-import logging
 from ctypes import Structure, c_uint64, sizeof
 from distutils.version import LooseVersion
 from typing import TYPE_CHECKING, Any, Optional, Type, Union
 
+from strongarm.logger import strongarm_logger
 from strongarm.macho.macho_definitions import (
     CFString32,
     CFString64,
@@ -59,6 +59,8 @@ if TYPE_CHECKING:
         CSSuperblobStruct,
     )
     from .macho_binary import MachoBinary
+
+logger = strongarm_logger.getChild(__file__)
 
 # Create type alias for the following classes that inherit from ArchIndependentStructure
 _32_BIT_STRUCT_ALIAS = Union[
@@ -278,7 +280,7 @@ class ObjcMethodStruct(ArchIndependentStructure):
                 field_address = address + field_offset
                 if field_type == c_uint64 and field_address in binary.dyld_rebased_pointers:
                     pointer_value = binary.dyld_rebased_pointers[field_address]
-                    logging.debug(
+                    logger.debug(
                         f"Setting rebased pointer within {struct_type}+{field_offset} -> "
                         f"{pointer_value} at {field_address}"
                     )

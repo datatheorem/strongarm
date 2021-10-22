@@ -1,10 +1,12 @@
-import logging
 from typing import Optional
 
+from strongarm.logger import strongarm_logger
 from strongarm.macho.macho_binary import MachoBinary
 from strongarm.macho.macho_definitions import StaticFilePointer
 
 from .codesign_definitions import CodesignBlobTypeEnum, CSBlob, CSBlobIndex, CSCodeDirectory, CSSuperblob
+
+logger = strongarm_logger.getChild(__file__)
 
 
 class CodesignParser:
@@ -56,7 +58,7 @@ class CodesignParser:
             pass
         else:
             # unknown magic
-            logging.debug(self, f"Unknown CodeSign blob magic @ {hex(file_offset)}: {hex(magic)}")
+            logger.debug(self, f"Unknown CodeSign blob magic @ {hex(file_offset)}: {hex(magic)}")
 
     def parse_superblob(self, file_offset: StaticFilePointer) -> None:
         """Parse a codesign 'superblob' at the provided file offset.

@@ -8,17 +8,20 @@ from setuptools.command.develop import develop
 from setuptools.command.install import install
 
 from strongarm import __url__, __version__
+from strongarm.logger import strongarm_logger
+
+logger = strongarm_logger.getChild(__file__)
 
 
 def install_capstone():
     platform = getattr(os.uname(), "sysname", None)
-    logging.info(f"Installing Capstone for platform: {platform}")
+    logger.info(f"Installing Capstone for platform: {platform}")
 
     if platform == "Darwin":
-        logging.info("Installing Capstone backend from brew...")
+        logger.info("Installing Capstone backend from brew...")
         subprocess.run(["brew", "install", "capstone"])
     elif platform == "Linux":
-        logging.info("Installing Capstone backend from apt-get...")
+        logger.info("Installing Capstone backend from apt-get...")
         subprocess.run(["apt-get", "update"])
         subprocess.run(
             [
@@ -34,8 +37,8 @@ def install_capstone():
         )
     else:
         # Let's not make this a fatal error, as the user may be able to install Capstone on their own
-        logging.warning(f"Unknown platform: {platform}")
-        logging.warning("You must install the capstone backend before using strongarm")
+        logger.warning(f"Unknown platform: {platform}")
+        logger.warning("You must install the capstone backend before using strongarm")
 
 
 # https://stackoverflow.com/questions/19569557/pip-not-picking-up-a-custom-install-cmdclass

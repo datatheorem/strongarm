@@ -1,4 +1,3 @@
-import logging
 import math
 from ctypes import c_uint32, c_uint64, sizeof
 from distutils.version import LooseVersion
@@ -7,6 +6,7 @@ from typing import TYPE_CHECKING, Any, Dict, List, Optional, Set, Tuple, Type, T
 
 from _ctypes import Structure
 
+from strongarm.logger import strongarm_logger
 from strongarm.macho.arch_independent_structs import (
     ArchIndependentStructure,
     CFStringStruct,
@@ -40,6 +40,8 @@ from strongarm.macho.macho_load_commands import MachoLoadCommands
 
 if TYPE_CHECKING:
     from strongarm.macho.codesign import CodesignParser
+
+logger = strongarm_logger.getChild(__file__)
 
 AIS = TypeVar("AIS", bound=ArchIndependentStructure)
 
@@ -171,6 +173,7 @@ class MachoBinary:
         self.platform_word_type = c_uint64 if self.is_64bit else c_uint32
 
         self._symtab_contents: Optional[List[MachoNlistStruct]] = None
+        logger.debug(self, f"parsed symtab, len = {len(self.symtab_contents)}")
 
         from .dyld_info_parser import DyldBoundSymbol, DyldInfoParser
 
@@ -194,11 +197,11 @@ class MachoBinary:
             False otherwise.
 
         """
-        # logging.debug(self, f"parsing Mach-O slice @ {hex(int(self._offset_within_fat))} in {self.path}")
+        # logger.debug(self, f"parsing Mach-O slice @ {hex(int(self._offset_within_fat))} in {self.path}")
 
         # Preliminary Mach-O parsing
         if not self.verify_magic():
-            logging.debug(self, f"unsupported magic {hex(self.slice_magic)}")
+            logger.debug(self, f"unsupported magic {hex(self.slice_magic)}")
             return False
 
         self.is_swap = self.should_swap_bytes()
@@ -210,7 +213,7 @@ class MachoBinary:
 
         self.parse_header()
 
-        logging.debug(self, f"header parsed. non-native endianness? {self.is_swap}. 64-bit? {self.is_64bit}")
+        logger.debug(self, f"header parsed. non-native endianness? {self.is_swap}. 64-bit? {self.is_64bit}")
         return True
 
     @property
@@ -372,7 +375,7 @@ class MachoBinary:
             field_offset = getattr(getattr(backing_layout, field_name), "offset")
             field_address = base_virt_offset + field_offset
             if field_type == c_uint64 and field_address in self.dyld_rebased_pointers:
-                logging.debug(
+                logger.debug(
                     f"Setting rebased pointer within {struct_type}+{field_offset} -> "
                     f"{self.dyld_rebased_pointers[field_address]} at {field_address}"
                 )
@@ -537,7 +540,7 @@ class MachoBinary:
     def symtab_contents(self) -> List[MachoNlistStruct]:
         if self._symtab_contents is None:
             self._symtab_contents = self._parse_symtab_contents()
-            logging.debug(self, f"parsed symtab, len = {len(self.symtab_contents)}")
+            logger.debug(self, f"parsed symtab, len = {len(self.symtab_contents)}")
         return self._symtab_contents
 
     def _parse_symtab_contents(self) -> List[MachoNlistStruct]:
@@ -545,9 +548,8 @@ class MachoBinary:
 
         Returns:
             Array of Nlist64's representing binary's symbol table
-
         """
-        logging.debug(self, f"parsing {self.symtab.nsyms} symtab entries")
+        logger.debug(self, f"parsing {self.symtab.nsyms} symtab entries")
 
         symtab = []
         # start reading from symoff and increment by one Nlist64 each iteration
@@ -751,13 +753,13 @@ class MachoBinary:
 
             if ptr_location in self.dyld_rebased_pointers:
                 ptr_value = self.dyld_rebased_pointers[ptr_location]
-                logging.debug(f"Pointer is rebased: {ptr_location} -> {ptr_value}")
+                logger.debug(f"Pointer is rebased: {ptr_location} -> {ptr_value}")
             else:
                 data_end = pointer_off + sizeof(binary_word)
                 ptr_value = VirtualMemoryPointer(
                     binary_word.from_buffer(bytearray(section_data[pointer_off:data_end])).value
                 )
-                logging.debug(f"Pointer was not in the rebase list: {ptr_location} -> {ptr_value}")
+                logger.debug(f"Pointer was not in the rebase list: {ptr_location} -> {ptr_value}")
 
             entries.append(VirtualMemoryPointer(ptr_value))
 

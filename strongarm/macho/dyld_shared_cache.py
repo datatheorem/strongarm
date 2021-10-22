@@ -1,10 +1,10 @@
-import logging
 from ctypes import c_uint32, sizeof
 from pathlib import Path
 from typing import Dict, List, Optional, Tuple, Type, TypeVar
 
 from _ctypes import Structure
 
+from strongarm.logger import strongarm_logger
 from strongarm.macho.macho_binary import MachoBinary
 from strongarm.macho.macho_definitions import (
     DyldSharedCacheHeader,
@@ -15,6 +15,8 @@ from strongarm.macho.macho_definitions import (
     VirtualMemoryPointer,
     VMProtFlags,
 )
+
+logger = strongarm_logger.getChild(__file__)
 
 _StructureT = TypeVar("_StructureT", bound=Structure)
 
@@ -117,13 +119,13 @@ class DyldSharedCacheParser:
         # Read the shared-cache header
         self.header = self.read_struct(StaticFilePointer(0), DyldSharedCacheHeader)
 
-        logging.debug(f"Cache magic: {self.header.magic.decode()}")
-        logging.debug(f"First mapping: {hex(self.header.mappingOffset)}")
-        logging.debug(f"Mapping count: {self.header.mappingCount}")
-        logging.debug(f"First image: {hex(self.header.imagesOffset)}")
-        logging.debug(f"Image count: {self.header.imagesCount}")
-        logging.debug(f"Memory base: {hex(self.header.dyldBaseAddress)}")
-        logging.debug(f"Codesign base: {hex(self.header.codeSignOffset)}")
+        logger.debug(f"Cache magic: {self.header.magic.decode()}")
+        logger.debug(f"First mapping: {hex(self.header.mappingOffset)}")
+        logger.debug(f"Mapping count: {self.header.mappingCount}")
+        logger.debug(f"First image: {hex(self.header.imagesOffset)}")
+        logger.debug(f"Image count: {self.header.imagesCount}")
+        logger.debug(f"Memory base: {hex(self.header.dyldBaseAddress)}")
+        logger.debug(f"Codesign base: {hex(self.header.codeSignOffset)}")
 
         self._parse_dsc_mappings()
         self._parse_embedded_binaries()
@@ -152,7 +154,7 @@ class DyldSharedCacheParser:
             static_addr = StaticFilePointer(mapping_struct.file_offset)
             prot = mapping_struct.max_prot
 
-            logging.debug(f"Mapping [{mapping_idx}]: [{virt_addr} - {virt_end}] @ {static_addr}, prot = {prot}")
+            logger.debug(f"Mapping [{mapping_idx}]: [{virt_addr} - {virt_end}] @ {static_addr}, prot = {prot}")
 
             # Verify the permissions of this mapping are as we expect
             assert prot == expected_vm_protections[mapping_idx], f"{hex(prot)} {expected_vm_protections[mapping_idx]}"
@@ -206,7 +208,7 @@ class DyldSharedCacheParser:
 
         text_vm_start, text_vm_end = self.embedded_binary_info[binary_path]
         text_size = text_vm_end - text_vm_start
-        logging.debug(f"Parsing DSC image {binary_path} @ [{text_vm_start}, {text_vm_end}]")
+        logger.debug(f"Parsing DSC image {binary_path} @ [{text_vm_start}, {text_vm_end}]")
 
         static_addr = self.translate_virtual_address_to_static(text_vm_start)
         image_bytes = self.get_bytes(static_addr, text_size)
@@ -260,7 +262,7 @@ class DyldSharedCacheBinary(MachoBinary):
         # If offset+size refers to an address outside the local image, translate and read from the global DSC.
         # Otherwise, don't translate and read directly from the global DSC.
         if offset + size > self.dyld_shared_cache_file_offset + len(self._cached_binary):
-            logging.debug(f"Reading from addr outside __TEXT: {offset}")
+            logger.debug(f"Reading from addr outside __TEXT: {offset}")
             # This address is outside the binary's buffer. If translation was disabled, an assumption has been violated
             assert _translate_addr_to_file, f"Must translate addr outside __TEXT: {offset}"
 
@@ -268,6 +270,6 @@ class DyldSharedCacheBinary(MachoBinary):
             if _translate_addr_to_file:
                 offset += self.dyld_shared_cache_file_offset
             else:
-                logging.debug(f"Translation explicitly disabled, direct read of {offset}")
+                logger.debug(f"Translation explicitly disabled, direct read of {offset}")
 
         return bytearray(self.dyld_shared_cache_parser.get_bytes(offset, size))

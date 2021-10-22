@@ -20,6 +20,7 @@ from strongarm.cli.utils import (
     print_raw_strings,
     print_selector,
 )
+from strongarm.logger import strongarm_logger
 from strongarm.macho import BinaryEncryptedError, MachoAnalyzer, MachoBinary, MachoParser, VirtualMemoryPointer
 
 
@@ -224,7 +225,7 @@ def main(args: argparse.Namespace) -> None:
     # end of config
 
     def configure_logger() -> None:
-        root = logging.getLogger()
+        root = strongarm_logger.getChild(__file__)
         root.setLevel(logging.DEBUG)
 
         ch = logging.StreamHandler(sys.stdout)
@@ -236,7 +237,7 @@ def main(args: argparse.Namespace) -> None:
     configure_logger()
 
     if args.verbose:
-        logging.getLogger().setLevel(logging.DEBUG)
+        strongarm_logger.setLevel(logging.DEBUG)
 
     print_header(args)
 

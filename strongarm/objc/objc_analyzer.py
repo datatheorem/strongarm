@@ -1,5 +1,4 @@
 import functools
-import logging
 import shlex
 from itertools import starmap
 from subprocess import check_output
@@ -9,9 +8,12 @@ from capstone import CsInsn
 from strongarm_dataflow.dataflow import get_register_contents_at_instruction_fast
 from strongarm_dataflow.register_contents import RegisterContents, RegisterContentsType
 
+from strongarm.logger import strongarm_logger
 from strongarm.macho import MachoBinary, ObjcClass, ObjcSelector, VirtualMemoryPointer
 
 from .objc_instruction import ObjcBranchInstruction, ObjcInstruction, ObjcUnconditionalBranchInstruction
+
+logger = strongarm_logger.getChild(__file__)
 
 
 def _is_mangled_cpp_symbol(symbol_name: str) -> bool:
@@ -149,11 +151,11 @@ class ObjcFunctionAnalyzer:
             output: string to output to debug log
         """
         if not len(self.instructions):
-            logging.debug(self, f"func(stub) {output}")
+            logger.debug(self, f"func(stub) {output}")
         else:
             func_base = self.start_address
             instruction_address = func_base + (idx * MachoBinary.BYTES_PER_INSTRUCTION)
-            logging.debug(self, f"func({hex(int(instruction_address))}) {output}")
+            logger.debug(self, f"func({hex(int(instruction_address))}) {output}")
 
     def get_symbol_name(self) -> str:
         """Return a objective-c class/method, c function, or sub_address-style string representing the name of

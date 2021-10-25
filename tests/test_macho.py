@@ -152,13 +152,16 @@ class TestMachoBinary:
         assert binary_with_data_classlist
 
         # If I read the __objc_classlist pointer section
-        locations, entries = binary_with_data_classlist.read_pointer_section("__objc_classlist")
-        correct_locations = [0x100008178, 0x100008180, 0x100008188, 0x100008190]
-        correct_entries = [0x100009120, 0x100009170, 0x1000091E8, 0x100009238]
+        locations_entries = binary_with_data_classlist.read_pointer_section("__objc_classlist")
+        correct_locations_entries = {
+            0x100008178: 0x100009120,
+            0x100008180: 0x100009170,
+            0x100008188: 0x1000091E8,
+            0x100008190: 0x100009238,
+        }
 
         # Then I get the correct data
-        assert sorted(locations) == sorted(correct_locations)
-        assert sorted(entries) == sorted(correct_entries)
+        assert sorted(locations_entries.items()) == sorted(correct_locations_entries.items())
 
     def test_read_classlist_data_const_segment(self) -> None:
         # Given a binary which stores the __objc_classlist section in the __DATA_CONST segment
@@ -166,13 +169,11 @@ class TestMachoBinary:
         assert binary_with_data_classlist
 
         # If I read the __objc_classlist pointer section
-        locations, entries = binary_with_data_classlist.read_pointer_section("__objc_classlist")
-        correct_locations = [0x100008098, 0x1000080A0, 0x1000080A8]
-        correct_entries = [0x10000D3C0, 0x10000D438, 0x10000D488]
+        locations_entries = binary_with_data_classlist.read_pointer_section("__objc_classlist")
+        correct_locations_entries = {0x100008098: 0x10000D3C0, 0x1000080A0: 0x10000D438, 0x1000080A8: 0x10000D488}
 
         # Then I get the correct data
-        assert sorted(locations) == sorted(correct_locations)
-        assert sorted(entries) == sorted(correct_entries)
+        assert sorted(locations_entries.items()) == sorted(correct_locations_entries.items())
 
     def test_function_starts_command(self) -> None:
         # Given a binary that contains functions

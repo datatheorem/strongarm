@@ -35,7 +35,7 @@ class MachoStringTableHelper:
         """Create more efficient representation of string table data
 
         Often, tables in a Mach-O will reference data within the string table.
-        The string table is a large array of characters, representing NULL-terminated strings. There is no seperator
+        The string table is a large array of characters, representing NULL-terminated strings. There is no separator
         between entries aside from a NULL terminator. When other sections reference a string table entry, they will
         only reference the starting index. Thus, if we did no other processing, every time we got an index we'd need to
         do an O(n) loop to find the next NULL character, indicating the end of the string.

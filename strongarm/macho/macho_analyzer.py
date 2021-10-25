@@ -10,7 +10,7 @@ from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any, Callable, Dict, Iterable, List, Optional, Set, Tuple, Type, TypeVar, cast
 
 from capstone import CS_ARCH_ARM64, CS_MODE_ARM, Cs, CsInsn
-from more_itertools import pairwise
+from more_itertools import first, pairwise
 
 from strongarm.logger import strongarm_logger
 from strongarm.macho.arch_independent_structs import CFString32, CFString64, CFStringStruct
@@ -647,8 +647,6 @@ class MachoAnalyzer:
             return classrefs[0]
 
         # TODO(PT): this is expensive! We should do one analysis step of __objc_classrefs and create a map.
-        classref_locations, classref_destinations = self.binary.read_pointer_section("__objc_classrefs")
-
         # is it a local class?
         class_locations = [x.raw_struct.binary_offset for x in self.objc_classes() if x.name == class_name]
         if not len(class_locations):
@@ -656,12 +654,9 @@ class MachoAnalyzer:
             return None
         class_location = VirtualMemoryPointer(class_locations[0])
 
-        if class_location not in classref_destinations:
-            # unknown class name
-            return None
-
-        classref_index = classref_destinations.index(class_location)
-        return classref_locations[classref_index]
+        classref_addr_to_pointer_map = self.binary.read_pointer_section("__objc_classrefs")
+        # If None is returned, it is an unknown class name
+        return first((k for k, v in classref_addr_to_pointer_map.items() if v == class_location), None)
 
     def selref_for_selector_name(self, selector_name: str) -> Optional[VirtualMemoryPointer]:
         return self.objc_helper.selref_for_selector_name(selector_name)

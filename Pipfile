@@ -6,7 +6,7 @@ name = "pypi"
 [packages]
 capstone = "*"
 more_itertools = "*"
-strongarm_dataflow = "==2.1.5"
+strongarm_dataflow = "==2.1.6"
 
 [dev-packages]
 # Packages for developing

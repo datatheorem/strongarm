@@ -1,5 +1,4 @@
 import functools
-import logging
 import pathlib
 import shutil
 import sqlite3
@@ -11,8 +10,9 @@ from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any, Callable, Dict, Iterable, List, Optional, Set, Tuple, Type, TypeVar, cast
 
 from capstone import CS_ARCH_ARM64, CS_MODE_ARM, Cs, CsInsn
-from more_itertools import pairwise
+from more_itertools import first, pairwise
 
+from strongarm.logger import strongarm_logger
 from strongarm.macho.arch_independent_structs import CFString32, CFString64, CFStringStruct
 from strongarm.macho.dyld_info_parser import DyldBoundSymbol
 from strongarm.macho.macho_binary import InvalidAddressError, MachoBinary
@@ -30,6 +30,7 @@ from strongarm.macho.objc_runtime_data_parser import (
 if TYPE_CHECKING:
     from strongarm.objc import ObjcFunctionAnalyzer, ObjcMethodInfo
 
+logger = strongarm_logger.getChild(__file__)
 
 _T = TypeVar("_T")
 
@@ -112,7 +113,7 @@ def _requires_xrefs_computed(func: CallableT) -> CallableT:
     @functools.wraps(func)
     def wrap(self: "MachoAnalyzer", *args: Any, **kwargs: Any) -> Any:
         if not self._has_computed_xrefs:
-            logging.info(
+            logger.info(
                 f"called {func.__name__} before XRefs were computed for {self.binary.path.name}, computing now..."
             )
             self._build_xref_database()
@@ -339,11 +340,11 @@ class MachoAnalyzer:
         from strongarm_dataflow.dataflow import build_xref_database_fast
 
         if self._has_computed_xrefs:
-            logging.error("Already computed xrefs, why was _build_xref_database called again?")
+            logger.error("Already computed xrefs, why was _build_xref_database called again?")
             return
 
         start_time = time.time()
-        logging.debug(f"{self.binary.path} computing call XRefs...")
+        logger.debug(f"{self.binary.path} computing call XRefs...")
 
         objc_function_family = list(self._objc_fastpath_ptrs_to_selector_names.keys())
         if self._objc_msgSend_addr:
@@ -362,7 +363,7 @@ class MachoAnalyzer:
 
         self._has_computed_xrefs = True
         end_time = time.time()
-        logging.debug(f"Finding xrefs took {end_time - start_time} seconds")
+        logger.debug(f"Finding xrefs took {end_time - start_time} seconds")
 
     @classmethod
     def clear_cache(cls) -> None:
@@ -370,7 +371,7 @@ class MachoAnalyzer:
         This can be used when you are finished analyzing a binary set and don't want to retain the cached data in memory
         """
         for binary, analyzer in cls._ANALYZER_CACHE.items():
-            logging.debug(f"Deleting db {analyzer._db_path}...")
+            logger.debug(f"Deleting db {analyzer._db_path}...")
             analyzer._db_handle.close()
             shutil.rmtree(analyzer._db_tempdir.as_posix())
 
@@ -646,8 +647,6 @@ class MachoAnalyzer:
             return classrefs[0]
 
         # TODO(PT): this is expensive! We should do one analysis step of __objc_classrefs and create a map.
-        classref_locations, classref_destinations = self.binary.read_pointer_section("__objc_classrefs")
-
         # is it a local class?
         class_locations = [x.raw_struct.binary_offset for x in self.objc_classes() if x.name == class_name]
         if not len(class_locations):
@@ -655,12 +654,9 @@ class MachoAnalyzer:
             return None
         class_location = VirtualMemoryPointer(class_locations[0])
 
-        if class_location not in classref_destinations:
-            # unknown class name
-            return None
-
-        classref_index = classref_destinations.index(class_location)
-        return classref_locations[classref_index]
+        classref_addr_to_pointer_map = self.binary.read_pointer_section("__objc_classrefs")
+        # If None is returned, it is an unknown class name
+        return first((k for k, v in classref_addr_to_pointer_map.items() if v == class_location), None)
 
     def selref_for_selector_name(self, selector_name: str) -> Optional[VirtualMemoryPointer]:
         return self.objc_helper.selref_for_selector_name(selector_name)

@@ -1,8 +1,9 @@
-import logging
 from ctypes import c_long, c_uint16, c_uint32, c_uint64, sizeof
 from dataclasses import dataclass, field
 from enum import IntEnum
 from typing import Dict, List, Optional, Tuple
+
+from strongarm.logger import strongarm_logger
 
 from .arch_independent_structs import (
     DylibCommandStruct,
@@ -15,6 +16,8 @@ from .arch_independent_structs import (
 )
 from .macho_binary import MachoBinary
 from .macho_definitions import StaticFilePointer, VirtualMemoryPointer
+
+logger = strongarm_logger.getChild(__file__)
 
 
 class BindOpcode(IntEnum):
@@ -108,7 +111,7 @@ class DyldInfoParser:
         dyld_bound_symbols = DyldInfoParser._read_chained_imports(
             binary, chained_fixups_data_start, chained_fixups_header
         )
-        logging.debug(f"dyld chained imports table contains {len(dyld_bound_symbols)} symbols")
+        logger.debug(f"dyld chained imports table contains {len(dyld_bound_symbols)} symbols")
 
         # By parsing each chain of fixup pointers in the binary, we'll populate this map of addresses -> binds
         dyld_bound_addresses_to_symbols: Dict[VirtualMemoryPointer, DyldBoundSymbol] = {}
@@ -139,7 +142,7 @@ class DyldInfoParser:
 
             starts_in_seg_addr = chained_starts_in_image_off + starts_in_seg_struct_offset
             chained_starts_in_seg = binary.read_struct(starts_in_seg_addr, MachoDyldChainedStartsInSegment)
-            logging.debug(
+            logger.debug(
                 f"ChainedStartsInSegment\tsegment {segment_idx}\t"
                 f"pointer_fmt {chained_starts_in_seg.pointer_format}\tpage count {chained_starts_in_seg.page_count}"
             )
@@ -150,7 +153,7 @@ class DyldInfoParser:
                 offset_in_page = binary.read_word(
                     offset_in_page_start + (page_idx * sizeof(c_uint16)), virtual=False, word_type=c_uint16
                 )
-                logging.debug(f"\tPageIdx {page_idx}, offset in page {hex(offset_in_page)}")
+                logger.debug(f"\tPageIdx {page_idx}, offset in page {hex(offset_in_page)}")
 
                 chain_base = (
                     chained_starts_in_seg.segment_offset + (page_idx * chained_starts_in_seg.page_size) + offset_in_page
@@ -180,7 +183,7 @@ class DyldInfoParser:
                 # Bind. Keep track that there is an imported symbol bind here
                 chained_bind_ptr = binary.read_struct(chain_base, MachoDyldChainedPtr64Bind)
                 bound_symbol = dyld_bound_symbols_table[chained_bind_ptr.ordinal]
-                logging.debug(
+                logger.debug(
                     f"\t\t{hex(chain_base)}: BIND\tordinal {chained_bind_ptr.ordinal}\t"
                     f"addend {chained_bind_ptr.addend}\treserved {chained_bind_ptr.reserved}\t"
                     f"next {chained_bind_ptr.next}\tsymbol {bound_symbol.name}\t\t"
@@ -192,7 +195,7 @@ class DyldInfoParser:
                 # Rebase. Overwrite the fixup pointer with the internal binary pointer it refers to
                 # Rebase. Keep track that there's a rebased pointer here
                 chained_ptr_raw = binary.read_word(chain_base, word_type=c_uint64, virtual=False)
-                logging.debug(
+                logger.debug(
                     f"\t\t{hex(chain_base)}: DyldChainedPtr64Rebase(raw: {hex(chained_ptr_raw)}) "
                     f"target={StaticFilePointer(chained_rebase_ptr.target)}"
                 )
@@ -326,6 +329,6 @@ class DyldInfoParser:
                 else:
                     raise ValueError(f"Invalid threaded sub-opcode: {immediate}")
             else:
-                logging.error(f"unknown dyld bind opcode {hex(opcode)}, immediate {hex(immediate)}")
+                logger.error(f"unknown dyld bind opcode {hex(opcode)}, immediate {hex(immediate)}")
 
         return dyld_stubs_to_symbols

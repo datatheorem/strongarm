@@ -2,7 +2,27 @@
 
 ## Unreleased
 
-Drop `MachoBinary` from the `MachoSection/MachoSegment` initialisers 
+## 2021-10-27: 13.0.0
+
+### SCAN-2950: The type signature of `MachoBinary.read_pointer_section` has been simplified to clarify its semantics
+### SCAN-2960: Handle `NULL` ivar offset pointer
+
+(Breaking): The initialisers of `MachoSection` and `MachoSegment` have changed to reflect they no longer need a reference to a `MachoBinary`.
+
+(Breaking): `MachoBinary.read_pointer_section` has changed its return signature from `Tuple[List[VirtualMemoryPointer], List[VirtualMemoryPointer]]` to `Dict[VirtualMemoryPointer, VirtualMemoryPointer]`.
+
+(Fix): Handle ivars with a `NULL` offset pointer. Observed for the `$defaultActor` ivar within a Swift source class.
+
+## 2021-10-26: 12.0.2
+
+### SCAN-2946: Bump strongarm_dataflow to 2.1.6
+
+## 2021-10-26: 12.0.1
+
+### SCAN-2950: Minor cleanup
+
+(New): Use a non-root `logger`.
+(New):  Add CLI flags for quick data querying.
 
 ## 2021-10-07: 12.0.0
 

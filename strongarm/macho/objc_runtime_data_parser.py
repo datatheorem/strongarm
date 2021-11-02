@@ -389,8 +389,11 @@ class ObjcRuntimeDataParser:
 
             ivar_name = self.binary.get_full_string_from_start_address(ivar_struct.name)
             class_name = self.binary.get_full_string_from_start_address(ivar_struct.type)
-            field_offset = self.binary.read_word(ivar_struct.offset_ptr, word_type=c_uint32)
             field_offset_addr = ivar_struct.offset_ptr
+            # SCAN-2960: offset_ptr may be zero. Observed for the $defaultActor ivar within a Swift source class.
+            field_offset = 0
+            if field_offset_addr:
+                field_offset = self.binary.read_word(field_offset_addr, word_type=c_uint32)
 
             # class_name and field_offset can be falsey ('' and 0), so don't include them in this sanity check
             if not ivar_name:

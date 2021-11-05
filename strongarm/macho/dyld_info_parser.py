@@ -53,6 +53,16 @@ class DyldBoundSymbol:
         self.dylib = self.binary.dylib_for_library_ordinal(self.library_ordinal)
 
 
+class DyldChainedPointerMagics(IntEnum):
+    """Special values in the chained pointer info structs that influence parsing.
+    """
+
+    # No fixups in this page
+    DYLD_CHAINED_PTR_NO_STARTS_IN_PAGE = 0xFFFF
+    # Multiple chain starts in this page
+    DYLD_CHAINED_PTR_START_MULTI = 0x8000
+
+
 class DyldInfoParser:
     """Wraps up the logic to parse __LINKEDIT data so that we can make sense of rebased pointers and bound dyld symbols.
     On < iOS 15 binaries:
@@ -153,6 +163,14 @@ class DyldInfoParser:
                 offset_in_page = binary.read_word(
                     offset_in_page_start + (page_idx * sizeof(c_uint16)), virtual=False, word_type=c_uint16
                 )
+
+                # Some offset_in_page values have special meaning
+                if offset_in_page == DyldChainedPointerMagics.DYLD_CHAINED_PTR_NO_STARTS_IN_PAGE:
+                    logger.debug(f"Skipping PageIdx {page_idx} with no chain starts")
+                    continue
+                elif offset_in_page == DyldChainedPointerMagics.DYLD_CHAINED_PTR_START_MULTI:
+                    raise NotImplementedError(f"Encountered page with multiple chain starts")
+
                 logger.debug(f"\tPageIdx {page_idx}, offset in page {hex(offset_in_page)}")
 
                 chain_base = (

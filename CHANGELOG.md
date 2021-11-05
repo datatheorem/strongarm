@@ -2,6 +2,19 @@
 
 ## Unreleased
 
+### SCAN-2970: Handle magic values in dyld chained fixup pointer page starts
+
+As part of the dyld implementation of chained fixup pointers, binaries contain structures describing the locations of
+fixup chains in various parts of the binary. One of the fields of such a structure denotes the offset into a page where
+a chain begins. Normally, this value represents the offset into a page from which we should begin reading a chain.
+
+However, some values of this offset field have special significance, such as to signify that there are actually no
+chains within the page. strongarm was previously interpreting these values as though they were real offsets into a
+page, leading to bad parse states.
+
+Note that another special value this field can hold indicates that there are multiple fixup chains within a single page.
+This ticket doesn't add support for parsing these, but does error out if they're encountered.
+
 ## 2021-10-27: 13.0.0
 
 ### SCAN-2950: The type signature of `MachoBinary.read_pointer_section` has been simplified to clarify its semantics

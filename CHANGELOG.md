@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+### 2021-11-05: 13.0.1
+
 ### SCAN-2970: Handle magic values in dyld chained fixup pointer page starts
 
 As part of the dyld implementation of chained fixup pointers, binaries contain structures describing the locations of

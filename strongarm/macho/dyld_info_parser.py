@@ -169,7 +169,7 @@ class DyldInfoParser:
                     logger.debug(f"Skipping PageIdx {page_idx} with no chain starts")
                     continue
                 elif offset_in_page == DyldChainedPointerMagics.DYLD_CHAINED_PTR_START_MULTI:
-                    raise NotImplementedError(f"Encountered page with multiple chain starts")
+                    raise NotImplementedError("Encountered page with multiple chain starts")
 
                 logger.debug(f"\tPageIdx {page_idx}, offset in page {hex(offset_in_page)}")
 

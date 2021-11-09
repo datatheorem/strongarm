@@ -29,16 +29,14 @@ class MachoParser:
         self.parse()
 
     def get_arm64_slice(self) -> Optional[MachoBinary]:
-        """Retrieve the parsed slice from the FAT built for ARM64
-        """
+        """Retrieve the parsed slice from the FAT built for ARM64."""
         arm64_slices = [x for x in self.slices if x.header.cputype == MachArch.MH_CPU_TYPE_ARM64]
         if len(arm64_slices):
             return arm64_slices[0]
         return None
 
     def get_armv7_slice(self) -> Optional[MachoBinary]:
-        """Retrieve the parsed slice from the FAT built for ARMv7
-        """
+        """Retrieve the parsed slice from the FAT built for ARMv7."""
         armv7_slices = [x for x in self.slices if x.header.cputype == MachArch.MH_CPU_TYPE_ARM]
         if len(armv7_slices):
             return armv7_slices[0]
@@ -151,8 +149,7 @@ class MachoParser:
 
     @property
     def file_magic(self) -> int:
-        """Read file magic
-        """
+        """Read file magic."""
         return c_uint32.from_buffer(bytearray(self.get_bytes(StaticFilePointer(0), sizeof(c_uint32)))).value
 
     @property

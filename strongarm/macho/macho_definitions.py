@@ -30,8 +30,7 @@ class _BasePointer(int):
 
 
 class StaticFilePointer(_BasePointer):
-    """A pointer analogous to a file offset within the Mach-O
-    """
+    """A pointer analogous to a file offset within the Mach-O."""
 
     def __str__(self) -> str:
         return f"Phys[{super().__str__()}]"
@@ -41,12 +40,11 @@ class StaticFilePointer(_BasePointer):
 
 
 class VirtualMemoryPointer(_BasePointer):
-    """A pointer representing a virtual memory location within the Mach-O
-    """
+    """A pointer representing a virtual memory location within the Mach-O."""
 
 
 def swap32(i: int) -> int:
-    """Reverse the bytes of a little-endian integer representation ie (3) -> 50331648"""
+    """Reverse the bytes of a little-endian integer representation ie (3) -> 50331648."""
     return struct.unpack("<I", struct.pack(">I", i))[0]
 
 

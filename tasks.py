@@ -26,8 +26,7 @@ def test(ctx):
 @task
 def autoformat_lint(ctx):
     # type: (Context) -> None
-    """Check formatting of the code
-    """
+    """Check formatting of the code."""
     # Gather all the modules / files in the tree
     files_to_process = " ".join(_get_python_modules())
 
@@ -53,8 +52,7 @@ def autoformat_lint(ctx):
 @task
 def autoformat(ctx):
     # type: (Context) -> None
-    """Run auto-formatting tools
-    """
+    """Run auto-formatting tools."""
     # Gather all the modules / files in the tree
     files_to_process = " ".join(_get_python_modules())
 

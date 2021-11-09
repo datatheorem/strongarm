@@ -215,8 +215,7 @@ class StrongarmShell:
 
 
 def strongarm_script(binary: MachoBinary, analyzer: MachoAnalyzer) -> None:
-    """If you want to run a script instead of using the CLI, write it here and change `script` to `True` in main()
-    """
+    """If you want to run a script instead of using the CLI, write it here and change `script` to `True` in main()."""
 
 
 def main(args: argparse.Namespace) -> None:

@@ -1,0 +1,15 @@
+-c requirements.txt
+# Packages for developing
+invoke
+flake8
+autoflake
+isort
+black==20.8b1
+mypy
+pytest
+pytest-cov
+pytest-xdist
+more_itertools
+configupdater
+# mypy-stubs
+types-setuptools

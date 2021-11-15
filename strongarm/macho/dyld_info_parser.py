@@ -54,8 +54,7 @@ class DyldBoundSymbol:
 
 
 class DyldChainedPointerMagics(IntEnum):
-    """Special values in the chained pointer info structs that influence parsing.
-    """
+    """Special values in the chained pointer info structs that influence parsing."""
 
     # No fixups in this page
     DYLD_CHAINED_PTR_NO_STARTS_IN_PAGE = 0xFFFF
@@ -78,7 +77,7 @@ class DyldInfoParser:
         chained_fixups_data_start: StaticFilePointer,
         chained_fixups_header: MachoDyldChainedFixupsHeader,
     ) -> List[DyldBoundSymbol]:
-        """Parse the chained imports table in __LINKEDIT into a list of DyldBoundSymbols"""
+        """Parse the chained imports table in __LINKEDIT into a list of DyldBoundSymbols."""
         chained_import_addr = chained_fixups_data_start + chained_fixups_header.imports_offset
         symbols_start_addr = chained_fixups_data_start + chained_fixups_header.symbols_offset
         dyld_bound_symbols: List[DyldBoundSymbol] = []

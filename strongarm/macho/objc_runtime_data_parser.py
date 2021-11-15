@@ -206,7 +206,8 @@ class ObjcRuntimeDataParser:
         It also *PARTLY* populates self._selref_ptr_to_selector_map. All selrefs keys will have an ObjcSelector
         value, but none of the ObjcSelector objects will have their `implementation` field filled, because
         at this point in the parse we do not yet know the implementations of each selector. ObjcSelectors which we
-        later find an implementation for are updated in self.read_selectors_from_methlist_ptr"""
+        later find an implementation for are updated in self.read_selectors_from_methlist_ptr.
+        """
         selref_pointers = self.binary.read_pointer_section("__objc_selrefs")
         for selref_ptr, selector_literal_ptr in selref_pointers.items():
             # read selector string literal from selref pointer
@@ -256,8 +257,7 @@ class ObjcRuntimeDataParser:
         )
 
     def get_method_imp_addresses(self, selector: str) -> List[VirtualMemoryPointer]:
-        """Given a selector, return a list of virtual addresses corresponding to the start of each IMP for that SEL
-        """
+        """Given a selector, return a list of virtual addresses corresponding to the start of each IMP for that SEL."""
         return [
             objc_sel.implementation
             for objc_class in self.classes
@@ -269,8 +269,7 @@ class ObjcRuntimeDataParser:
         return self._classrefs_to_objc_classes.get(classlist_ptr)
 
     def _parse_objc_classes(self) -> List[ObjcClass]:
-        """Read Objective-C class data in __objc_classlist, __objc_data to get classes and selectors in binary
-        """
+        """Read Objective-C class data in __objc_classlist, __objc_data to get classes and selectors in binary."""
         logger.debug("Cross-referencing __objc_classlist, __objc_class, and __objc_data entries...")
         parsed_objc_classes = []
         classlist_pointers = self._get_classlist_pointers()
@@ -320,8 +319,7 @@ class ObjcRuntimeDataParser:
         return parsed_categories
 
     def _parse_class_and_category_info(self) -> List[ObjcClass]:
-        """Parse classes and categories referenced by __objc_classlist and __objc_catlist
-        """
+        """Parse classes and categories referenced by __objc_classlist and __objc_catlist."""
         classes: List[ObjcClass] = []
         classes += self._parse_objc_classes()
         classes += self._parse_objc_categories()
@@ -371,15 +369,13 @@ class ObjcRuntimeDataParser:
                 objc_class_or_category.superclass_name = base_class_name
 
     def _parse_global_protocol_info(self) -> List[ObjcProtocol]:
-        """Parse protocols which code in the app conforms to, referenced by __objc_protolist
-        """
+        """Parse protocols which code in the app conforms to, referenced by __objc_protolist."""
         logger.debug("Cross referencing __objc_protolist, __objc_protocol, and __objc_data entries...")
         protocol_pointers = self._get_protolist_pointers()
         return self._parse_protocol_ptr_list(protocol_pointers)
 
     def read_ivars_from_ivarlist_ptr(self, ivarlist_ptr: VirtualMemoryPointer) -> List[ObjcIvar]:
-        """Given the virtual address of an ivar list, return a List of each encoded ObjcIvar
-        """
+        """Given the virtual address of an ivar list, return a List of each encoded ObjcIvar."""
         ivarlist = self.binary.read_struct(ivarlist_ptr, ObjcIvarListStruct, virtual=True)
         ivars: List[ObjcIvar] = []
         # Parse each ivar struct which follows the ivarlist
@@ -406,8 +402,7 @@ class ObjcRuntimeDataParser:
         return ivars
 
     def read_selectors_from_methlist_ptr(self, methlist_ptr: VirtualMemoryPointer) -> List[ObjcSelector]:
-        """Given the virtual address of a method list, return a List of ObjcSelectors encapsulating each method
-        """
+        """Given the virtual address of a method list, return a List of ObjcSelectors encapsulating each method."""
         methlist = self.binary.read_struct(methlist_ptr, ObjcMethodListStruct, virtual=True)
         selectors: List[ObjcSelector] = []
         # parse every entry in method list
@@ -516,8 +511,7 @@ class ObjcRuntimeDataParser:
         return ObjcClass(objc_class_struct, symbol_name, selectors, ivars, protocols, objc_class_struct.superclass)
 
     def _protolist_ptr_to_protocol_ptr_list(self, protolist_ptr: VirtualMemoryPointer) -> List[VirtualMemoryPointer]:
-        """Accepts the virtual address of an ObjcProtocolListStruct, and returns List of protocol pointers it refers to.
-        """
+        """Accepts the virtual address of an ObjcProtocolListStruct, and returns List of protocol pointers it refers to."""  # noqa: E501
         protolist = self.binary.read_struct(protolist_ptr, ObjcProtocolListStruct, virtual=True)
         protocol_pointers: List[VirtualMemoryPointer] = []
         # pointers start directly after the 'count' field
@@ -540,41 +534,35 @@ class ObjcRuntimeDataParser:
         return protocols
 
     def _get_catlist_pointers(self) -> List[VirtualMemoryPointer]:
-        """Read pointers in __objc_catlist into list
-        """
+        """Read pointers in __objc_catlist into list."""
         return list(self.binary.read_pointer_section("__objc_catlist").values())
 
     def _get_protolist_pointers(self) -> List[VirtualMemoryPointer]:
-        """Read pointers in __objc_protolist into list
-        """
+        """Read pointers in __objc_protolist into list."""
         return list(self.binary.read_pointer_section("__objc_protolist").values())
 
     def _get_classlist_pointers(self) -> List[VirtualMemoryPointer]:
-        """Read pointers in __objc_classlist into list
-        """
+        """Read pointers in __objc_classlist into list."""
         return list(self.binary.read_pointer_section("__objc_classlist").values())
 
     def _get_objc_category_from_catlist_pointer(
         self, category_struct_pointer: VirtualMemoryPointer
     ) -> ObjcCategoryRawStruct:
-        """Read a struct __objc_category from the location indicated by the provided __objc_catlist pointer
-        """
+        """Read a struct __objc_category from the location indicated by the provided __objc_catlist pointer."""
         category_entry = self.binary.read_struct_with_rebased_pointers(
             category_struct_pointer, ObjcCategoryRawStruct, virtual=True
         )
         return category_entry
 
     def _get_objc_protocol_from_pointer(self, protocol_struct_pointer: VirtualMemoryPointer) -> ObjcProtocolRawStruct:
-        """Read a struct __objc_protocol from the location indicated by the provided struct objc_protocol_list pointer
-        """
+        """Read a struct __objc_protocol from the location indicated by the provided struct objc_protocol_list pointer."""  # noqa: E501
         protocol_entry = self.binary.read_struct_with_rebased_pointers(
             protocol_struct_pointer, ObjcProtocolRawStruct, virtual=True
         )
         return protocol_entry
 
     def _get_objc_class_from_classlist_pointer(self, class_struct_pointer: VirtualMemoryPointer) -> ObjcClassRawStruct:
-        """Read a struct __objc_class from the location indicated by the __objc_classlist pointer
-        """
+        """Read a struct __objc_class from the location indicated by the __objc_classlist pointer."""
         class_entry = self.binary.read_struct_with_rebased_pointers(
             class_struct_pointer, ObjcClassRawStruct, virtual=True
         )

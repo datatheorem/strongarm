@@ -54,8 +54,7 @@ class DyldSharedCacheParser:
 
     @property
     def file_magic(self) -> int:
-        """Read file magic
-        """
+        """Read file magic."""
         return c_uint32.from_buffer(bytearray(self.get_bytes(StaticFilePointer(0), sizeof(c_uint32)))).value
 
     def get_bytes(self, offset: StaticFilePointer, size: int) -> bytes:
@@ -131,8 +130,7 @@ class DyldSharedCacheParser:
         self._parse_embedded_binaries()
 
     def _parse_dsc_mappings(self) -> None:
-        """Populates self.segment_translations based on the mappings reported by the DSC header.
-        """
+        """Populates self.segment_translations based on the mappings reported by the DSC header."""
         # We expect exactly: an executable mapping, a writable mapping, a readonly mapping
         # Verify this expectation
         assert self.header.mappingCount == 3
@@ -162,8 +160,7 @@ class DyldSharedCacheParser:
             self.segment_mappings.append(mapping_struct)
 
     def _parse_embedded_binaries(self) -> None:
-        """Populates self.embedded_binary_info based on the images reported by the DSC header.
-        """
+        """Populates self.embedded_binary_info based on the images reported by the DSC header."""
         # Parse the embedded binaries within the DSC
         image_off = self.header.imagesOffset
         for image_idx in range(self.header.imagesCount):
@@ -191,8 +188,7 @@ class DyldSharedCacheParser:
             self.embedded_binary_info[Path(embedded_binary_path)] = (vm_addr, vm_end)
 
     def translate_virtual_address_to_static(self, vm_addr: VirtualMemoryPointer) -> StaticFilePointer:
-        """Given a pointer within the DSC's virtual address mappings, return the file pointer to the same data.
-        """
+        """Given a pointer within the DSC's virtual address mappings, return the file pointer to the same data."""
         # Find the mapping which contains the provided address
         for mapping in self.segment_mappings:
             if mapping.address <= vm_addr < mapping.address + mapping.size:
@@ -201,8 +197,7 @@ class DyldSharedCacheParser:
         raise ValueError(f"Could not find address within DSC address space: {vm_addr}")
 
     def get_embedded_binary(self, binary_path: Path) -> "DyldSharedCacheBinary":
-        """Given a path to a binary embedded in the DSC, retrieve & parse the embedded binary
-        """
+        """Given a path to a binary embedded in the DSC, retrieve & parse the embedded binary."""
         if binary_path not in self.embedded_binary_info:
             raise ValueError(f"DSC does not contain {binary_path}")
 
@@ -216,8 +211,7 @@ class DyldSharedCacheParser:
         return DyldSharedCacheBinary(self, binary_path, static_addr, image_bytes)
 
     def image_for_text_address(self, address: VirtualMemoryPointer) -> Path:
-        """Given a virtual memory address of __TEXT content, return the embedded image which contains it
-        """
+        """Given a virtual memory address of __TEXT content, return the embedded image which contains it."""
         for path, text_region in self.embedded_binary_info.items():
             text_vm_start, text_vm_end = text_region
             if text_vm_start <= address < text_vm_end:

@@ -31,15 +31,13 @@ class CodesignParser:
         self.parse_codesign_blob(self._codesign_entry)
 
     def read_32_big_endian(self, offset: StaticFilePointer) -> int:
-        """Read a 32-bit word from the file offset in big-endian order.
-        """
+        """Read a 32-bit word from the file offset in big-endian order."""
         word_bytes = self.binary.get_bytes(offset, 4)
         word = int.from_bytes(word_bytes, byteorder="big")
         return word
 
     def parse_codesign_blob(self, file_offset: StaticFilePointer) -> None:
-        """High-level parser to parse the codesign blob at the file offset.
-        """
+        """High-level parser to parse the codesign blob at the file offset."""
         magic = self.read_32_big_endian(file_offset)
 
         if magic == CodesignBlobTypeEnum.CSMAGIC_CODE_DIRECTORY:
@@ -87,8 +85,7 @@ class CodesignParser:
 
     @staticmethod
     def get_index_blob_name(blob_index: CSBlobIndex) -> str:
-        """Get the human-readable blob type from the `type` field in a CSBlobIndex.
-        """
+        """Get the human-readable blob type from the `type` field in a CSBlobIndex."""
         # cs_blobs.h
         blob_types = {
             0: "Code Directory",
@@ -111,8 +108,7 @@ class CodesignParser:
         return blob_index
 
     def parse_code_directory(self, file_offset: StaticFilePointer) -> None:
-        """Parse a Code Directory at the file offset.
-        """
+        """Parse a Code Directory at the file offset."""
         code_directory = self.binary.read_struct(file_offset, CSCodeDirectory)
 
         identifier_address = code_directory.binary_offset + code_directory.identifier_offset

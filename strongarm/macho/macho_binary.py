@@ -47,23 +47,19 @@ AIS = TypeVar("AIS", bound=ArchIndependentStructure)
 
 
 class BinaryEncryptedError(Exception):
-    """Raised when the binary is encrypted.
-    """
+    """Raised when the binary is encrypted."""
 
 
 class LoadCommandMissingError(Exception):
-    """Raised when the binary is missing a load command.
-    """
+    """Raised when the binary is missing a load command."""
 
 
 class NoEmptySpaceForLoadCommandError(Exception):
-    """Raised when we fail to insert a load command because there's not enough empty space left in the Mach-O header.
-    """
+    """Raised when we fail to insert a load command because there's not enough empty space left in the Mach-O header."""
 
 
 class InvalidAddressError(Exception):
-    """Raised when a client asks for bytes at an address outside the binary.
-    """
+    """Raised when a client asks for bytes at an address outside the binary."""
 
 
 class MachoSegment:
@@ -124,9 +120,8 @@ class MachoBinary:
     SUPPORTED_MAG = _MAG_64 + _MAG_32
     BYTES_PER_INSTRUCTION = 4
 
-    def __init__(self, path: Path, binary_data: bytes, file_offset: Optional[StaticFilePointer] = None,) -> None:
-        """Parse the bytes representing a Mach-O file.
-        """
+    def __init__(self, path: Path, binary_data: bytes, file_offset: Optional[StaticFilePointer] = None) -> None:
+        """Parse the bytes representing a Mach-O file."""
         from .codesign.codesign_parser import CodesignParser
 
         self._cached_binary = binary_data
@@ -218,8 +213,7 @@ class MachoBinary:
 
     @property
     def slice_magic(self) -> int:
-        """Read magic number identifier from this Mach-O slice
-        """
+        """Read magic number identifier from this Mach-O slice."""
         return self.read_word(0, virtual=False, word_type=c_uint32)
 
     def verify_magic(self) -> bool:
@@ -264,8 +258,7 @@ class MachoBinary:
         self._parse_load_commands(load_commands_off, self.header.ncmds)  # type: ignore
 
     def _parse_header_flags(self) -> None:
-        """Interpret binary's header bitset and populate self.header_flags
-        """
+        """Interpret binary's header bitset and populate self.header_flags."""
         self.header_flags = []
 
         flags_bitset = self.header.flags
@@ -384,16 +377,14 @@ class MachoBinary:
         return s
 
     def section_name_for_address(self, virt_addr: VirtualMemoryPointer) -> Optional[str]:
-        """Given an address in the virtual address space, return the name of the section which contains it.
-        """
+        """Given an address in the virtual address space, return the name of the section which contains it."""
         section = self.section_for_address(virt_addr)
         if not section:
             return None
         return section.name
 
     def section_for_address(self, virt_addr: VirtualMemoryPointer) -> Optional[MachoSection]:
-        """Given an address in the virtual address space, return the section which contains it.
-        """
+        """Given an address in the virtual address space, return the section which contains it."""
         # invalid address?
         if virt_addr < self.get_virtual_base():
             return None
@@ -421,8 +412,7 @@ class MachoBinary:
             raise ValueError(f"segment_index ({segment_index}) out of bounds ({len(self.segments)}")
 
     def segment_with_name(self, desired_segment_name: str) -> Optional[MachoSegment]:
-        """Returns the segment with the provided name. Returns None if there's no such segment in the binary.
-        """
+        """Returns the segment with the provided name. Returns None if there's no such segment in the binary."""
         # TODO(PT): add unit test for this method
         return next((s for s in self.segments if s.name == desired_segment_name), None)
 
@@ -476,8 +466,7 @@ class MachoBinary:
         return self._virtual_base
 
     def get_file_offset(self) -> StaticFilePointer:
-        """Retrieve the offset within the file of this Mach-O slice
-        """
+        """Retrieve the offset within the file of this Mach-O slice."""
         return self.file_offset
 
     def get_bytes(self, offset: StaticFilePointer, size: int, _translate_addr_to_file: bool = False) -> bytearray:
@@ -666,15 +655,13 @@ class MachoBinary:
         return self.get_full_string_from_start_address(address)
 
     def is_encrypted(self) -> bool:
-        """Returns True if the binary has an encrypted segment, False otherwise
-        """
+        """Returns True if the binary has an encrypted segment, False otherwise."""
         if not self._encryption_info:
             return False
         return self.encryption_info.cryptid != 0
 
     def is_range_encrypted(self, offset: StaticFilePointer, size: int) -> bool:
-        """Returns whether the provided address range overlaps with the encrypted section of the binary.
-        """
+        """Returns whether the provided address range overlaps with the encrypted section of the binary."""
         if not self.is_encrypted():
             return False
 
@@ -698,8 +685,7 @@ class MachoBinary:
         return self.load_dylib_commands[idx]
 
     def dylib_name_for_library_ordinal(self, library_ordinal: int) -> str:
-        """Read the name of the dynamic library by its library ordinal
-        """
+        """Read the name of the dynamic library by its library ordinal."""
         source_dylib = self.dylib_for_library_ordinal(library_ordinal)
         if source_dylib:
             source_name_addr = source_dylib.binary_offset + source_dylib.dylib.name.offset + self.get_virtual_base()
@@ -766,8 +752,7 @@ class MachoBinary:
         return address_to_pointer_map
 
     def read_word(self, address: int, virtual: bool = True, word_type: Any = None) -> int:
-        """Attempt to read a word from the binary at a virtual address.
-        """
+        """Attempt to read a word from the binary at a virtual address."""
         if not word_type:
             word_type = self.platform_word_type
 
@@ -839,18 +824,15 @@ class MachoBinary:
         return self.__codesign_parser
 
     def get_entitlements(self) -> Optional[bytearray]:
-        """Read the entitlements the binary was signed with.
-        """
+        """Read the entitlements the binary was signed with."""
         return self._codesign_parser.entitlements
 
     def get_signing_identity(self) -> Optional[str]:
-        """Read the bundle ID the binary was signed as.
-        """
+        """Read the bundle ID the binary was signed as."""
         return self._codesign_parser.signing_identifier
 
     def get_team_id(self) -> Optional[str]:
-        """Read the team ID the binary was signed with.
-        """
+        """Read the team ID the binary was signed with."""
         return self._codesign_parser.signing_team_id
 
     def write_bytes(self, data: bytes, address: int, virtual: bool = False) -> "MachoBinary":
@@ -1067,8 +1049,7 @@ class MachoBinary:
         return list(self.read_pointer_section("__mod_term_func").values())
 
     def dylib_id(self) -> Optional[str]:
-        """If the binary contains an LC_ID_DYLIB load command, return the pathname which the binary represents.
-        """
+        """If the binary contains an LC_ID_DYLIB load command, return the pathname which the binary represents."""
         if not self._id_dylib_cmd:
             return None
 

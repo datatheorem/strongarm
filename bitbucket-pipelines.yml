@@ -8,11 +8,10 @@ pipelines:
           caches:
             - pip
           script:
-            - pip install pipenv
-            - export PIP_PROCESS_DEPENDENCY_LINKS=1
-            - pipenv install --dev
-            - pipenv run invoke install
-            - pipenv run invoke autoformat-lint
+            - pip install -U pip wheel setuptools 'pip-tools<7.0.0'
+            - pip-sync requirements.txt requirements-dev.txt
+            - invoke install
+            - invoke autoformat-lint
       - step:
           name: Test (via Pipenv)
           caches:
@@ -22,11 +21,10 @@ pipelines:
             - apt-get update
             # These dependencies are normally installed by strongarm-base/setup.py
             - apt-get install libcapstone4 libcapstone-dev sqlite3 libsqlite3-dev -y --allow-unauthenticated
-            - pip install pipenv
-            - export PIP_PROCESS_DEPENDENCY_LINKS=1
-            - pipenv install --dev
-            - pipenv run invoke install
-            - pipenv run invoke test
+            - pip install -U pip wheel setuptools 'pip-tools<7.0.0'
+            - pip-sync requirements.txt requirements-dev.txt
+            - invoke install
+            - invoke test
       - step:
           name: Test (via setuptools)
           caches:
@@ -36,12 +34,10 @@ pipelines:
             - apt-get update
             # These dependencies are normally installed by strongarm-base/setup.py
             - apt-get install libcapstone4 libcapstone-dev sqlite3 libsqlite3-dev -y --allow-unauthenticated
-            - pip install --upgrade pip pipenv
-            - pip install invoke pipenv pytest mypy flake8
+            - pip install invoke mypy flake8 pytest pytest-xdist
             # Version info
             - python --version
             - pip --version
-            - pipenv --version
             # Use pip instead of `python setup.py install`. For some reason, Pip can handle the git dependencies, but
             # not `setup.py install`, even if setuptools is fully up-to-date?
             #

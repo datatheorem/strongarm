@@ -58,8 +58,7 @@ class StringFormatter:
 
 
 def pick_macho_slice(parser: MachoParser) -> MachoBinary:
-    """Retrieve a MachoBinary slice from a MachoParser, with a preference for an arm64 slice
-    """
+    """Retrieve a MachoBinary slice from a MachoParser, with a preference for an arm64 slice."""
     binary_slices = parser.slices
 
     # Sanity checks (an empty list is falsey)

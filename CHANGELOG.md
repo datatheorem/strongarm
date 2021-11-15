@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+### SCAN-2972: Switch from Pipenv to pip-tools
+
+(Maintenance): Bump black dependency from 19.10b0 to 20.8b1.
+
 ### 2021-11-05: 13.0.1
 
 ### SCAN-2970: Handle magic values in dyld chained fixup pointer page starts

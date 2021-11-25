@@ -1,8 +1,6 @@
 from ctypes import c_uint32, c_uint64, sizeof
 from typing import Dict, List, Optional
 
-from more_itertools import first_true
-
 from strongarm.logger import strongarm_logger
 from strongarm.macho.arch_independent_structs import (
     ArchIndependentStructure,
@@ -144,9 +142,11 @@ class ObjcRuntimeDataParser:
         logger.debug(f"Parsing ObjC runtime info of {self.binary}...")
 
         logger.debug("Step 1: Parsing selrefs...")
-        self._selref_ptr_to_selector_map: Dict[VirtualMemoryPointer, ObjcSelector] = {}
         self._selector_literal_ptr_to_selref_map: Dict[VirtualMemoryPointer, ObjcSelref] = {}
-        # This populates self._selector_literal_ptr_to_selref_map and self._selref_ptr_to_selector_map
+        self._selref_ptr_to_selref_map: Dict[VirtualMemoryPointer, ObjcSelref] = {}
+        # Note this mapping is partially filled in now, but gets updated later in the parse
+        self._selref_ptr_to_selector_map: Dict[VirtualMemoryPointer, ObjcSelector] = {}
+        # Populates the mappings above
         self._parse_selrefs()
 
         logger.debug("Step 2: Parsing classes, categories, and protocols...")
@@ -201,39 +201,45 @@ class ObjcRuntimeDataParser:
 
     def _parse_selrefs(self) -> None:
         """Parse the binary's selref list, and store the data.
-
-        This method populates self._selector_literal_ptr_to_selref_map.
-        It also *PARTLY* populates self._selref_ptr_to_selector_map. All selrefs keys will have an ObjcSelector
-        value, but none of the ObjcSelector objects will have their `implementation` field filled, because
-        at this point in the parse we do not yet know the implementations of each selector. ObjcSelectors which we
-        later find an implementation for are updated in self.read_selectors_from_methlist_ptr"""
+        Fully populates:
+            self._selector_literal_ptr_to_selref_map
+            self._selref_ptr_to_selref_map
+        *PARTIALLY* populates:
+            self._selref_ptr_to_selector_map
+        All selrefs keys will have an ObjcSelector value, but none of the ObjcSelector objects
+        will have their `implementation` field filled, because at this point in the parse we do not yet know the
+        implementations of each selector. ObjcSelectors which we later find an implementation for are
+        updated in self.read_selectors_from_methlist_ptr
+        """
         selref_pointers = self.binary.read_pointer_section("__objc_selrefs")
         for selref_ptr, selector_literal_ptr in selref_pointers.items():
-            # read selector string literal from selref pointer
+            # Read selector string literal from selref pointer
             selector_string = self.binary.get_full_string_from_start_address(selector_literal_ptr)
             if not selector_string:
-                continue  # but all selectors should have a name
+                # But all selectors should have a name
+                # TODO(PT): Is this an error?
+                continue
             wrapped_selref = ObjcSelref(selref_ptr, selector_literal_ptr, selector_string)
 
-            # map the selector string pointer to the ObjcSelref
+            # Map the pointers to the wrapped-up selref object
             self._selector_literal_ptr_to_selref_map[selector_literal_ptr] = wrapped_selref
-            # add second mapping in selref list
-            # we don't know the implementation address yet but it will be updated when we parse method lists
+            self._selref_ptr_to_selref_map[wrapped_selref.source_address] = wrapped_selref
+
+            # And start off the selref pointer -> selector map
+            # We don't know the implementation address yet but it will be updated when we parse method lists
             self._selref_ptr_to_selector_map[selref_ptr] = ObjcSelector(selector_string, wrapped_selref, None)
 
     def selector_for_selref(self, selref_addr: VirtualMemoryPointer) -> Optional[ObjcSelector]:
+        # This map contains selectors implemented in the binary
         selector = self._selref_ptr_to_selector_map.get(selref_addr)
         if selector is not None:
             return selector
 
-        # selref wasn't referenced in classes implemented within the binary
-        # make sure it's a valid selref
-        selrefs = self._selector_literal_ptr_to_selref_map.values()
-        selref = first_true(iter(selrefs), pred=lambda x: x.source_address == selref_addr, default=None)
-
+        # This map contains all used selectors, including those imported from an external binary
+        selref = self._selref_ptr_to_selref_map.get(selref_addr)
         if selref is not None:
-            # Therefore, the selref must refer to a selector which is defined outside this binary
-            # this is fine, just construct an ObjcSelector with what we know
+            # The selref must refer to a selector which is defined outside this binary
+            # This is fine, just construct an ObjcSelector with what we know
             return ObjcSelector(selref.selector_literal, selref, None)
 
         else:

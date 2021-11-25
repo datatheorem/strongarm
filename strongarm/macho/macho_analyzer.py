@@ -79,8 +79,7 @@ ANALYZER_SQL_SCHEMA = """
 
 
 class DisassemblyFailedError(Exception):
-    """Raised when Capstone fails to disassemble a bytecode sequence.
-    """
+    """Raised when Capstone fails to disassemble a bytecode sequence."""
 
 
 @dataclass(order=True, frozen=True)
@@ -98,8 +97,7 @@ class ObjcMsgSendXref(CallerXRef):
 
 @dataclass
 class CallableSymbol:
-    """A locally-defined function or externally-defined imported function
-    """
+    """A locally-defined function or externally-defined imported function."""
 
     address: VirtualMemoryPointer
     is_imported: bool
@@ -195,8 +193,7 @@ class MachoAnalyzer:
 
     @_requires_xrefs_computed
     def calls_to(self, address: VirtualMemoryPointer) -> List[CallerXRef]:
-        """Return the list of code-locations within the binary which branch to the provided address.
-        """
+        """Return the list of code-locations within the binary which branch to the provided address."""
         xrefs_cursor = self._db_handle.execute(
             "SELECT * from function_calls WHERE destination_address=?", (int(address),)
         )
@@ -204,7 +201,7 @@ class MachoAnalyzer:
 
     @_requires_xrefs_computed
     def objc_calls_to(
-        self, objc_class_names: List[str], objc_selectors: List[str], requires_class_and_sel_found: bool,
+        self, objc_class_names: List[str], objc_selectors: List[str], requires_class_and_sel_found: bool
     ) -> List[ObjcMsgSendXref]:
         """Return the list of code-locations in the binary which invoke _objc_msgSend with any of the provided
         classes or selectors.
@@ -253,8 +250,7 @@ class MachoAnalyzer:
     def get_basic_block_boundaries(
         self, entry_point: VirtualMemoryPointer
     ) -> List[Tuple[VirtualMemoryPointer, VirtualMemoryPointer]]:
-        """Given the function starting at the provided address, return the list of (start_addr, end_addr) basic blocks.
-        """
+        """Given the function starting at the provided address, return the list of (start_addr, end_addr) basic blocks."""  # noqa: E501
         cursor = self._db_handle.execute(
             "SELECT start_address, end_address FROM basic_blocks WHERE entry_point=?", (entry_point,)
         )
@@ -385,8 +381,7 @@ class MachoAnalyzer:
 
     @classmethod
     def get_analyzer(cls, binary: MachoBinary) -> "MachoAnalyzer":
-        """Get a cached analyzer for a given MachoBinary
-        """
+        """Get a cached analyzer for a given MachoBinary."""
         if binary in cls._ANALYZER_CACHE:
             # There exists a MachoAnalyzer for this binary - use it instead of making a new one
             return cls._ANALYZER_CACHE[binary]
@@ -403,32 +398,27 @@ class MachoAnalyzer:
         return None
 
     def objc_classes(self) -> List[ObjcClass]:
-        """Return the List of classes and categories implemented within the binary
-        """
+        """Return the List of classes and categories implemented within the binary."""
         return self.objc_helper.classes
 
     def objc_categories(self) -> List[ObjcCategory]:
-        """Return the List of categories implemented within the app
-        """
+        """Return the List of categories implemented within the app."""
         all_classes = self.objc_classes()
         categories: List[ObjcCategory] = [c for c in all_classes if isinstance(c, ObjcCategory)]
         return categories
 
     def get_conformed_protocols(self) -> List[ObjcProtocol]:
-        """Return the List of protocols to which code within the binary conforms
-        """
+        """Return the List of protocols to which code within the binary conforms."""
         return self.objc_helper.protocols
 
     @property
     def dyld_bound_symbols(self) -> Dict[VirtualMemoryPointer, DyldBoundSymbol]:
-        """Return a Dict of each imported dyld stub to the corresponding symbol to be bound at runtime.
-        """
+        """Return a Dict of each imported dyld stub to the corresponding symbol to be bound at runtime."""
         return self.binary.dyld_bound_symbols
 
     @property
     def imp_stubs_to_symbol_names(self) -> Dict[VirtualMemoryPointer, str]:
-        """Return a Dict of callable implementation stubs to the names of the imported symbols they correspond to.
-        """
+        """Return a Dict of callable implementation stubs to the names of the imported symbols they correspond to."""
         if self._imported_symbol_addresses_to_names:
             return self._imported_symbol_addresses_to_names
 
@@ -487,22 +477,19 @@ class MachoAnalyzer:
         return {y: x for x, y in self.exported_symbol_pointers_to_names.items()}
 
     def exported_symbol_name_for_address(self, address: VirtualMemoryPointer) -> Optional[str]:
-        """Return the symbol name for the provided address, or None if the address is not a named exported symbol.
-        """
+        """Return the symbol name for the provided address, or None if the address is not a named exported symbol."""
         if address in self.exported_symbol_pointers_to_names:
             return self.exported_symbol_pointers_to_names[address]
         return None
 
     def symbol_name_for_branch_destination(self, branch_address: VirtualMemoryPointer) -> str:
-        """Get the associated symbol name for a given branch destination
-        """
+        """Get the associated symbol name for a given branch destination."""
         if branch_address in self.imp_stubs_to_symbol_names:
             return self.imp_stubs_to_symbol_names[branch_address]
         raise RuntimeError(f"Unknown branch destination {hex(branch_address)}. Is this a local branch?")
 
     def disassemble_region(self, start_address: VirtualMemoryPointer, size: int) -> List[CsInsn]:
-        """Disassemble the executable code in a given region into a list of CsInsn objects
-        """
+        """Disassemble the executable code in a given region into a list of CsInsn objects."""
         func_str = bytes(self.binary.get_content_from_virtual_address(virtual_address=start_address, size=size))
         instructions = [instr for instr in self.cs.disasm(func_str, start_address)]
         if not len(instructions):
@@ -510,8 +497,7 @@ class MachoAnalyzer:
         return instructions
 
     def get_function_instructions(self, start_address: VirtualMemoryPointer) -> List[CsInsn]:
-        """Get a list of disassembled instructions for the function beginning at start_address
-        """
+        """Get a list of disassembled instructions for the function beginning at start_address."""
         end_address = self.get_function_end_address(start_address)
 
         if end_address is None:
@@ -533,8 +519,7 @@ class MachoAnalyzer:
         return self.objc_helper.selector_for_selector_literal(selref_ptr)
 
     def get_method_imp_addresses(self, selector: str) -> List[VirtualMemoryPointer]:
-        """Given a selector, return a list of virtual addresses corresponding to the start of each IMP for that SEL
-        """
+        """Given a selector, return a list of virtual addresses corresponding to the start of each IMP for that SEL."""
         return self.objc_helper.get_method_imp_addresses(selector)
 
     def get_imps_for_sel(self, selector: str) -> List["ObjcFunctionAnalyzer"]:
@@ -556,8 +541,7 @@ class MachoAnalyzer:
         return implementation_analyzers
 
     def get_objc_methods(self) -> List["ObjcMethodInfo"]:
-        """Get a List of ObjcMethodInfo's representing all ObjC methods implemented in the Mach-O.
-        """
+        """Get a List of ObjcMethodInfo's representing all ObjC methods implemented in the Mach-O."""
         from strongarm.objc import ObjcMethodInfo  # type: ignore
 
         if self._objc_method_list:
@@ -636,8 +620,7 @@ class MachoAnalyzer:
         return None
 
     def classref_for_class_name(self, class_name: str) -> Optional[VirtualMemoryPointer]:
-        """Given a class name, try to find a classref for it.
-        """
+        """Given a class name, try to find a classref for it."""
         classrefs = [
             addr
             for addr, name in self.imported_symbols_to_symbol_names.items()
@@ -663,8 +646,7 @@ class MachoAnalyzer:
 
     @_requires_xrefs_computed
     def strings(self) -> Set[str]:
-        """Return a list containing every string in the binary
-        """
+        """Return a list containing every string in the binary."""
         # Gather strings from various sections
         all_strings = set()
         for section_name in ["__cstring", "__objc_methname", "__objc_methtype", "__objc_classname", "__const"]:
@@ -680,8 +662,7 @@ class MachoAnalyzer:
         return all_strings
 
     def get_cstrings(self) -> Set[str]:
-        """Return the list of strings in the binary's __cstring section.
-        """
+        """Return the list of strings in the binary's __cstring section."""
         # TODO(PT): This is SLOW and WASTEFUL!!!
         # These transformations should be done ONCE on initial analysis!
         # This method should cache its result.
@@ -839,8 +820,7 @@ class MachoAnalyzer:
         self._db_handle.commit()
 
     def _strings_in_section(self, section_name: str) -> Set[str]:
-        """Fetch the list of strings located inside the provided section
-        """
+        """Fetch the list of strings located inside the provided section."""
         discovered_strings = set()
         string_section = self.binary.section_with_name(section_name, "__TEXT")
         if string_section:

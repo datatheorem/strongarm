@@ -19,20 +19,16 @@ def install(ctx):
 @task
 def test(ctx):
     # type: (Context) -> None
-    ctx.run("pipenv run mypy strongarm strongarm-cli.py --ignore-missing-imports")
-    ctx.run("pipenv run pytest")
+    ctx.run("mypy strongarm strongarm-cli.py --ignore-missing-imports")
+    ctx.run("pytest -n 4")
 
 
 @task
 def autoformat_lint(ctx):
     # type: (Context) -> None
-    """Check formatting of the code
-    """
+    """Check formatting of the code."""
     # Gather all the modules / files in the tree
     files_to_process = " ".join(_get_python_modules())
-
-    # Find virtual environment for isort
-    venv = ctx.run("pipenv --venv", hide=True).stdout.strip()
 
     autoflake_version = ctx.run("autoflake --version", hide=True).stdout.strip().split()[1]
     isort_version = ctx.run("isort --version | grep VERSION", hide=True).stdout.strip().split()[1]
@@ -44,7 +40,7 @@ def autoformat_lint(ctx):
     ctx.run(f"autoflake --recursive {files_to_process}")  # Default behaviour is to print diff
 
     print(f"Checking imports sorting (isort v{isort_version})")
-    ctx.run(f"isort --check --diff --virtual-env {venv} {files_to_process}")
+    ctx.run(f"isort --check --diff {files_to_process}")
 
     print(f"Checking black format (black v{black_version})")
     ctx.run(f"black --check --diff {files_to_process}")
@@ -56,20 +52,16 @@ def autoformat_lint(ctx):
 @task
 def autoformat(ctx):
     # type: (Context) -> None
-    """Run auto-formatting tools
-    """
+    """Run auto-formatting tools."""
     # Gather all the modules / files in the tree
     files_to_process = " ".join(_get_python_modules())
-
-    # Find virtual environment for isort
-    venv = ctx.run("pipenv --venv", hide=True).stdout.strip()
 
     # Run auto-formatting tools
     print("Optimizing imports")
     ctx.run(f"autoflake --in-place --recursive {files_to_process}")
 
     print("Sorting imports")
-    ctx.run(f"isort --virtual-env {venv} {files_to_process}")
+    ctx.run(f"isort {files_to_process}")
 
     print("Blackifying code")
     ctx.run(f"black {files_to_process}")

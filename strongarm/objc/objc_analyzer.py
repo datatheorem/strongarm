@@ -17,14 +17,12 @@ logger = strongarm_logger.getChild(__file__)
 
 
 def _is_mangled_cpp_symbol(symbol_name: str) -> bool:
-    """Return whether a symbol name appears to be a mangled C++ symbol.
-    """
+    """Return whether a symbol name appears to be a mangled C++ symbol."""
     return any(symbol_name.startswith(prefix) for prefix in ["_Z", "__Z", "___Z"])
 
 
 def _demangle_cpp_symbol(cpp_symbol: str) -> str:
-    """Call into c++filt to demangle the provided mangled C++ symbol name.
-    """
+    """Call into c++filt to demangle the provided mangled C++ symbol name."""
     if not _is_mangled_cpp_symbol(cpp_symbol):
         return cpp_symbol
 
@@ -117,8 +115,7 @@ class ObjcFunctionAnalyzer:
         self.basic_blocks = self._find_basic_blocks()
 
     def _get_instruction_index_of_address(self, address: VirtualMemoryPointer) -> Optional[int]:
-        """Return the index of an instruction with a provided address within the internal list of instructions
-        """
+        """Return the index of an instruction with a provided address within the internal list of instructions."""
         base_address = self.start_address
         offset = address - base_address
         index = int(offset / MachoBinary.BYTES_PER_INSTRUCTION)
@@ -127,8 +124,7 @@ class ObjcFunctionAnalyzer:
         return None
 
     def get_instruction_at_index(self, index: int) -> Optional[CsInsn]:
-        """Get the instruction at a given index within the function's code, wrapping in ObjcInstruction
-        """
+        """Get the instruction at a given index within the function's code, wrapping in ObjcInstruction."""
         if 0 <= index < len(self.instructions):
             return self.instructions[index]
         return None
@@ -159,7 +155,7 @@ class ObjcFunctionAnalyzer:
 
     def get_symbol_name(self) -> str:
         """Return a objective-c class/method, c function, or sub_address-style string representing the name of
-            this block of code.
+        this block of code.
         """
         if self.method_info:
             return f"-[{self.method_info.objc_class.name} {self.method_info.objc_sel.name}]"
@@ -247,8 +243,7 @@ class ObjcFunctionAnalyzer:
 
     @property
     def call_targets(self) -> List[ObjcBranchInstruction]:
-        """Return the List of all branch instructions within the source function.
-        """
+        """Return the List of all branch instructions within the source function."""
         # Use cached list if available
         if self._call_targets is not None:
             return self._call_targets
@@ -290,7 +285,8 @@ class ObjcFunctionAnalyzer:
         return call_targets
 
     def get_local_branches(self) -> List[ObjcBranchInstruction]:
-        """Return all instructions in the analyzed function representing a branch to a destination within the function
+        """Return all instructions in the analyzed function representing a branch to a destination within
+        the source function.
         """
         local_branches = []
         for target in self.call_targets:

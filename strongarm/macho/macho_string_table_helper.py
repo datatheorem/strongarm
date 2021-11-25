@@ -5,8 +5,7 @@ from strongarm.macho.macho_definitions import NLIST_NTYPE, NTYPE_VALUES
 
 
 class MachoStringTableEntry:
-    """Class encapsulating an entry into the Mach-O string table
-    """
+    """Class encapsulating an entry into the Mach-O string table."""
 
     __slots__ = ["start_idx", "length", "full_string"]
 
@@ -17,8 +16,7 @@ class MachoStringTableEntry:
 
 
 class MachoStringTableHelper:
-    """Class containing helper functions for processing different tables in a Mach-O
-    """
+    """Class containing helper functions for processing different tables in a Mach-O."""
 
     # TODO(PT): generalize the preprocessing of a string table where we efficiently map string start addresses to
     # full strings, so we don't need to do an O(n) search for a (struct __objc_data).name or something
@@ -81,8 +79,7 @@ class MachoStringTableHelper:
         return None
 
     def parse_sym_lists(self) -> None:
-        """Read imported and exported symbol names referenced by symtab from the string table.
-        """
+        """Read imported and exported symbol names referenced by symtab from the string table."""
 
         self.imported_symbols = []
 
@@ -109,8 +106,7 @@ class MachoStringTableHelper:
                 self.exported_symbols[sym.n_value] = symbol_str
 
     def get_symbol_name_for_address(self, address: VirtualMemoryPointer) -> Optional[str]:
-        """ For an address of a function entrypoint, return the function's symbol name
-        """
+        """For an address of a function entrypoint, return the function's symbol name."""
         if address in self.exported_symbols:
             return self.exported_symbols[address]
         return None

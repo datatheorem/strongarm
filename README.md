@@ -12,8 +12,8 @@ strongarm is production-ready and is used throughout DataTheorem's iOS static an
 ![REPL example](repl_example.png)
 
 This repo contains multiple tools to explore strongarm and the API. In the `scripts` folder,
-several popular Mach-O analysis tools have been reimplemented in strongarm, to demonstrate real API usage. As strongarm is cross-platform, 
-all of these tools are as well:
+several popular Mach-O analysis tools have been reimplemented in strongarm, to demonstrate real API usage.
+As strongarm is cross-platform, all of these tools are as well:
 
 - `strongarm-cli`: Static analysis REPL (try me!)
 - `class-dump`: Dump the Objective-C class information from a Mach-O with Objective-C declaration syntax
@@ -31,16 +31,27 @@ Installation
 
 strongarm is supported on macOS and Linux.
 
-```bash
 # Via pip
-$ pip install strongarm-ios
 
-# Or, for local development
-$ git clone ...
-$ cd strongarm-ios/
-$ pipenv shell
-$ pipenv install
-```
+    pip install strongarm-ios
+
+# Via git (for local development)
+
+To setup a local environment:
+
+    git clone ...
+    cd static-checks-common
+    python -m venv .venv
+    source .venv/bin/activate
+    pip install -U pip setuptools wheel 'pip-tools<7.0.0'
+    pip-sync requirements.txt requirements-dev.txt
+
+If you modify requirements.in or requirements-dev.in:
+
+    pip-compile requirements.in
+    pip-compile requirements-dev.in
+    pip-sync requirements.txt requirements-dev.txt
+    git add requirements-dev.in requirements-dev.txt
 
 Features
 -----------
@@ -81,13 +92,14 @@ Pass an input file to `MachoParser`, which will read a Mach-O or FAT and provide
 
 ```python
 import pathlib
+from strongarm.macho import MachoParser, MachoBinary
+
 # Load an input file
-from strongarm.macho import MachoParser
-parser = MachoParser(pathlib.Path('~/Documents/MyApp.app/MyApp'))
+parser = MachoParser(pathlib.Path("~/Documents/MyApp.app/MyApp"))
 # Read the ARM64 slice and perform some operations
-binary = parser.get_arm64_slice()   # type: MachoBinary
+binary: MachoBinary = parser.get_arm64_slice()
 print(binary.get_entitlements().decode())
-print(hex(binary.section_with_name('__text','__TEXT').address))
+print(hex(binary.section_with_name("__text", "__TEXT").address))
 ```
 
 Advanced analysis
@@ -96,10 +108,10 @@ Advanced analysis
 Some APIs which require more memory or cross-referencing are available through `MachoAnalyzer`
 
 ```python
-import pathlib
+from pathlib import Path
 from strongarm.macho import MachoParser, MachoBinary, MachoAnalyzer
 
-macho_parser = MachoParser(pathlib.Path('~/Documents/MyApp.app/MyApp'))
+macho_parser = MachoParser(Path("~/Documents/MyApp.app/MyApp"))
 binary: MachoBinary = macho_parser.get_arm64_slice()
 # A MachoAnalyzer wraps a binary and allows deeper analysis
 analyzer = MachoAnalyzer.get_analyzer(binary)
@@ -112,15 +124,15 @@ print(analyzer.imported_symbol_names_to_pointers)   # All the dynamically linked
 print(analyzer.exported_symbol_names_to_pointers)   # All the symbols which this binary defines and exports
 print(analyzer.get_functions())                     # Entry-point list of the binary. Each of these can be wrapped in an ObjcFunctionAnalyzer
 print(analyzer.strings())                           # __cstring segment
-print(analyzer.get_imps_for_sel('viewDidLoad'))     # Convenience accessor for an ObjcFunctionAnalyzer
+print(analyzer.get_imps_for_sel("viewDidLoad"))     # Convenience accessor for an ObjcFunctionAnalyzer
 
 # Print the Objective-C class information
 for objc_cls in analyzer.objc_classes():
     print(objc_cls.name)
     for objc_ivar in objc_cls.ivars:
-        print(f'\tivar: {objc_ivar.name}')
+        print(f"\tivar: {objc_ivar.name}")
     for objc_sel in objc_cls.selectors:
-        print(f'\tmethod: {objc_sel.name} @ {hex(objc_sel.implementation)}')
+        print(f"\tmethod: {objc_sel.name} @ {hex(objc_sel.implementation)}")
 ```
 
 Code analysis
@@ -129,14 +141,14 @@ Code analysis
 Once you have a handle to a `FunctionAnalyzer`, representing a source code function, you can analyze the code:
 
 ```python
-import pathlib
+from pathlib import Path
 from strongarm.macho import MachoParser, MachoBinary, MachoAnalyzer
 from strongarm.objc import ObjcFunctionAnalyzer
 
-macho_parser = MachoParser(pathlib.Path('~/Documents/MyApp.app/MyApp'))
+macho_parser = MachoParser(Path("~/Documents/MyApp.app/MyApp"))
 binary: MachoBinary = macho_parser.get_arm64_slice()
 analyzer = MachoAnalyzer.get_analyzer(binary)
-function_analyzer = ObjcFunctionAnalyzer.get_function_analyzer_for_signature(binary, 'ViewController', 'viewDidLoad')
+function_analyzer = ObjcFunctionAnalyzer.get_function_analyzer_for_signature(binary, "ViewController", "viewDidLoad")
 print(function_analyzer.basic_blocks)   # Find the basic block boundaries
 
 # Print some interesting info about Objective-C method calls in the function
@@ -145,14 +157,14 @@ for instr in function_analyzer.instructions:
         continue
     
     # In an Objective-C message send, x0 stores the receiver and x1 stores the selector being messaged.
-    classref = function_analyzer.get_register_contents_at_instruction('x0', instr)
-    selref = function_analyzer.get_register_contents_at_instruction('x1', instr)
+    classref = function_analyzer.get_register_contents_at_instruction("x0", instr)
+    selref = function_analyzer.get_register_contents_at_instruction("x1", instr)
     
     class_name = analyzer.class_name_for_class_pointer(classref.value)
     selector = analyzer.selector_for_selref(selref.value).name
    
     # Prints "0x100000000: _objc_msgSend(_OBJC_CLASS_$_UIView, @selector(alloc));"
-    print(f'{hex(instr.address)}: {instr.symbol}({class_name}, @selector({selector}));')
+    print(f"{hex(instr.address)}: {instr.symbol}({class_name}, @selector({selector}));")
 ```
 
 Modifying Mach-O's
@@ -160,6 +172,11 @@ Modifying Mach-O's
 
 You can also modify Mach-O's by overwriting structures or inserting load commands:
 ```python
+from pathlib import Path
+from strongarm.macho import MachoParser, MachoBinary
+from strongarm.macho.macho_definitions import MachoSymtabCommand
+
+macho_parser = MachoParser(Path("~/Documents/MyApp.app/MyApp"))
 # Overwrite a structure
 binary: MachoBinary = macho_parser.get_arm64_slice()
 new_symbol_table = MachoSymtabCommand()
@@ -167,10 +184,10 @@ new_symbol_table.nsyms = 0
 modified_binary = binary.write_struct(new_symbol_table, binary.symtab.address, virtual=True)
 
 # Add a load command
-modified_binary = modified_binary.insert_load_dylib_cmd('/System/Frameworks/UIKit.framework/UIKit')
+modified_binary = modified_binary.insert_load_dylib_cmd("/System/Frameworks/UIKit.framework/UIKit")
 
 # Write the modified binary to a file
-MachoBinary.write_binary(pathlib.Path(__file__).parent / 'modified_binary')
+MachoBinary.write_binary(Path(__file__).parent / "modified_binary")
 ```
 
 `MachoBinary` provides several functions to faciliate binary modifications.
@@ -180,25 +197,28 @@ which is re-parsed with the edits.
 
 ```python
 # Write raw bytes or Mach-O structures to a binary
-MachoBinary.write_bytes(self, data: bytes, address: int, virtual=False) -> 'MachoBinary'
-MachoBinary.write_struct(self, struct: Structure, address: int, virtual=False) -> 'MachoBinary'
+MachoBinary.write_bytes(self, data: bytes, address: int, virtual=False) -> MachoBinary
+MachoBinary.write_struct(self, struct: Structure, address: int, virtual=False) -> MachoBinary
 
 # Insert a load command
-MachoBinary.insert_load_dylib_cmd(dylib_path: str) -> 'MachoBinary'
+MachoBinary.insert_load_dylib_cmd(dylib_path: str) -> MachoBinary
 
 # Flush a modified slice to a thin Mach-O file, or a list of slices to a FAT Mach-O file:
 MachoBinary.write_binary(self, path: pathlib.Path) -> None
 @staticmethod
-MachoBinary.write_fat(slices: List['MachoBinary'], path: pathlib.Path) -> None
+MachoBinary.write_fat(slices: List[MachoBinary], path: pathlib.Path) -> None
 ```
 
 To make several modifications to a `MachoBinary` while triggering only one extra parse, use a `MachoBinaryWriter`:
 
 ```python
 from pathlib import Path
+from strongarm.macho import MachoParser, MachoBinary
 from ctypes import c_uint64, sizeof
 from strongarm.macho.macho_binary_writer import MachoBinaryWriter
 
+macho_parser = MachoParser(Path("~/Documents/MyApp.app/MyApp"))
+binary: MachoBinary = macho_parser.get_arm64_slice()
 # Initialise a batch binary writer
 writer = MachoBinaryWriter(binary)
 

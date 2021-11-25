@@ -1,0 +1,10 @@
+-c requirements.txt
+# Packages for developing
+invoke
+flake8
+autoflake
+isort
+black==20.8b1
+mypy
+pytest
+pytest-xdist

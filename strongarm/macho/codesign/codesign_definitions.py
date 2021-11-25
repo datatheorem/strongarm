@@ -5,8 +5,7 @@ from strongarm.macho.arch_independent_structs import ArchIndependentStructure
 
 
 class CodesignBlobTypeEnum(IntEnum):
-    """Magic numbers for codesigning blobs
-    """
+    """Magic numbers for codesigning blobs."""
 
     CSMAGIC_REQUIREMENT = 0xFADE0C00  # single requirement blob
     CSMAGIC_REQUIREMENT_SET = 0xFADE0C01  # requirements vector (internal requirements)
@@ -18,8 +17,7 @@ class CodesignBlobTypeEnum(IntEnum):
 
 
 class CSBlobStruct(BigEndianStructure):
-    """Basic CodeSign blob structure. These fields shared by all CodeSign blob structures.
-    """
+    """Basic CodeSign blob structure. These fields shared by all CodeSign blob structures."""
 
     _fields_ = [("magic", c_uint32), ("length", c_uint32)]
 

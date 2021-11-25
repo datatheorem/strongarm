@@ -26,8 +26,7 @@ class ObjcInstruction:
 
     @classmethod
     def is_vector_register(cls, reg_name: str) -> bool:
-        """Returns True if the register refers to a vector register; False otherwise.
-        """
+        """Returns True if the register refers to a vector register; False otherwise."""
         for vector_prefix in ObjcInstruction.VECTOR_REGISTER_PREFIXES:
             if vector_prefix in reg_name:
                 return True
@@ -60,8 +59,7 @@ class ObjcInstruction:
     def parse_instruction(
         cls, function_analyzer: "ObjcFunctionAnalyzer", instruction: CsInsn
     ) -> Union["ObjcInstruction", "ObjcUnconditionalBranchInstruction", "ObjcConditionalBranchInstruction"]:
-        """Read an instruction and encapsulate it in the appropriate ObjcInstruction subclass
-        """
+        """Read an instruction and encapsulate it in the appropriate ObjcInstruction subclass."""
         if ObjcBranchInstruction.is_branch_instruction(instruction):
             return ObjcBranchInstruction.parse_instruction(function_analyzer, instruction)
         return ObjcInstruction(instruction)
@@ -87,8 +85,7 @@ class ObjcBranchInstruction(ObjcInstruction):
         patch_msgSend_destination: bool = True,
         container_function_boundary: Tuple[VirtualMemoryPointer, VirtualMemoryPointer] = None,
     ) -> Union["ObjcUnconditionalBranchInstruction", "ObjcConditionalBranchInstruction"]:
-        """Read a branch instruction and encapsulate it in the appropriate ObjcBranchInstruction subclass
-        """
+        """Read a branch instruction and encapsulate it in the appropriate ObjcBranchInstruction subclass."""
         # use appropriate subclass
         if instruction.mnemonic in ObjcUnconditionalBranchInstruction.UNCONDITIONAL_BRANCH_MNEMONICS:
             uncond_instr = ObjcUnconditionalBranchInstruction(
@@ -105,8 +102,7 @@ class ObjcBranchInstruction(ObjcInstruction):
 
     @classmethod
     def is_branch_instruction(cls, instruction: CsInsn) -> bool:
-        """Returns True if the CsInsn represents a branch instruction, False otherwise
-        """
+        """Returns True if the CsInsn represents a branch instruction, False otherwise."""
         # TODO(FS): Merge subclasses into ObjcBranchInstruction and provide contextual information about each variant
         return (
             instruction.mnemonic in ObjcUnconditionalBranchInstruction.UNCONDITIONAL_BRANCH_MNEMONICS

@@ -2,11 +2,18 @@
 
 ## Unreleased
 
+### SCAN-3007: Add a cache to speed up `ObjcRuntimeDataParser.selector_for_selref()`
+
+This method is queried for every selector in the binary while building the XRef database, so it needs to be constant-time.
+The previous implementation did an O(n) search through all the selrefs in the binary when the input selref refers to an imported, 
+rather than locally defined, selector. The new implementation builds a cache while enumerating the Objective-C runtime data
+to avoid this. 
+
 ### SCAN-2972: Switch from Pipenv to pip-tools
 
 (Maintenance): Bump black dependency from 19.10b0 to 20.8b1.
 
-### 2021-11-05: 13.0.1
+## 2021-11-05: 13.0.1
 
 ### SCAN-2970: Handle magic values in dyld chained fixup pointer page starts
 

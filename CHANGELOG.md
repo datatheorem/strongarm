@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+## 2021-11-29: 13.0.2
+
 ### SCAN-3007: Add a cache to speed up `ObjcRuntimeDataParser.selector_for_selref()`
 
 This method is queried for every selector in the binary while building the XRef database, so it needs to be constant-time.

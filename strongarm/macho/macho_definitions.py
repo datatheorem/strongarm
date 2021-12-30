@@ -708,6 +708,16 @@ class MachoDyldChainedImportRaw(Structure):
     ]
 
 
+class MachoDyldChainedImportAddend64Raw(Structure):
+    _fields_ = [
+        ("lib_ordinal", c_uint64, 16),
+        ("weak_import", c_uint64, 1),
+        ("reserved", c_uint64, 15),
+        ("name_offset", c_uint64, 32),
+        ("addend", c_uint64),
+    ]
+
+
 class MachoDyldChainedStartsInImageRaw(Structure):
     _fields_ = [
         ("seg_count", c_uint32),

@@ -1,11 +1,12 @@
 from ctypes import c_int8, c_int16, c_long, c_uint16, c_uint32, c_uint64, sizeof
 from dataclasses import dataclass, field
 from enum import IntEnum
-from typing import Dict, List, Optional, Tuple
+from typing import Dict, List, Optional, Tuple, Type
 
 from strongarm.logger import strongarm_logger
 
 from .arch_independent_structs import (
+    ArchIndependentStructure,
     DylibCommandStruct,
     MachoDyldChainedFixupsHeader,
     MachoDyldChainedImport,
@@ -99,6 +100,8 @@ class DyldInfoParser:
 
         # Different imports formats have different layouts and parsing rules
         imports_format = chained_fixups_header.imports_format
+
+        chained_import_struct: Type[ArchIndependentStructure]
         if imports_format == MachoDyldChainedImportFormat.DYLD_CHAINED_IMPORT:
             chained_import_struct = MachoDyldChainedImport
             compute_library_ordinal = DyldInfoParser._compute_library_ordinal_for_chained_import_type

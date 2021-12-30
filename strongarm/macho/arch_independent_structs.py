@@ -124,6 +124,7 @@ _64_BIT_STRUCT_ALIAS = Union[
     Type["MachoBuildToolVersion"],
     Type["MachoDyldChainedFixupsHeaderRaw"],
     Type["MachoDyldChainedImportRaw"],
+    Type["MachoDyldChainedImportAddend64Raw"],
     Type["MachoDyldChainedStartsInImageRaw"],
     Type["MachoDyldChainedStartsInSegmentRaw"],
     Type["MachoDyldChainedPtr64RebaseRaw"],

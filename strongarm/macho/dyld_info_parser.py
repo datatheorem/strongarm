@@ -1,21 +1,23 @@
-from ctypes import c_long, c_uint16, c_uint32, c_uint64, sizeof
+from ctypes import c_int8, c_int16, c_long, c_uint16, c_uint32, c_uint64, sizeof
 from dataclasses import dataclass, field
 from enum import IntEnum
-from typing import Dict, List, Optional, Tuple
+from typing import Dict, List, Optional, Tuple, Type
 
 from strongarm.logger import strongarm_logger
 
 from .arch_independent_structs import (
+    ArchIndependentStructure,
     DylibCommandStruct,
     MachoDyldChainedFixupsHeader,
     MachoDyldChainedImport,
+    MachoDyldChainedImportAddend64,
     MachoDyldChainedPtr64Bind,
     MachoDyldChainedPtr64Rebase,
     MachoDyldChainedStartsInImage,
     MachoDyldChainedStartsInSegment,
 )
 from .macho_binary import MachoBinary
-from .macho_definitions import StaticFilePointer, VirtualMemoryPointer
+from .macho_definitions import MachoDyldChainedImportFormat, StaticFilePointer, VirtualMemoryPointer
 
 logger = strongarm_logger.getChild(__file__)
 
@@ -72,6 +74,20 @@ class DyldInfoParser:
     """
 
     @staticmethod
+    def _compute_library_ordinal_for_chained_import_type(lib_value: int) -> int:
+        if lib_value > 0xF0:
+            # Cast to int8
+            return c_int8(lib_value).value
+        return lib_value
+
+    @staticmethod
+    def _compute_library_ordinal_for_chained_import_addend64_type(lib_value: int) -> int:
+        if lib_value > 0xFFF0:
+            # Cast to int16
+            return c_int16(lib_value).value
+        return lib_value
+
+    @staticmethod
     def _read_chained_imports(
         binary: MachoBinary,
         chained_fixups_data_start: StaticFilePointer,
@@ -81,17 +97,38 @@ class DyldInfoParser:
         chained_import_addr = chained_fixups_data_start + chained_fixups_header.imports_offset
         symbols_start_addr = chained_fixups_data_start + chained_fixups_header.symbols_offset
         dyld_bound_symbols: List[DyldBoundSymbol] = []
+
+        # Different imports formats have different layouts and parsing rules
+        imports_format = chained_fixups_header.imports_format
+
+        chained_import_struct: Type[ArchIndependentStructure]
+        if imports_format == MachoDyldChainedImportFormat.DYLD_CHAINED_IMPORT:
+            chained_import_struct = MachoDyldChainedImport
+            compute_library_ordinal = DyldInfoParser._compute_library_ordinal_for_chained_import_type
+
+        elif imports_format == MachoDyldChainedImportFormat.DYLD_CHAINED_IMPORT_ADDEND64:
+            # net.salkosuo.clp.ttmsg includes ADDEND64 imports, but the binary is too big to include in the test tree.
+            # TODO(PT): This same binary contains imports with an ordinal of BIND_SPECIAL_DYLIB_WEAK_LOOKUP (-3),
+            # which appears to be imports for locally defined symbols (?!)
+            chained_import_struct = MachoDyldChainedImportAddend64
+            compute_library_ordinal = DyldInfoParser._compute_library_ordinal_for_chained_import_addend64_type
+
+        else:
+            raise ValueError(f"Unsupported chained import pointer format: {imports_format}")
+
         for i in range(chained_fixups_header.imports_count):
-            chained_import = binary.read_struct(chained_import_addr, MachoDyldChainedImport)
+            chained_import = binary.read_struct(chained_import_addr, chained_import_struct)
             symbol_addr = symbols_start_addr + chained_import.name_offset
             symbol_string = binary.get_full_string_from_start_address(symbol_addr, virtual=False)
+
             if not symbol_string:
                 raise ValueError(f"Should not happen: Failed to read a string for chained import {chained_import_addr}")
+
             dyld_bound_symbols.append(
                 DyldBoundSymbol(
                     binary=binary,
                     address=chained_import_addr,
-                    library_ordinal=chained_import.lib_ordinal,
+                    library_ordinal=compute_library_ordinal(chained_import.lib_ordinal),
                     name=symbol_string,
                 )
             )

@@ -2,6 +2,13 @@
 
 ## Unreleased
 
+## 2022-01-03: 13.0.3
+
+### SCAN-3091: Support parsing `DYLD_CHAINED_IMPORT_ADDEND64`
+
+Previously, we supported parsing only one type of chained fixup pointers: DYLD_CHAINED_IMPORT_ADDEND. Some chained fixup pointers are of type DYLD_CHAINED_IMPORT_ADDEND64, which has a different data layout.
+Note that every chained import has a ‘library ordinal’ describing which linked dylib it comes from (starting at an index of 1). For some binaries we've come across, this value was -3, which corresponds to the constant BIND_SPECIAL_DYLIB_WEAK_LOOKUP. It appears that this constant mean “this isn’t an import, this symbol is actually locally defined”. I don’t understand the use case for this.
+
 ## 2021-11-29: 13.0.2
 
 ### SCAN-3007: Add a cache to speed up `ObjcRuntimeDataParser.selector_for_selref()`

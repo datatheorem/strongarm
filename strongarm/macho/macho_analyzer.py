@@ -185,6 +185,9 @@ class MachoAnalyzer:
         self._cfstring_to_stringref_map = self._build_cfstring_map()
         self._cstring_to_stringref_map = self._build_cstring_map()
 
+        self.__cached_strings: Optional[Set[str]] = None
+        self.__cached_cstrings: Optional[Set[str]] = None
+
         # Done setting up, store this analyzer in class cache
         MachoAnalyzer._ANALYZER_CACHE[binary] = self
 
@@ -647,26 +650,28 @@ class MachoAnalyzer:
     @_requires_xrefs_computed
     def strings(self) -> Set[str]:
         """Return a list containing every string in the binary."""
-        # Gather strings from various sections
-        all_strings = set()
-        for section_name in ["__cstring", "__objc_methname", "__objc_methtype", "__objc_classname", "__const"]:
-            section_strings = self._strings_in_section(section_name)
-            all_strings.update(section_strings)
+        if not self.__cached_strings:
+            # Gather strings from various sections
+            all_strings = set()
+            all_strings.update(self.get_cstrings())
+            for section_name in ["__objc_methname", "__objc_methtype", "__objc_classname", "__const"]:
+                section_strings = self._strings_in_section(section_name)
+                all_strings.update(section_strings)
 
-        # Gather strings found via Xrefs
-        c = self._db_handle.cursor()
-        xref_strings_rows = c.execute("SELECT string_literal from string_xrefs").fetchall()
-        xref_strings = [xref_strings_row[0] for xref_strings_row in xref_strings_rows]
-        all_strings.update(set(xref_strings))
+            # Gather strings found via Xrefs
+            c = self._db_handle.cursor()
+            xref_strings_rows = c.execute("SELECT string_literal from string_xrefs").fetchall()
+            xref_strings = [xref_strings_row[0] for xref_strings_row in xref_strings_rows]
+            all_strings.update(set(xref_strings))
 
-        return all_strings
+            self.__cached_strings = all_strings
+        return self.__cached_strings
 
     def get_cstrings(self) -> Set[str]:
         """Return the list of strings in the binary's __cstring section."""
-        # TODO(PT): This is SLOW and WASTEFUL!!!
-        # These transformations should be done ONCE on initial analysis!
-        # This method should cache its result.
-        return self._strings_in_section("__cstring")
+        if not self.__cached_cstrings:
+            self.__cached_cstrings = self._strings_in_section("__cstring")
+        return self.__cached_cstrings
 
     def _build_cstring_map(self) -> Dict[str, VirtualMemoryPointer]:
         strings_section = self.binary.section_with_name("__cstring", "__TEXT")

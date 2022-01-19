@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+### SCAN-3119: Cache the results of `MachoAnalyzer.get_cstrings()` and `MachoAnalyzer.strings()`
+
 ## 2022-01-03: 13.0.3
 
 ### SCAN-3091: Support parsing `DYLD_CHAINED_IMPORT_ADDEND64`

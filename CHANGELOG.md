@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+## 2022-01-20: 13.0.4
+
 ### SCAN-3119: Cache the results of `MachoAnalyzer.get_cstrings()` and `MachoAnalyzer.strings()`
 
 ## 2022-01-03: 13.0.3

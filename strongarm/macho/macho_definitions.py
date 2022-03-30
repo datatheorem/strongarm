@@ -775,7 +775,7 @@ class MachoDyldChainedPtrFormat(IntEnum):
     """Gives the format for packed pointers within fixup chains
     PT: Only model a subset for now so it's clear when we encounter binaries breaking our assumptions
     """
-    
+
     # Packed target is a virtual memory address
     DYLD_CHAINED_PTR_64 = 2
     # Packed target is an offset from the runtime virtual base

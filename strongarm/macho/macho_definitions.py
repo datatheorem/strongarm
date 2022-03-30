@@ -731,9 +731,9 @@ class MachoDyldChainedStartsInImageRaw(Structure):
 
 
 class MachoDyldChainedStartsInSegmentRaw(Structure):
-    # https://docs.python.org/3/library/ctypes.html#structure-union-alignment-and-byte-order
     # XXX(PT): Force alignment to uint16_t, as by default this structure is reported as being 2 bytes too big
     # The correct size is important when we're parsing data that is placed directly after this structure
+    # https://docs.python.org/3/library/ctypes.html#structure-union-alignment-and-byte-order
     _pack_ = 2
 
     _fields_ = [
@@ -775,6 +775,7 @@ class MachoDyldChainedPtrFormat(IntEnum):
     """Gives the format for packed pointers within fixup chains
     PT: Only model a subset for now so it's clear when we encounter binaries breaking our assumptions
     """
+    
     # Packed target is a virtual memory address
     DYLD_CHAINED_PTR_64 = 2
     # Packed target is an offset from the runtime virtual base

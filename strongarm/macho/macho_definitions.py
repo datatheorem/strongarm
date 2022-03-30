@@ -741,7 +741,7 @@ class MachoDyldChainedStartsInSegmentRaw(Structure):
         ("size", c_uint32),
         # 0x1000 or 0x4000
         ("page_size", c_uint16),
-        # DYLD_CHAINED_PTR_*
+        # MachoDyldChainedPtrFormat
         ("pointer_format", c_uint16),
         # Offset in memory to start of segment
         ("segment_offset", c_uint64),
@@ -771,10 +771,21 @@ class MachoDyldChainedPointerStartType(IntEnum):
     DYLD_CHAINED_PTR_START_LAST = 0x8000
 
 
+class MachoDyldChainedPtrFormat(IntEnum):
+    """Gives the format for packed pointers within fixup chains
+    PT: Only model a subset for now so it's clear when we encounter binaries breaking our assumptions
+    """
+    # Packed target is a virtual memory address
+    DYLD_CHAINED_PTR_64 = 2
+    # Packed target is an offset from the runtime virtual base
+    DYLD_CHAINED_PTR_64_OFFSET = 6
+
+
 class MachoDyldChainedPtr64RebaseRaw(Structure):
     # Used with DYLD_CHAINED_PTR_64/DYLD_CHAINED_PTR_64_OFFSET
     _fields_ = [
-        # 64GB max image size (DYLD_CHAINED_PTR_64 => vmAddr, DYLD_CHAINED_PTR_64_OFFSET => runtimeOffset)
+        # Interpreted according to the active pointer format
+        # Note that 36 bits imposes a maximum image size of 64GB
         ("target", c_uint64, 36),
         # Top 8 bits set to this (DYLD_CHAINED_PTR_64 => after slide added,
         # DYLD_CHAINED_PTR_64_OFFSET => before slide added)

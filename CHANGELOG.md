@@ -2,6 +2,15 @@
 
 ## Unreleased
 
+### SCAN-3221: Support parsing `DYLD_CHAINED_PTR_64`
+
+Previously, while parsing chained fixup pointers, we'd implicitly treat all `target` fields in a packed rebase as though it were `DYLD_CHAINED_PTR_64_OFFSET`; 
+that is, we'd always add a virtual memory base to `target` to yield a final rebase target address. 
+However, the correct interpretation of `target` depends on the value of the `pointer_format` 
+field in the `MachoDyldChainedStartsInSegmentRaw` structure. 
+
+This version supports parsing absolute and relative targets, and will explicitly error out if an unsupported pointer format is encountered in a fixup chain.
+
 ## 2022-01-20: 13.0.4
 
 ### SCAN-3119: Cache the results of `MachoAnalyzer.get_cstrings()` and `MachoAnalyzer.strings()`

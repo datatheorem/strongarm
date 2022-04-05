@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+## 2022-04-05: 13.0.5
+
 ### SCAN-3221: Support parsing `DYLD_CHAINED_PTR_64`
 
 Previously, while parsing chained fixup pointers, we'd implicitly treat all `target` fields in a packed rebase as though it were `DYLD_CHAINED_PTR_64_OFFSET`; 

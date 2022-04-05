@@ -40,7 +40,7 @@ strongarm is supported on macOS and Linux.
 To setup a local environment:
 
     git clone ...
-    cd static-checks-common
+    cd strongarm
     python -m venv .venv
     source .venv/bin/activate
     pip install -U pip setuptools wheel 'pip-tools<7.0.0'

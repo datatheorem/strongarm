@@ -17,7 +17,12 @@ from .arch_independent_structs import (
     MachoDyldChainedStartsInSegment,
 )
 from .macho_binary import MachoBinary
-from .macho_definitions import MachoDyldChainedImportFormat, StaticFilePointer, VirtualMemoryPointer
+from .macho_definitions import (
+    MachoDyldChainedImportFormat,
+    MachoDyldChainedPtrFormat,
+    StaticFilePointer,
+    VirtualMemoryPointer,
+)
 
 logger = strongarm_logger.getChild(__file__)
 
@@ -172,8 +177,6 @@ class DyldInfoParser:
         chained_starts_in_image = binary.read_struct(chained_starts_in_image_off, MachoDyldChainedStartsInImage)
         chained_starts_in_seg_offsets_base = chained_starts_in_image_off + chained_starts_in_image.sizeof
 
-        # While processing rebases, we'll need to overwrite the rebase fixup pointer with the internal pointer it's
-        # referring to. Since we'll be making many such writes, use a MachoBinaryWriter to do them more efficiently.
         rebases: Dict[VirtualMemoryPointer, VirtualMemoryPointer] = {}
         for segment_idx in range(chained_starts_in_image.seg_count):
             # Read entry of variable-length array of words. See comment in MachoDyldChainedStartsInImageRaw
@@ -188,6 +191,7 @@ class DyldInfoParser:
 
             starts_in_seg_addr = chained_starts_in_image_off + starts_in_seg_struct_offset
             chained_starts_in_seg = binary.read_struct(starts_in_seg_addr, MachoDyldChainedStartsInSegment)
+
             logger.debug(
                 f"ChainedStartsInSegment\tsegment {segment_idx}\t"
                 f"pointer_fmt {chained_starts_in_seg.pointer_format}\tpage count {chained_starts_in_seg.page_count}"
@@ -214,7 +218,7 @@ class DyldInfoParser:
                 )
                 # Process this chain of fixup pointers
                 rebases_in_chain, bound_addresses_in_chain = DyldInfoParser._process_fixup_pointer_chain(
-                    binary, dyld_bound_symbols, chain_base
+                    binary, dyld_bound_symbols, chain_base, chained_starts_in_seg.pointer_format
                 )
                 rebases.update(rebases_in_chain)
                 dyld_bound_addresses_to_symbols.update(bound_addresses_in_chain)
@@ -223,7 +227,10 @@ class DyldInfoParser:
 
     @staticmethod
     def _process_fixup_pointer_chain(
-        binary: MachoBinary, dyld_bound_symbols_table: List[DyldBoundSymbol], chain_base: VirtualMemoryPointer
+        binary: MachoBinary,
+        dyld_bound_symbols_table: List[DyldBoundSymbol],
+        chain_base: VirtualMemoryPointer,
+        pointer_format: MachoDyldChainedPtrFormat,
     ) -> Tuple[Dict[VirtualMemoryPointer, VirtualMemoryPointer], Dict[VirtualMemoryPointer, DyldBoundSymbol]]:
         rebased_pointers: Dict[VirtualMemoryPointer, VirtualMemoryPointer] = {}
         dyld_bound_addresses_to_symbols: Dict[VirtualMemoryPointer, DyldBoundSymbol] = {}
@@ -246,16 +253,23 @@ class DyldInfoParser:
                 dyld_bound_addresses_to_symbols[chain_base + virtual_base] = bound_symbol
                 chain_base += chained_bind_ptr.next * 4
             else:
-                # Rebase. Overwrite the fixup pointer with the internal binary pointer it refers to
                 # Rebase. Keep track that there's a rebased pointer here
                 chained_ptr_raw = binary.read_word(chain_base, word_type=c_uint64, virtual=False)
                 logger.debug(
                     f"\t\t{hex(chain_base)}: DyldChainedPtr64Rebase(raw: {hex(chained_ptr_raw)}) "
                     f"target={StaticFilePointer(chained_rebase_ptr.target)}"
                 )
-                rebased_pointers[VirtualMemoryPointer(chain_base + virtual_base)] = VirtualMemoryPointer(
-                    chained_rebase_ptr.target + virtual_base
-                )
+                # The pointer format within this chain tells us how to interpret the target field
+                if pointer_format == MachoDyldChainedPtrFormat.DYLD_CHAINED_PTR_64_OFFSET:
+                    # The target field stores an offset from the virtual base rather than an absolute address
+                    rebase_target = virtual_base + chained_rebase_ptr.target
+                elif pointer_format == MachoDyldChainedPtrFormat.DYLD_CHAINED_PTR_64:
+                    # The target field stores an absolute virtual address
+                    rebase_target = chained_rebase_ptr.target
+                else:
+                    raise NotImplementedError(f"Unsupported chained pointer format: {pointer_format}")
+
+                rebased_pointers[VirtualMemoryPointer(chain_base + virtual_base)] = VirtualMemoryPointer(rebase_target)
                 chain_base += chained_rebase_ptr.next * 4
 
             # Reached the end of the chain?

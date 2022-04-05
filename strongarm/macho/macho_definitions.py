@@ -774,6 +774,7 @@ class MachoDyldChainedPointerStartType(IntEnum):
 class MachoDyldChainedPtrFormat(IntEnum):
     """Gives the format for packed pointers within fixup chains
     PT: Only model a subset for now so it's clear when we encounter binaries breaking our assumptions
+    Ref: https://opensource.apple.com/source/dyld/dyld-851.27/include/mach-o/fixup-chains.h.auto.html
     """
 
     # Packed target is a virtual memory address

@@ -8,7 +8,6 @@ Previously, while parsing chained fixup pointers, we'd implicitly treat all `tar
 that is, we'd always add a virtual memory base to `target` to yield a final rebase target address. 
 However, the correct interpretation of `target` depends on the value of the `pointer_format` 
 field in the `MachoDyldChainedStartsInSegmentRaw` structure. 
-
 This version supports parsing absolute and relative targets, and will explicitly error out if an unsupported pointer format is encountered in a fixup chain.
 
 ## 2022-01-20: 13.0.4

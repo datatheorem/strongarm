@@ -10,6 +10,7 @@ from strongarm.macho.macho_definitions import (
     MachoBuildToolVersion,
     MachoBuildVersionCommand,
     MachoDyldChainedFixupsHeaderRaw,
+    MachoDyldChainedImportAddendRaw,
     MachoDyldChainedImportAddend64Raw,
     MachoDyldChainedImportRaw,
     MachoDyldChainedPtr64BindRaw,
@@ -357,6 +358,10 @@ class MachoDyldChainedFixupsHeader(ArchIndependentStructure):
 
 class MachoDyldChainedImport(ArchIndependentStructure):
     _64_BIT_STRUCT = MachoDyldChainedImportRaw
+
+
+class MachoDyldChainedImportAddend(ArchIndependentStructure):
+    _64_BIT_STRUCT = MachoDyldChainedImportAddendRaw
 
 
 class MachoDyldChainedImportAddend64(ArchIndependentStructure):

@@ -10,6 +10,7 @@ from .arch_independent_structs import (
     DylibCommandStruct,
     MachoDyldChainedFixupsHeader,
     MachoDyldChainedImport,
+    MachoDyldChainedImportAddend,
     MachoDyldChainedImportAddend64,
     MachoDyldChainedPtr64Bind,
     MachoDyldChainedPtr64Rebase,
@@ -109,6 +110,11 @@ class DyldInfoParser:
         chained_import_struct: Type[ArchIndependentStructure]
         if imports_format == MachoDyldChainedImportFormat.DYLD_CHAINED_IMPORT:
             chained_import_struct = MachoDyldChainedImport
+            compute_library_ordinal = DyldInfoParser._compute_library_ordinal_for_chained_import_type
+
+        elif imports_format == MachoDyldChainedImportFormat.DYLD_CHAINED_IMPORT_ADDEND:
+            # com.jpmorgan.intelligence-uat-ent includes ADDEND imports, but we can't include a test case in this tree.
+            chained_import_struct = MachoDyldChainedImportAddend
             compute_library_ordinal = DyldInfoParser._compute_library_ordinal_for_chained_import_type
 
         elif imports_format == MachoDyldChainedImportFormat.DYLD_CHAINED_IMPORT_ADDEND64:

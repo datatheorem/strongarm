@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+## 2022-06-27: 13.0.6
+
+### SCAN-3221: Support parsing `DYLD_CHAINED_IMPORT_ADDEND`
+
+Similarly to the support added in `13.0.5`, this release supports the `DYLD_CHAINED_IMPORT_ADDEND` pointer format. 
+
 ## 2022-04-05: 13.0.5
 
 ### SCAN-3221: Support parsing `DYLD_CHAINED_PTR_64`

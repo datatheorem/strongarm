@@ -11,6 +11,7 @@ from strongarm.macho.macho_definitions import (
     MachoBuildVersionCommand,
     MachoDyldChainedFixupsHeaderRaw,
     MachoDyldChainedImportAddend64Raw,
+    MachoDyldChainedImportAddendRaw,
     MachoDyldChainedImportRaw,
     MachoDyldChainedPtr64BindRaw,
     MachoDyldChainedPtr64RebaseRaw,
@@ -124,6 +125,7 @@ _64_BIT_STRUCT_ALIAS = Union[
     Type["MachoBuildToolVersion"],
     Type["MachoDyldChainedFixupsHeaderRaw"],
     Type["MachoDyldChainedImportRaw"],
+    Type["MachoDyldChainedImportAddendRaw"],
     Type["MachoDyldChainedImportAddend64Raw"],
     Type["MachoDyldChainedStartsInImageRaw"],
     Type["MachoDyldChainedStartsInSegmentRaw"],
@@ -357,6 +359,10 @@ class MachoDyldChainedFixupsHeader(ArchIndependentStructure):
 
 class MachoDyldChainedImport(ArchIndependentStructure):
     _64_BIT_STRUCT = MachoDyldChainedImportRaw
+
+
+class MachoDyldChainedImportAddend(ArchIndependentStructure):
+    _64_BIT_STRUCT = MachoDyldChainedImportAddendRaw
 
 
 class MachoDyldChainedImportAddend64(ArchIndependentStructure):

@@ -25,18 +25,17 @@ from strongarm.macho import BinaryEncryptedError, MachoAnalyzer, MachoBinary, Ma
 
 
 def print_header(args: argparse.Namespace) -> None:
-    header_lines = ["\nstrongarm - Mach-O analyzer", f"{args.binary_path}"]
-    # find longest line
-    longest_line_len = 0
-    for line in header_lines:
-        longest_line_len = max(longest_line_len, len(line))
+    header_lines = ["strongarm - Mach-O analyzer", f"{args.binary_path}"]
+    # find the longest line
+    longest_line_len = max(map(len, header_lines))
     # add a line of hyphens, where the hyphen count matches the longest line
     header_lines.append("-" * longest_line_len)
-    header_lines.append("")
 
     # print header
+    print()
     for line in header_lines:
         print(line)
+    print()
 
 
 class InfoCommand:
@@ -248,7 +247,14 @@ def main(args: argparse.Namespace) -> None:
         print(f"\t{macho_slice.cpu_type.name} Mach-O slice")
 
     binary = pick_macho_slice(parser)
-    print(f"Reading {binary.cpu_type.name} slice\n\n")
+    print(f"Reading {binary.cpu_type.name} slice")
+    print()
+
+    print("Minimum Deployment Target:", binary.get_minimum_deployment_target())
+    print("Sdk Deployment Target:", binary.get_sdk_deployment_target())
+    print("Build Tools:")
+    for build_tool_name, build_tool_version in binary.get_build_tools().items():
+        print(f"    {build_tool_name}: {build_tool_version}")
 
     try:
         analyzer = MachoAnalyzer.get_analyzer(binary)

@@ -528,7 +528,7 @@ class MachoAnalyzer:
     def get_imps_for_sel(self, selector: str) -> List["ObjcFunctionAnalyzer"]:
         """Retrieve a list of the disassembled function data for every implementation of a provided selector
         Args:
-            selector: The selector name who's implementations should be found
+            selector: The selector name whose implementations should be found
 
         Returns:
             A list of ObjcFunctionAnalyzers corresponding to each found implementation of the provided selector.

@@ -31,6 +31,7 @@ from strongarm.macho.macho_definitions import (
     DylibStruct,
     LcStrUnion,
     MachArch,
+    MachoBuildTool,
     MachoBuildVersionPlatform,
     MachoFileType,
     StaticFilePointer,
@@ -113,6 +114,14 @@ class MachoSection:
         return f'<MachoSection {virtual_loc} "{self.name}" ("{self.segment_name}")>'
 
 
+def _version_from_nibbles(value: int) -> LooseVersion:
+    # X.Y.Z is encoded in nibbles xxxx.yy.zz
+    patch = (value >> (8 * 0)) & 0xFF
+    minor = (value >> (8 * 1)) & 0xFF
+    major = (value >> (8 * 2)) & 0xFFFF
+    return LooseVersion(f"{major}.{minor}.{patch}")
+
+
 class MachoBinary:
     _MAG_64 = [MachArch.MH_MAGIC_64, MachArch.MH_CIGAM_64]
     _MAG_32 = [MachArch.MH_MAGIC, MachArch.MH_CIGAM]
@@ -160,6 +169,8 @@ class MachoBinary:
 
         self.__codesign_parser: Optional[CodesignParser] = None
         self.__minimum_deployment_target: Optional[LooseVersion] = None
+        self.__sdk_deployment_target: Optional[LooseVersion] = None
+        self.__build_tools: Dict[str, LooseVersion] = {}
 
         # This kicks off the parse of the binary
         if not self.parse():
@@ -1062,15 +1073,14 @@ class MachoBinary:
         return dylib_name
 
     def get_minimum_deployment_target(self) -> Optional[LooseVersion]:
-        if not self.__minimum_deployment_target:
-            if self._build_version_cmd:
-                # X.Y.Z is encoded in nibbles xxxx.yy.zz
-                encoded_min_target = self._build_version_cmd.minos
-                patch = (encoded_min_target >> (8 * 0)) & 0xFF
-                minor = (encoded_min_target >> (8 * 1)) & 0xFF
-                major = (encoded_min_target >> (8 * 2)) & 0xFFFF
-                self.__minimum_deployment_target = LooseVersion(f"{major}.{minor}.{patch}")
+        if not self.__minimum_deployment_target and self._build_version_cmd:
+            self.__minimum_deployment_target = _version_from_nibbles(self._build_version_cmd.minos)
         return self.__minimum_deployment_target
+
+    def get_sdk_deployment_target(self) -> Optional[LooseVersion]:
+        if not self.__sdk_deployment_target and self._build_version_cmd:
+            self.__sdk_deployment_target = _version_from_nibbles(self._build_version_cmd.sdk)
+        return self.__sdk_deployment_target
 
     def get_build_version_platform(self) -> Optional[MachoBuildVersionPlatform]:
         if not self._build_version_cmd:
@@ -1079,3 +1089,11 @@ class MachoBinary:
 
     def get_build_tool_versions(self) -> Optional[List[MachoBuildToolVersionStruct]]:
         return self._build_tool_versions
+
+    def get_build_tools(self) -> Dict[str, LooseVersion]:
+        if not self.__build_tools and self._build_tool_versions:
+            self.__build_tools = {
+                MachoBuildTool(tool.tool).name.lower(): _version_from_nibbles(tool.version)
+                for tool in self._build_tool_versions
+            }
+        return self.__build_tools

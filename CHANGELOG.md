@@ -2,6 +2,21 @@
 
 ## Unreleased
 
+## 2022-09-12: 13.0.7
+
+### SCAN-3535: Support binaries with code outside __TEXT
+
+Some binaries use tricks in which their code is stored in custom segments rather than `__TEXT`. 
+
+In the cases I've seen so far, `__TEXT` is still around, but only contains mandated sections (such as `__const`, `__bss`, `__swift51_hooks`, etc). 
+
+The dataflow module mostly gets this right, as it gets its entry points from `LC_FUNCTION_STARTS` (which points to valid locations in the custom segment).
+However, it needs a bit of help. The dataflow module previously used the assumption that `code_slice_offset = code_virt_addr - __TEXT.base`.
+This relied on the knowledge that `__TEXT` always begins at offset 0. Of course, if code is stored outside `__TEXT`, this will result in incorrect calculations.
+
+Previously, the dataflow module was just passed a list of code entry points to analyze. In this change, it is also passed the corresponding slice offsets 
+for each entry point, which is easier to compute in strongarm proper than the dataflow module.
+
 ## 2022-06-27: 13.0.6
 
 ### SCAN-3221: Support parsing `DYLD_CHAINED_IMPORT_ADDEND`

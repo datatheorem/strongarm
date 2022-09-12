@@ -253,8 +253,7 @@ class MachoAnalyzer:
     def get_basic_block_boundaries(
         self, entry_point: VirtualMemoryPointer
     ) -> List[Tuple[VirtualMemoryPointer, VirtualMemoryPointer]]:
-        """Given the function starting at the provided address, return the list of (start_addr, end_addr) basic blocks.
-        """
+        """Given the function starting at the provided address, return the list of (start_addr, end_addr) basic blocks."""  # noqa: E501
         cursor = self._db_handle.execute(
             "SELECT start_address, end_address FROM basic_blocks WHERE entry_point=?", (entry_point,)
         )
@@ -353,7 +352,9 @@ class MachoAnalyzer:
         # SCAN-3535: For each function entry point, we'll need its file offset.
         # When the function is in __TEXT this'll simply be (virt_addr - __TEXT.virt_base), but we've encountered
         # cases in which functions are stored in a segment other than __TEXT.
-        boundaries_with_file_off = [(tup, self.binary.file_offset_for_virtual_address(tup[0])) for tup in self.get_function_boundaries()]
+        boundaries_with_file_off = [
+            (tup, self.binary.file_offset_for_virtual_address(tup[0])) for tup in self.get_function_boundaries()
+        ]
         build_xref_database_fast(
             self,
             self.binary.path.as_posix(),

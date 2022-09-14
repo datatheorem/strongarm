@@ -349,6 +349,12 @@ class MachoAnalyzer:
         if self._objc_msgSend_addr:
             objc_function_family.append(self._objc_msgSend_addr)
 
+        # SCAN-3535: For each function entry point, we'll need its file offset.
+        # When the function is in __TEXT this'll simply be (virt_addr - __TEXT.virt_base), but we've encountered
+        # cases in which functions are stored in a segment other than __TEXT.
+        boundaries_with_file_off = [
+            (tup, self.binary.file_offset_for_virtual_address(tup[0])) for tup in self.get_function_boundaries()
+        ]
         build_xref_database_fast(
             self,
             self.binary.path.as_posix(),
@@ -357,7 +363,7 @@ class MachoAnalyzer:
             self.binary.get_file_offset(),
             self._objc_msgSend_addr,
             objc_function_family,
-            list(self.get_function_boundaries()),
+            boundaries_with_file_off,
         )
 
         self._has_computed_xrefs = True

@@ -77,7 +77,7 @@ class TestFunctionAnalyzer:
 
     def test_get_register_contents_at_instruction_same_reg(self) -> None:
         """Test cases for dataflow where a single register has an immediate, then has a 'data link' from the same reg.
-        Related ticket: SCAN-577-dataflow-fix
+        SCAN-577
         """
         # Given I provide assembly where an address is loaded via a page load + page offset, using the same register
         # 0x000000010000428c    adrp       x1, #0x10011a000

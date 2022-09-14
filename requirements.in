@@ -1,4 +1,4 @@
 # Packages for functioning
 capstone
 more_itertools
-strongarm_dataflow==2.1.6
+strongarm_dataflow==2.1.7

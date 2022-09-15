@@ -916,7 +916,7 @@ class MachoBinary:
         # Check that there is enough emtpy space before the start of the first section to insert a load command
         load_commands_end = self.header.sizeof + self.header.sizeofcmds
         string_end = load_commands_end + load_cmd.cmdsize
-        first_section = sorted(self.sections, key=lambda s: s.offset)[0]
+        first_section = sorted(self.sections, key=lambda s: s.address)[0]
         if string_end >= first_section.offset:
             raise NoEmptySpaceForLoadCommandError()
 

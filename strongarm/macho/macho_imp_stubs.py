@@ -1,4 +1,4 @@
-from typing import List
+from typing import List, Optional
 
 from capstone import Cs, CsInsn
 
@@ -80,8 +80,25 @@ class MachoImpStubsParser:
         stub = MachoImpStub(VirtualMemoryPointer(stub_addr), VirtualMemoryPointer(stub_dest))
         return stub
 
-    def _parse_all_stubs(self) -> List[MachoImpStub]:
+    def get_dyld_stubs_section(self) -> Optional["MachoSection"]:
+        """Pull the __stubs section.
+        In the overwhelming majority of cases, __stubs is in __TEXT.
+        However, we've encountered binaries that store __stubs elsewhere.
+        """
+        # Happy path
         stubs_section = self.binary.section_with_name("__stubs", "__TEXT")
+        if stubs_section:
+            return stubs_section
+
+        for section in self.binary.sections:
+            # As a further check, we could reduce this to sections in an executable segment
+            if section.name == "__stubs":
+                return section
+
+        return None
+
+    def _parse_all_stubs(self) -> List[MachoImpStub]:
+        stubs_section = self.get_dyld_stubs_section()
         if not stubs_section:
             return []
 

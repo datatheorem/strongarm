@@ -913,11 +913,11 @@ class MachoBinary:
         # TODO(PT): Alternatively, assignments like `self.header.ncmds += 1` should update the backing binary.
         # This would also make binary modifications easier.
 
-        # Check that there is enough emtpy space before the start of __text to insert a load command
+        # Check that there is enough emtpy space before the start of the first section to insert a load command
         load_commands_end = self.header.sizeof + self.header.sizeofcmds
         string_end = load_commands_end + load_cmd.cmdsize
-        text_section = self.section_with_name("__text", "__TEXT")
-        if text_section and string_end >= text_section.offset:
+        first_section = sorted(self.sections, key=lambda s: s.offset)[0]
+        if string_end >= first_section.offset:
             raise NoEmptySpaceForLoadCommandError()
 
         # Add the load command to the end of the Mach-O header
@@ -1097,3 +1097,15 @@ class MachoBinary:
                 for tool in self._build_tool_versions
             }
         return self.__build_tools
+
+    def get_cstring_section(self) -> Optional[MachoSection]:
+        # Ordered by likelihood
+        container_segments = [
+            "__TEXT",
+            "__RODATA",
+        ]
+        for segment in container_segments:
+            strings_section = self.section_with_name("__cstring", segment)
+            if strings_section:
+                return strings_section
+        return None

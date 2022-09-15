@@ -10,8 +10,6 @@ Other APIs within strongarm had baked-in assumptions that certain Mach-O section
 
 This version more correctly looks for these sections dynamically, rather than assuming they'll always be in `__TEXT`.
 
-Specifically, the following features and APIs have been corrected: 
-
 Specifically, the following features and APIs will now look for `__cstrings` in either `__TEXT` or `__RODATA`:
 
 * `MachoAnalyzer.get_cstrings() -> Set[str]`

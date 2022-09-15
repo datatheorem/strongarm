@@ -80,7 +80,7 @@ class MachoImpStubsParser:
         stub = MachoImpStub(VirtualMemoryPointer(stub_addr), VirtualMemoryPointer(stub_dest))
         return stub
 
-    def get_dyld_stubs_section(self) -> Optional["MachoSection"]:  # type: ignore
+    def get_dyld_stubs_section(self) -> Optional["MachoSection"]:  # type: ignore   # noqa: F821
         """Pull the __stubs section.
         In the overwhelming majority of cases, __stubs is in __TEXT.
         However, we've encountered binaries that store __stubs elsewhere.

@@ -36,9 +36,6 @@ class MachoImpStub:
 
 
 class MachoImpStubsParser:
-    # PT: Local import to prevent circular import
-    from strongarm.macho import MachoSection
-
     def __init__(self, binary: MachoBinary, capstone_disasm: Cs) -> None:
         self.binary = binary
         self._cs = capstone_disasm
@@ -83,7 +80,7 @@ class MachoImpStubsParser:
         stub = MachoImpStub(VirtualMemoryPointer(stub_addr), VirtualMemoryPointer(stub_dest))
         return stub
 
-    def get_dyld_stubs_section(self) -> Optional[MachoSection]:
+    def get_dyld_stubs_section(self) -> Optional["MachoSection"]:  # type: ignore
         """Pull the __stubs section.
         In the overwhelming majority of cases, __stubs is in __TEXT.
         However, we've encountered binaries that store __stubs elsewhere.

@@ -7,26 +7,26 @@ from strongarm.macho.macho_definitions import VirtualMemoryPointer
 
 
 class MachoImpStub:
-    """Encapsulates entry in __imp_stubs section
+    """Encapsulates entry in __stubs section
 
-    An 'entry' in the __imp_stubs section is a very short function which jumps to a pointer in the __got or
+    An 'entry' in the __stubs section is a very short function which jumps to a pointer in the __got or
     __la_symbol_ptr lists. This pointer is a 'garbage' value which will be filled by dyld at runtime the first time
     the stub is invoked by a function called dyld_stub_binder.
-    An entry in the __imp_stubs section might be assembly like the following:
+    An entry in the __stubs section might be assembly like the following:
     0x0000000100006898         nop
     0x000000010000689c         ldr        x16, #0x100008010
     0x00000001000068a0         br         x16
-    In this case, 0x100008010 is an address in __la_symbol_ptr, which contains `dq 0x100010000`. I don't know the exact
-    mechanism by which dyld_stub_binder rewrites __imp_stubs/__la_symbol_ptr at runtime to change garbage pointers such
-    as 0x100010000 into the address the symbol was loaded at, but it's not really relevant here.
-    More relevant is the fact that the first address of each stub entry (0x100006898 in this example) will be the
-    branch destination anytime someone addresses the external symbol in question.
+    In this case, 0x100008010 is an address in __la_symbol_ptr, which contains `dq 0x100010000`.
+    At dynamic link-time, dyld_stub_binder rewrites entries in __la_symbol_ptr to point to the location at which the
+    target code was loaded.
+    Therefore, the entry point of each stub entry (0x100006898 in this example) will be the branch destination
+    anytime someone addresses the external symbol in question.
     So, if the imp stub above corresponded to the `__la_symbol_ptr` entry for NSLog, a caller calling NSLog would
     actually branch to 0x100006898.
     By chaining all this information together along with symbol names cross-referenced with __la_symbol_ptr from
     the indirect symbol table + string table, we can cross-reference branch destinations to external symbol names.
 
-    This object contains the starting address of the stub (which will be the destination for branches),
+    This object contains the entry point of the stub (which will be the destination for branches),
     as well as the __la_symbol_ptr entry which is targeted by the stub.
     """
 
@@ -36,6 +36,9 @@ class MachoImpStub:
 
 
 class MachoImpStubsParser:
+    # PT: Local import to prevent circular import
+    from strongarm.macho import MachoSection
+
     def __init__(self, binary: MachoBinary, capstone_disasm: Cs) -> None:
         self.binary = binary
         self._cs = capstone_disasm
@@ -80,7 +83,7 @@ class MachoImpStubsParser:
         stub = MachoImpStub(VirtualMemoryPointer(stub_addr), VirtualMemoryPointer(stub_dest))
         return stub
 
-    def get_dyld_stubs_section(self) -> Optional["MachoSection"]:
+    def get_dyld_stubs_section(self) -> Optional[MachoSection]:
         """Pull the __stubs section.
         In the overwhelming majority of cases, __stubs is in __TEXT.
         However, we've encountered binaries that store __stubs elsewhere.

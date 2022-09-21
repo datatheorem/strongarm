@@ -356,8 +356,8 @@ def print_analyzer_protocols(analyzer: MachoAnalyzer) -> None:
 
 
 def print_raw_strings(binary: MachoBinary) -> None:
-    strings_section = binary.section_with_name("__cstring", "__TEXT")
-    if strings_section is None:
+    strings_section = binary.get_cstring_section()
+    if not strings_section:
         return
 
     print("\nStrings:")

@@ -2,9 +2,31 @@
 
 ## Unreleased
 
+## 2022-09-15: 13.1.0
+
+### SCAN-3546: Further support for binaries with code outside `__TEXT`
+
+Other APIs within strongarm had baked-in assumptions that certain Mach-O sections would be contained within `__TEXT`.
+
+This version more correctly looks for these sections dynamically, rather than assuming they'll always be in `__TEXT`.
+
+Specifically, the following features and APIs will now look for `__cstrings` in either `__TEXT` or `__RODATA`:
+
+* `MachoAnalyzer.get_cstrings() -> Set[str]`
+* `MachoAnalyzer.build_cstring_map() -> Dict[str, VirtualMemoryPointer]`
+* The `strings` command in the CLI
+
+Additionally:
+
+* `MachoBinary.get_cstring_section() -> Optional[MachoSection]` is a new API to facilitate segment-agnostic `__cstring` retrieval
+* `MachoImpStubsParser.get_dyld_stubs_section() -> Optional[MachoSection]` is a new API to facilitate segment-agnostic `__stubs` retrieval
+* `MachoAnalyzer._strings_in_section(section_name: str)` has a new kwarg, `segment_name: str = "__TEXT"`
+* `MachoBinary.insert_load_dylib_cmd(dylib_path: str)` will now dynamically find the first section after the Mach-O header, rather than assuming it's `__text,__TEXT`
+* `MachoImpStubsParser` now looks for `__stubs` in other segments if it wasn't found in `__TEXT`
+
 ## 2022-09-12: 13.0.7
 
-### SCAN-3535: Support binaries with code outside __TEXT
+### SCAN-3535: Support binaries with code outside `__TEXT`
 
 Some binaries use tricks in which their code is stored in custom segments rather than `__TEXT`. 
 

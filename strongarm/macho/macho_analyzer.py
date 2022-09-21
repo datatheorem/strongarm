@@ -676,16 +676,21 @@ class MachoAnalyzer:
     def get_cstrings(self) -> Set[str]:
         """Return the list of strings in the binary's __cstring section."""
         if not self.__cached_cstrings:
-            self.__cached_cstrings = self._strings_in_section("__cstring")
+            # We need to double-check what segment __cstring is in, as it might not be __TEXT
+            segment = "__TEXT"
+            cstring_section = self.binary.get_cstring_section()
+            if cstring_section:
+                segment = cstring_section.segment_name
+            self.__cached_cstrings = self._strings_in_section("__cstring", segment)
         return self.__cached_cstrings
 
     def _build_cstring_map(self) -> Dict[str, VirtualMemoryPointer]:
-        strings_section = self.binary.section_with_name("__cstring", "__TEXT")
-        if not strings_section:
+        cstring_section = self.binary.get_cstring_section()
+        if not cstring_section:
             return {}
 
-        strings_base = strings_section.address
-        strings_content = self.binary.get_bytes(strings_section.offset, strings_section.size)
+        strings_base = cstring_section.address
+        strings_content = self.binary.get_bytes(cstring_section.offset, cstring_section.size)
 
         string_to_stringrefs = {}
         # split into characters (string table is packed and each entry is terminated by a null character)
@@ -830,10 +835,10 @@ class MachoAnalyzer:
 
         self._db_handle.commit()
 
-    def _strings_in_section(self, section_name: str) -> Set[str]:
+    def _strings_in_section(self, section_name: str, segment_name: str = "__TEXT") -> Set[str]:
         """Fetch the list of strings located inside the provided section."""
         discovered_strings = set()
-        string_section = self.binary.section_with_name(section_name, "__TEXT")
+        string_section = self.binary.section_with_name(section_name, segment_name)
         if string_section:
             strings_content = self.binary.get_bytes(string_section.offset, string_section.size)
             transformed_strings = MachoStringTableHelper.transform_string_section(list(strings_content))

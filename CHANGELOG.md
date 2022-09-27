@@ -2,6 +2,50 @@
 
 ## Unreleased
 
+## 2022-09-27: 13.2.0
+
+### SCAN-3401: Support XRefs for calls to `__objc_stubs`
+
+Historically, the pattern for sending a message to an Objective-C class looks similar to the following:
+
+```
+; Base page of the classref
+adrp x0, #0x1001f7000
+; Page offset of the classref
+ldr  x0, [x0, #0xe00]
+; Base page of the selref
+adrp x1, #0x10000c000
+; Page offset of the selref
+ldr  x0, [x0, #0xc8]
+; Classref and selref are now loaded into x0 and x1, respectively - we're ready to send the message
+bl _objc_msgSend
+```
+
+This `adrp`, `ldr`, `bl` pattern is repetitive and can greatly contribute to the final code size of an application. 
+
+In [early 2021](https://www.uber.com/en-GB/blog/how-uber-deals-with-large-ios-app-size/), Uber detailed a technique by which 
+they greatly reduced binary code size by outlining this sequence to a dedicated function. Now, each time we want to message a selector, 
+we only need to include one instruction (a branch to the outlined instructions) at each call site, instead of 3. 
+
+Perhaps relatedly, in Xcode 14, Apple's toolchain performs the same optimization (for binaries targeting older OS versions as well as new). 
+
+There is a new Mach-O section, `__objc_stubs`, which contains these outlined sequences. In this strongarm version, we now support
+generating XRefs to these calls. In other words, in the user-facing `MachoAnalyzer.objc_calls_to()` API, a branch to a stub in `__objc_stubs`
+will be indistinguishable from a direct `_objc_msgSend` call that uses the inlined `adrp`, `ldr`, `bl` pattern. Perhaps in the future I'll add
+some kind of discriminator so the API consumer can know what kind of call site it is, but the important thing for now is that the XRefs show up. 
+
+There's a new internal API to facilitate this:
+
+`MachoAnalyzer._get_objc_selector_stubs() -> Dict[VirtualMemoryPointer, str]`
+
+The API for the dataflow module has also changed, as we now provide the XRef builder with the above map upon entry. This version is released in tandem with `strongarm-dataflow@3.0.0`.
+
+Unrelatedly, I added a small terseness helper to the unit test suite:
+
+`tests.utils.test_binary_with_name(name: str) -> MachoBinary`
+
+It allows the caller to retrieve and parse a binary from `/tests/bin/` without needing to spell it all out.
+
 ## 2022-09-15: 13.1.0
 
 ### SCAN-3546: Further support for binaries with code outside `__TEXT`

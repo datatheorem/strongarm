@@ -8,8 +8,7 @@ from strongarm.macho import MachoBinary, ObjcCategory
 from strongarm.macho.macho_analyzer import CallerXRef, MachoAnalyzer, ObjcMsgSendXref, VirtualMemoryPointer
 from strongarm.macho.macho_parse import MachoParser
 from strongarm.objc import ObjcFunctionAnalyzer
-from tests.utils import binary_containing_code
-from tests.utils import test_binary_with_name
+from tests.utils import binary_containing_code, test_binary_with_name
 
 
 class TestMachoAnalyzerControlFlowTarget:
@@ -1218,44 +1217,46 @@ class TestMachoAnalyzerDynStaticChecks:
     def test_get_objc_selector_stubs(self):
         # Given a binary compiled with an Xcode version that does not produce __objc_stubs
         binary_without_objc_stubs = test_binary_with_name("iOS13_objc_opt")
-        assert not binary_without_objc_stubs.section_with_name('__objc_stubs', '__TEXT')
+        assert not binary_without_objc_stubs.section_with_name("__objc_stubs", "__TEXT")
         # When I call the API to retrieve the ObjC stubs
         # Then no error is raised, and no stubs are returned
         assert MachoAnalyzer.get_analyzer(binary_without_objc_stubs)._get_objc_selector_stubs() == {}
 
         # Given a binary compiled with an Xcode version that does produce __objc_stubs
         binary_with_objc_stubs = test_binary_with_name("Xcode14_objc_stubs")
-        assert binary_with_objc_stubs.section_with_name('__objc_stubs', '__TEXT')
+        assert binary_with_objc_stubs.section_with_name("__objc_stubs", "__TEXT")
         # When I call the API to retrieve the ObjC stubs
         # Then the stubs are computed correctly
         # XXX(PT): Interestingly, it seems selector stubs always sit on 32-byte (0x20) boundaries. I wonder why.
         assert MachoAnalyzer.get_analyzer(binary_with_objc_stubs)._get_objc_selector_stubs() == {
-            0x100007c60: 'URLByAppendingPathComponent:',
-            0x100007c80: 'URLForResource:withExtension:',
-            0x100007ca0: 'URLsForDirectory:inDomains:',
-            0x100007cc0: 'defaultManager',
-            0x100007ce0: 'initForWritingWithMutableData:',
-            0x100007d00: 'initWithConcurrencyType:',
-            0x100007d20: 'initWithContentsOfURL:',
-            0x100007d40: 'initWithManagedObjectModel:',
-            0x100007d60: 'lastObject',
-            0x100007d80: 'mainBundle',
-            0x100007da0: 'persistentStoreCoordinator',
-            0x100007dc0: 'setPersistentStoreCoordinator:'
+            0x100007C60: "URLByAppendingPathComponent:",
+            0x100007C80: "URLForResource:withExtension:",
+            0x100007CA0: "URLsForDirectory:inDomains:",
+            0x100007CC0: "defaultManager",
+            0x100007CE0: "initForWritingWithMutableData:",
+            0x100007D00: "initWithConcurrencyType:",
+            0x100007D20: "initWithContentsOfURL:",
+            0x100007D40: "initWithManagedObjectModel:",
+            0x100007D60: "lastObject",
+            0x100007D80: "mainBundle",
+            0x100007DA0: "persistentStoreCoordinator",
+            0x100007DC0: "setPersistentStoreCoordinator:",
         }
 
     def test_find_xref_from_selector_stub(self):
         # Given a binary that contains calls to a stub in __objc_stubs
         binary_with_objc_stubs = test_binary_with_name("Xcode14_objc_stubs")
         # When I search for XRefs to a selector in __objc_stubs
-        xrefs = MachoAnalyzer.get_analyzer(binary_with_objc_stubs).objc_calls_to([], ["initForWritingWithMutableData:"], False)
+        xrefs = MachoAnalyzer.get_analyzer(binary_with_objc_stubs).objc_calls_to(
+            [], ["initForWritingWithMutableData:"], False
+        )
         # Then the XRef is correctly found
         assert xrefs == [
             ObjcMsgSendXref(
-                destination_addr=VirtualMemoryPointer(0x100007ce0),
-                caller_addr=VirtualMemoryPointer(0x100007c18),
-                caller_func_start_address=VirtualMemoryPointer(0x100007bdc),
-                class_name='_OBJC_CLASS_$_NSData',
-                selector='initForWritingWithMutableData:'
+                destination_addr=VirtualMemoryPointer(0x100007CE0),
+                caller_addr=VirtualMemoryPointer(0x100007C18),
+                caller_func_start_address=VirtualMemoryPointer(0x100007BDC),
+                class_name="_OBJC_CLASS_$_NSData",
+                selector="initForWritingWithMutableData:",
             )
         ]

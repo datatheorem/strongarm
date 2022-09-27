@@ -332,19 +332,19 @@ class MachoAnalyzer:
 
     def _get_objc_selector_stubs(self) -> Dict[VirtualMemoryPointer, str]:
         # TODO(PT): Could this be in a segment other than __TEXT?
-        objc_stubs_section = self.binary.section_with_name('__objc_stubs', '__TEXT')
+        objc_stubs_section = self.binary.section_with_name("__objc_stubs", "__TEXT")
         if not objc_stubs_section:
             return {}
 
         # Consider every named symbol within __objc_stubs to be a potential selector stub entry point
         objc_selector_stubs = {}
         selector_stub_prefix = "_objc_msgSend$"
-        for symbol_addr, symbol_name  in self.exported_symbol_pointers_to_names.items():
+        for symbol_addr, symbol_name in self.exported_symbol_pointers_to_names.items():
             if objc_stubs_section.address <= symbol_addr < objc_stubs_section.address + objc_stubs_section.size:
                 # Ignore symbols that don't follow the selector stubs format
                 if not symbol_name.startswith(selector_stub_prefix):
                     continue
-                objc_selector_stubs[symbol_addr] = symbol_name[len(selector_stub_prefix):]
+                objc_selector_stubs[symbol_addr] = symbol_name[len(selector_stub_prefix) :]
         return objc_selector_stubs
 
     def _build_xref_database(self) -> None:

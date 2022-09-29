@@ -42,7 +42,7 @@ The API for the dataflow module has also changed, as we now provide the XRef bui
 
 Unrelatedly, I added a small terseness helper to the unit test suite:
 
-`tests.utils.test_binary_with_name(name: str) -> MachoBinary`
+`tests.utils.binary_with_name(name: str) -> MachoBinary`
 
 It allows the caller to retrieve and parse a binary from `/tests/bin/` without needing to spell it all out.
 

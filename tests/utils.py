@@ -155,7 +155,7 @@ def function_containing_asm(asm_source: str) -> Generator[Tuple[MachoAnalyzer, O
         yield analyzer, func
 
 
-def test_binary_with_name(name: str) -> MachoBinary:
+def binary_with_name(name: str) -> MachoBinary:
     """Terseness helper to pull and parse the binary at tests/bin/{name}"""
     bin_path = pathlib.Path(__file__).parent / "bin" / name
     binary = MachoParser(bin_path).get_arm64_slice()

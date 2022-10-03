@@ -384,13 +384,18 @@ class TestMachoBinary:
 
     def test_read_string_xcode_14(self) -> None:
         # Given a binary with a CFString, compiled with Xcode 14
-        with binary_containing_code("""-(void)foo {
+        with binary_containing_code(
+            """-(void)foo {
             NSLog(@"CFString");
-        }""", is_assembly=False) as (binary, analyzer):
+            }""",
+            is_assembly=False,
+        ) as (binary, analyzer):
             # Get a reference to the string via the NSLog call
             # XXX(PT): We just need the analyzers to find the NSLog call, they're not related to what's being tested
-            from strongarm.objc import ObjcFunctionAnalyzer, ObjcInstruction
             from strongarm_dataflow.register_contents import RegisterContentsType
+
+            from strongarm.objc import ObjcFunctionAnalyzer, ObjcInstruction
+
             ns_log = analyzer.callable_symbol_for_symbol_name("_NSLog")
             ns_log_call_xref = analyzer.calls_to(ns_log.address)[0]
             caller_func = ObjcFunctionAnalyzer.get_function_analyzer(binary, ns_log_call_xref.caller_func_start_address)

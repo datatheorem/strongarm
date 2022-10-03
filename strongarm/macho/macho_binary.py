@@ -660,7 +660,7 @@ class MachoBinary:
         # special case if this is a __cfstring entry
         if section_name == "__cfstring":
             # read bytes into CFString struct
-            cfstring_ent = self.read_struct(address, CFStringStruct, virtual=True)
+            cfstring_ent = self.read_struct_with_rebased_pointers(address, CFStringStruct, virtual=True)
             # patch address to read string from to be the string literal address of this CFString
             address = cfstring_ent.literal
         return self.get_full_string_from_start_address(address)

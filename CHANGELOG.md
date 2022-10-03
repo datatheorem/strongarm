@@ -2,6 +2,14 @@
 
 ## Unreleased
 
+### SCAN-3569: Fix reading CFStrings on iOS 15+
+
+`struct __cfstring` has fields that might need to be rebased via chained fixup pointers. Therefore, the internal strongarm API that parses them needs to use 
+
+`MachoBinary.read_struct_with_rebased_pointers()` rather than `MachoBinary.read_struct()`. 
+
+I only noticed this on a binary built with Xcode 14, but since it involves chained fixup pointers, it may affect any iOS 15+ binary. 
+
 ## 2022-09-27: 13.2.0
 
 ### SCAN-3401: Support XRefs for calls to `__objc_stubs`

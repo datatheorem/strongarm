@@ -10,5 +10,5 @@ capstone==4.0.2
     #   strongarm-dataflow
 more-itertools==8.10.0
     # via -r requirements.in
-strongarm-dataflow==2.1.7
+strongarm-dataflow==3.0.0
     # via -r requirements.in

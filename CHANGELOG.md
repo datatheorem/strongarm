@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+## 2022-10-04: 13.2.1
+
 ### SCAN-3569: Fix reading CFStrings on iOS 15+
 
 `struct __cfstring` has fields that might need to be rebased via chained fixup pointers. Therefore, the internal strongarm API that parses them needs to use 

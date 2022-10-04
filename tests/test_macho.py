@@ -14,6 +14,7 @@ from strongarm.macho import (
     StaticFilePointer,
     VirtualMemoryPointer,
 )
+from tests.utils import binary_containing_code
 
 
 class TestMachoBinary:
@@ -380,3 +381,29 @@ class TestMachoBinary:
         binary = MachoParser(self.MULTIPLE_CONST_SECTIONS).get_arm64_slice()
         assert binary
         assert binary.dylib_id() == expected_dylib_id
+
+    def test_read_string_xcode_14(self) -> None:
+        # Given a binary with a CFString, compiled with Xcode 14
+        with binary_containing_code(
+            """-(void)foo {
+            NSLog(@"CFString");
+            }""",
+            is_assembly=False,
+        ) as (binary, analyzer):
+            # Get a reference to the string via the NSLog call
+            # XXX(PT): We just need the analyzers to find the NSLog call, they're not related to what's being tested
+            from strongarm_dataflow.register_contents import RegisterContentsType
+
+            from strongarm.objc import ObjcFunctionAnalyzer, ObjcInstruction
+
+            ns_log = analyzer.callable_symbol_for_symbol_name("_NSLog")
+            ns_log_call_xref = analyzer.calls_to(ns_log.address)[0]
+            caller_func = ObjcFunctionAnalyzer.get_function_analyzer(binary, ns_log_call_xref.caller_func_start_address)
+            raw_ns_log_call_instr = caller_func.get_instruction_at_address(ns_log_call_xref.caller_addr)
+            ns_log_call_instr = ObjcInstruction.parse_instruction(caller_func, raw_ns_log_call_instr)
+            register_contents = caller_func.get_register_contents_at_instruction("x0", ns_log_call_instr)
+            assert register_contents.type == RegisterContentsType.IMMEDIATE
+            cfstring_ref = register_contents.value
+            # When I use the API to read the CFString
+            # Then the string is read correctly
+            assert binary.read_string_at_address(cfstring_ref) == "CFString"

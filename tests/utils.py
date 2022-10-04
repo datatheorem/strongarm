@@ -88,12 +88,21 @@ def _compile_code(
 
         ret = subprocess.run(
             [
-                "xcrun -sdk iphoneos",
-                "clang -arch arm64",
-                "-framework Foundation",
-                "-framework CoreGraphics",
-                "-framework UIKit",
-                f"{shlex.quote(source_filepath.as_posix())} -o {shlex.quote(output_filepath.as_posix())}",
+                "xcrun",
+                "-sdk",
+                "iphoneos",
+                "clang",
+                "-arch",
+                "arm64",
+                "-framework",
+                "Foundation",
+                "-framework",
+                "CoreGraphics",
+                "-framework",
+                "UIKit",
+                shlex.quote(source_filepath.as_posix()),
+                "-o",
+                shlex.quote(output_filepath.as_posix()),
             ],
             stderr=subprocess.PIPE,
         )

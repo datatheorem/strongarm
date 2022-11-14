@@ -1,7 +1,10 @@
+from pathlib import Path
+
 from strongarm.macho import CPU_TYPE, MachoAnalyzer, MachoParser
+from strongarm.macho import MachoBinary
 
 
-def find_selector_implementations(binary):
+def find_selector_implementations(binary: MachoBinary) -> None:
     print(f"Analyzing Mach-O slice built for {CPU_TYPE(binary.cpu_type).name}")
     analyzer = MachoAnalyzer(binary)
 
@@ -16,8 +19,9 @@ def find_selector_implementations(binary):
         )
 
 
-parser = MachoParser("./tests/bin/TestBinary4")
+parser = MachoParser(Path("./tests/bin/TestBinary4"))
 binary_64 = parser.get_arm64_slice()
 binary_32 = parser.get_armv7_slice()
 for binary in [binary_64, binary_32]:  # equivalent to parser.slices
-    find_selector_implementations(binary)
+    if binary:
+        find_selector_implementations(binary)

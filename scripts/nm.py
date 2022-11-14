@@ -35,6 +35,7 @@ def print_binary_symbols(binary: MachoBinary, verbose: bool = True) -> None:
     # Print exported symbols
     for addr, sym in analyzer.exported_symbol_pointers_to_names.items():
         section = binary.section_for_address(addr)
+        assert section is not None
         section_name = section.name.decode()
 
         if verbose:
@@ -49,7 +50,7 @@ def print_binary_symbols(binary: MachoBinary, verbose: bool = True) -> None:
         print(f"{addr:#011x} {section_name} {sym}")
 
 
-def main():
+def main() -> None:
     arg_parser = argparse.ArgumentParser(description="nm clone")
     arg_parser.add_argument(
         "binary_path", metavar="binary_path", type=str, help="Path to binary whose symbol table should be output"

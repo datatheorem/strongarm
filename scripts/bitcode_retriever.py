@@ -8,7 +8,7 @@ import pathlib
 from strongarm.macho import MachoParser
 
 
-def main():
+def main() -> None:
     arg_parser = argparse.ArgumentParser(description="bitcode_retriever clone")
     arg_parser.add_argument("binary_path", metavar="binary_path", type=str, help="Path to Bitcode binary")
     args = arg_parser.parse_args()
@@ -26,7 +26,7 @@ def main():
         bitcode_segment = binary.segment_with_name("__LLVM")
         if not bitcode_segment:
             raise ValueError(f"The provided Mach-O does not contain Bitcode.")
-        xar_data = binary.get_bytes(bitcode_segment.fileoff, bitcode_segment.filesize)
+        xar_data = binary.get_bytes(bitcode_segment.offset, bitcode_segment.size)
 
         # Place the bitcode adjacent to this file, named <arch>.xar
         output_path = pathlib.Path(__file__).parent / f"{binary.cpu_type.name.lower()}.xar"

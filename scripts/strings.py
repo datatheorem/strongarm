@@ -7,7 +7,7 @@ import pathlib
 from strongarm.macho import MachoAnalyzer, MachoBinary, MachoParser
 
 
-def main():
+def main() -> None:
     arg_parser = argparse.ArgumentParser(description="strings clone")
     arg_parser.add_argument(
         "binary_path", metavar="binary_path", type=str, help="Path to binary whose strings should be printed"

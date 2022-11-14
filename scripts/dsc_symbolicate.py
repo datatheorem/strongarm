@@ -12,7 +12,7 @@ from strongarm.logger import strongarm_logger
 logger = strongarm_logger.getChild(__file__)
 
 
-def main():
+def main() -> None:
     logging.basicConfig(level=logging.INFO)
 
     arg_parser = argparse.ArgumentParser(description="dyld_shared_cache symbol map generator")

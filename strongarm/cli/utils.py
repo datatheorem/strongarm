@@ -1,5 +1,5 @@
 import re
-from typing import List
+from typing import List, Optional
 
 from capstone import CsInsn
 from capstone.arm64 import ARM64_OP_IMM, ARM64_OP_MEM, ARM64_OP_REG, Arm64Op
@@ -228,7 +228,10 @@ def annotate_instruction(function_analyzer: ObjcFunctionAnalyzer, sel_args: List
 
 
 def disassemble_function(
-    binary: MachoBinary, function_addr: VirtualMemoryPointer, prefix: List[str] = None, sel_args: List[str] = None
+    binary: MachoBinary,
+    function_addr: VirtualMemoryPointer,
+    prefix: Optional[List[str]] = None,
+    sel_args: Optional[List[str]] = None,
 ) -> str:
     if not prefix:
         prefix = []

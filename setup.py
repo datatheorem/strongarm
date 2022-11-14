@@ -13,7 +13,7 @@ from strongarm.logger import strongarm_logger
 logger = strongarm_logger.getChild(__file__)
 
 
-def install_capstone():
+def install_capstone() -> None:
     platform = getattr(os.uname(), "sysname", None)
     logger.info(f"Installing Capstone for platform: {platform}")
 

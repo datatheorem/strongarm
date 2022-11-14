@@ -391,13 +391,14 @@ class TestMachoBinary:
             from strongarm.objc import ObjcFunctionAnalyzer, ObjcInstruction
 
             ns_log = analyzer.callable_symbol_for_symbol_name("_NSLog")
+            assert ns_log is not None
             ns_log_call_xref = analyzer.calls_to(ns_log.address)[0]
             caller_func = ObjcFunctionAnalyzer.get_function_analyzer(binary, ns_log_call_xref.caller_func_start_address)
             raw_ns_log_call_instr = caller_func.get_instruction_at_address(ns_log_call_xref.caller_addr)
             ns_log_call_instr = ObjcInstruction.parse_instruction(caller_func, raw_ns_log_call_instr)
             register_contents = caller_func.get_register_contents_at_instruction("x0", ns_log_call_instr)
             assert register_contents.type == RegisterContentsType.IMMEDIATE
-            cfstring_ref = register_contents.value
+            cfstring_ref = VirtualMemoryPointer(register_contents.value)
             # When I use the API to read the CFString
             # Then the string is read correctly
             assert binary.read_string_at_address(cfstring_ref) == "CFString"

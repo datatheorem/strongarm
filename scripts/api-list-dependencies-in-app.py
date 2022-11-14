@@ -27,6 +27,7 @@ i = 0
 for path in paths:
     parser = MachoParser(Path(path))
     binary = parser.get_arm64_slice()
+    assert binary is not None
 
     for dli in binary.dependent_library_infos:
         print(f"{path} loads {dli.name}")

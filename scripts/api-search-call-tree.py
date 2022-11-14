@@ -1,7 +1,10 @@
+from pathlib import Path
+
 from strongarm.macho import MachoAnalyzer, MachoParser
 from strongarm.objc import CodeSearch, CodeSearchTermCallDestination
 
-binary = MachoParser("./tests/bin/StrongarmTarget").get_arm64_slice()
+binary = MachoParser(Path("./tests/bin/StrongarmTarget")).get_arm64_slice()
+assert binary is not None
 analyzer = MachoAnalyzer(binary)
 
 # we do not specify a class, because this is an NSURLSessionDelegate method and we don't

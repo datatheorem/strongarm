@@ -135,7 +135,7 @@ class cached_property(object):
         self.__doc__ = func.__doc__
         self.func = func
 
-    def __get__(self, obj: Any, _type: Type = None) -> Any:
+    def __get__(self, obj: Any, _type: Optional[Type] = None) -> Any:
         if obj is None:
             return self
         value = obj.__dict__.get(self.__name__, None)

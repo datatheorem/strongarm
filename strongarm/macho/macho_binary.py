@@ -1,10 +1,8 @@
 import math
-from ctypes import c_uint32, c_uint64, sizeof
+from ctypes import Structure, c_uint32, c_uint64, sizeof
 from distutils.version import LooseVersion
 from pathlib import Path
 from typing import TYPE_CHECKING, Any, Dict, List, Optional, Set, Tuple, Type, TypeVar
-
-from _ctypes import Structure
 
 from strongarm.logger import strongarm_logger
 from strongarm.macho.arch_independent_structs import (

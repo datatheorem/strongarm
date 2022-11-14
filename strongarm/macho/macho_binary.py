@@ -63,6 +63,30 @@ class InvalidAddressError(Exception):
     """Raised when a client asks for bytes at an address outside the binary."""
 
 
+class DependentLibraryInfo:
+    """Dyld's DependentLibraryInfo
+    https://opensource.apple.com/source/dyld/dyld-96.2/src/ImageLoaderMachO.cpp.auto.html
+    """
+
+    def __init__(self, dylib_command: DylibCommandStruct) -> None:
+        self.cmd = dylib_command
+
+        self.name = ""
+        self.checksum = self.cmd.dylib.timestamp
+        self.current_version = self.cmd.dylib.current_version  # maxVersion
+        self.compatibility_version = self.cmd.dylib.compatibility_version  # minVersion
+        self.required = self.cmd.cmd != MachoLoadCommands.LC_LOAD_WEAK_DYLIB
+        self.re_exported = self.cmd.cmd != MachoLoadCommands.LC_REEXPORT_DYLIB
+
+    def load_name(self, macho_binary: "MachoBinary") -> None:
+        start_address = self.cmd.binary_offset + self.cmd.dylib.name.offset
+        dylib_name = macho_binary.get_full_string_from_start_address(start_address, virtual=False)
+        if not dylib_name:
+            raise ValueError("Could not read DylibCommandStruct.name")
+
+        self.name = dylib_name
+
+
 class MachoSegment:
     def __init__(self, segment_command: MachoSegmentCommandStruct) -> None:
         self.cmd = segment_command
@@ -159,7 +183,7 @@ class MachoBinary:
         self._dyld_info: Optional[MachoDyldInfoCommandStruct] = None
         self._dyld_export_trie: Optional[MachoLinkeditDataCommandStruct] = None
         self._dyld_chained_fixups: Optional[MachoLinkeditDataCommandStruct] = None
-        self.load_dylib_commands: List[DylibCommandStruct] = []
+        self.dependent_library_infos: List[DependentLibraryInfo] = []
         self._code_signature_cmd: Optional[MachoLinkeditDataCommandStruct] = None
         self._function_starts_cmd: Optional[MachoLinkeditDataCommandStruct] = None
         self._functions_list: Optional[Set[VirtualMemoryPointer]] = None
@@ -286,8 +310,6 @@ class MachoBinary:
             offset: Slice offset to first segment command
             ncmds: Number of load commands to parse, as declared by the header's ncmds field
         """
-        self.load_dylib_commands = []
-
         for i in range(ncmds):
             load_command = self.read_struct(offset, MachoLoadCommandStruct)
 
@@ -320,7 +342,9 @@ class MachoBinary:
 
             elif load_command.cmd in [MachoLoadCommands.LC_LOAD_DYLIB, MachoLoadCommands.LC_LOAD_WEAK_DYLIB]:
                 dylib_load_command = self.read_struct(offset, DylibCommandStruct)
-                self.load_dylib_commands.append(dylib_load_command)
+                dependent_library_info = DependentLibraryInfo(dylib_load_command)
+                self.dependent_library_infos.append(dependent_library_info)
+                dependent_library_info.load_name(self)
 
             elif load_command.cmd == MachoLoadCommands.LC_CODE_SIGNATURE:
                 self._code_signature_cmd = self.read_struct(offset, MachoLinkeditDataCommandStruct)
@@ -600,7 +624,7 @@ class MachoBinary:
         return self.get_bytes(binary_address, size)
 
     def get_contents_from_address(self, address: int, size: int, is_virtual: bool = False) -> bytearray:
-        """Get a bytesarray from a specified address, size and virtualness
+        """Get a bytearray from a specified address, size and virtualness
         TODO(FS): change all methods that use addresses as ints to the VirtualAddress/StaticAddress class pair to better
          express intent
         """
@@ -682,34 +706,30 @@ class MachoBinary:
         range2 = (self.encryption_info.cryptoff, self.encryption_info.cryptoff + self.encryption_info.cryptsize)
         return range1[1] >= range2[0] and range2[1] >= range1[0]
 
-    def dylib_for_library_ordinal(self, library_ordinal: int) -> Optional[DylibCommandStruct]:
+    def dylib_for_library_ordinal(self, library_ordinal: int) -> Optional[DependentLibraryInfo]:
         """Retrieve the library information for the 'library ordinal' value, or None if no entry exists there.
         Library ordinals are 1-indexed.
 
         https://opensource.apple.com/source/cctools/cctools-795/include/mach-o/loader.h
         """
-        idx = library_ordinal - 1
-        # library ordinals are 1-indexed
-        # if the input is invalid, return None
-        if library_ordinal < 1 or idx >= len(self.load_dylib_commands):
+        try:
+            # library ordinals are 1-indexed
+            return self.dependent_library_infos[library_ordinal - 1]
+
+        except KeyError:
             return None
-        return self.load_dylib_commands[idx]
 
     def dylib_name_for_library_ordinal(self, library_ordinal: int) -> str:
         """Read the name of the dynamic library by its library ordinal."""
         source_dylib = self.dylib_for_library_ordinal(library_ordinal)
         if source_dylib:
-            source_name_addr = source_dylib.binary_offset + source_dylib.dylib.name.offset + self.get_virtual_base()
-            source_name = self.get_full_string_from_start_address(source_name_addr)
-            if not source_name:
-                source_name = "<unknown dylib>"
-        else:
-            # we have encountered binaries where the n_desc indicates a nonexistent library ordinal
-            # Netflix.app/frameworks/widevine_cdm_sdk_oemcrypto_release.framework/widevine_cdm_sdk_oemcrypto_release
-            # indicates an ordinal 254, when the binary only actually has 8 LC_LOAD_DYLIB commands.
-            # if we encounter a buggy binary like this, just use a placeholder name
-            source_name = "<unknown dylib>"
-        return source_name
+            return source_dylib.name
+
+        # we have encountered binaries where the n_desc indicates a nonexistent library ordinal
+        # Netflix.app/frameworks/widevine_cdm_sdk_oemcrypto_release.framework/widevine_cdm_sdk_oemcrypto_release
+        # indicates an ordinal 254, when the binary only actually has 8 LC_LOAD_DYLIB commands.
+        # if we encounter a buggy binary like this, just use a placeholder name
+        return "<unknown dylib>"
 
     def read_pointer_section(self, section_name: str) -> Dict[VirtualMemoryPointer, VirtualMemoryPointer]:
         """Read all the pointers in a section

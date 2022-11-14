@@ -7,7 +7,6 @@ from strongarm.logger import strongarm_logger
 
 from .arch_independent_structs import (
     ArchIndependentStructure,
-    DylibCommandStruct,
     MachoDyldChainedFixupsHeader,
     MachoDyldChainedImport,
     MachoDyldChainedImportAddend,
@@ -17,7 +16,7 @@ from .arch_independent_structs import (
     MachoDyldChainedStartsInImage,
     MachoDyldChainedStartsInSegment,
 )
-from .macho_binary import MachoBinary
+from .macho_binary import DependentLibraryInfo, MachoBinary
 from .macho_definitions import (
     MachoDyldChainedImportFormat,
     MachoDyldChainedPtrFormat,
@@ -55,7 +54,7 @@ class DyldBoundSymbol:
     address: VirtualMemoryPointer
     library_ordinal: int
     name: str
-    dylib: Optional[DylibCommandStruct] = field(init=False)
+    dylib: Optional[DependentLibraryInfo] = field(init=False)
 
     def __post_init__(self) -> None:
         self.dylib = self.binary.dylib_for_library_ordinal(self.library_ordinal)

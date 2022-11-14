@@ -33,7 +33,7 @@ pipelines:
             # Update before installing packages
             - apt-get update
             # These dependencies are normally installed by strongarm-base/setup.py
-            - apt-get install libcapstone4 libcapstone-dev sqlite3 libsqlite3-dev -y --allow-unauthenticated
+            - apt-get install libcapstone4 libcapstone-dev sqlite3 libsqlite3-dev libffi-dev -y --allow-unauthenticated
             - pip install invoke mypy flake8 pytest pytest-xdist
             # Version info
             - python --version

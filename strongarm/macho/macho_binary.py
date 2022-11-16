@@ -66,23 +66,21 @@ class DependentLibraryInfo:
     https://opensource.apple.com/source/dyld/dyld-96.2/src/ImageLoaderMachO.cpp.auto.html
     """
 
-    def __init__(self, dylib_command: DylibCommandStruct) -> None:
+    def __init__(self, dylib_command: DylibCommandStruct, macho_binary: "MachoBinary") -> None:
         self.cmd = dylib_command
 
-        self.name = ""
+        start_address = self.cmd.binary_offset + self.cmd.dylib.name.offset
+        dylib_name = macho_binary.get_full_string_from_start_address(start_address, virtual=False)
+        if not dylib_name:
+            logger.warning("Could not read DylibCommandStruct.name")
+            dylib_name = "<unknown dylib>"
+
+        self.name = dylib_name
         self.checksum = self.cmd.dylib.timestamp
         self.current_version = self.cmd.dylib.current_version  # maxVersion
         self.compatibility_version = self.cmd.dylib.compatibility_version  # minVersion
         self.required = self.cmd.cmd != MachoLoadCommands.LC_LOAD_WEAK_DYLIB
         self.re_exported = self.cmd.cmd != MachoLoadCommands.LC_REEXPORT_DYLIB
-
-    def load_name(self, macho_binary: "MachoBinary") -> None:
-        start_address = self.cmd.binary_offset + self.cmd.dylib.name.offset
-        dylib_name = macho_binary.get_full_string_from_start_address(start_address, virtual=False)
-        if not dylib_name:
-            raise ValueError("Could not read DylibCommandStruct.name")
-
-        self.name = dylib_name
 
 
 class MachoSegment:
@@ -340,9 +338,8 @@ class MachoBinary:
 
             elif load_command.cmd in [MachoLoadCommands.LC_LOAD_DYLIB, MachoLoadCommands.LC_LOAD_WEAK_DYLIB]:
                 dylib_load_command = self.read_struct(offset, DylibCommandStruct)
-                dependent_library_info = DependentLibraryInfo(dylib_load_command)
+                dependent_library_info = DependentLibraryInfo(dylib_load_command, macho_binary=self)
                 self.dependent_library_infos.append(dependent_library_info)
-                dependent_library_info.load_name(self)
 
             elif load_command.cmd == MachoLoadCommands.LC_CODE_SIGNATURE:
                 self._code_signature_cmd = self.read_struct(offset, MachoLinkeditDataCommandStruct)
@@ -368,7 +365,7 @@ class MachoBinary:
             offset += load_command.cmdsize
 
     def read_struct(self, binary_offset: int, struct_type: Type[AIS], virtual: bool = False) -> AIS:
-        """Given an binary offset, return the structure it describes.
+        """Given a binary offset, return the structure it describes.
 
         Params:
             binary_offset: Address from where to read the bytes.

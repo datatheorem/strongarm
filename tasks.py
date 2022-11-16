@@ -19,7 +19,7 @@ def install(ctx):
 @task
 def test(ctx):
     # type: (Context) -> None
-    ctx.run("mypy strongarm strongarm-cli.py --ignore-missing-imports")
+    ctx.run("mypy strongarm strongarm-cli.py")
     ctx.run("pytest -n 4")
 
 

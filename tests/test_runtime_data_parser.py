@@ -205,10 +205,11 @@ class TestObjcRuntimeDataParser:
         proto_names = [x.name for x in test_cls.protocols]
         assert proto_names == ["UIApplicationDelegate", "UITabBarControllerDelegate"]
 
-    def test_ios14_build_version_cmd(self):
+    def test_ios14_build_version_cmd(self) -> None:
         # Given a binary compiled with a minimum deployment target of iOS 14
         parser = MachoParser(TestObjcRuntimeDataParser.IOS14_RELATIVE_METHOD_LIST_BIN_PATH)
         binary = parser.get_arm64_slice()
+        assert binary is not None
 
         # When I query properties such as the minimum deployment target, deployment platform,
         # and build tool versions
@@ -217,15 +218,17 @@ class TestObjcRuntimeDataParser:
         assert binary.get_build_version_platform() == MachoBuildVersionPlatform.IOS
 
         build_tool_versions = binary.get_build_tool_versions()
+        assert build_tool_versions is not None
         assert len(build_tool_versions) == 1
         ld_version = build_tool_versions[0]
         assert ld_version.tool == MachoBuildTool.LD
         assert ld_version.version == 0x2610000
 
-    def test_ios13_absolute_method_lists(self):
+    def test_ios13_absolute_method_lists(self) -> None:
         # Given a binary compiled with a minimum deployment target of iOS 13
         parser = MachoParser(TestObjcRuntimeDataParser.IOS13_ABSOLUTE_METHOD_LIST_BIN_PATH)
         binary = parser.get_arm64_slice()
+        assert binary is not None
         assert binary.get_minimum_deployment_target() == LooseVersion("13.2.0")
 
         # When the Objective C methods within the binary are parsed
@@ -250,10 +253,11 @@ class TestObjcRuntimeDataParser:
         assert s3.is_external_definition is False
         assert s3.name == "viewDidLoad"
 
-    def test_ios14_relative_method_lists(self):
+    def test_ios14_relative_method_lists(self) -> None:
         # Given a binary compiled with a minimum deployment target of iOS 14
         parser = MachoParser(TestObjcRuntimeDataParser.IOS14_RELATIVE_METHOD_LIST_BIN_PATH)
         binary = parser.get_arm64_slice()
+        assert binary is not None
         assert binary.get_minimum_deployment_target() == LooseVersion("14.0.0")
 
         # When the Objective C methods within the binary are parsed
@@ -273,7 +277,7 @@ class TestObjcRuntimeDataParser:
         assert internal_sel.is_external_definition is False
         assert internal_sel.name == "usesWebView"
 
-    def test_ios14__selects_correct_method_list_variant(self):
+    def test_ios14__selects_correct_method_list_variant(self) -> None:
         # Given a variety of input parameters
         args_to_expected_variant = {
             (("is_64bit", False), ("minimum_deployment_target", "13.0.0"), ("methlist_flags", 0x0)): ObjcMethod32,
@@ -288,15 +292,16 @@ class TestObjcRuntimeDataParser:
         for kwargs_tup, expected_retval in args_to_expected_variant.items():
             kwargs = {t[0]: t[1] for t in kwargs_tup}
             # When I check which structure variant should be used to parse a method list
-            retval = ObjcMethodStruct.get_backing_data_layout(**kwargs)
+            retval = ObjcMethodStruct.get_backing_data_layout(**kwargs)  # type: ignore
             # Then I see the correct structure variant is returned
             assert retval == expected_retval
 
-    def test_ios15_chained_fixup_pointer_objc_data(self):
+    def test_ios15_chained_fixup_pointer_objc_data(self) -> None:
         # Given a binary compiled with a minimum deployment target of iOS 15
         # And this binary contains chained fixup pointers in the __objc_selrefs and __objc_classrefs pointer lists
         parser = MachoParser(TestObjcRuntimeDataParser.IOS15_CHAINED_FIXUP_POINTERS_BIN_PATH)
         binary = parser.get_arm64_slice()
+        assert binary is not None
         assert binary.get_minimum_deployment_target() == LooseVersion("15.0.0")
 
         # When the Objective C data within the binary is parsed
@@ -317,9 +322,11 @@ class TestObjcRuntimeDataParser:
         # their original chained rebases to internal pointers
         assert objc_parser.classes[0].selectors[0].implementation == 0x10000628C
         assert objc_parser.classes[0].selectors[0].is_external_definition is False
-        assert objc_parser.classes[0].selectors[0].selref.selector_literal == "viewDidLoad"
-        assert objc_parser.classes[0].selectors[0].selref.source_address == 0x10000D278
-        assert objc_parser.classes[0].selectors[0].selref.destination_address == 0x1000065EC
+        selref = objc_parser.classes[0].selectors[0].selref
+        assert selref is not None
+        assert selref.selector_literal == "viewDidLoad"
+        assert selref.source_address == 0x10000D278
+        assert selref.destination_address == 0x1000065EC
 
         # And the selref -> selector map looks valid
         # And the locally implemented selectors have their implementation pointers correctly set
@@ -396,7 +403,7 @@ class TestObjcRuntimeDataParser:
             ),
         }
         for selref_addr, correct_sel in correct_selref_attr_map.items():
-            actual_sel = selref_selector_map[selref_addr]
+            actual_sel = selref_selector_map[VirtualMemoryPointer(selref_addr)]
             assert actual_sel.name == correct_sel._name
             assert actual_sel.implementation == correct_sel.implementation
             assert actual_sel.is_external_definition == correct_sel.is_external_definition

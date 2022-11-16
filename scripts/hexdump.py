@@ -38,7 +38,7 @@ def dump_memory(parser: MachoParser, start_address: int, size: int) -> None:
         current_index += region_size
 
 
-def main():
+def main() -> None:
     arg_parser = argparse.ArgumentParser(description="hexdump clone")
     arg_parser.add_argument("binary_path", type=str, help="Path to binary")
     arg_parser.add_argument(

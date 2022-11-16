@@ -1,8 +1,11 @@
 # TODO(PT): This file is out of date
+from pathlib import Path
+
 from strongarm.macho import MachoAnalyzer, MachoParser
 from strongarm.objc import CodeSearch, RegisterContentsType
 
-binary = MachoParser("./tests/bin/StrongarmControlFlowTarget").get_arm64_slice()
+binary = MachoParser(Path("./tests/bin/StrongarmControlFlowTarget")).get_arm64_slice()
+assert binary is not None
 analyzer = MachoAnalyzer(binary)
 
 log_search = CodeSearch(

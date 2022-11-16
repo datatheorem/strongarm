@@ -1,5 +1,5 @@
 import re
-from typing import List
+from typing import List, Optional
 
 from capstone import CsInsn
 from capstone.arm64 import ARM64_OP_IMM, ARM64_OP_MEM, ARM64_OP_REG, Arm64Op
@@ -228,7 +228,10 @@ def annotate_instruction(function_analyzer: ObjcFunctionAnalyzer, sel_args: List
 
 
 def disassemble_function(
-    binary: MachoBinary, function_addr: VirtualMemoryPointer, prefix: List[str] = None, sel_args: List[str] = None
+    binary: MachoBinary,
+    function_addr: VirtualMemoryPointer,
+    prefix: Optional[List[str]] = None,
+    sel_args: Optional[List[str]] = None,
 ) -> str:
     if not prefix:
         prefix = []
@@ -272,12 +275,8 @@ def print_binary_info(binary: MachoBinary) -> None:
 
 def print_binary_load_commands(binary: MachoBinary) -> None:
     print("\nLoad commands:")
-    load_commands = binary.load_dylib_commands
-    for cmd in load_commands:
-        dylib_name_addr = binary.get_virtual_base() + cmd.binary_offset + cmd.dylib.name.offset
-        dylib_name = binary.read_string_at_address(dylib_name_addr)
-        dylib_version = cmd.dylib.current_version
-        print(f"\t{dylib_name} v.{hex(dylib_version)}")
+    for linked_dylib in binary.linked_dylibs:
+        print(f"\t{linked_dylib.name} v.{hex(linked_dylib.current_version)}")
 
 
 def print_binary_segments(binary: MachoBinary) -> None:

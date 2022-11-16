@@ -91,7 +91,9 @@ class ObjcFunctionAnalyzer:
     As Objective-C is a strict superset of C, ObjcFunctionAnalyzer can also be used on pure C functions.
     """
 
-    def __init__(self, binary: MachoBinary, instructions: List[CsInsn], method_info: ObjcMethodInfo = None) -> None:
+    def __init__(
+        self, binary: MachoBinary, instructions: List[CsInsn], method_info: Optional[ObjcMethodInfo] = None
+    ) -> None:
         from strongarm.macho import MachoAnalyzer
 
         try:

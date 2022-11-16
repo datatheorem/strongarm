@@ -285,7 +285,7 @@ class TestMachoBinary:
             "/System/Library/Frameworks/Security.framework/Security",
             "/System/Library/Frameworks/UIKit.framework/UIKit",
         ]
-        found_dylibs = [binary.dylib_name_for_library_ordinal(i + 1) for i in range(len(binary.load_dylib_commands))]
+        found_dylibs = [linked_dylib.name for linked_dylib in binary.linked_dylibs]
         assert found_dylibs == original_dylibs
 
         # If I create a new binary with an inserted load command
@@ -299,10 +299,7 @@ class TestMachoBinary:
             "/System/Library/Frameworks/UIKit.framework/UIKit",
             "@rpath/Frameworks/Interject.framework/Interject",
         ]
-        found_dylibs = [
-            modified_binary.dylib_name_for_library_ordinal(i + 1)
-            for i in range(len(modified_binary.load_dylib_commands))
-        ]
+        found_dylibs = [linked_dylib.name for linked_dylib in modified_binary.linked_dylibs]
         assert found_dylibs == modified_dylibs
 
     def test_no_space_for_new_load_command(self) -> None:
@@ -321,7 +318,7 @@ class TestMachoBinary:
     def test_write_thin_binary(self) -> None:
         binary = MachoParser(self.THIN_PATH).get_arm64_slice()
         assert binary
-        original_dylibs = [binary.dylib_name_for_library_ordinal(i + 1) for i in range(len(binary.load_dylib_commands))]
+        original_dylibs = [linked_dylib.name for linked_dylib in binary.linked_dylibs]
         # Given I add a load command to a binary
         new_dylib_name = "@rpath/Frameworks/Interject.framework/Interject"
         modified_binary = binary.insert_load_dylib_cmd(new_dylib_name)
@@ -334,10 +331,7 @@ class TestMachoBinary:
             assert on_disk_binary
 
             # Then the new on-disk binary contains the modification
-            new_dylibs = [
-                on_disk_binary.dylib_name_for_library_ordinal(i + 1)
-                for i in range(len(on_disk_binary.load_dylib_commands))
-            ]
+            new_dylibs = [linked_dylib.name for linked_dylib in on_disk_binary.linked_dylibs]
             assert new_dylibs == original_dylibs + [new_dylib_name]
 
     def test_write_fat_binary(self) -> None:
@@ -345,7 +339,7 @@ class TestMachoBinary:
         parser = MachoParser(self.FAT_PATH)
         binary = parser.get_arm64_slice()
         assert binary
-        original_dylibs = [binary.dylib_name_for_library_ordinal(i + 1) for i in range(len(binary.load_dylib_commands))]
+        original_dylibs = [linked_dylib.name for linked_dylib in binary.linked_dylibs]
         new_dylib_name = "@rpath/Frameworks/Interject.framework/Interject"
         modified_binary = binary.insert_load_dylib_cmd(new_dylib_name)
 
@@ -368,7 +362,7 @@ class TestMachoBinary:
             assert arm64 is not None
             assert len(arm64.segments) == 4
             # And the arm64 segment contains the new load command
-            new_dylibs = [arm64.dylib_name_for_library_ordinal(i + 1) for i in range(len(arm64.load_dylib_commands))]
+            new_dylibs = [linked_dylib.name for linked_dylib in arm64.linked_dylibs]
             assert new_dylibs == original_dylibs + [new_dylib_name]
 
     def test_get_dylib_id(self) -> None:
@@ -397,13 +391,14 @@ class TestMachoBinary:
             from strongarm.objc import ObjcFunctionAnalyzer, ObjcInstruction
 
             ns_log = analyzer.callable_symbol_for_symbol_name("_NSLog")
+            assert ns_log is not None
             ns_log_call_xref = analyzer.calls_to(ns_log.address)[0]
             caller_func = ObjcFunctionAnalyzer.get_function_analyzer(binary, ns_log_call_xref.caller_func_start_address)
             raw_ns_log_call_instr = caller_func.get_instruction_at_address(ns_log_call_xref.caller_addr)
             ns_log_call_instr = ObjcInstruction.parse_instruction(caller_func, raw_ns_log_call_instr)
             register_contents = caller_func.get_register_contents_at_instruction("x0", ns_log_call_instr)
             assert register_contents.type == RegisterContentsType.IMMEDIATE
-            cfstring_ref = register_contents.value
+            cfstring_ref = VirtualMemoryPointer(register_contents.value)
             # When I use the API to read the CFString
             # Then the string is read correctly
             assert binary.read_string_at_address(cfstring_ref) == "CFString"

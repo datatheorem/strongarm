@@ -7,7 +7,7 @@ import pathlib
 from strongarm.macho import MachoBinary, MachoParser
 
 
-def main():
+def main() -> None:
     arg_parser = argparse.ArgumentParser(description="Add a load command to a binary")
     arg_parser.add_argument("binary_path", type=str, help="Path to binary")
     arg_parser.add_argument("output_path", type=str, help="Path to write the modified binary (must not already exist)")

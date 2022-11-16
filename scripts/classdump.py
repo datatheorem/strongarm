@@ -34,7 +34,7 @@ def _prototype_from_selector(sel: str) -> str:
     return prototype
 
 
-def main():
+def main() -> None:
     arg_parser = argparse.ArgumentParser(description="classdump clone")
     arg_parser.add_argument(
         "binary_path", metavar="binary_path", type=str, help="Path to binary to print Objective-C class information"
@@ -48,7 +48,7 @@ def main():
     binary = arm64_slices[0] if len(arm64_slices) else parser.slices[0]
     analyzer = MachoAnalyzer.get_analyzer(binary)
 
-    for objc_class in analyzer.objc_classes() + analyzer.objc_categories():
+    for objc_class in [*analyzer.objc_classes(), *analyzer.objc_categories()]:
         # Print the opening line of the declaration
         class_declaration = f"@interface {objc_class.name} : NSObject"
         if len(objc_class.protocols):

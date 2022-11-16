@@ -1,8 +1,6 @@
-from ctypes import c_uint32, sizeof
+from ctypes import Structure, c_uint32, sizeof
 from pathlib import Path
 from typing import Dict, List, Optional, Tuple, Type, TypeVar
-
-from _ctypes import Structure
 
 from strongarm.logger import strongarm_logger
 from strongarm.macho.macho_binary import MachoBinary

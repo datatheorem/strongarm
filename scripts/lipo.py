@@ -7,7 +7,7 @@ import pathlib
 from strongarm.macho import MachoBinary, MachoParser
 
 
-def main():
+def main() -> None:
     arg_parser = argparse.ArgumentParser(description="lipo clone")
     arg_parser.add_argument(
         "-archs", action="store_true", help="Display the architecture names present in each slice of the archive."

@@ -79,8 +79,8 @@ class ObjcClass:
         raw_struct: ArchIndependentStructure,
         name: str,
         selectors: List[ObjcSelector],
-        ivars: List[ObjcIvar] = None,
-        protocols: List["ObjcProtocol"] = None,
+        ivars: Optional[List[ObjcIvar]] = None,
+        protocols: Optional[List["ObjcProtocol"]] = None,
         super_classref: Optional[VirtualMemoryPointer] = None,
         superclass_name: Optional[str] = None,
     ) -> None:
@@ -115,8 +115,8 @@ class ObjcCategory(ObjcClass):
         base_class: str,
         category_name: str,
         selectors: List[ObjcSelector],
-        ivars: List[ObjcIvar] = None,
-        protocols: List[ObjcProtocol] = None,
+        ivars: Optional[List[ObjcIvar]] = None,
+        protocols: Optional[List[ObjcProtocol]] = None,
     ) -> None:
         self.base_class = base_class
         self.category_name = category_name

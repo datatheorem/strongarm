@@ -12,6 +12,7 @@ class TestMachoBinaryWriter:
     def test_batched_write(self) -> None:
         # Given a binary with some known attributes
         binary = MachoParser(self.TEST_BIN_PATH).get_arm64_slice()
+        assert binary is not None
 
         original_view_controller_data_ref = VirtualMemoryPointer(0x100009190)
         original_view_controller_data_target = VirtualMemoryPointer(0x1000086E8)

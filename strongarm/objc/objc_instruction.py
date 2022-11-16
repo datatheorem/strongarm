@@ -83,7 +83,7 @@ class ObjcBranchInstruction(ObjcInstruction):
         function_analyzer: "ObjcFunctionAnalyzer",
         instruction: CsInsn,
         patch_msgSend_destination: bool = True,
-        container_function_boundary: Tuple[VirtualMemoryPointer, VirtualMemoryPointer] = None,
+        container_function_boundary: Optional[Tuple[VirtualMemoryPointer, VirtualMemoryPointer]] = None,
     ) -> Union["ObjcUnconditionalBranchInstruction", "ObjcConditionalBranchInstruction"]:
         """Read a branch instruction and encapsulate it in the appropriate ObjcBranchInstruction subclass."""
         # use appropriate subclass
@@ -134,7 +134,7 @@ class ObjcUnconditionalBranchInstruction(ObjcBranchInstruction):
         function_analyzer: "ObjcFunctionAnalyzer",
         instruction: CsInsn,
         patch_msgSend_destination: bool = True,
-        container_function_boundary: Tuple[VirtualMemoryPointer, VirtualMemoryPointer] = None,
+        container_function_boundary: Optional[Tuple[VirtualMemoryPointer, VirtualMemoryPointer]] = None,
     ) -> None:
         if instruction.mnemonic not in ObjcUnconditionalBranchInstruction.UNCONDITIONAL_BRANCH_MNEMONICS:
             raise ValueError(

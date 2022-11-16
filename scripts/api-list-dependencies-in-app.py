@@ -1,5 +1,6 @@
 import os
 import sys
+from pathlib import Path
 from time import time
 
 from strongarm.macho import MachoParser
@@ -24,15 +25,12 @@ for framework_name in os.listdir(frameworks_folder):
 
 i = 0
 for path in paths:
-    parser = MachoParser(path)
+    parser = MachoParser(Path(path))
     binary = parser.get_arm64_slice()
+    assert binary is not None
 
-    load_commands = binary.load_dylib_commands
-    for cmd in load_commands:
-        dylib_name_addr = binary.get_virtual_base() + cmd.binary_offset + cmd.dylib.name.offset
-        dylib_name = binary.read_string_at_address(dylib_name_addr)
-        print(f"{path} loads {dylib_name}")
-        i += 1
+    for linked_dylib in binary.linked_dylibs:
+        print(f"{path} loads {linked_dylib.name}")
 
 
 print(i)

@@ -275,8 +275,8 @@ def print_binary_info(binary: MachoBinary) -> None:
 
 def print_binary_load_commands(binary: MachoBinary) -> None:
     print("\nLoad commands:")
-    for dli in binary.dependent_library_infos:
-        print(f"\t{dli.name} v.{hex(dli.current_version)}")
+    for linked_dylib in binary.linked_dylibs:
+        print(f"\t{linked_dylib.name} v.{hex(linked_dylib.current_version)}")
 
 
 def print_binary_segments(binary: MachoBinary) -> None:

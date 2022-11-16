@@ -61,21 +61,23 @@ class InvalidAddressError(Exception):
     """Raised when a client asks for bytes at an address outside the binary."""
 
 
-class DependentLibraryInfo:
-    """Dyld's DependentLibraryInfo
+class DynamicLibrary:
+    """Linked dylib
+    Dyld's DependentLibraryInfo
     https://opensource.apple.com/source/dyld/dyld-96.2/src/ImageLoaderMachO.cpp.auto.html
+    CCTools' Dynamic library
+    https://opensource.apple.com/source/cctools/cctools-576/ld/dylibs.c.auto.html
     """
+
+    UNKNOWN_NAME = "<unknown dylib>"
 
     def __init__(self, dylib_command: DylibCommandStruct, macho_binary: "MachoBinary") -> None:
         self.cmd = dylib_command
 
         start_address = self.cmd.binary_offset + self.cmd.dylib.name.offset
         dylib_name = macho_binary.get_full_string_from_start_address(start_address, virtual=False)
-        if not dylib_name:
-            logger.warning("Could not read DylibCommandStruct.name")
-            dylib_name = "<unknown dylib>"
 
-        self.name = dylib_name
+        self.name = dylib_name or DynamicLibrary.UNKNOWN_NAME
         self.checksum = self.cmd.dylib.timestamp
         self.current_version = self.cmd.dylib.current_version  # maxVersion
         self.compatibility_version = self.cmd.dylib.compatibility_version  # minVersion
@@ -179,11 +181,11 @@ class MachoBinary:
         self._dyld_info: Optional[MachoDyldInfoCommandStruct] = None
         self._dyld_export_trie: Optional[MachoLinkeditDataCommandStruct] = None
         self._dyld_chained_fixups: Optional[MachoLinkeditDataCommandStruct] = None
-        self.dependent_library_infos: List[DependentLibraryInfo] = []
+        self.linked_dylibs: List[DynamicLibrary] = []
         self._code_signature_cmd: Optional[MachoLinkeditDataCommandStruct] = None
         self._function_starts_cmd: Optional[MachoLinkeditDataCommandStruct] = None
         self._functions_list: Optional[Set[VirtualMemoryPointer]] = None
-        self._id_dylib_cmd: Optional[DylibCommandStruct] = None
+        self.id_dylib: Optional[DynamicLibrary] = None
         self._build_version_cmd: Optional[MachoBuildVersionCommandStruct] = None
         self._build_tool_versions: Optional[List[MachoBuildToolVersionStruct]] = None
 
@@ -338,8 +340,10 @@ class MachoBinary:
 
             elif load_command.cmd in [MachoLoadCommands.LC_LOAD_DYLIB, MachoLoadCommands.LC_LOAD_WEAK_DYLIB]:
                 dylib_load_command = self.read_struct(offset, DylibCommandStruct)
-                dependent_library_info = DependentLibraryInfo(dylib_load_command, macho_binary=self)
-                self.dependent_library_infos.append(dependent_library_info)
+                dependent_library_info = DynamicLibrary(dylib_load_command, macho_binary=self)
+                if dependent_library_info.name == DynamicLibrary.UNKNOWN_NAME:
+                    logger.warning(f"Could not read name of LC_LOAD_(WEAK_)DYLIB command at index {i}, offset {offset}")
+                self.linked_dylibs.append(dependent_library_info)
 
             elif load_command.cmd == MachoLoadCommands.LC_CODE_SIGNATURE:
                 self._code_signature_cmd = self.read_struct(offset, MachoLinkeditDataCommandStruct)
@@ -348,7 +352,10 @@ class MachoBinary:
                 self._function_starts_cmd = self.read_struct(offset, MachoLinkeditDataCommandStruct)
 
             elif load_command.cmd == MachoLoadCommands.LC_ID_DYLIB:
-                self._id_dylib_cmd = self.read_struct(offset, DylibCommandStruct)
+                id_dylib_command = self.read_struct(offset, DylibCommandStruct)
+                self.id_dylib = DynamicLibrary(id_dylib_command, macho_binary=self)
+                if self.id_dylib.name == DynamicLibrary.UNKNOWN_NAME:
+                    logger.warning(f"Could not read name of LC_ID_DYLIB command at index {i}, offset {offset}")
                 # This load command should only be present for dylibs. Validate this assumption
                 assert self.file_type == MachoFileType.MH_DYLIB
 
@@ -701,7 +708,7 @@ class MachoBinary:
         range2 = (self.encryption_info.cryptoff, self.encryption_info.cryptoff + self.encryption_info.cryptsize)
         return range1[1] >= range2[0] and range2[1] >= range1[0]
 
-    def dylib_for_library_ordinal(self, library_ordinal: int) -> Optional[DependentLibraryInfo]:
+    def dylib_for_library_ordinal(self, library_ordinal: int) -> Optional[DynamicLibrary]:
         """Retrieve the library information for the 'library ordinal' value, or None if no entry exists there.
         Library ordinals are 1-indexed.
 
@@ -709,7 +716,7 @@ class MachoBinary:
         """
         try:
             # library ordinals are 1-indexed
-            return self.dependent_library_infos[library_ordinal - 1]
+            return self.linked_dylibs[library_ordinal - 1]
 
         except KeyError:
             return None
@@ -724,7 +731,7 @@ class MachoBinary:
         # Netflix.app/frameworks/widevine_cdm_sdk_oemcrypto_release.framework/widevine_cdm_sdk_oemcrypto_release
         # indicates an ordinal 254, when the binary only actually has 8 LC_LOAD_DYLIB commands.
         # if we encounter a buggy binary like this, just use a placeholder name
-        return "<unknown dylib>"
+        return DynamicLibrary.UNKNOWN_NAME
 
     def read_pointer_section(self, section_name: str) -> Dict[VirtualMemoryPointer, VirtualMemoryPointer]:
         """Read all the pointers in a section
@@ -1076,16 +1083,10 @@ class MachoBinary:
 
     def dylib_id(self) -> Optional[str]:
         """If the binary contains an LC_ID_DYLIB load command, return the pathname which the binary represents."""
-        if not self._id_dylib_cmd:
-            return None
+        if self.id_dylib:
+            return self.id_dylib.name
 
-        dylib_name_addr = (
-            self._id_dylib_cmd.binary_offset + self._id_dylib_cmd.dylib.name.offset + self.get_virtual_base()
-        )
-        dylib_name = self.get_full_string_from_start_address(dylib_name_addr)
-        if not dylib_name:
-            dylib_name = "<unknown dylib>"
-        return dylib_name
+        return None
 
     def get_minimum_deployment_target(self) -> Optional[LooseVersion]:
         if not self.__minimum_deployment_target and self._build_version_cmd:

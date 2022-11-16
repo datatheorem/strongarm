@@ -285,7 +285,7 @@ class TestMachoBinary:
             "/System/Library/Frameworks/Security.framework/Security",
             "/System/Library/Frameworks/UIKit.framework/UIKit",
         ]
-        found_dylibs = [dli.name for dli in binary.dependent_library_infos]
+        found_dylibs = [linked_dylib.name for linked_dylib in binary.linked_dylibs]
         assert found_dylibs == original_dylibs
 
         # If I create a new binary with an inserted load command
@@ -299,7 +299,7 @@ class TestMachoBinary:
             "/System/Library/Frameworks/UIKit.framework/UIKit",
             "@rpath/Frameworks/Interject.framework/Interject",
         ]
-        found_dylibs = [dli.name for dli in modified_binary.dependent_library_infos]
+        found_dylibs = [linked_dylib.name for linked_dylib in modified_binary.linked_dylibs]
         assert found_dylibs == modified_dylibs
 
     def test_no_space_for_new_load_command(self) -> None:
@@ -318,7 +318,7 @@ class TestMachoBinary:
     def test_write_thin_binary(self) -> None:
         binary = MachoParser(self.THIN_PATH).get_arm64_slice()
         assert binary
-        original_dylibs = [dli.name for dli in binary.dependent_library_infos]
+        original_dylibs = [linked_dylib.name for linked_dylib in binary.linked_dylibs]
         # Given I add a load command to a binary
         new_dylib_name = "@rpath/Frameworks/Interject.framework/Interject"
         modified_binary = binary.insert_load_dylib_cmd(new_dylib_name)
@@ -331,7 +331,7 @@ class TestMachoBinary:
             assert on_disk_binary
 
             # Then the new on-disk binary contains the modification
-            new_dylibs = [dli.name for dli in on_disk_binary.dependent_library_infos]
+            new_dylibs = [linked_dylib.name for linked_dylib in on_disk_binary.linked_dylibs]
             assert new_dylibs == original_dylibs + [new_dylib_name]
 
     def test_write_fat_binary(self) -> None:
@@ -339,7 +339,7 @@ class TestMachoBinary:
         parser = MachoParser(self.FAT_PATH)
         binary = parser.get_arm64_slice()
         assert binary
-        original_dylibs = [dli.name for dli in binary.dependent_library_infos]
+        original_dylibs = [linked_dylib.name for linked_dylib in binary.linked_dylibs]
         new_dylib_name = "@rpath/Frameworks/Interject.framework/Interject"
         modified_binary = binary.insert_load_dylib_cmd(new_dylib_name)
 
@@ -362,7 +362,7 @@ class TestMachoBinary:
             assert arm64 is not None
             assert len(arm64.segments) == 4
             # And the arm64 segment contains the new load command
-            new_dylibs = [dli.name for dli in arm64.dependent_library_infos]
+            new_dylibs = [linked_dylib.name for linked_dylib in arm64.linked_dylibs]
             assert new_dylibs == original_dylibs + [new_dylib_name]
 
     def test_get_dylib_id(self) -> None:

@@ -29,8 +29,8 @@ for path in paths:
     binary = parser.get_arm64_slice()
     assert binary is not None
 
-    for dli in binary.dependent_library_infos:
-        print(f"{path} loads {dli.name}")
+    for linked_dylib in binary.linked_dylibs:
+        print(f"{path} loads {linked_dylib.name}")
 
 
 print(i)

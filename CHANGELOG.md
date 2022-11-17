@@ -2,6 +2,16 @@
 
 ## Unreleased
 
+## 2022-11-17: 14.0.0
+
+### SCAN-3620: Add Dynamic Library processing
+
+- Add Dynamic Library processing.
+- Switch `Structure` imports from _ctypes to ctypes.
+- Replace `MachoBinary.load_dylib_commands` `DylibCommandStruct` with `linked_dylibs` `DynamicLibrary`.
+- Replace `MachoBinary._id_dylib_cmd` `DylibCommandStruct` with `id_dylib` `DynamicLibrary`.
+- Log warning on dylib name read failure with load command index and file offset.
+
 ## 2022-10-04: 13.2.1
 
 ### SCAN-3569: Fix reading CFStrings on iOS 15+

@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+### SCAN-3705: Fix reading Objective-C class refs on iOS 15+
+
+- Switch `MachoAnalyzer.class_name_for_class_pointer()` to use `MachoBinary.read_rebased_pointer()` instead of `MachoBinary.read_word()`
+
 ## 2022-11-17: 14.0.0
 
 ### SCAN-3620: Add Dynamic Library processing

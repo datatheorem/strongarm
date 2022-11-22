@@ -1,5 +1,6 @@
 import pathlib
 from contextlib import contextmanager
+from textwrap import dedent
 from typing import Generator, List, Tuple
 
 import pytest
@@ -386,6 +387,39 @@ class TestMachoAnalyzer:
         # And I can query it via APIs
         assert a.stringref_for_string('@"x is: %d i is %d"') == VirtualMemoryPointer(0x100008070)
         assert a.stringref_for_string('@"Default Configuration"') == VirtualMemoryPointer(0x100008090)
+
+    def test_class_name_for_class_pointer__with_rebases(self) -> None:
+        # Given a binary that contains chained fixup rebases within the class ref static structures
+        # For class refs to appear in a binary, a class has to reference another class
+        outer_source_code = dedent(
+            """
+            @interface ApiProvider : NSObject
+            + (void)setApiKey:(NSString *)apiKey;
+            @end
+            @implementation ApiProvider
+            + (void)setApiKey:(NSString *)apiKey {
+            }
+            @end
+            @interface ApiConsumer : NSObject
+            @end
+            @implementation ApiConsumer
+            - (void)performApiCall {
+                [ApiProvider setApiKey:@"private_api_key_do_not_leak"];
+            }
+            @end
+            """
+        ).strip()
+        expected_values_mapping = {
+            VirtualMemoryPointer(0x000000010000C1C0): "ApiProvider",
+        }
+        with binary_containing_code("", is_assembly=False, code_outside_objc_class=outer_source_code) as (
+            binary,
+            analyzer,
+        ):
+            # When I parse the Objc class ref data
+            class_names = [analyzer.class_name_for_class_pointer(pointer) for pointer in expected_values_mapping]
+            # Then the data is correctly parsed
+            assert class_names == list(expected_values_mapping.values())
 
 
 class TestMachoAnalyzerDynStaticChecks:

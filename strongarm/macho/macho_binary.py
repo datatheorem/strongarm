@@ -63,15 +63,14 @@ class InvalidAddressError(Exception):
 
 class DynamicLibrary:
     """Linked dylib
-    Dyld's DependentLibraryInfo
     https://opensource.apple.com/source/dyld/dyld-96.2/src/ImageLoaderMachO.cpp.auto.html
-    CCTools' Dynamic library
     https://opensource.apple.com/source/cctools/cctools-576/ld/dylibs.c.auto.html
     """
 
+    # Stand-in for rare cases in which we're unable to parse a dylib's path
     UNKNOWN_NAME = "<unknown dylib>"
 
-    def __init__(self, dylib_command: DylibCommandStruct, macho_binary: "MachoBinary") -> None:
+    def __init__(self, macho_binary: "MachoBinary", dylib_command: DylibCommandStruct) -> None:
         self.cmd = dylib_command
 
         start_address = self.cmd.binary_offset + self.cmd.dylib.name.offset
@@ -174,18 +173,20 @@ class MachoBinary:
         # Segment and section commands from Mach-O header
         self.segments: List[MachoSegment] = []
         self.sections: List[MachoSection] = []
+
         # Interesting Mach-O sections
+        self.linked_dylibs: List[DynamicLibrary] = []
+        self.id_dylib: Optional[DynamicLibrary] = None
+
         self._dysymtab: Optional[MachoDysymtabCommandStruct] = None
         self._symtab: Optional[MachoSymtabCommandStruct] = None
         self._encryption_info: Optional[MachoEncryptionInfoStruct] = None
         self._dyld_info: Optional[MachoDyldInfoCommandStruct] = None
         self._dyld_export_trie: Optional[MachoLinkeditDataCommandStruct] = None
         self._dyld_chained_fixups: Optional[MachoLinkeditDataCommandStruct] = None
-        self.linked_dylibs: List[DynamicLibrary] = []
         self._code_signature_cmd: Optional[MachoLinkeditDataCommandStruct] = None
         self._function_starts_cmd: Optional[MachoLinkeditDataCommandStruct] = None
         self._functions_list: Optional[Set[VirtualMemoryPointer]] = None
-        self.id_dylib: Optional[DynamicLibrary] = None
         self._build_version_cmd: Optional[MachoBuildVersionCommandStruct] = None
         self._build_tool_versions: Optional[List[MachoBuildToolVersionStruct]] = None
 
@@ -340,7 +341,7 @@ class MachoBinary:
 
             elif load_command.cmd in [MachoLoadCommands.LC_LOAD_DYLIB, MachoLoadCommands.LC_LOAD_WEAK_DYLIB]:
                 dylib_load_command = self.read_struct(offset, DylibCommandStruct)
-                dependent_library_info = DynamicLibrary(dylib_load_command, macho_binary=self)
+                dependent_library_info = DynamicLibrary(self, dylib_load_command)
                 if dependent_library_info.name == DynamicLibrary.UNKNOWN_NAME:
                     logger.warning(f"Could not read name of LC_LOAD_(WEAK_)DYLIB command at index {i}, offset {offset}")
                 self.linked_dylibs.append(dependent_library_info)
@@ -353,7 +354,7 @@ class MachoBinary:
 
             elif load_command.cmd == MachoLoadCommands.LC_ID_DYLIB:
                 id_dylib_command = self.read_struct(offset, DylibCommandStruct)
-                self.id_dylib = DynamicLibrary(id_dylib_command, macho_binary=self)
+                self.id_dylib = DynamicLibrary(self, id_dylib_command)
                 if self.id_dylib.name == DynamicLibrary.UNKNOWN_NAME:
                     logger.warning(f"Could not read name of LC_ID_DYLIB command at index {i}, offset {offset}")
                 # This load command should only be present for dylibs. Validate this assumption

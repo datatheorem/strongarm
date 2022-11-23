@@ -4,19 +4,33 @@
 
 ## 2022-11-23: 14.0.1
 
-### SCAN-3705: Fix reading Objective-C class refs on iOS 15+
+### SCAN-3705: Fix parsing __objc_classrefs on iOS 15+
 
-- Switch `MachoAnalyzer.class_name_for_class_pointer()` to use `MachoBinary.read_rebased_pointer()` instead of `MachoBinary.read_word()`
+`__objc_classrefs` contains internal pointers to `__objc_data` that need to be rebased. 
+
+On iOS 15+, these pointers are rebased via chained fixup pointers, and therefore the literal binary data at each `u64` in `__objc_classrefs` needs to be fixed up.
+
+This release uses the correct internal API (`MachoBinary.read_rebased_pointer()`) when parsing classrefs.
 
 ## 2022-11-17: 14.0.0
 
 ### SCAN-3620: Add Dynamic Library processing
 
-- Add Dynamic Library processing.
-- Switch `Structure` imports from _ctypes to ctypes.
-- Replace `MachoBinary.load_dylib_commands` `DylibCommandStruct` with `linked_dylibs` `DynamicLibrary`.
-- Replace `MachoBinary._id_dylib_cmd` `DylibCommandStruct` with `id_dylib` `DynamicLibrary`.
-- Log warning on dylib name read failure with load command index and file offset.
+Prior to this release, strongarm didn't have an ergonomic API for enumerating the dylibs loaded by a binary. 
+strongarm provided `MachoBinary.loaded_dylib_commands`, but the caller had to jump through awkward hoops to, for example, list the load paths of dylibs:
+
+```python
+for cmd in binary.load_dylib_commands:
+    dylib_name_addr = binary.get_virtual_base() + cmd.binary_offset + cmd.dylib.name.offset
+    dylib_name = binary.read_string_at_address(dylib_name_addr)
+```
+
+This release replaces `MachoBinary.loaded_dylib_commands` with `MachoBinary.linked_dylibs`:
+
+```python
+for dylib in binary.loaded_dylibs:
+    dylib_name = dylib.name
+```
 
 ## 2022-10-04: 13.2.1
 

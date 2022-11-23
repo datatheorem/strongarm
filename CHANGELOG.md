@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+## 2022-11-23: 14.0.1
+
 ### SCAN-3705: Fix reading Objective-C class refs on iOS 15+
 
 - Switch `MachoAnalyzer.class_name_for_class_pointer()` to use `MachoBinary.read_rebased_pointer()` instead of `MachoBinary.read_word()`

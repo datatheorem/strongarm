@@ -393,24 +393,22 @@ class TestMachoAnalyzer:
         # For class refs to appear in a binary, a class has to reference another class
         outer_source_code = dedent(
             """
-            @interface ApiProvider : NSObject
-            + (void)setApiKey:(NSString *)apiKey;
+            @interface A : NSObject
             @end
-            @implementation ApiProvider
-            + (void)setApiKey:(NSString *)apiKey {
-            }
+            @implementation A
             @end
-            @interface ApiConsumer : NSObject
+
+            @interface B : NSObject
             @end
-            @implementation ApiConsumer
-            - (void)performApiCall {
-                [ApiProvider setApiKey:@"private_api_key_do_not_leak"];
+            @implementation B
+            - (void)perform {
+                [A new];
             }
             @end
             """
         ).strip()
         expected_values_mapping = {
-            VirtualMemoryPointer(0x000000010000C1C0): "ApiProvider",
+            VirtualMemoryPointer(0x000000010000C1B8): "A",
         }
         with binary_containing_code("", is_assembly=False, code_outside_objc_class=outer_source_code) as (
             binary,

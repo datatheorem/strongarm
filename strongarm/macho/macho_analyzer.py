@@ -634,7 +634,7 @@ class MachoAnalyzer:
 
         # Then, check if we were passed a classref pointer in __objc_classrefs
         try:
-            dereferenced_classref = VirtualMemoryPointer(self.binary.read_word(classref))
+            dereferenced_classref = VirtualMemoryPointer(self.binary.read_rebased_pointer(classref))
         except InvalidAddressError:
             # Invalid classref
             return None

@@ -25,6 +25,7 @@ from strongarm.macho.arch_independent_structs import (
 from strongarm.macho.macho_definitions import (
     CPU_TYPE,
     HEADER_FLAGS,
+    BindSpecialDylib,
     DylibCommand,
     DylibStruct,
     LcStrUnion,
@@ -715,15 +716,47 @@ class MachoBinary:
 
         https://opensource.apple.com/source/cctools/cctools-795/include/mach-o/loader.h
         """
-        try:
+        if library_ordinal == BindSpecialDylib.BIND_SPECIAL_DYLIB_SELF:
+            return None
+        elif library_ordinal == BindSpecialDylib.BIND_SPECIAL_DYLIB_MAIN_EXECUTABLE:
+            return None
+        elif library_ordinal == BindSpecialDylib.BIND_SPECIAL_DYLIB_FLAT_LOOKUP:
+            return None
+        elif library_ordinal == BindSpecialDylib.BIND_SPECIAL_DYLIB_WEAK_LOOKUP:
+            return None
+        elif library_ordinal < BindSpecialDylib.BIND_SPECIAL_DYLIB_WEAK_LOOKUP:
+            return None
+        elif library_ordinal > len(self.linked_dylibs):
+            return None
+
+        else:
             # library ordinals are 1-indexed
             return self.linked_dylibs[library_ordinal - 1]
 
-        except KeyError:
-            return None
-
     def dylib_name_for_library_ordinal(self, library_ordinal: int) -> str:
-        """Read the name of the dynamic library by its library ordinal."""
+        """Read the name of the dynamic library by its library ordinal.
+
+        const char *
+        ordinalName(
+            int libraryOrdinal,
+            const char **dylibs,
+            uint32_t ndylibs,
+            enum bool *libraryOrdinalSet);
+        from https://opensource.apple.com/source/cctools/cctools-921/otool/dyld_bind_info.c.auto.html
+        """
+        if library_ordinal == BindSpecialDylib.BIND_SPECIAL_DYLIB_SELF:
+            return "this-image"
+        elif library_ordinal == BindSpecialDylib.BIND_SPECIAL_DYLIB_MAIN_EXECUTABLE:
+            return "main-executable"
+        elif library_ordinal == BindSpecialDylib.BIND_SPECIAL_DYLIB_FLAT_LOOKUP:
+            return "flat-namespace"
+        elif library_ordinal == BindSpecialDylib.BIND_SPECIAL_DYLIB_WEAK_LOOKUP:
+            return "weak"
+        elif library_ordinal < BindSpecialDylib.BIND_SPECIAL_DYLIB_WEAK_LOOKUP:
+            return "Unknown special ordinal"
+        elif library_ordinal > len(self.linked_dylibs):
+            return "LibraryOrdinal out of range"
+
         source_dylib = self.dylib_for_library_ordinal(library_ordinal)
         if source_dylib:
             return source_dylib.name

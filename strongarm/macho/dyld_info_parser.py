@@ -28,6 +28,8 @@ logger = strongarm_logger.getChild(__file__)
 
 
 class BindOpcode(IntEnum):
+    BIND_OPCODE_MASK = 0xF0
+    BIND_IMMEDIATE_MASK = 0x0F
     BIND_OPCODE_DONE = 0x00
     BIND_OPCODE_SET_DYLIB_ORDINAL_IMM = 0x10
     BIND_OPCODE_SET_DYLIB_ORDINAL_ULEB = 0x20
@@ -345,8 +347,8 @@ class DyldInfoParser:
 
         while index != len(binding_info):
             byte = binding_info[index]
-            opcode = byte & 0xF0
-            immediate = byte & 0x0F
+            opcode = BindOpcode.BIND_OPCODE_MASK & byte
+            immediate = BindOpcode.BIND_IMMEDIATE_MASK & byte
             index += 1
 
             if opcode == BindOpcode.BIND_OPCODE_DONE:
@@ -356,7 +358,10 @@ class DyldInfoParser:
             elif opcode == BindOpcode.BIND_OPCODE_SET_DYLIB_ORDINAL_ULEB:
                 library_ordinal, index = DyldInfoParser.read_uleb(binding_info, index)
             elif opcode == BindOpcode.BIND_OPCODE_SET_DYLIB_SPECIAL_IMM:
-                library_ordinal = -immediate
+                if immediate == 0:
+                    library_ordinal = 0
+                else:
+                    library_ordinal = c_int8(BindOpcode.BIND_OPCODE_MASK | immediate).value
             elif opcode == BindOpcode.BIND_OPCODE_SET_SYMBOL_TRAILING_FLAGS_IMM:
                 name_end = binding_info.find(b"\0", index)
                 name_bytes = binding_info[index:name_end]

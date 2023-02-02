@@ -2,6 +2,20 @@
 
 ## Unreleased
 
+### SCAN-3832: Fix library ordinals parsing
+
+The parsing of library_ordinal when opcode is BIND_OPCODE_SET_DYLIB_SPECIAL_IMM would negate the value, instead it should handle the special value 0 and sign extend the rest of the values:
+
+```python
+    if immediate == 0:
+       library_ordinal = 0
+    else:
+       library_ordinal = c_int8(BindOpcode.BIND_OPCODE_MASK | immediate).value
+```
+
+Handle `BIND_SPECIAL_DYLIB_*` ordinals in MachoBinary.dylib_for_library_ordinal() and MachoBinary.dylib_name_for_library_ordinal() to return None and special values respectively.
+
+
 ## 2022-11-23: 14.0.1
 
 ### SCAN-3705: Fix parsing __objc_classrefs on iOS 15+

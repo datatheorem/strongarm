@@ -716,17 +716,17 @@ class MachoBinary:
 
         https://opensource.apple.com/source/cctools/cctools-795/include/mach-o/loader.h
         """
-        if library_ordinal == BindSpecialDylib.BIND_SPECIAL_DYLIB_SELF:
-            return None
-        elif library_ordinal == BindSpecialDylib.BIND_SPECIAL_DYLIB_MAIN_EXECUTABLE:
-            return None
-        elif library_ordinal == BindSpecialDylib.BIND_SPECIAL_DYLIB_FLAT_LOOKUP:
-            return None
-        elif library_ordinal == BindSpecialDylib.BIND_SPECIAL_DYLIB_WEAK_LOOKUP:
-            return None
-        elif library_ordinal < BindSpecialDylib.BIND_SPECIAL_DYLIB_WEAK_LOOKUP:
-            return None
-        elif library_ordinal > len(self.linked_dylibs):
+        if (
+            library_ordinal
+            in (
+                BindSpecialDylib.BIND_SPECIAL_DYLIB_SELF,
+                BindSpecialDylib.BIND_SPECIAL_DYLIB_MAIN_EXECUTABLE,
+                BindSpecialDylib.BIND_SPECIAL_DYLIB_FLAT_LOOKUP,
+                BindSpecialDylib.BIND_SPECIAL_DYLIB_WEAK_LOOKUP,
+            )
+            or library_ordinal < BindSpecialDylib.BIND_SPECIAL_DYLIB_WEAK_LOOKUP
+            or library_ordinal > len(self.linked_dylibs)
+        ):
             return None
 
         else:
@@ -755,7 +755,7 @@ class MachoBinary:
         elif library_ordinal < BindSpecialDylib.BIND_SPECIAL_DYLIB_WEAK_LOOKUP:
             return "Unknown special ordinal"
         elif library_ordinal > len(self.linked_dylibs):
-            return "LibraryOrdinal out of range"
+            raise ValueError(f"LibraryOrdinal out of range: {library_ordinal}")
 
         source_dylib = self.dylib_for_library_ordinal(library_ordinal)
         if source_dylib:

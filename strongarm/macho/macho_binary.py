@@ -25,6 +25,7 @@ from strongarm.macho.arch_independent_structs import (
 from strongarm.macho.macho_definitions import (
     CPU_TYPE,
     HEADER_FLAGS,
+    BindSpecialDylibOrdinal,
     DylibCommand,
     DylibStruct,
     LcStrUnion,
@@ -715,23 +716,39 @@ class MachoBinary:
 
         https://opensource.apple.com/source/cctools/cctools-795/include/mach-o/loader.h
         """
-        try:
+        if library_ordinal <= BindSpecialDylibOrdinal.BIND_SPECIAL_DYLIB_SELF or library_ordinal > len(
+            self.linked_dylibs
+        ):
+            return None
+
+        else:
             # library ordinals are 1-indexed
             return self.linked_dylibs[library_ordinal - 1]
 
-        except KeyError:
-            return None
-
     def dylib_name_for_library_ordinal(self, library_ordinal: int) -> str:
-        """Read the name of the dynamic library by its library ordinal."""
+        """Read the name of the dynamic library by its library ordinal.
+
+        const char * ordinalName(...)
+        from https://opensource.apple.com/source/cctools/cctools-921/otool/dyld_bind_info.c.auto.html
+        """
+        if library_ordinal == BindSpecialDylibOrdinal.BIND_SPECIAL_DYLIB_SELF:
+            return "this-image"
+        elif library_ordinal == BindSpecialDylibOrdinal.BIND_SPECIAL_DYLIB_MAIN_EXECUTABLE:
+            return "main-executable"
+        elif library_ordinal == BindSpecialDylibOrdinal.BIND_SPECIAL_DYLIB_FLAT_LOOKUP:
+            return "flat-namespace"
+        elif library_ordinal == BindSpecialDylibOrdinal.BIND_SPECIAL_DYLIB_WEAK_LOOKUP:
+            return "weak"
+        elif library_ordinal < BindSpecialDylibOrdinal.BIND_SPECIAL_DYLIB_WEAK_LOOKUP:
+            return "Unknown special ordinal"
+        elif library_ordinal > len(self.linked_dylibs):
+            raise ValueError(f"LibraryOrdinal out of range: {library_ordinal}")
+
         source_dylib = self.dylib_for_library_ordinal(library_ordinal)
         if source_dylib:
             return source_dylib.name
 
-        # we have encountered binaries where the n_desc indicates a nonexistent library ordinal
-        # Netflix.app/frameworks/widevine_cdm_sdk_oemcrypto_release.framework/widevine_cdm_sdk_oemcrypto_release
-        # indicates an ordinal 254, when the binary only actually has 8 LC_LOAD_DYLIB commands.
-        # if we encounter a buggy binary like this, just use a placeholder name
+        # If all else fails,
         return DynamicLibrary.UNKNOWN_NAME
 
     def read_pointer_section(self, section_name: str) -> Dict[VirtualMemoryPointer, VirtualMemoryPointer]:

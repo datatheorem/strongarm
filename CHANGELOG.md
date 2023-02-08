@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+### SCAN-3832: Fix library ordinals parsing
+
+In the pre-CFP dyld bytecode stream, certain library ordinals denote special behavior, rather than referring to literal ordinals. strongarm was previously interpreting these as literal ordinals, leading to invalid ordinal lookups. This release correctly interprets these special ordinal values.
+
 ## 2022-11-23: 14.0.1
 
 ### SCAN-3705: Fix parsing __objc_classrefs on iOS 15+

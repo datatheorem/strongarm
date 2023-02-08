@@ -822,3 +822,10 @@ class MachoDyldChainedPtr64BindRaw(Structure):
         # == 1
         ("bind", c_uint64, 1),
     ]
+
+
+class BindSpecialDylibOrdinal(IntEnum):
+    BIND_SPECIAL_DYLIB_SELF = 0
+    BIND_SPECIAL_DYLIB_MAIN_EXECUTABLE = -1
+    BIND_SPECIAL_DYLIB_FLAT_LOOKUP = -2
+    BIND_SPECIAL_DYLIB_WEAK_LOOKUP = -3

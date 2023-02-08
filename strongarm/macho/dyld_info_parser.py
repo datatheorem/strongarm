@@ -18,6 +18,7 @@ from .arch_independent_structs import (
 )
 from .macho_binary import DynamicLibrary, MachoBinary
 from .macho_definitions import (
+    BindSpecialDylibOrdinal,
     MachoDyldChainedImportFormat,
     MachoDyldChainedPtrFormat,
     StaticFilePointer,
@@ -334,7 +335,6 @@ class DyldInfoParser:
         segment_index = 0
         segment_offset = 0
         library_ordinal = 0
-        target_table_count = 0
 
         def commit_stub() -> None:
             segment_command = binary.segment_for_index(segment_index)
@@ -359,7 +359,7 @@ class DyldInfoParser:
                 library_ordinal, index = DyldInfoParser.read_uleb(binding_info, index)
             elif opcode == BindOpcode.BIND_OPCODE_SET_DYLIB_SPECIAL_IMM:
                 if immediate == 0:
-                    library_ordinal = 0
+                    library_ordinal = BindSpecialDylibOrdinal.BIND_SPECIAL_DYLIB_SELF
                 else:
                     library_ordinal = c_int8(BindOpcode.BIND_OPCODE_MASK | immediate).value
             elif opcode == BindOpcode.BIND_OPCODE_SET_SYMBOL_TRAILING_FLAGS_IMM:

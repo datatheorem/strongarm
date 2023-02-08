@@ -824,7 +824,7 @@ class MachoDyldChainedPtr64BindRaw(Structure):
     ]
 
 
-class BindSpecialDylib(IntEnum):
+class BindSpecialDylibOrdinal(IntEnum):
     BIND_SPECIAL_DYLIB_SELF = 0
     BIND_SPECIAL_DYLIB_MAIN_EXECUTABLE = -1
     BIND_SPECIAL_DYLIB_FLAT_LOOKUP = -2

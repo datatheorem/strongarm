@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+
+## 2023-02-08: 14.0.2
+
 ### SCAN-3832: Fix library ordinals parsing
 
 In the pre-CFP dyld bytecode stream, certain library ordinals denote special behavior, rather than referring to literal ordinals. strongarm was previously interpreting these as literal ordinals, leading to invalid ordinal lookups. This release correctly interprets these special ordinal values.

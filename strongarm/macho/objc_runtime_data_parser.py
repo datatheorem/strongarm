@@ -1,4 +1,4 @@
-from ctypes import c_uint32, c_uint64, sizeof
+from ctypes import c_int8, c_uint32, c_uint64, sizeof
 from typing import Dict, List, Optional
 
 from strongarm.logger import strongarm_logger
@@ -197,7 +197,7 @@ class ObjcRuntimeDataParser:
 
     @staticmethod
     def _library_ordinal_from_n_desc(n_desc: int) -> int:
-        return (n_desc >> 8) & 0xFF
+        return c_int8((n_desc >> 8) & 0xFF).value
 
     def _parse_selrefs(self) -> None:
         """Parse the binary's selref list, and store the data.

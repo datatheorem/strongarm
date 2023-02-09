@@ -2,12 +2,25 @@
 
 ## Unreleased
 
+## 2023-02-09: 14.0.3
+
+### SCAN-3845: Fix parsing relative method lists for watchOS binaries
+
+Previously, strongarm's detection for relative address-style method lists was gated behind an iOS-specific version check.
+
+This was unnecessary, because a flag in the method list header already indicates whether a relative address-style method list follows.
+
+This check also prevented relative method lists from being parsed correctly on watchOS binaries. This version removes the check to fix strongarm's handling.
 
 ## 2023-02-08: 14.0.2
 
 ### SCAN-3832: Fix library ordinals parsing
 
-In the pre-CFP dyld bytecode stream, certain library ordinals denote special behavior, rather than referring to literal ordinals. strongarm was previously interpreting these as literal ordinals, leading to invalid ordinal lookups. This release correctly interprets these special ordinal values.
+In the pre-CFP dyld bytecode stream, certain library ordinals denote special behavior, rather than referring to literal ordinals. 
+
+strongarm was previously interpreting these as literal ordinals, leading to invalid ordinal lookups. 
+
+This release correctly interprets these special ordinal values.
 
 ## 2022-11-23: 14.0.1
 

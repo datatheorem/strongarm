@@ -258,7 +258,9 @@ class ObjcMethodStruct(ArchIndependentStructure):
         This method accounts for post-iOS-14 binaries using a relative-offset layout for this structure, and
          patches the field values to appear as absolute addresses to callers, to match the layout from prior versions.
         """
-        struct_type = cls.get_backing_data_layout(binary.is_64bit, methlist_flags)
+        struct_type = cls.get_backing_data_layout(
+            binary.is_64bit, binary.get_minimum_deployment_target(), methlist_flags
+        )
         data = binary.get_contents_from_address(address=address, size=sizeof(struct_type), is_virtual=True)
         method_ent = ObjcMethodStruct(address, data, struct_type)
 

@@ -239,6 +239,7 @@ class ObjcMethodStruct(ArchIndependentStructure):
     def get_backing_data_layout(
         cls,
         is_64bit: bool = True,
+        minimum_deployment_target: Optional[LooseVersion] = None,
         methlist_flags: Optional[int] = None,
     ) -> Type[Structure]:
         # Prior to iOS 14, 64-bit targets would use an ObjcMethod64 structure with absolute addresses.
@@ -247,7 +248,7 @@ class ObjcMethodStruct(ArchIndependentStructure):
         if is_64bit and methlist_flags and methlist_flags & (1 << 31) != 0:
             return ObjcMethodRelativeData
 
-        return super().get_backing_data_layout(is_64bit)
+        return super().get_backing_data_layout(is_64bit, minimum_deployment_target)
 
     @classmethod
     def read_method_struct(
@@ -257,9 +258,7 @@ class ObjcMethodStruct(ArchIndependentStructure):
         This method accounts for post-iOS-14 binaries using a relative-offset layout for this structure, and
          patches the field values to appear as absolute addresses to callers, to match the layout from prior versions.
         """
-        struct_type = cls.get_backing_data_layout(
-            binary.is_64bit, methlist_flags
-        )
+        struct_type = cls.get_backing_data_layout(binary.is_64bit, methlist_flags)
         data = binary.get_contents_from_address(address=address, size=sizeof(struct_type), is_virtual=True)
         method_ent = ObjcMethodStruct(address, data, struct_type)
 

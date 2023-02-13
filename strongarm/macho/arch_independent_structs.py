@@ -244,11 +244,9 @@ class ObjcMethodStruct(ArchIndependentStructure):
     ) -> Type[Structure]:
         # Prior to iOS 14, 64-bit targets would use an ObjcMethod64 structure with absolute addresses.
         # On iOS 14 and later, 64-bit targets use a structure with 32-bit relative offsets from each field.
-        if is_64bit and minimum_deployment_target and minimum_deployment_target >= LooseVersion("14.0.0"):
-            # SCAN-2419: Binaries can be built for iOS 14 and still use an absolute method list, so also check a flag
-            # bit set in the method list
-            if methlist_flags and methlist_flags & (1 << 31) != 0:
-                return ObjcMethodRelativeData
+        # SCAN-2419/SCAN-3845: We can identify this case via a bit in the method list header flags
+        if is_64bit and methlist_flags and methlist_flags & (1 << 31) != 0:
+            return ObjcMethodRelativeData
 
         return super().get_backing_data_layout(is_64bit, minimum_deployment_target)
 

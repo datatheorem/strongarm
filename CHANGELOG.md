@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+### FIX: library ordinals parsing in chained fixup pointers
+
 ## 2023-02-09: 14.0.3
 
 ### SCAN-3845: Fix parsing relative method lists for watchOS binaries

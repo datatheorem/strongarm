@@ -251,9 +251,10 @@ class DyldInfoParser:
             if chained_rebase_ptr.bind == 1:
                 # Bind. Keep track that there is an imported symbol bind here
                 chained_bind_ptr = binary.read_struct(chain_base, MachoDyldChainedPtr64Bind)
-                bound_symbol = dyld_bound_symbols_table[chained_bind_ptr.ordinal]
+                ordinal = c_int8(chained_bind_ptr.ordinal & 0xFF).value
+                bound_symbol = dyld_bound_symbols_table[ordinal]
                 logger.debug(
-                    f"\t\t{hex(chain_base)}: BIND\tordinal {chained_bind_ptr.ordinal}\t"
+                    f"\t\t{hex(chain_base)}: BIND\tordinal {ordinal}\t"
                     f"addend {chained_bind_ptr.addend}\treserved {chained_bind_ptr.reserved}\t"
                     f"next {chained_bind_ptr.next}\tsymbol {bound_symbol.name}\t\t"
                     f"dylib {binary.dylib_name_for_library_ordinal(bound_symbol.library_ordinal)}"

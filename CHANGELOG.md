@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+## 2023-02-15: 14.0.4
+
 ### FIX: library ordinals parsing in chained fixup pointers
 
 ## 2023-02-09: 14.0.3

@@ -1,4 +1,4 @@
-from ctypes import c_int8, c_uint32, c_uint64, sizeof
+from ctypes import c_uint32, c_uint64, sizeof
 from typing import Dict, List, Optional
 
 from strongarm.logger import strongarm_logger
@@ -16,6 +16,7 @@ from strongarm.macho.arch_independent_structs import (
 )
 from strongarm.macho.macho_binary import MachoBinary
 from strongarm.macho.macho_definitions import VirtualMemoryPointer
+from strongarm.macho.utils import int8_from_value
 
 logger = strongarm_logger.getChild(__file__)
 
@@ -184,7 +185,7 @@ class ObjcRuntimeDataParser:
                 logger.error(f"Could not get symbol name at address {hex(string_file_address)}")
                 continue
 
-            library_ordinal = self._library_ordinal_from_n_desc(sym.n_desc)
+            library_ordinal = int8_from_value(sym.n_desc >> 8)
             source_name = self.binary.dylib_name_for_library_ordinal(library_ordinal)
 
             syms_to_dylib_path[symbol_name] = source_name
@@ -194,10 +195,6 @@ class ObjcRuntimeDataParser:
         if symbol in self._sym_to_dylib_path:
             return self._sym_to_dylib_path[symbol]
         return None
-
-    @staticmethod
-    def _library_ordinal_from_n_desc(n_desc: int) -> int:
-        return c_int8((n_desc >> 8) & 0xFF).value
 
     def _parse_selrefs(self) -> None:
         """Parse the binary's selref list, and store the data.

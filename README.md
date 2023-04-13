@@ -187,7 +187,7 @@ modified_binary = binary.write_struct(new_symbol_table, binary.symtab.address, v
 modified_binary = modified_binary.insert_load_dylib_cmd("/System/Frameworks/UIKit.framework/UIKit")
 
 # Write the modified binary to a file
-MachoBinary.write_binary(Path(__file__).parent / "modified_binary")
+modified_binary.write_binary(Path(__file__).parent / "modified_binary")
 ```
 
 `MachoBinary` provides several functions to faciliate binary modifications.

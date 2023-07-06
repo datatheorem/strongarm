@@ -1,4 +1,4 @@
 # Packages for functioning
-capstone
+capstone==4.0.2
 more_itertools
 strongarm_dataflow==3.0.0

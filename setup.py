@@ -19,7 +19,7 @@ def install_capstone() -> None:
 
     if platform == "Darwin":
         logger.info("Installing Capstone backend from brew...")
-        subprocess.run(["brew", "install", "capstone"])
+        subprocess.run(["brew", "install", "capstone@4.0.2"])
     elif platform == "Linux":
         logger.info("Installing Capstone backend from apt-get...")
         subprocess.run(["apt-get", "update"])
@@ -27,8 +27,8 @@ def install_capstone() -> None:
             [
                 "apt-get",
                 "install",
-                "libcapstone4",
-                "libcapstone-dev",
+                "libcapstone4=4.0.2-5",
+                "libcapstone-dev=4.0.2-5",
                 "sqlite3",
                 "libsqlite3-dev",
                 "-y",
@@ -70,7 +70,7 @@ setup(
     author="Data Theorem",
     url=__url__,
     packages=find_packages(exclude=["tests"]),
-    install_requires=["capstone", "more_itertools", "strongarm_dataflow==3.0.0"],
+    install_requires=["capstone==4.0.2", "more_itertools", "strongarm_dataflow==3.0.0"],
     package_data={"strongarm": ["py.typed"]},
     data_files=[("", ["LICENSE.txt"])],
     cmdclass={

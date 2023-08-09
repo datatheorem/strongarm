@@ -24,7 +24,7 @@ from .macho_definitions import (
     StaticFilePointer,
     VirtualMemoryPointer,
 )
-from .utils import int8_from_value
+from .utils import int8_from_value, int24_from_value
 
 logger = strongarm_logger.getChild(__file__)
 
@@ -252,7 +252,7 @@ class DyldInfoParser:
             if chained_rebase_ptr.bind == 1:
                 # Bind. Keep track that there is an imported symbol bind here
                 chained_bind_ptr = binary.read_struct(chain_base, MachoDyldChainedPtr64Bind)
-                ordinal = int8_from_value(chained_bind_ptr.ordinal)
+                ordinal = int24_from_value(chained_bind_ptr.ordinal)
                 bound_symbol = dyld_bound_symbols_table[ordinal]
                 logger.debug(
                     f"\t\t{hex(chain_base)}: BIND\tordinal {ordinal}\t"

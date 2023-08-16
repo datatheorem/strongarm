@@ -60,7 +60,6 @@ def _demangle_cpp_symbol(cpp_symbol: str) -> str:
 
 
 class ObjcMethodInfo:
-
     __slots__ = ["objc_class", "objc_sel", "imp_addr"]
 
     def __init__(self, objc_class: ObjcClass, objc_sel: ObjcSelector, imp: Optional[VirtualMemoryPointer]) -> None:

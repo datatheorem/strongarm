@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+## 2023-08-09: 14.0.6
+
+Use int32 when parsing CFPs to fix mapping issues.
+
 ## 2023-07-07: 14.0.5
 
 Pinned capstone to version 4.0.2.

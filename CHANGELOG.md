@@ -10,7 +10,7 @@ Some binaries, such as the kernel, are fully statically linked.
 
 The vast majority of Mach-Os in the world are dynamically linked. 
 
-Even binaries that don't do much of anything will link against `/usr/lib/libSystem.B.dylib` for little benefit - it's just what the toolchain pushes you towards.
+Even binaries that don't do much of anything will link against `/usr/lib/libSystem.B.dylib` for startup code, and it's a bit of a hassle to get around this - the toolchain heavily pushes users towards dynamic linkage.
 
 In very rare cases, binaries are statically linked. A good example is the kernel, which has no dynamic linker available.
 

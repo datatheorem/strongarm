@@ -2,6 +2,20 @@
 
 ## Unreleased
 
+Some binaries, such as the kernel, are fully statically linked.
+
+## 2023-08-09: 14.0.7
+
+### SCAN-4142: strongarm can parse statically linked binaries
+
+The vast majority of Mach-Os in the world are dynamically linked. 
+
+Even binaries that don't do much of anything will link against `/usr/lib/libSystem.B.dylib` for little benefit - it's just what the toolchain pushes you towards.
+
+In very rare cases, binaries are statically linked. A good example is the kernel, which has no dynamic linker available.
+
+This release of strongarm correctly handles statically linked binaries, and won't try to identify binds and rebases for these.
+
 ## 2023-08-09: 14.0.6
 
 ### SCAN-4016: Handle larger library ordinal size within chained fixup pointers Use int32 when parsing CFPs to fix mapping issues.

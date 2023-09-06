@@ -4,15 +4,33 @@
 
 ## 2023-08-09: 14.0.6
 
-Use int32 when parsing CFPs to fix mapping issues.
+### SCAN-4016: Handle larger library ordinal size within chained fixup pointers Use int32 when parsing CFPs to fix mapping issues.
+
+Previously, strongarm was incorrectly truncating library ordinals within `MachoDyldChainedPtr64Bind` to `i8`. 
+
+In fact, this field is an `i24`. The truncated values would cause incorrect library lookups, as the higher bits of the ordinal were being discarded. 
+
+This release correctly reads the full data contained within this field before using it to index into the libraries map.
 
 ## 2023-07-07: 14.0.5
 
-Pinned capstone to version 4.0.2.
+### SCAN-4045: Pin capstone to 4.0.2
+
+Newer releases of Capstone remove `ARM64_VESS_INVALID`, which internal clients of strongarm currently rely on. 
+
+For now, we're pinning the transitive dependency within strongarm.
 
 ## 2023-02-15: 14.0.4
 
-### FIX: library ordinals parsing in chained fixup pointers
+### SCAN-3845: Truncate library ordinal size when parsing chained fixup pointers
+
+_(2023-09-06: The rationale behind this release was mistaken, and it was fixed by 14.0.6)_
+
+Previously, strongarm was parsing library ordinal values denoted by `MachoDyldChainedPtr64Bind.ordinal`. 
+
+This field is an `i8`, but strongarm was treating it as a `uint`. Extra high bits that should not have been considered led to invalid library lookups. 
+
+This release masks this field to `i8` before using it to index into the libraries map.
 
 ## 2023-02-09: 14.0.3
 

@@ -312,7 +312,7 @@ class DyldInfoParser:
     @staticmethod
     def parse_dyld_info(binary: MachoBinary) -> Dict[VirtualMemoryPointer, DyldBoundSymbol]:
         if not binary.dyld_info:
-            raise ValueError("This method expects the provided binary to contain LC_DYLD_INFO")
+            raise ValueError("Unavailable: the binary lacks LC_DYLD_INFO")
 
         return {
             **DyldInfoParser._parse_dyld_bytestream(binary, binary.dyld_info.bind_off, binary.dyld_info.bind_size),

@@ -2,7 +2,7 @@
 # and if capstone is not installed correctly it will raise an ImportError.
 # Report this in a clearer way so the user can see exactly what went wrong.
 try:
-    # Re-export symbols from from the sequestered strongarm_dataflow module
+    # Re-export symbols from the sequestered strongarm_dataflow module
     from strongarm_dataflow.dataflow import get_register_contents_at_instruction_fast
     from strongarm_dataflow.register_contents import RegisterContents, RegisterContentsType
 except ImportError as e:

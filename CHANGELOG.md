@@ -2,8 +2,6 @@
 
 ## Unreleased
 
-Some binaries, such as the kernel, are fully statically linked.
-
 ## 2023-08-09: 14.0.7
 
 ### SCAN-4142: strongarm can parse statically linked binaries

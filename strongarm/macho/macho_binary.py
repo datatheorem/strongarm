@@ -211,9 +211,14 @@ class MachoBinary:
         self.dyld_rebased_pointers: Dict[VirtualMemoryPointer, VirtualMemoryPointer] = {}
 
         if self._dyld_chained_fixups:
+            # PT: Binaries compiled with the Xcode 13+ toolchains describe binds and rebases in the inline CFP format
             rebases, binds = DyldInfoParser.parse_chained_fixups(self)  # type: ignore
             self.dyld_rebased_pointers, self.dyld_bound_symbols = rebases, binds
-        else:
+        elif self.dyld_info:
+            # PT: Binaries produced with older toolchains embed a dyld bytecode stream in __LINKEDIT to describe binds
+            # and rebases.
+            # However, not all binaries contain the LC_DYLD_INFO load command: fully statically linked binaries
+            # (which are very rare) will not contain LC_DYLD_INFO.
             self.dyld_bound_symbols = DyldInfoParser.parse_dyld_info(self)
 
     def __repr__(self) -> str:
@@ -605,10 +610,12 @@ class MachoBinary:
         return indirect_symtab
 
     def file_offset_for_virtual_address(self, virtual_address: VirtualMemoryPointer) -> StaticFilePointer:
-        # if this address is within the initial Mach-O load commands, it must be handled seperately
-        # this unslid virtual address is just a 'best guess' of the physical file address, and it'll be the correct
-        # address if the virtual address was within the initial load commands
-        # if the virtual address was in the section contents, however, we must use another method to translate addresses
+        # Addresses within the initial load commands get special handling.
+        #
+        # This unslid virtual address is just a 'best guess' of the physical file address, and it'll be the correct
+        # address if the virtual address was within the initial load commands.
+        # If the virtual address was in the section contents, however,
+        # we must use another method to translate addresses.
         unslid_virtual_address = virtual_address - self.get_virtual_base()
         if unslid_virtual_address < self._load_commands_end_addr:
             return StaticFilePointer(unslid_virtual_address)
@@ -617,8 +624,8 @@ class MachoBinary:
         if not section_for_address:
             raise RuntimeError(f"Could not map virtual address {hex(int(virtual_address))} to a section!")
 
-        # the virtual address is contained within a section's contents
-        # use this formula to convert a virtual address within a section to the file offset:
+        # The virtual address is contained within a section's contents
+        # Use this formula to convert a virtual address within a section to the file offset:
         # https://reverseengineering.stackexchange.com/questions/8177/convert-mach-o-vm-address-to-file-offset
         binary_address = (virtual_address - section_for_address.address) + section_for_address.offset
         return StaticFilePointer(binary_address)

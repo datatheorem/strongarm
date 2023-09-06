@@ -18,7 +18,7 @@ This release of strongarm correctly handles statically linked binaries, and won'
 
 ## 2023-08-09: 14.0.6
 
-### SCAN-4016: Handle larger library ordinal size within chained fixup pointers Use int32 when parsing CFPs to fix mapping issues.
+### SCAN-4016: Handle larger library ordinal size within chained fixup pointers
 
 Previously, strongarm was incorrectly truncating library ordinals within `MachoDyldChainedPtr64Bind` to `i8`. 
 

@@ -628,6 +628,10 @@ class MachoBinary:
         # Use this formula to convert a virtual address within a section to the file offset:
         # https://reverseengineering.stackexchange.com/questions/8177/convert-mach-o-vm-address-to-file-offset
         binary_address = (virtual_address - section_for_address.address) + section_for_address.offset
+
+        # We might be a slice within a FAT, so add in our slice offset.
+        binary_address += self.file_offset
+
         return StaticFilePointer(binary_address)
 
     def get_content_from_virtual_address(self, virtual_address: VirtualMemoryPointer, size: int) -> bytearray:

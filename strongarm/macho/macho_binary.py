@@ -214,7 +214,7 @@ class MachoBinary:
             # PT: Binaries compiled with the Xcode 13+ toolchains describe binds and rebases in the inline CFP format
             rebases, binds = DyldInfoParser.parse_chained_fixups(self)  # type: ignore
             self.dyld_rebased_pointers, self.dyld_bound_symbols = rebases, binds
-        elif self.dyld_info:
+        elif self._dyld_info:
             # PT: Binaries produced with older toolchains embed a dyld bytecode stream in __LINKEDIT to describe binds
             # and rebases.
             # However, not all binaries contain the LC_DYLD_INFO load command: fully statically linked binaries
